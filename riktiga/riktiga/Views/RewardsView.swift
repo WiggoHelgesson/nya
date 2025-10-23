@@ -315,57 +315,58 @@ struct RewardDetailView: View {
     let reward: RewardCard
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Same image as on the card
-            Image(reward.imageName)
-                .resizable()
-                .scaledToFill()
-                .frame(height: 300)
-                .clipped()
-            
-            VStack(spacing: 20) {
-                // Discount and brand name
-                VStack(spacing: 8) {
-                    Text(reward.discount)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.black)
+        ScrollView {
+            VStack(spacing: 0) {
+                // Same image as on the card
+                Image(reward.imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 250)
+                    .clipped()
+                
+                VStack(spacing: 16) {
+                    // Discount and brand name
+                    VStack(spacing: 6) {
+                        Text(reward.discount)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.black)
+                        
+                        Text(reward.brandName)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.top, 16)
                     
-                    Text(reward.brandName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.gray)
-                }
-                .padding(.top, 20)
-                
-                // Company description
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Om företaget")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                    // Company description
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Företaget")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.black)
+                        
+                        Text(getCompanyDescription(for: reward.brandName))
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .lineLimit(nil)
+                    }
+                    .padding(.horizontal, 16)
                     
-                    Text(getCompanyDescription(for: reward.brandName))
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                        .lineLimit(nil)
+                    // Get discount button
+                    Button(action: {
+                        // Handle get discount action
+                        print("Getting discount for \(reward.brandName)")
+                    }) {
+                        Text("Hämta rabatt")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Color.black)
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 20)
-                
-                Spacer()
-                
-                // Get discount button
-                Button(action: {
-                    // Handle get discount action
-                    print("Getting discount for \(reward.brandName)")
-                }) {
-                    Text("Hämta rabatt")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .background(Color.black)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
             }
         }
         .navigationTitle(reward.brandName)
