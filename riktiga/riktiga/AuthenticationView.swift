@@ -11,18 +11,13 @@ struct AuthenticationView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 20) {
-                // Logo
-                Text("up&down")
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
-                    .padding(.top, 40)
-                
                 // Bild från Xcode (Image 1)
                 Image("1")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 200)
                     .padding(.vertical, 20)
+                    .padding(.top, 40)
                 
                 // Text under bilden
                 VStack(spacing: 8) {
