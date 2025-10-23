@@ -134,33 +134,10 @@ struct MainTabView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(
-                        // Apple Liquid Glass Background
                         RoundedRectangle(cornerRadius: 28)
-                            .fill(.regularMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28)
-                                    .fill(.thinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1),
-                                                Color.clear,
-                                                Color.white.opacity(0.1),
-                                                Color.white.opacity(0.2)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.5
-                                    )
-                            )
-                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-                            .shadow(color: Color.white.opacity(0.3), radius: 5, x: 0, y: -2)
+                            .fill(.ultraThinMaterial)
                     )
+                    .glassBackgroundEffect()
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
                 }
