@@ -1,4 +1,6 @@
 import SwiftUI
+import MapKit
+import CoreLocation
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
@@ -8,7 +10,7 @@ struct StartSessionView: View {
         if showActivitySelection {
             SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
         } else if let activity = selectedActivityType {
-            SessionTrackerView(activity: activity, isPresented: $showActivitySelection)
+            SessionMapView(activity: activity, isPresented: $showActivitySelection)
         }
     }
 }
@@ -43,7 +45,6 @@ struct SelectActivityView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header
                 VStack(spacing: 12) {
                     Text("Välj aktivitet")
                         .font(.system(size: 28, weight: .bold))
@@ -56,7 +57,6 @@ struct SelectActivityView: View {
                 
                 Spacer()
                 
-                // Activity Grid
                 VStack(spacing: 16) {
                     ForEach(activities, id: \.self) { activity in
                         Button(action: {
@@ -99,7 +99,6 @@ struct SelectActivityView: View {
                 
                 Spacer()
                 
-                // Cancel Button
                 Button(action: {
                     dismiss()
                 }) {
@@ -119,159 +118,186 @@ struct SelectActivityView: View {
     }
 }
 
-struct SessionTrackerView: View {
+struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
     @Environment(\.dismiss) var dismiss
     
-    @State private var duration: Double = 30
-    @State private var isRunning = false
+    @StateObject private var locationManager = LocationManager()
+    @State private var position: MapCameraPosition = .automatic
     @State private var elapsedTime: Int = 0
+    @State private var isRunning = false
     @State private var timer: Timer?
+    @State private var routePoints: [CLLocationCoordinate2D] = []
+    @State private var lastLocationString = ""
     
     var caloriesBurned: Int {
         let caloriesPerMinute = activity == .running ? 10 : activity == .golf ? 6 : activity == .walking ? 5 : 8
         return elapsedTime * caloriesPerMinute / 60
     }
     
+    var averagePace: String {
+        guard elapsedTime > 0 && locationManager.distance > 0 else { return "0:00" }
+        let paceSeconds = Int((Double(elapsedTime) / locationManager.distance) * 60)
+        let minutes = paceSeconds / 60
+        let seconds = paceSeconds % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                // Timer display
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 20)
-                    
-                    Circle()
-                        .trim(from: 0, to: isRunning ? 1 : 0)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 0.1, green: 0.6, blue: 0.8),
-                                    Color(red: 0.2, green: 0.4, blue: 0.9)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 20, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 0.1), value: elapsedTime)
-                    
-                    VStack(spacing: 8) {
-                        Text(formattedTime(elapsedTime))
-                            .font(.system(size: 60, weight: .bold, design: .monospaced))
-                        Text(activity.rawValue)
-                            .font(.headline)
-                            .foregroundColor(.gray)
+        ZStack {
+            Map(position: $position) {
+                if let userLocation = locationManager.userLocation {
+                    Annotation("", coordinate: userLocation) {
+                        Image(systemName: "location.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.blue)
                     }
                 }
-                .frame(height: 280)
-                .padding(40)
                 
-                // Statistik
-                HStack(spacing: 20) {
-                    VStack(spacing: 8) {
-                        Text(String(format: "%.0f", duration))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        Text("Minuter planerat")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                if routePoints.count > 1 {
+                    MapPolyline(coordinates: routePoints)
+                        .stroke(.blue, lineWidth: 3)
+                }
+            }
+            .mapStyle(.standard)
+            .ignoresSafeArea()
+            
+            VStack {
+                HStack {
+                    Button(action: {
+                        locationManager.stopTracking()
+                        stopTimer()
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
+                            .foregroundColor(.black)
                     }
-                    .frame(maxWidth: .infinity)
                     
-                    Divider()
+                    Spacer()
                     
-                    VStack(spacing: 8) {
-                        Text("\(caloriesBurned)")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        Text("kcal brände")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                    Text(activity.rawValue)
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Button(action: {}) {
+                        Image(systemName: "ellipsis")
+                            .font(.headline)
+                            .foregroundColor(.black)
                     }
-                    .frame(maxWidth: .infinity)
                 }
                 .padding(16)
-                .background(Color(.systemGray6))
-                .cornerRadius(12)
-                .padding(.horizontal)
+                .background(Color.white.opacity(0.95))
                 
                 Spacer()
                 
-                // Kontrollknappar
-                HStack(spacing: 16) {
-                    Button(action: {
-                        stopTimer()
-                        isPresented = true
-                    }) {
-                        Text("Avbryt")
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color(.systemGray5))
-                            .foregroundColor(.black)
-                            .cornerRadius(10)
-                            .font(.headline)
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "location.circle.fill")
+                            .foregroundColor(.red)
+                        Text("GPS")
+                            .font(.caption)
+                        Spacer()
+                    }
+                    
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("⭕m²")
+                                .font(.system(size: 32, weight: .bold))
+                            Text("Capture in Progress")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
+                    }
+                    
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String(format: "%.2f", locationManager.distance))
+                                .font(.system(size: 18, weight: .bold))
+                            Text("km")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(formattedTime(elapsedTime))
+                                .font(.system(size: 18, weight: .bold))
+                            Text("Duration")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(averagePace)
+                                .font(.system(size: 18, weight: .bold))
+                            Text("Average pace")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Spacer()
                     }
                     
                     Button(action: {
                         if isRunning {
                             stopTimer()
+                            locationManager.stopTracking()
                         } else {
                             startTimer()
+                            locationManager.startTracking()
                         }
+                        isRunning.toggle()
                     }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: isRunning ? "pause.fill" : "play.fill")
-                            Text(isRunning ? "Pausa" : "Starta")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 0.1, green: 0.6, blue: 0.8),
-                                    Color(red: 0.2, green: 0.4, blue: 0.9)
-                                ]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .font(.headline)
+                        Text(isRunning ? "Pausa" : "Start Run")
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Color.black)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                            .font(.headline)
+                    }
+                    
+                    Button(action: {}) {
+                        Text("View other options")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .underline()
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+                .padding(16)
+                .background(Color.white)
+                .cornerRadius(16)
+                .padding(16)
             }
-            .navigationTitle("Starta pass")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(false)
         }
-        .onDisappear {
-            stopTimer()
+        .onAppear {
+            locationManager.requestBackgroundLocationPermission()
         }
     }
     
     func startTimer() {
-        isRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             elapsedTime += 1
         }
     }
     
     func stopTimer() {
-        isRunning = false
         timer?.invalidate()
         timer = nil
     }
     
     func formattedTime(_ seconds: Int) -> String {
-        let minutes = seconds / 60
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
         let secs = seconds % 60
-        return String(format: "%02d:%02d", minutes, secs)
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%02d:%02d", minutes, secs)
+        }
     }
 }
 
