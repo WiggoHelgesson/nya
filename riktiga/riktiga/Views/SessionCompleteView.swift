@@ -5,9 +5,9 @@ struct SessionCompleteView: View {
     let activity: ActivityType
     let distance: Double
     let duration: Int
-    let calories: Int
-    @Binding var showSessionComplete: Bool
+    let earnedPoints: Int
     @Binding var isPresented: Bool
+    let onComplete: () -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
     
@@ -24,7 +24,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 0) {
                 HStack {
                     Button(action: {
-                        showSessionComplete = false
+                        isPresented = false
                     }) {
                         Image(systemName: "chevron.left")
                             .foregroundColor(.black)
@@ -33,7 +33,9 @@ struct SessionCompleteView: View {
                     Text("Slutför pass")
                         .font(.headline)
                     Spacer()
-                    Button(action: {}) {
+                    Button(action: {
+                        isPresented = false
+                    }) {
                         Image(systemName: "xmark")
                             .foregroundColor(.black)
                     }
@@ -42,7 +44,7 @@ struct SessionCompleteView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        ActivitySummaryCard(activity: activity, distance: distance, duration: duration)
+                        ActivitySummaryCard(activity: activity, distance: distance, duration: duration, earnedPoints: earnedPoints)
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Rubrik")
@@ -142,9 +144,8 @@ struct SessionCompleteView: View {
                 
                 DispatchQueue.main.async {
                     isSaving = false
-                    showSessionComplete = false
-                    isPresented = true
-                    dismiss()
+                    isPresented = false
+                    onComplete()
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")
@@ -160,12 +161,13 @@ struct ActivitySummaryCard: View {
     let activity: ActivityType
     let distance: Double
     let duration: Int
+    let earnedPoints: Int
     
     var body: some View {
         HStack {
             Image(systemName: activity.icon)
                 .font(.system(size: 24))
-                .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+                .foregroundColor(AppColors.brandBlue)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.rawValue)
@@ -173,6 +175,10 @@ struct ActivitySummaryCard: View {
                 Text(String(format: "%.2f km • %@", distance, formattedDuration(duration)))
                     .font(.caption)
                     .foregroundColor(.gray)
+                Text("\(earnedPoints) poäng")
+                    .font(.caption)
+                    .foregroundColor(AppColors.brandGreen)
+                    .fontWeight(.semibold)
             }
             
             Spacer()
@@ -195,6 +201,13 @@ struct ActivitySummaryCard: View {
 }
 
 #Preview {
-    SessionCompleteView(activity: .running, distance: 5.2, duration: 1800, calories: 300, showSessionComplete: .constant(true), isPresented: .constant(false))
-        .environmentObject(AuthViewModel())
+    SessionCompleteView(
+        activity: .running, 
+        distance: 5.2, 
+        duration: 1800, 
+        earnedPoints: 78,
+        isPresented: .constant(true),
+        onComplete: {}
+    )
+    .environmentObject(AuthViewModel())
 }

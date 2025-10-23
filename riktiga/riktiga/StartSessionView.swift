@@ -133,11 +133,13 @@ struct SessionMapView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
     @State private var isRunning = false
+    @State private var isPaused = false
     @State private var sessionDuration: Int = 0
     @State private var sessionDistance: Double = 0.0
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
     @State private var showCompletionPopup = false
+    @State private var showSessionComplete = false
     @State private var earnedPoints: Int = 0
     @Environment(\.dismiss) var dismiss
 
@@ -227,25 +229,59 @@ struct SessionMapView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    // Start/Pause Button
-                    Button(action: {
-                        if isRunning {
-                            stopTimer()
-                            isRunning = false
-                        } else {
-                            startTimer()
-                            isRunning = true
+                    // Start/Pause/Continue/End Buttons
+                    if isPaused {
+                        // Paused state - show Continue and End buttons
+                        VStack(spacing: 12) {
+                            Button(action: {
+                                startTimer()
+                                isPaused = false
+                                isRunning = true
+                            }) {
+                                Text("Fortsätt")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(14)
+                                    .background(AppColors.brandGreen)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            }
+                            
+                            Button(action: {
+                                endSession()
+                            }) {
+                                Text("Avsluta")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(14)
+                                    .background(AppColors.brandBlue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            }
                         }
-                    }) {
-                        Text(isRunning ? "Pausa" : "Starta löpning")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(.black)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                    } else {
+                        // Running or stopped state - show Start/Pause button
+                        Button(action: {
+                            if isRunning {
+                                stopTimer()
+                                isRunning = false
+                                isPaused = true
+                            } else {
+                                startTimer()
+                                isRunning = true
+                            }
+                        }) {
+                            Text(isRunning ? "Pausa" : "Starta löpning")
+                                .font(.system(size: 16, weight: .black))
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(.black)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 16)
                 }
                 .padding(20)
                 .background(
@@ -275,9 +311,9 @@ struct SessionMapView: View {
                         
                         Button(action: {
                             showCompletionPopup = false
-                            dismiss()
+                            showSessionComplete = true
                         }) {
-                            Text("STÄNG")
+                            Text("SKAPA INLÄGG")
                                 .font(.system(size: 16, weight: .black))
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -293,6 +329,22 @@ struct SessionMapView: View {
                     .shadow(radius: 20)
                     .padding(40)
                 }
+            }
+            
+            // MARK: - Session Complete View
+            if showSessionComplete {
+                SessionCompleteView(
+                    activity: activity,
+                    distance: sessionDistance,
+                    duration: sessionDuration,
+                    earnedPoints: earnedPoints,
+                    isPresented: $showSessionComplete,
+                    onComplete: {
+                        // Navigate to Activities tab after saving
+                        NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
+                        dismiss()
+                    }
+                )
             }
         }
         .onDisappear {

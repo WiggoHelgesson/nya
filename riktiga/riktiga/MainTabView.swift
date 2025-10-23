@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -152,6 +153,9 @@ struct MainTabView: View {
                     EmptyView()
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActivities"))) { _ in
+            selectedTab = 1 // Switch to Activities tab
         }
     }
 }
