@@ -5,6 +5,7 @@ struct ProfileView: View {
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
     @State private var showSettings = false
+    @State private var showStatistics = false
     
     var body: some View {
         NavigationStack {
@@ -72,12 +73,6 @@ struct ProfileView: View {
                                     Spacer()
                                 }
                                 
-                                NavigationLink(destination: Text("Redigera profil")) {
-                                    Text("Förhandsgranska din profil")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
-                                        .underline()
-                                }
                             }
                         }
                     }
@@ -108,35 +103,21 @@ struct ProfileView: View {
                     .cornerRadius(12)
                     .border(Color.black, width: 2)
                     
-                    // MARK: - Action Buttons (2x2)
-                    VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            ActionButton(
-                                icon: "cart.fill",
-                                label: "Mina köp",
-                                action: {}
-                            )
-                            
-                            ActionButton(
-                                icon: "chart.bar.fill",
-                                label: "Statistik",
-                                action: {}
-                            )
-                        }
+                    // MARK: - Action Buttons (2x1)
+                    HStack(spacing: 12) {
+                        ActionButton(
+                            icon: "cart.fill",
+                            label: "Mina köp",
+                            action: {}
+                        )
                         
-                        HStack(spacing: 12) {
-                            ActionButton(
-                                icon: "arrow.up.right.circle.fill",
-                                label: "Utveckling",
-                                action: {}
-                            )
-                            
-                            ActionButton(
-                                icon: "target",
-                                label: "Mål",
-                                action: {}
-                            )
-                        }
+                        ActionButton(
+                            icon: "chart.bar.fill",
+                            label: "Statistik",
+                            action: {
+                                showStatistics = true
+                            }
+                        )
                     }
                     
                     Spacer()
@@ -161,6 +142,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showStatistics) {
+                StatisticsView()
             }
         }
     }
