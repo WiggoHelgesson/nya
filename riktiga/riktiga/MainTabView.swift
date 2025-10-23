@@ -13,11 +13,7 @@ struct MainTabView: View {
                     if selectedTab == 0 {
                         HomeView()
                     } else if selectedTab == 1 {
-                        VStack {
-                            Text("Aktiviteter")
-                                .font(.title)
-                            Spacer()
-                        }
+                        ActivitiesView()
                     } else if selectedTab == 2 {
                         RewardsView()
                     } else if selectedTab == 3 {
