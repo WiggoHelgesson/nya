@@ -11,16 +11,11 @@ struct AuthenticationView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 20) {
-                // Logo och titel
-                VStack(spacing: 10) {
-                    Text("up&down")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
-                    Text("Din aktivitetsapp")
-                        .font(.headline)
-                        .foregroundColor(.gray)
-                }
-                .padding(.top, 40)
+                // Logo
+                Text("up&down")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+                    .padding(.top, 40)
                 
                 // Bild från Xcode (Image 1)
                 Image("1")
@@ -108,18 +103,9 @@ struct LoginFormView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(12)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.1, green: 0.6, blue: 0.8),
-                        Color(red: 0.2, green: 0.4, blue: 0.9)
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .background(Color.black)
             .foregroundColor(.white)
-            .cornerRadius(8)
+            .cornerRadius(25)
             .font(.headline)
             .disabled(authViewModel.isLoading)
         }
@@ -178,18 +164,9 @@ struct SignupFormView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(12)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.1, green: 0.6, blue: 0.8),
-                        Color(red: 0.2, green: 0.4, blue: 0.9)
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .background(Color.black)
             .foregroundColor(.white)
-            .cornerRadius(8)
+            .cornerRadius(25)
             .font(.headline)
             .disabled(authViewModel.isLoading)
         }
