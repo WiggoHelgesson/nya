@@ -1,17 +1,136 @@
 import SwiftUI
 
 struct StartSessionView: View {
+    @State private var showActivitySelection = true
+    @State private var selectedActivityType: ActivityType?
+    
+    var body: some View {
+        if showActivitySelection {
+            SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+        } else if let activity = selectedActivityType {
+            SessionTrackerView(activity: activity, isPresented: $showActivitySelection)
+        }
+    }
+}
+
+enum ActivityType: String, CaseIterable {
+    case running = "Löppass"
+    case golf = "Golfrunda"
+    case walking = "Promenad"
+    case hiking = "Bestiga berg"
+    
+    var icon: String {
+        switch self {
+        case .running:
+            return "figure.run"
+        case .golf:
+            return "flag.fill"
+        case .walking:
+            return "figure.walk"
+        case .hiking:
+            return "mountain.2.fill"
+        }
+    }
+}
+
+struct SelectActivityView: View {
+    @Binding var isPresented: Bool
+    @Binding var selectedActivity: ActivityType?
     @Environment(\.dismiss) var dismiss
-    @State private var selectedActivity = "Löpning"
+    
+    let activities: [ActivityType] = [.running, .golf, .walking, .hiking]
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    Text("Välj aktivitet")
+                        .font(.system(size: 28, weight: .bold))
+                    Text("Vilken aktivitet vill du göra idag?")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(24)
+                
+                Spacer()
+                
+                // Activity Grid
+                VStack(spacing: 16) {
+                    ForEach(activities, id: \.self) { activity in
+                        Button(action: {
+                            selectedActivity = activity
+                            isPresented = false
+                        }) {
+                            HStack(spacing: 16) {
+                                Image(systemName: activity.icon)
+                                    .font(.system(size: 32))
+                                    .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+                                    .frame(width: 60, height: 60)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(12)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(activity.rawValue)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.black)
+                                    Text("Starta ett nytt pass")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(16)
+                            .background(Color.white)
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color(.systemGray6), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+                .padding(16)
+                
+                Spacer()
+                
+                // Cancel Button
+                Button(action: {
+                    dismiss()
+                }) {
+                    Text("Avbryt")
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color(.systemGray5))
+                        .foregroundColor(.black)
+                        .cornerRadius(25)
+                        .font(.headline)
+                }
+                .padding(16)
+            }
+            .background(Color(.systemGray6).opacity(0.3))
+            .navigationBarBackButtonHidden(true)
+        }
+    }
+}
+
+struct SessionTrackerView: View {
+    let activity: ActivityType
+    @Binding var isPresented: Bool
+    @Environment(\.dismiss) var dismiss
+    
     @State private var duration: Double = 30
     @State private var isRunning = false
     @State private var elapsedTime: Int = 0
     @State private var timer: Timer?
     
-    let activities = ["Löpning", "Cykling", "Promenad", "Styrketräning", "Yoga", "Simning"]
-    
     var caloriesBurned: Int {
-        let caloriesPerMinute = selectedActivity == "Löpning" ? 10 : selectedActivity == "Cykling" ? 9 : 5
+        let caloriesPerMinute = activity == .running ? 10 : activity == .golf ? 6 : activity == .walking ? 5 : 8
         return elapsedTime * caloriesPerMinute / 60
     }
     
@@ -42,7 +161,7 @@ struct StartSessionView: View {
                     VStack(spacing: 8) {
                         Text(formattedTime(elapsedTime))
                             .font(.system(size: 60, weight: .bold, design: .monospaced))
-                        Text(selectedActivity)
+                        Text(activity.rawValue)
                             .font(.headline)
                             .foregroundColor(.gray)
                     }
@@ -79,26 +198,13 @@ struct StartSessionView: View {
                 .cornerRadius(12)
                 .padding(.horizontal)
                 
-                // Aktivitetsväljare
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Välj aktivitet")
-                        .font(.headline)
-                    
-                    Picker("Aktivitet", selection: $selectedActivity) {
-                        ForEach(activities, id: \.self) { activity in
-                            Text(activity).tag(activity)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                .padding(.horizontal)
-                
                 Spacer()
                 
                 // Kontrollknappar
                 HStack(spacing: 16) {
                     Button(action: {
-                        dismiss()
+                        stopTimer()
+                        isPresented = true
                     }) {
                         Text("Avbryt")
                             .frame(maxWidth: .infinity)
