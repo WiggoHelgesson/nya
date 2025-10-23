@@ -2,7 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var weekProgress = 65
+    @State private var stepProgress = 0.65 // 5426 / 8000 steps = ~65%
+    @State private var showStartSession = false
     
     var body: some View {
         NavigationStack {
@@ -12,8 +13,8 @@ struct HomeView: View {
                     .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        // MARK: - Header med stor, tjock text
+                    VStack(alignment: .leading, spacing: 24) {
+                        // MARK: - Header
                         VStack(alignment: .leading, spacing: 2) {
                             Text("HEJ,")
                                 .font(.system(size: 56, weight: .black))
@@ -33,90 +34,128 @@ struct HomeView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         
-                        // MARK: - Veckoöversikt Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("DIN VECKA")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(AppColors.white)
-                                    
-                                    Text("650 KM")
-                                        .font(.system(size: 32, weight: .black))
-                                        .foregroundColor(AppColors.white)
-                                }
+                        // MARK: - Steps/Activity Circle Card
+                        VStack(spacing: 0) {
+                            ZStack {
+                                // Background circle
+                                Circle()
+                                    .fill(AppColors.brandBlue.opacity(0.1))
                                 
-                                Spacer()
+                                // Progress circle
+                                Circle()
+                                    .trim(from: 0, to: stepProgress)
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                AppColors.brandBlue,
+                                                AppColors.brandGreen
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                                    )
+                                    .rotationEffect(.degrees(-90))
                                 
-                                ZStack {
-                                    Circle()
-                                        .stroke(AppColors.white.opacity(0.3), lineWidth: 8)
+                                // Center content
+                                VStack(spacing: 8) {
+                                    Text("5 426")
+                                        .font(.system(size: 48, weight: .black))
+                                        .foregroundColor(AppColors.brandDark)
                                     
-                                    Circle()
-                                        .trim(from: 0, to: CGFloat(weekProgress) / 100)
-                                        .stroke(
-                                            AppColors.white,
-                                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                                        )
-                                        .rotationEffect(.degrees(-90))
+                                    Text("STEG")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.gray)
                                     
-                                    Text("\(weekProgress)%")
-                                        .font(.system(size: 20, weight: .black))
-                                        .foregroundColor(AppColors.white)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "flame.fill")
+                                            .foregroundColor(.orange)
+                                        Text("1")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(AppColors.brandDark)
+                                    }
+                                    .padding(.top, 4)
                                 }
-                                .frame(width: 90, height: 90)
                             }
-                            .padding(24)
-                            .background(AppColors.brandBlue)
-                            .cornerRadius(16)
-                            .rotationEffect(.degrees(-3), anchor: .center)
+                            .frame(height: 280)
+                            .padding(20)
+                        }
+                        .background(Color.white)
+                        .cornerRadius(20)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                        .padding(.horizontal, 20)
+                        
+                        // MARK: - Action Buttons
+                        VStack(spacing: 12) {
+                            // Starta Pass Button
+                            NavigationLink(destination: StartSessionView()) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 20, weight: .bold))
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("STARTA PASS")
+                                            .font(.system(size: 18, weight: .black))
+                                        Text("Börja ett träningspass")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .opacity(0.9)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(AppColors.brandGreen)
+                                .foregroundColor(.white)
+                                .cornerRadius(14)
+                                .rotationEffect(.degrees(-2))
+                            }
+                            
+                            // Se Varumärken Button
+                            NavigationLink(destination: RewardsView()) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 20, weight: .bold))
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("SE VARUMÄRKEN")
+                                            .font(.system(size: 18, weight: .black))
+                                        Text("Tjäna och använd poäng")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .opacity(0.9)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(AppColors.brandBlue)
+                                .foregroundColor(.white)
+                                .cornerRadius(14)
+                                .rotationEffect(.degrees(2))
+                            }
                         }
                         .padding(.horizontal, 20)
                         
-                        // MARK: - Feature Cards
-                        VStack(spacing: 16) {
-                            // Kort 1 - Grön
-                            BrandedCard(
-                                title: "STARTA TRÄNING",
-                                subtitle: "Börja ett nytt pass",
-                                icon: "play.fill",
-                                backgroundColor: AppColors.brandGreen,
-                                angle: -4
-                            )
-                            
-                            // Kort 2 - Gul
-                            BrandedCard(
-                                title: "DAGENS UTMANING",
-                                subtitle: "Du är 450 kcal från målet",
-                                icon: "target",
-                                backgroundColor: AppColors.brandYellow,
-                                angle: 3
-                            )
-                            
-                            // Kort 3 - Rosa
-                            BrandedCard(
-                                title: "DIN STATISTIK",
-                                subtitle: "Se din framgång",
-                                icon: "chart.bar.fill",
-                                backgroundColor: AppColors.pastelPink,
-                                angle: -3
-                            )
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        // MARK: - Tips Section
+                        // MARK: - Daily Challenges/Tips Section
                         VStack(alignment: .leading, spacing: 12) {
                             Text("💡 TIPS FÖR IDAG")
                                 .font(.system(size: 18, weight: .black))
-                                .foregroundColor(.black)
+                                .foregroundColor(.white)
                             
                             Text("Drick mer vatten! Du behöver minst 2 liter per dag för att hålla dig hydratiserad och energisk.")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.white)
                                 .lineLimit(4)
                         }
                         .padding(20)
-                        .background(AppColors.brandYellow.opacity(0.6))
+                        .background(AppColors.brandYellow)
                         .cornerRadius(12)
                         .rotationEffect(.degrees(2), anchor: .center)
                         .padding(.horizontal, 20)
@@ -129,41 +168,6 @@ struct HomeView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
         }
-    }
-}
-
-// MARK: - Branded Card Component
-struct BrandedCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let backgroundColor: Color
-    let angle: Double
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 20, weight: .black))
-                    .foregroundColor(.black)
-                    .lineLimit(2)
-                
-                Text(subtitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.7))
-                    .lineLimit(2)
-            }
-            
-            Spacer()
-            
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundColor(.black)
-        }
-        .padding(20)
-        .background(backgroundColor)
-        .cornerRadius(14)
-        .rotationEffect(.degrees(angle), anchor: .center)
     }
 }
 
