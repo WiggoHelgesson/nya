@@ -150,10 +150,8 @@ struct SessionMapView: View {
             MapReader { reader in
                 Map(coordinateRegion: $region, showsUserLocation: true) {
                     // Visa rutten som en svart linje
-                    if locationManager.routeCoordinates.count > 1 {
-                        MapPolyline(coordinates: locationManager.routeCoordinates)
-                            .stroke(.black, lineWidth: 4)
-                    }
+                    MapPolyline(coordinates: locationManager.routeCoordinates)
+                        .stroke(.black, lineWidth: 4)
                 }
                 .ignoresSafeArea()
                 .onAppear {
