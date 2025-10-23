@@ -2,224 +2,210 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var showingAlert = false
+    @State private var showImagePicker = false
+    @State private var profileImage: UIImage?
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 0) {
-                    // MARK: - Profile Header
+                VStack(spacing: 16) {
+                    // MARK: - Profile Header Card
                     VStack(spacing: 16) {
-                        // Profilbild
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
-                        
-                        // Namn
-                        Text(authViewModel.currentUser?.name ?? "User")
-                            .font(.system(size: 24, weight: .bold))
-                        
-                        // Stats
-                        HStack(spacing: 30) {
-                            VStack(spacing: 4) {
-                                Text("1")
-                                    .font(.system(size: 18, weight: .bold))
-                                Text("Träningspass")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            VStack(spacing: 4) {
-                                Text("12")
-                                    .font(.system(size: 18, weight: .bold))
-                                Text("Följare")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            VStack(spacing: 4) {
-                                Text("18")
-                                    .font(.system(size: 18, weight: .bold))
-                                Text("Följer")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        
-                        // Edit profil link
-                        NavigationLink(destination: Text("Redigera profil")) {
-                            Text("Förhandsgranska din profil")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                                .underline()
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(24)
-                    .background(Color(.systemGray6))
-                    
-                    // MARK: - XP Display Box
-                    VStack(spacing: 0) {
                         HStack(spacing: 16) {
-                            // U Symbol
-                            Text("U")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 60, height: 60)
-                                .background(Color.black)
-                                .cornerRadius(12)
-                            
-                            // XP Text
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
-                                    .font(.system(size: 20, weight: .bold))
-                                
-                                if let currentLevel = authViewModel.currentUser?.currentLevel {
-                                    Text("Level \(currentLevel)")
-                                        .font(.body)
+                            // Profilbild - Tappable
+                            Button(action: {
+                                showImagePicker = true
+                            }) {
+                                if let profileImage = profileImage {
+                                    Image(uiImage: profileImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(Circle())
+                                } else {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.system(size: 80))
                                         .foregroundColor(.gray)
                                 }
                             }
                             
-                            Spacer()
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Text(authViewModel.currentUser?.name ?? "User")
+                                        .font(.system(size: 20, weight: .bold))
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {}) {
+                                        Image(systemName: "pencil.square")
+                                            .font(.title3)
+                                            .foregroundColor(.black)
+                                    }
+                                }
+                                
+                                HStack(spacing: 20) {
+                                    VStack(spacing: 4) {
+                                        Text("1")
+                                            .font(.system(size: 16, weight: .bold))
+                                        Text("Träningspass")
+                                            .font(.caption2)
+                                            .foregroundColor(.gray)
+                                    }
+                                    
+                                    VStack(spacing: 4) {
+                                        Text("12")
+                                            .font(.system(size: 16, weight: .bold))
+                                        Text("Följare")
+                                            .font(.caption2)
+                                            .foregroundColor(.gray)
+                                    }
+                                    
+                                    VStack(spacing: 4) {
+                                        Text("18")
+                                            .font(.system(size: 16, weight: .bold))
+                                        Text("Följer")
+                                            .font(.caption2)
+                                            .foregroundColor(.gray)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                NavigationLink(destination: Text("Redigera profil")) {
+                                    Text("Förhandsgranska din profil")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                        .underline()
+                                }
+                            }
                         }
-                        .padding(20)
-                        .background(Color.black)
-                        .cornerRadius(12)
+                    }
+                    .padding(20)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+                    
+                    // MARK: - XP Box
+                    HStack(spacing: 16) {
+                        // Logo/Icon
+                        Text("U")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Color.black)
+                            .cornerRadius(10)
+                        
+                        // XP Text
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        
+                        Spacer()
                     }
                     .padding(16)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .border(Color.black, width: 2)
                     
-                    // MARK: - Stats Buttons
+                    // MARK: - Action Buttons (2x2)
                     VStack(spacing: 12) {
                         HStack(spacing: 12) {
-                            StatButton(
+                            ActionButton(
                                 icon: "cart.fill",
-                                label: "Mina köp"
+                                label: "Mina köp",
+                                action: {}
                             )
                             
-                            StatButton(
+                            ActionButton(
                                 icon: "chart.bar.fill",
-                                label: "Statistik"
+                                label: "Statistik",
+                                action: {}
                             )
                         }
                         
                         HStack(spacing: 12) {
-                            StatButton(
+                            ActionButton(
                                 icon: "arrow.up.right.circle.fill",
-                                label: "Utveckling"
+                                label: "Utveckling",
+                                action: {}
                             )
                             
-                            StatButton(
+                            ActionButton(
                                 icon: "target",
-                                label: "Mål"
+                                label: "Mål",
+                                action: {}
                             )
                         }
                     }
-                    .padding(16)
                     
-                    Divider()
-                        .padding(.vertical, 8)
-                    
-                    // MARK: - Settings
-                    VStack(spacing: 0) {
-                        NavigationLink(destination: Text("Redigera profil")) {
-                            SettingsRow(icon: "pencil", label: "Redigera profil", color: .blue)
-                        }
-                        
-                        Divider()
-                            .padding(.leading, 50)
-                        
-                        NavigationLink(destination: Text("Notifikationsinställningar")) {
-                            SettingsRow(icon: "bell", label: "Notifikationer", color: .orange)
-                        }
-                        
-                        Divider()
-                            .padding(.leading, 50)
-                        
-                        NavigationLink(destination: Text("Sekretessinställningar")) {
-                            SettingsRow(icon: "lock", label: "Sekretess", color: .green)
-                        }
-                    }
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 16)
-                    
-                    Spacer(minLength: 20)
-                    
-                    // MARK: - Logout Button
-                    Button(action: {
-                        showingAlert = true
-                    }) {
-                        Text("Logga ut")
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .cornerRadius(10)
-                            .font(.headline)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 20)
+                    Spacer()
                 }
+                .padding(16)
             }
             .navigationTitle("Inställningar")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Logga ut", isPresented: $showingAlert) {
-                Button("Avbryt", role: .cancel) { }
-                Button("Logga ut", role: .destructive) {
-                    authViewModel.logout()
-                }
-            } message: {
-                Text("Är du säker på att du vill logga ut?")
+            .sheet(isPresented: $showImagePicker) {
+                ImagePicker(image: $profileImage)
             }
         }
     }
 }
 
-struct StatButton: View {
+struct ActionButton: View {
     let icon: String
     let label: String
+    let action: () -> Void
     
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(.white)
-                .frame(height: 40)
-            
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.black)
-                .lineLimit(1)
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(.black)
+                
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
         }
-        .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(Color(.systemGray6))
-        .cornerRadius(10)
     }
 }
 
-struct SettingsRow: View {
-    let icon: String
-    let label: String
-    let color: Color
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.presentationMode) var presentationMode
     
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .frame(width: 24, height: 24)
-            
-            Text(label)
-                .foregroundColor(.black)
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.gray)
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
         }
-        .padding(16)
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let uiImage = info[.originalImage] as? UIImage {
+                parent.image = uiImage
+            }
+            parent.presentationMode.wrappedValue.dismiss()
+        }
     }
 }
 
