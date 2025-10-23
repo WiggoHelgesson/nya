@@ -228,85 +228,22 @@ struct FullScreenRewardCard: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Image Section - Takes up most of the screen
-            ZStack {
-                // Real brand image as background
-                Image(reward.imageName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 400)
-                    .clipped()
-                
-                // Dark overlay for better text readability
-                Rectangle()
-                    .fill(Color.black.opacity(0.3))
-                    .frame(height: 400)
-                
-                // Brand Logo in center
-                VStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.white.opacity(0.9))
-                        .frame(width: 80, height: 80)
-                        .overlay(
-                            VStack(spacing: 4) {
-                                Text(getBrandLogoText(reward.brandName))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .multilineTextAlignment(.center)
-                                Image(systemName: "flag.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.black)
-                            }
-                        )
-                    
-                    Text(reward.brandName)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.top, 8)
-                }
-                
-                // Points badge
-                VStack {
-                    HStack {
-                        Spacer()
-                        Text(reward.points)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.black.opacity(0.8))
-                            .cornerRadius(16)
-                    }
-                    Spacer()
-                }
-                .padding(16)
-            }
+            // Image Section - Clean brand image only
+            Image(reward.imageName)
+                .resizable()
+                .scaledToFill()
+                .frame(height: 500) // Larger height like in the image
+                .clipped()
             
-            // Info Section - Compact at bottom
+            // Info Section - Clean like in the image
             HStack {
-                // Small brand logo
-                Circle()
-                    .fill(Color.white.opacity(0.9))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        VStack(spacing: 2) {
-                            Text(getBrandLogoText(reward.brandName))
-                                .font(.system(size: 6, weight: .bold))
-                                .foregroundColor(.black)
-                                .multilineTextAlignment(.center)
-                            Image(systemName: "flag.fill")
-                                .font(.system(size: 4))
-                                .foregroundColor(.black)
-                        }
-                    )
-                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.black)
                     
                     Text(reward.brandName)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.gray)
                 }
                 
@@ -323,34 +260,9 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
-        .frame(width: 280) // Fixed width for horizontal scroll
+        .frame(width: UIScreen.main.bounds.width - 32) // Full screen width minus padding
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-    }
-    
-    private func getBrandLogoText(_ brandName: String) -> String {
-        switch brandName {
-        case "PLIKTGOLF":
-            return "PLIKT\nGOLF"
-        case "PEGMATE":
-            return "PEG\nMATE"
-        case "LONEGOLF":
-            return "LONE\nGOLF"
-        case "WINWIZE":
-            return "WIN\nWIZE"
-        case "SCANDIGOLF":
-            return "SCANDI\nGOLF"
-        case "Exotic Golf":
-            return "EXOTIC\nGOLF"
-        case "HAPPYALBA":
-            return "HAPPY\nALBA"
-        case "RETROGOLF":
-            return "RETRO\nGOLF"
-        case "PUMPLABS":
-            return "PUMP\nLABS"
-        default:
-            return brandName
-        }
     }
 }
 
