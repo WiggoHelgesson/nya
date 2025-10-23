@@ -221,7 +221,7 @@ struct SessionMapView: View {
                         VStack(spacing: 4) {
                             Text(currentPace)
                                 .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.black)
+                                .foregroundColor(currentPace == "0:00" ? .gray : .black)
                             Text("Tempo")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
@@ -356,8 +356,13 @@ struct SessionMapView: View {
         isRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             sessionDuration += 1
-            // Simulera distans (ca 10 km/h för löpning)
-            sessionDistance += 0.00278
+            
+            // Simulera distans bara om vi "springer" (var 3:e sekund för realistisk simulering)
+            if sessionDuration % 3 == 0 {
+                // Simulera ca 10 km/h löpning (2.78 m/s)
+                sessionDistance += 0.00278
+            }
+            
             updatePace()
         }
     }
@@ -376,12 +381,30 @@ struct SessionMapView: View {
     }
 
     func updatePace() {
-        if sessionDuration > 0 && sessionDistance > 0 {
-            let paceSeconds = (Double(sessionDuration) / sessionDistance) * 1000 // sekunder per km
-            let minutes = Int(paceSeconds / 60)
-            let seconds = Int(paceSeconds.truncatingRemainder(dividingBy: 60))
-            currentPace = String(format: "%d:%02d", minutes, seconds)
+        // Om vi inte har kört tillräckligt länge eller distans, visa "0:00"
+        if sessionDuration < 10 || sessionDistance < 0.01 {
+            currentPace = "0:00"
+            return
         }
+        
+        // Beräkna tempo (sekunder per km)
+        let paceSeconds = (Double(sessionDuration) / sessionDistance) * 1000
+        
+        // Om tempot är för långsamt (över 20 min/km), visa "0:00"
+        if paceSeconds > 1200 {
+            currentPace = "0:00"
+            return
+        }
+        
+        // Om tempot är för snabbt (under 2 min/km), visa "0:00"
+        if paceSeconds < 120 {
+            currentPace = "0:00"
+            return
+        }
+        
+        let minutes = Int(paceSeconds / 60)
+        let seconds = Int(paceSeconds.truncatingRemainder(dividingBy: 60))
+        currentPace = String(format: "%d:%02d", minutes, seconds)
     }
 
     func formattedTime(_ seconds: Int) -> String {
