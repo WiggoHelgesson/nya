@@ -136,14 +136,14 @@ struct RewardsView: View {
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 16)
                             
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 16) {
-                                    ForEach(rewards) { reward in
-                                        FullScreenRewardCard(reward: reward)
-                                    }
+                            TabView {
+                                ForEach(rewards) { reward in
+                                    FullScreenRewardCard(reward: reward)
+                                        .padding(.horizontal, 16)
                                 }
-                                .padding(.horizontal, 16)
                             }
+                            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                            .frame(height: 400)
                         }
                         
                         Spacer(minLength: 100)
@@ -260,7 +260,7 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width * 0.65) // About 2/3 of screen width like in image
+        .frame(maxWidth: .infinity) // Let TabView handle the sizing
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
