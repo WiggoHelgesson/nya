@@ -39,20 +39,13 @@ struct HomeView: View {
                             ZStack {
                                 // Background circle
                                 Circle()
-                                    .fill(AppColors.brandBlue.opacity(0.1))
+                                    .fill(Color(.systemGray6))
                                 
                                 // Progress circle
                                 Circle()
                                     .trim(from: 0, to: stepProgress)
                                     .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                AppColors.brandBlue,
-                                                AppColors.brandGreen
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
+                                        Color.black,
                                         style: StrokeStyle(lineWidth: 16, lineCap: .round)
                                     )
                                     .rotationEffect(.degrees(-90))
@@ -61,7 +54,7 @@ struct HomeView: View {
                                 VStack(spacing: 8) {
                                     Text("5 426")
                                         .font(.system(size: 48, weight: .black))
-                                        .foregroundColor(AppColors.brandDark)
+                                        .foregroundColor(.black)
                                     
                                     Text("STEG")
                                         .font(.system(size: 16, weight: .semibold))
@@ -69,10 +62,10 @@ struct HomeView: View {
                                     
                                     HStack(spacing: 4) {
                                         Image(systemName: "flame.fill")
-                                            .foregroundColor(.orange)
+                                            .foregroundColor(.gray)
                                         Text("1")
                                             .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(AppColors.brandDark)
+                                            .foregroundColor(.black)
                                     }
                                     .padding(.top, 4)
                                 }
