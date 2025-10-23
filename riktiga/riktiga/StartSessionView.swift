@@ -247,11 +247,6 @@ struct SessionMapView: View {
 
                     // View Other Options
                     NavigationLink(destination: Text("Andra alternativ")) {
-                        Text("Se andra alternativ")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppColors.brandBlue)
-                            .frame(maxWidth: .infinity)
-                            .padding(10)
                     }
                 }
                 .padding(20)
