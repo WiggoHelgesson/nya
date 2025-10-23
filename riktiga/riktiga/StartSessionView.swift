@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import Combine
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
@@ -153,7 +154,7 @@ struct SessionMapView: View {
                     locationManager.requestLocationPermission()
                     locationManager.startTracking()
                 }
-                .onChange(of: locationManager.userLocation) { _, newLocation in
+                .onReceive(locationManager.$userLocation) { newLocation in
                     if let location = newLocation {
                         region.center = location
                     }
