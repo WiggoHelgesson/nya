@@ -43,78 +43,75 @@ struct SelectActivityView: View {
     let activities: [ActivityType] = [.running, .golf, .walking, .hiking]
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                VStack(spacing: 12) {
-                    Text("Välj aktivitet")
-                        .font(.system(size: 28, weight: .bold))
-                    Text("Vilken aktivitet vill du göra idag?")
-                        .font(.body)
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
-                
-                Spacer()
-                
-                VStack(spacing: 16) {
-                    ForEach(activities, id: \.self) { activity in
-                        Button(action: {
-                            selectedActivity = activity
-                            isPresented = false
-                        }) {
-                            HStack(spacing: 16) {
-                                Image(systemName: activity.icon)
-                                    .font(.system(size: 32))
-                                    .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
-                                    .frame(width: 60, height: 60)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(12)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(activity.rawValue)
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(.black)
-                                    Text("Starta ett nytt pass")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                Text("Välj aktivitet")
+                    .font(.system(size: 28, weight: .bold))
+                Text("Vilken aktivitet vill du göra idag?")
+                    .font(.body)
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+            
+            Spacer()
+            
+            VStack(spacing: 16) {
+                ForEach(activities, id: \.self) { activity in
+                    Button(action: {
+                        selectedActivity = activity
+                        isPresented = false
+                    }) {
+                        HStack(spacing: 16) {
+                            Image(systemName: activity.icon)
+                                .font(.system(size: 32))
+                                .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+                                .frame(width: 60, height: 60)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(activity.rawValue)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.black)
+                                Text("Starta ett nytt pass")
+                                    .font(.caption)
                                     .foregroundColor(.gray)
                             }
-                            .padding(16)
-                            .background(Color.white)
-                            .cornerRadius(14)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color(.systemGray6), lineWidth: 1)
-                            )
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
                         }
+                        .padding(16)
+                        .background(Color.white)
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color(.systemGray6), lineWidth: 1)
+                        )
                     }
                 }
-                .padding(16)
-                
-                Spacer()
-                
-                Button(action: {
-                    dismiss()
-                }) {
-                    Text("Avbryt")
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(Color(.systemGray5))
-                        .foregroundColor(.black)
-                        .cornerRadius(25)
-                        .font(.headline)
-                }
-                .padding(16)
             }
-            .background(Color(.systemGray6).opacity(0.3))
-            .navigationBarBackButtonHidden(true)
+            .padding(16)
+            
+            Spacer()
+            
+            Button(action: {
+                dismiss()
+            }) {
+                Text("Avbryt")
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color(.systemGray5))
+                    .foregroundColor(.black)
+                    .cornerRadius(25)
+                    .font(.headline)
+            }
+            .padding(16)
         }
+        .background(Color(.systemGray6).opacity(0.3))
     }
 }
 
@@ -129,7 +126,6 @@ struct SessionMapView: View {
     @State private var isRunning = false
     @State private var timer: Timer?
     @State private var routePoints: [CLLocationCoordinate2D] = []
-    @State private var lastLocationString = ""
     
     var caloriesBurned: Int {
         let caloriesPerMinute = activity == .running ? 10 : activity == .golf ? 6 : activity == .walking ? 5 : 8
@@ -146,6 +142,7 @@ struct SessionMapView: View {
     
     var body: some View {
         ZStack {
+            // Karta
             Map(position: $position) {
                 if let userLocation = locationManager.userLocation {
                     Annotation("", coordinate: userLocation) {
@@ -154,16 +151,12 @@ struct SessionMapView: View {
                             .foregroundColor(.blue)
                     }
                 }
-                
-                if routePoints.count > 1 {
-                    MapPolyline(coordinates: routePoints)
-                        .stroke(.blue, lineWidth: 3)
-                }
             }
             .mapStyle(.standard)
             .ignoresSafeArea()
             
             VStack {
+                // Header
                 HStack {
                     Button(action: {
                         locationManager.stopTracking()
@@ -193,6 +186,7 @@ struct SessionMapView: View {
                 
                 Spacer()
                 
+                // Stats bottom card
                 VStack(spacing: 16) {
                     HStack {
                         Image(systemName: "location.circle.fill")
@@ -233,7 +227,7 @@ struct SessionMapView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(averagePace)
                                 .font(.system(size: 18, weight: .bold))
-                            Text("Average pace")
+                            Text("Avg pace")
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                         }
@@ -275,6 +269,13 @@ struct SessionMapView: View {
         }
         .onAppear {
             locationManager.requestBackgroundLocationPermission()
+            // Uppdatera karta position när vi får location
+            if let userLocation = locationManager.userLocation {
+                position = .region(MKCoordinateRegion(
+                    center: userLocation,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                ))
+            }
         }
     }
     
