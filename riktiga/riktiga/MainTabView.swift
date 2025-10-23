@@ -96,11 +96,14 @@ struct MainTabView: View {
                 .background(
                     ZStack {
                         Color.white.opacity(0.7)
-                        .background(.ultraThinMaterial)
+                        
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(.ultraThinMaterial)
                     }
                 )
                 .cornerRadius(20)
                 .padding(12)
+                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
             }
         }
     }
