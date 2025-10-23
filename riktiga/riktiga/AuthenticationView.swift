@@ -6,29 +6,41 @@ struct AuthenticationView: View {
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.1, green: 0.6, blue: 0.8),
-                    Color(red: 0.2, green: 0.4, blue: 0.9)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Vit bakgrund
+            Color.white
+                .ignoresSafeArea()
             
             VStack(spacing: 20) {
+                // Logo och titel
                 VStack(spacing: 10) {
                     Text("up&down")
                         .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
                     Text("Din aktivitetsapp")
                         .font(.headline)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(.gray)
                 }
-                .padding(.top, 60)
+                .padding(.top, 40)
+                
+                // Bild från Xcode (Image 1)
+                Image("1")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 200)
+                    .padding(.vertical, 20)
+                
+                // Text under bilden
+                VStack(spacing: 8) {
+                    Text("Träna, Få belöningar")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.bottom, 20)
                 
                 Spacer()
                 
+                // Login/Signup formulär
                 VStack(spacing: 20) {
                     Picker("Välj läge", selection: $isLoginMode) {
                         Text("Logga in").tag(true)
