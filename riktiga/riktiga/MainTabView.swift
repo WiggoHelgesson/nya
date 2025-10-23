@@ -9,12 +9,6 @@ struct MainTabView: View {
             TabView(selection: $selectedTab) {
                 // Hem tab
                 HomeView()
-                    .tabItem {
-                        VStack(spacing: 4) {
-                            Image(systemName: "house.fill")
-                            Text("Hem")
-                        }
-                    }
                     .tag(0)
                 
                 // Socialt tab
@@ -23,49 +17,19 @@ struct MainTabView: View {
                         .font(.title)
                     Spacer()
                 }
-                .tabItem {
-                    VStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                        Text("Socialt")
-                    }
-                }
                 .tag(1)
-                
-                // Placeholder för mittknappen
-                VStack {
-                    Text("Starta Pass")
-                }
-                .tabItem {
-                    VStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                        Text("Pass")
-                    }
-                }
-                .tag(2)
                 
                 // Belöningar tab
                 RewardsView()
-                    .tabItem {
-                        VStack(spacing: 4) {
-                            Image(systemName: "star.fill")
-                            Text("Belöningar")
-                        }
-                    }
                     .tag(3)
                 
                 // Profil tab
                 ProfileView()
-                    .tabItem {
-                        VStack(spacing: 4) {
-                            Image(systemName: "person.fill")
-                            Text("Profil")
-                        }
-                    }
                     .tag(4)
             }
-            .tint(.black)
+            .tabViewStyle(.page(indexDisplayMode: .never))
             
-            // Custom Tab Bar
+            // Custom Tab Bar - Liquid Glass
             VStack {
                 Spacer()
                 
