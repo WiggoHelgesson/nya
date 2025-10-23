@@ -9,19 +9,22 @@ class ProfileService {
         do {
             print("🔍 Fetching profile for userId: \(userId)")
             
-            // Försök att dekoda som User
+            // Försök att dekoda - Email finns INTE i profiles tabellen
             do {
-                let profiles: [User] = try await supabase
+                var profiles: [User] = try await supabase
                     .from("profiles")
-                    .select("id, username, current_xp, current_level, is_pro_member")
+                    .select("id, username, current_xp, current_level, is_pro_member")  // NO email!
                     .eq("id", value: userId)
                     .execute()
                     .value
                 
                 print("✅ Decoded profiles: \(profiles)")
                 
-                if let profile = profiles.first {
-                    print("💾 Profile found: \(profile.name), XP: \(profile.currentXP), Level: \(profile.currentLevel)")
+                if var profile = profiles.first {
+                    // Hämta email från auth.user
+                    let session = try await supabase.auth.session
+                    profile.email = session.user.email ?? ""
+                    print("💾 Profile found: \(profile.name), Email: \(profile.email), XP: \(profile.currentXP), Level: \(profile.currentLevel)")
                     return profile
                 } else {
                     print("❌ No profile found for userId: \(userId)")
