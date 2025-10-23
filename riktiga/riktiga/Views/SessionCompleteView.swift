@@ -128,7 +128,6 @@ struct SessionCompleteView: View {
     func saveWorkout() {
         isSaving = true
         
-        // Konvertera bild till base64
         var imageBase64: String? = nil
         if let image = sessionImage, let imageData = image.jpegData(compressionQuality: 0.7) {
             imageBase64 = imageData.base64EncodedString()
@@ -141,7 +140,6 @@ struct SessionCompleteView: View {
             description: description,
             distance: distance,
             duration: duration,
-            calories: calories,
             imageData: imageBase64
         )
         

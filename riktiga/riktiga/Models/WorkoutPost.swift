@@ -8,7 +8,6 @@ struct WorkoutPost: Codable, Identifiable {
     let description: String
     let distance: Double
     let duration: Int
-    let calories: Int
     let imageData: String?
     let createdAt: String
     
@@ -20,12 +19,11 @@ struct WorkoutPost: Codable, Identifiable {
         case description
         case distance
         case duration
-        case calories
         case imageData = "image_data"
         case createdAt = "created_at"
     }
     
-    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String, distance: Double, duration: Int, calories: Int, imageData: String? = nil) {
+    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String, distance: Double, duration: Int, imageData: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -33,7 +31,6 @@ struct WorkoutPost: Codable, Identifiable {
         self.description = description
         self.distance = distance
         self.duration = duration
-        self.calories = calories
         self.imageData = imageData
         self.createdAt = ISO8601DateFormatter().string(from: Date())
     }

@@ -101,14 +101,6 @@ struct WorkoutPostCard: View {
                         .foregroundColor(.gray)
                 }
                 
-                VStack(spacing: 4) {
-                    Text("\(post.calories)")
-                        .font(.headline)
-                    Text("kcal")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                
                 Spacer()
             }
         }
