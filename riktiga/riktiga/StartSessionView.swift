@@ -133,7 +133,6 @@ struct SessionMapView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
     @State private var isRunning = false
-    @State private var isPaused = false
     @State private var sessionDuration: Int = 0
     @State private var sessionDistance: Double = 0.0
     @State private var currentPace: String = "0'00\"/km"
@@ -165,99 +164,93 @@ struct SessionMapView: View {
                 Spacer()
             }
 
-            // MARK: - Stats and Controls Overlay
+            // MARK: - Bottom Stats and Controls
             VStack {
                 Spacer()
 
-                VStack(spacing: 16) {
-                    // Activity Title
-                    Text(activity.rawValue)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.black)
-
-                    // Stats
-                    HStack(spacing: 16) {
-                        StatView(
-                            value: String(format: "%.2f", sessionDistance / 1000),
-                            label: "KM"
-                        )
-                        StatView(
-                            value: formattedTime(sessionDuration),
-                            label: "TID"
-                        )
-                        StatView(
-                            value: currentPace,
-                            label: "TEMPO"
-                        )
+                VStack(spacing: 20) {
+                    // GPS Status
+                    HStack(spacing: 8) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppColors.brandBlue)
+                        Text("GPS")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.black)
                     }
-                    .padding(.vertical, 12)
 
-                    // Control Buttons
-                    if isPaused {
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                isPaused = false
-                                isRunning = true
-                                startTimer()
-                            }) {
-                                Text("FORTSÄTT")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(12)
-                                    .background(AppColors.brandBlue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(10)
-                            }
+                    // Status
+                    VStack(spacing: 8) {
+                        Text("Inspelning pågår")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.black)
+                    }
 
-                            Button(action: {
-                                stopTimer()
-                                dismiss()
-                            }) {
-                                Text("AVSLUTA")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(12)
-                                    .background(.black)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(10)
-                            }
+                    // Stats Grid
+                    HStack(spacing: 24) {
+                        VStack(spacing: 4) {
+                            Text(String(format: "%.2f", sessionDistance))
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(.black)
+                            Text("km")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.gray)
                         }
-                    } else {
-                        Button(action: {
-                            if isRunning {
-                                isPaused = true
-                                isRunning = false
-                                stopTimer()
-                            } else {
-                                startTimer()
-                                isRunning = true
-                            }
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: isRunning ? "pause.fill" : "play.fill")
-                                Text(isRunning ? "PAUSA" : "STARTA")
-                            }
+                        
+                        VStack(spacing: 4) {
+                            Text(formattedTime(sessionDuration))
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(.black)
+                            Text("Tid")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.gray)
+                        }
+                        
+                        VStack(spacing: 4) {
+                            Text(currentPace)
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(.black)
+                            Text("Tempo")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+
+                    // Start/Pause Button
+                    Button(action: {
+                        if isRunning {
+                            stopTimer()
+                            isRunning = false
+                        } else {
+                            startTimer()
+                            isRunning = true
+                        }
+                    }) {
+                        Text(isRunning ? "Pausa" : "Starta löpning")
                             .font(.system(size: 16, weight: .black))
                             .frame(maxWidth: .infinity)
-                            .padding(12)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        AppColors.brandBlue,
-                                        AppColors.brandGreen
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .padding(14)
+                            .background(.black)
                             .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 16)
+
+                    // View Other Options
+                    NavigationLink(destination: Text("Andra alternativ")) {
+                        Text("Se andra alternativ")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.brandBlue)
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
                     }
                 }
-                .padding(16)
+                .padding(20)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 20)
                         .fill(Color.white.opacity(0.95))
                         .shadow(radius: 10)
                 )
@@ -303,23 +296,6 @@ struct SessionMapView: View {
         } else {
             return String(format: "%02d:%02d", minutes, secs)
         }
-    }
-}
-
-struct StatView: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 18, weight: .black))
-                .foregroundColor(.black)
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
