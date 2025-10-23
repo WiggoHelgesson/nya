@@ -313,6 +313,7 @@ struct FullScreenRewardCard: View {
 
 struct RewardDetailView: View {
     let reward: RewardCard
+    @State private var showCheckout = false
     
     var body: some View {
         ScrollView {
@@ -353,8 +354,7 @@ struct RewardDetailView: View {
                     
                     // Get discount button
                     Button(action: {
-                        // Handle get discount action
-                        print("Getting discount for \(reward.brandName)")
+                        showCheckout = true
                     }) {
                         Text("Hämta rabatt")
                             .font(.system(size: 14, weight: .bold))
@@ -372,6 +372,9 @@ struct RewardDetailView: View {
         }
         .navigationTitle(reward.brandName)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showCheckout) {
+            CheckoutView(reward: reward)
+        }
     }
     
     private func getCompanyDescription(for brandName: String) -> String {
@@ -398,6 +401,107 @@ struct RewardDetailView: View {
             return "ZEN ENERGY erbjuder energidrycker och supplement som ger dig den extra energin du behöver för din träning och vardag."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
+        }
+    }
+}
+
+struct CheckoutView: View {
+    let reward: RewardCard
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var email = ""
+    @State private var city = ""
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header with reward info
+                    VStack(spacing: 12) {
+                        Text(reward.discount)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.black)
+                        
+                        Text(reward.brandName)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.top, 20)
+                    
+                    // Form fields
+                    VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Förnamn")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            TextField("Ange ditt förnamn", text: $firstName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Efternamn")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            TextField("Ange ditt efternamn", text: $lastName)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("E-post")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            TextField("Ange din e-post", text: $email)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Stad")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            TextField("Ange din stad", text: $city)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer(minLength: 40)
+                    
+                    // Confirm purchase button
+                    Button(action: {
+                        // Handle purchase confirmation
+                        print("Confirming purchase for \(reward.brandName)")
+                        dismiss()
+                    }) {
+                        Text("Bekräfta köp")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(16)
+                            .background(Color.black)
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                    .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty)
+                }
+            }
+            .navigationTitle("Checkout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Avbryt") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }
