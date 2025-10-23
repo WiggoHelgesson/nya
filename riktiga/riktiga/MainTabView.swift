@@ -37,7 +37,7 @@ struct MainTabView: View {
                                 .font(.caption)
                         }
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(selectedTab == 0 ? .black : .gray)
+                        .foregroundColor(selectedTab == 0 ? .black : .gray.opacity(0.6))
                     }
                     
                     // Aktiviteter
@@ -49,7 +49,7 @@ struct MainTabView: View {
                                 .font(.caption)
                         }
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(selectedTab == 1 ? .black : .gray)
+                        .foregroundColor(selectedTab == 1 ? .black : .gray.opacity(0.6))
                     }
                     
                     // Starta Pass - Center Button
@@ -64,8 +64,20 @@ struct MainTabView: View {
                         .font(.caption)
                         .foregroundColor(.white)
                         .padding(12)
-                        .background(Color(red: 0.15, green: 0.2, blue: 0.35))
-                        .cornerRadius(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color(red: 0.2, green: 0.25, blue: 0.4),
+                                            Color(red: 0.15, green: 0.2, blue: 0.35)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                        )
                     }
                     
                     // Belöningar
@@ -77,7 +89,7 @@ struct MainTabView: View {
                                 .font(.caption)
                         }
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(selectedTab == 2 ? .black : .gray)
+                        .foregroundColor(selectedTab == 2 ? .black : .gray.opacity(0.6))
                     }
                     
                     // Profil
@@ -89,21 +101,51 @@ struct MainTabView: View {
                                 .font(.caption)
                         }
                         .frame(maxWidth: .infinity)
-                        .foregroundColor(selectedTab == 3 ? .black : .gray)
+                        .foregroundColor(selectedTab == 3 ? .black : .gray.opacity(0.6))
                     }
                 }
                 .frame(height: 70)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
                 .background(
+                    // Liquid Glass Background with strong blur
                     ZStack {
-                        Color.white.opacity(0.7)
-                        
-                        RoundedRectangle(cornerRadius: 20)
+                        // Blur layer
+                        RoundedRectangle(cornerRadius: 24)
                             .fill(.ultraThinMaterial)
+                        
+                        // Glass overlay
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.25),
+                                        Color.white.opacity(0.1)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        // Border for glass effect
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.1)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
                     }
+                    .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.white.opacity(0.5), radius: 6, x: 0, y: -2)
                 )
-                .cornerRadius(20)
-                .padding(12)
-                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
         }
     }
