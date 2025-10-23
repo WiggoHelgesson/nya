@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import PhotosUI
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
@@ -124,8 +125,10 @@ struct SessionMapView: View {
     @State private var position: MapCameraPosition = .automatic
     @State private var elapsedTime: Int = 0
     @State private var isRunning = false
+    @State private var isPaused = false
     @State private var timer: Timer?
-    @State private var routePoints: [CLLocationCoordinate2D] = []
+    @State private var sessionDistance: Double = 0
+    @State private var showSessionComplete = false
     
     var caloriesBurned: Int {
         let caloriesPerMinute = activity == .running ? 10 : activity == .golf ? 6 : activity == .walking ? 5 : 8
@@ -141,140 +144,158 @@ struct SessionMapView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Karta
-            Map(position: $position) {
-                if let userLocation = locationManager.userLocation {
-                    Annotation("", coordinate: userLocation) {
-                        Image(systemName: "location.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.blue)
+        if showSessionComplete {
+            SessionCompleteView(
+                activity: activity,
+                distance: locationManager.distance,
+                duration: elapsedTime,
+                calories: caloriesBurned,
+                showSessionComplete: $showSessionComplete,
+                isPresented: $isPresented
+            )
+        } else {
+            ZStack {
+                Map(position: $position) {
+                    if let userLocation = locationManager.userLocation {
+                        Annotation("", coordinate: userLocation) {
+                            Image(systemName: "location.circle.fill")
+                                .font(.system(size: 30))
+                                .foregroundColor(.blue)
+                        }
                     }
                 }
-            }
-            .mapStyle(.standard)
-            .ignoresSafeArea()
-            
-            VStack {
-                // Header
-                HStack {
-                    Button(action: {
-                        locationManager.stopTracking()
-                        stopTimer()
-                        dismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                    }
-                    
-                    Spacer()
-                    
-                    Text(activity.rawValue)
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    Button(action: {}) {
-                        Image(systemName: "ellipsis")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                    }
-                }
-                .padding(16)
-                .background(Color.white.opacity(0.95))
+                .mapStyle(.standard)
+                .ignoresSafeArea()
                 
-                Spacer()
-                
-                // Stats bottom card
-                VStack(spacing: 16) {
+                VStack {
                     HStack {
-                        Image(systemName: "location.circle.fill")
-                            .foregroundColor(.red)
-                        Text("GPS")
-                            .font(.caption)
-                        Spacer()
-                    }
-                    
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("⭕m²")
-                                .font(.system(size: 32, weight: .bold))
-                            Text("Capture in Progress")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        Spacer()
-                    }
-                    
-                    HStack(spacing: 24) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(String(format: "%.2f", locationManager.distance))
-                                .font(.system(size: 18, weight: .bold))
-                            Text("km")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(formattedTime(elapsedTime))
-                                .font(.system(size: 18, weight: .bold))
-                            Text("Duration")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(averagePace)
-                                .font(.system(size: 18, weight: .bold))
-                            Text("Avg pace")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Spacer()
-                    }
-                    
-                    Button(action: {
-                        if isRunning {
-                            stopTimer()
+                        Button(action: {
                             locationManager.stopTracking()
-                        } else {
-                            startTimer()
-                            locationManager.startTracking()
+                            stopTimer()
+                            dismiss()
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                                .foregroundColor(.black)
+                                .padding(12)
+                                .background(Color.white)
+                                .clipShape(Circle())
                         }
-                        isRunning.toggle()
-                    }) {
-                        Text(isRunning ? "Pausa" : "Start Run")
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Color.black)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                            .font(.headline)
+                        Spacer()
                     }
+                    .padding(16)
                     
-                    Button(action: {}) {
-                        Text("View other options")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .underline()
+                    Spacer()
+                    
+                    VStack(spacing: 16) {
+                        HStack {
+                            Image(systemName: "location.circle.fill")
+                                .foregroundColor(.red)
+                            Text("GPS")
+                                .font(.caption)
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("⭕m²")
+                                    .font(.system(size: 32, weight: .bold))
+                                Text("Capture in Progress")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 24) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(String(format: "%.2f", locationManager.distance))
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("km")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(formattedTime(elapsedTime))
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("Duration")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(averagePace)
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("Avg pace")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        if isPaused {
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    isPaused = false
+                                    isRunning = true
+                                    startTimer()
+                                    locationManager.startTracking()
+                                }) {
+                                    Text("Fortsätt")
+                                        .frame(maxWidth: .infinity)
+                                        .padding(14)
+                                        .background(Color(red: 0.1, green: 0.6, blue: 0.8))
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .font(.headline)
+                                }
+                                
+                                Button(action: {
+                                    sessionDistance = locationManager.distance
+                                    showSessionComplete = true
+                                }) {
+                                    Text("Avsluta")
+                                        .frame(maxWidth: .infinity)
+                                        .padding(14)
+                                        .background(Color.black)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .font(.headline)
+                                }
+                            }
+                        } else {
+                            Button(action: {
+                                if isRunning {
+                                    isPaused = true
+                                    isRunning = false
+                                    stopTimer()
+                                    locationManager.stopTracking()
+                                } else {
+                                    startTimer()
+                                    locationManager.startTracking()
+                                    isRunning = true
+                                }
+                            }) {
+                                Text(isRunning ? "Pausa" : "Start Run")
+                                    .frame(maxWidth: .infinity)
+                                    .padding(14)
+                                    .background(Color.black)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                                    .font(.headline)
+                            }
+                        }
                     }
+                    .padding(16)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .padding(16)
                 }
-                .padding(16)
-                .background(Color.white)
-                .cornerRadius(16)
-                .padding(16)
             }
-        }
-        .onAppear {
-            locationManager.requestBackgroundLocationPermission()
-            // Uppdatera karta position när vi får location
-            if let userLocation = locationManager.userLocation {
-                position = .region(MKCoordinateRegion(
-                    center: userLocation,
-                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                ))
+            .onAppear {
+                locationManager.requestLocationPermission()
             }
         }
     }
@@ -298,6 +319,166 @@ struct SessionMapView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, secs)
         } else {
             return String(format: "%02d:%02d", minutes, secs)
+        }
+    }
+}
+
+struct SessionCompleteView: View {
+    let activity: ActivityType
+    let distance: Double
+    let duration: Int
+    let calories: Int
+    @Binding var showSessionComplete: Bool
+    @Binding var isPresented: Bool
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var title: String = ""
+    @State private var description: String = ""
+    @State private var sessionImage: UIImage?
+    @State private var showImagePicker = false
+    @State private var selectedItem: PhotosPickerItem?
+    
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                HStack {
+                    Button(action: {
+                        showSessionComplete = false
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.black)
+                    }
+                    Spacer()
+                    Text("Slutför pass")
+                        .font(.headline)
+                    Spacer()
+                    Button(action: {}) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.black)
+                    }
+                }
+                .padding(16)
+                
+                ScrollView {
+                    VStack(spacing: 20) {
+                        ActivitySummaryCard(activity: activity, distance: distance, duration: duration)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Rubrik")
+                                .font(.headline)
+                            TextField("Ge ditt pass en titel", text: $title)
+                                .padding(12)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                        }
+                        .padding(.horizontal, 16)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Beskrivning")
+                                .font(.headline)
+                            TextEditor(text: $description)
+                                .frame(height: 100)
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                        }
+                        .padding(.horizontal, 16)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Bild")
+                                .font(.headline)
+                            
+                            if let sessionImage = sessionImage {
+                                Image(uiImage: sessionImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 200)
+                                    .cornerRadius(8)
+                                    .clipped()
+                            } else {
+                                PhotosPicker(selection: $selectedItem, matching: .images) {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "photo.on.rectangle")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(.gray)
+                                        Text("Lägg till bild")
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 150)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        
+                        Button(action: {
+                            showSessionComplete = false
+                            isPresented = true
+                            dismiss()
+                        }) {
+                            Text("Spara pass")
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(Color.black)
+                                .foregroundColor(.white)
+                                .cornerRadius(25)
+                                .font(.headline)
+                        }
+                        .padding(16)
+                    }
+                }
+            }
+        }
+        .onChange(of: selectedItem) { oldValue, newValue in
+            Task {
+                if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                    if let uiImage = UIImage(data: data) {
+                        sessionImage = uiImage
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ActivitySummaryCard: View {
+    let activity: ActivityType
+    let distance: Double
+    let duration: Int
+    
+    var body: some View {
+        HStack {
+            Image(systemName: activity.icon)
+                .font(.system(size: 24))
+                .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(activity.rawValue)
+                    .font(.headline)
+                Text(String(format: "%.2f km • %@", distance, formattedDuration(duration)))
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .padding(.horizontal, 16)
+    }
+    
+    func formattedDuration(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        } else {
+            return String(format: "%dm", minutes)
         }
     }
 }
