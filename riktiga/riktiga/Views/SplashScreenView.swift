@@ -30,22 +30,22 @@ struct SplashScreenView: View {
                         .shadow(radius: 10)
                     
                     // MARK: - Text Animation (exakt som auth-sidan)
-                    VStack(spacing: 0) {
+                    VStack(spacing: 2) {
                         Text("TRÄNA,")
                             .font(.system(size: 48, weight: .black))
                             .foregroundColor(.black)
+                            .lineLimit(1)
                         
-                        HStack(spacing: 0) {
-                            Text("FÅ BELÖNINGAR")
-                                .font(.system(size: 48, weight: .black))
-                                .foregroundColor(.white)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
-                        .background(AppColors.brandBlue)
-                        .cornerRadius(8)
-                        .rotationEffect(.degrees(-3))
+                        Text("FÅ BELÖNINGAR")
+                            .font(.system(size: 42, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(AppColors.brandBlue)
+                            .cornerRadius(8)
+                            .rotationEffect(.degrees(-3))
                     }
                     .offset(y: textOffset)
                     .opacity(textOpacity)
