@@ -22,30 +22,34 @@ struct SplashScreenView: View {
                     Image("1")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 200)
+                        .frame(height: 180)
                         .cornerRadius(20)
                         .clipped()
                         .scaleEffect(logoScale)
                         .opacity(logoOpacity)
                         .shadow(radius: 10)
                     
-                    // MARK: - Text Animation (på en rad)
-                    HStack(spacing: 8) {
-                        Text("TRÄNA, FÅ")
-                            .font(.system(size: 40, weight: .black))
+                    // MARK: - Text Animation (exakt som auth-sidan)
+                    VStack(spacing: 0) {
+                        Text("TRÄNA,")
+                            .font(.system(size: 48, weight: .black))
                             .foregroundColor(.black)
                         
-                        Text("BELÖNINGAR")
-                            .font(.system(size: 40, weight: .black))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
-                            .background(AppColors.brandYellow)
-                            .cornerRadius(8)
-                            .rotationEffect(.degrees(-3))
+                        HStack(spacing: 0) {
+                            Text("FÅ BELÖNINGAR")
+                                .font(.system(size: 48, weight: .black))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
+                        .background(AppColors.brandBlue)
+                        .cornerRadius(8)
+                        .rotationEffect(.degrees(-3))
                     }
                     .offset(y: textOffset)
                     .opacity(textOpacity)
+                    .padding(.horizontal, 20)
                     
                     Spacer()
                 }
