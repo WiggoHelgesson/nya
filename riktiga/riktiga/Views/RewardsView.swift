@@ -511,6 +511,8 @@ struct CheckoutView: View {
 struct ConfirmationView: View {
     let reward: RewardCard
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var purchaseService = PurchaseService.shared
     
     var body: some View {
         NavigationStack {
@@ -631,6 +633,12 @@ struct ConfirmationView: View {
                             .background(Color(.systemGray5))
                             .cornerRadius(16)
                     }
+                }
+            }
+            .onAppear {
+                // Save purchase when confirmation view appears
+                if let userId = authViewModel.currentUser?.id {
+                    purchaseService.addMockPurchase(reward: reward, userId: userId)
                 }
             }
         }

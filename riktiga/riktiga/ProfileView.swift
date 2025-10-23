@@ -6,6 +6,7 @@ struct ProfileView: View {
     @State private var profileImage: UIImage?
     @State private var showSettings = false
     @State private var showStatistics = false
+    @State private var showMyPurchases = false
     
     var body: some View {
         NavigationStack {
@@ -108,7 +109,9 @@ struct ProfileView: View {
                         ActionButton(
                             icon: "cart.fill",
                             label: "Mina köp",
-                            action: {}
+                            action: {
+                                showMyPurchases = true
+                            }
                         )
                         
                         ActionButton(
@@ -145,6 +148,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showStatistics) {
                 StatisticsView()
+            }
+            .sheet(isPresented: $showMyPurchases) {
+                MyPurchasesView()
             }
         }
     }
