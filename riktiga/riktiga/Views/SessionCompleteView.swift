@@ -16,6 +16,7 @@ struct SessionCompleteView: View {
     @State private var sessionImage: UIImage?
     @State private var selectedItem: PhotosPickerItem?
     @State private var isSaving = false
+    @State private var showDeleteConfirmation = false
     
     var body: some View {
         ZStack {
@@ -23,18 +24,12 @@ struct SessionCompleteView: View {
             
             VStack(spacing: 0) {
                 HStack {
-                    Button(action: {
-                        isPresented = false
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(.black)
-                    }
                     Spacer()
                     Text("Slutför pass")
                         .font(.headline)
                     Spacer()
                     Button(action: {
-                        isPresented = false
+                        showDeleteConfirmation = true
                     }) {
                         Image(systemName: "xmark")
                             .foregroundColor(.black)
@@ -113,6 +108,58 @@ struct SessionCompleteView: View {
                         .disabled(isSaving || title.isEmpty)
                         .padding(16)
                     }
+                }
+            }
+            
+            // MARK: - Delete Confirmation Popup
+            if showDeleteConfirmation {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        Text("Vill du verkligen radera passet?")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("Alla data kommer att försvinna")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                        
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                showDeleteConfirmation = false
+                            }) {
+                                Text("Avbryt")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Color(.systemGray5))
+                                    .foregroundColor(.black)
+                                    .cornerRadius(8)
+                            }
+                            
+                            Button(action: {
+                                showDeleteConfirmation = false
+                                isPresented = false
+                            }) {
+                                Text("Radera")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Color.red)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .padding(24)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(radius: 20)
+                    .padding(40)
                 }
             }
         }

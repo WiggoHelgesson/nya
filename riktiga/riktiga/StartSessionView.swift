@@ -347,6 +347,7 @@ struct SessionMapView: View {
                 )
             }
         }
+        .navigationBarHidden(true)
         .onDisappear {
             stopTimer()
         }
