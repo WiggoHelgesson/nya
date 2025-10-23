@@ -153,7 +153,7 @@ struct SessionMapView: View {
                     locationManager.requestLocationPermission()
                     locationManager.startTracking()
                 }
-                .onChange(of: locationManager.userLocation) { newLocation in
+                .onChange(of: locationManager.userLocation) { _, newLocation in
                     if let location = newLocation {
                         region.center = location
                     }
@@ -377,13 +377,6 @@ struct SessionMapView: View {
         isRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             sessionDuration += 1
-            
-            // Simulera distans bara om vi "springer" (var 3:e sekund för realistisk simulering)
-            if sessionDuration % 3 == 0 {
-                // Simulera ca 10 km/h löpning (2.78 m/s)
-                sessionDistance += 0.00278
-            }
-            
             updatePace()
         }
     }
