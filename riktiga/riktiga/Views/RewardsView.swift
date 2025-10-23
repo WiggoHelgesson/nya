@@ -324,9 +324,9 @@ struct RewardDetailView: View {
                     .frame(height: 250)
                     .clipped()
                 
-                VStack(spacing: 16) {
+                VStack(spacing: 20) {
                     // Discount and brand name
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         Text(reward.discount)
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.black)
@@ -335,8 +335,8 @@ struct RewardDetailView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                     }
-                    .padding(.top, 12)
-                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.horizontal, 40)
                     
                     // Company description
                     VStack(alignment: .leading, spacing: 8) {
@@ -349,7 +349,7 @@ struct RewardDetailView: View {
                             .foregroundColor(.gray)
                             .lineLimit(nil)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 40)
                     
                     // Get discount button
                     Button(action: {
@@ -364,9 +364,9 @@ struct RewardDetailView: View {
                             .background(Color.black)
                             .cornerRadius(8)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 20)
+                    .padding(.bottom, 30)
                 }
             }
         }
