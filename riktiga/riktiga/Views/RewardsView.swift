@@ -146,6 +146,7 @@ struct RewardsView: View {
                                         }
                                     }
                                     .padding(.horizontal, 16)
+                                    .scrollTargetLayout()
                                 }
                                 .scrollTargetBehavior(.viewAligned)
                                 .onAppear {
