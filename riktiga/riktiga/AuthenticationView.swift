@@ -18,6 +18,8 @@ struct AuthenticationView: View {
                     .frame(height: 200)
                     .padding(.vertical, 20)
                     .padding(.top, 40)
+                    .cornerRadius(20)
+                    .clipped()
                 
                 // Text under bilden
                 VStack(spacing: 8) {
