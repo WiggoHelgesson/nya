@@ -6,17 +6,24 @@ struct AuthenticationView: View {
     
     var body: some View {
         ZStack {
-            Color.white
-                .ignoresSafeArea()
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.1, green: 0.6, blue: 0.8),
+                    Color(red: 0.2, green: 0.4, blue: 0.9)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
             VStack(spacing: 20) {
                 VStack(spacing: 10) {
                     Text("up&down")
                         .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
+                        .foregroundColor(.white)
                     Text("Din aktivitetsapp")
                         .font(.headline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.9))
                 }
                 .padding(.top, 60)
                 
