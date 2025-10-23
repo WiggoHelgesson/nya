@@ -138,8 +138,6 @@ struct SessionCompleteView: View {
             activityType: activity.rawValue,
             title: title,
             description: description,
-            distance: distance,
-            duration: duration,
             imageData: imageBase64
         )
         

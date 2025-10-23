@@ -80,28 +80,8 @@ struct WorkoutPostCard: View {
             if !post.description.isEmpty {
                 Text(post.description)
                     .font(.caption)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .foregroundColor(.gray)
-            }
-            
-            HStack(spacing: 20) {
-                VStack(spacing: 4) {
-                    Text(String(format: "%.2f", post.distance))
-                        .font(.headline)
-                    Text("km")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                
-                VStack(spacing: 4) {
-                    Text(formatDuration(post.duration))
-                        .font(.headline)
-                    Text("Duration")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
             }
         }
         .padding(16)
@@ -138,16 +118,6 @@ struct WorkoutPostCard: View {
             return dateFormatter.string(from: date)
         }
         return dateString
-    }
-    
-    func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        if hours > 0 {
-            return String(format: "%dh %dm", hours, minutes)
-        } else {
-            return String(format: "%dm", minutes)
-        }
     }
     
     func decodeImage(_ base64: String) -> UIImage? {
