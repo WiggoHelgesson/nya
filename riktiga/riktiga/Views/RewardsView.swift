@@ -93,6 +93,24 @@ struct RewardsView: View {
             imageName: "12",
             category: "Gym",
             isBookmarked: false
+        ),
+        RewardCard(
+            id: 10,
+            brandName: "ZEN ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "13",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 11,
+            brandName: "ZEN ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "13",
+            category: "Löpning",
+            isBookmarked: false
         )
     ]
     
