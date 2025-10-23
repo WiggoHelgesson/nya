@@ -137,12 +137,12 @@ struct RewardsView: View {
                                 .padding(.horizontal, 16)
                             
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 16) {
+                                HStack(spacing: 8) {
                                     ForEach(rewards) { reward in
                                         FullScreenRewardCard(reward: reward)
                                     }
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, 8)
                             }
                         }
                         
@@ -232,7 +232,7 @@ struct FullScreenRewardCard: View {
             Image(reward.imageName)
                 .resizable()
                 .scaledToFill()
-                .frame(height: 500) // Larger height like in the image
+                .frame(height: 600) // Match the image proportions exactly
                 .clipped()
             
             // Info Section - Clean like in the image
@@ -260,7 +260,7 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width - 32) // Full screen width minus padding
+        .frame(width: UIScreen.main.bounds.width - 16) // Almost full screen width
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
