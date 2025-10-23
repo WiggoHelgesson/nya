@@ -5,7 +5,6 @@ struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var selectedTab = 0
     @State private var showStartSession = false
-    @State private var shimmerOffset: CGFloat = -200
     
     var body: some View {
         NavigationStack {
@@ -135,89 +134,32 @@ struct MainTabView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(
-                        // Real Liquid Glass Background
-                        ZStack {
-                            // Base blur layer with stronger blur
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(.ultraThinMaterial)
-                                .blur(radius: 1)
-                            
-                            // Glass overlay with stronger gradient
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.white.opacity(0.4),
-                                            Color.white.opacity(0.2),
-                                            Color.white.opacity(0.1),
-                                            Color.white.opacity(0.05)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                        // Apple Liquid Glass Background
+                        RoundedRectangle(cornerRadius: 28)
+                            .fill(.regularMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 28)
+                                    .fill(.thinMaterial)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 28)
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.white.opacity(0.2),
+                                                Color.white.opacity(0.1),
+                                                Color.clear,
+                                                Color.white.opacity(0.1),
+                                                Color.white.opacity(0.2)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.5
                                     )
-                                )
-                            
-                            // Animated liquid shimmer effect
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(stops: [
-                                            .init(color: Color.clear, location: 0),
-                                            .init(color: Color.clear, location: 0.3),
-                                            .init(color: Color.white.opacity(0.3), location: 0.5),
-                                            .init(color: Color.clear, location: 0.7),
-                                            .init(color: Color.clear, location: 1)
-                                        ]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .offset(x: shimmerOffset)
-                                .clipped()
-                            
-                            // Secondary shimmer layer
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(stops: [
-                                            .init(color: Color.clear, location: 0),
-                                            .init(color: Color.white.opacity(0.1), location: 0.4),
-                                            .init(color: Color.white.opacity(0.2), location: 0.5),
-                                            .init(color: Color.white.opacity(0.1), location: 0.6),
-                                            .init(color: Color.clear, location: 1)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .rotationEffect(.degrees(30))
-                                .offset(x: shimmerOffset * 0.7)
-                                .clipped()
-                            
-                            // Enhanced border with gradient
-                            RoundedRectangle(cornerRadius: 28)
-                                .stroke(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.white.opacity(0.6),
-                                            Color.white.opacity(0.3),
-                                            Color.white.opacity(0.1),
-                                            Color.white.opacity(0.3),
-                                            Color.white.opacity(0.6)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 2
-                                )
-                        }
-                        .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
-                        .shadow(color: Color.white.opacity(0.8), radius: 10, x: 0, y: -5)
-                        .onAppear {
-                            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                                shimmerOffset = 200
-                            }
-                        }
+                            )
+                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                            .shadow(color: Color.white.opacity(0.3), radius: 5, x: 0, y: -2)
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
