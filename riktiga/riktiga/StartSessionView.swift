@@ -135,7 +135,7 @@ struct SessionMapView: View {
     @State private var isRunning = false
     @State private var sessionDuration: Int = 0
     @State private var sessionDistance: Double = 0.0
-    @State private var currentPace: String = "0'00\"/km"
+    @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
     @Environment(\.dismiss) var dismiss
 
@@ -164,11 +164,11 @@ struct SessionMapView: View {
                 Spacer()
             }
 
-            // MARK: - Bottom Stats and Controls
+            // MARK: - Bottom Stats and Controls (Exakt som bilden)
             VStack {
                 Spacer()
 
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     // GPS Status
                     HStack(spacing: 8) {
                         Image(systemName: "location.fill")
@@ -179,27 +179,35 @@ struct SessionMapView: View {
                             .foregroundColor(.black)
                     }
 
-                    // Status
-                    VStack(spacing: 8) {
-                        Text("Inspelning pågår")
-                            .font(.system(size: 14, weight: .semibold))
+                    // Main Distance Display (Längst upp i fetstil)
+                    VStack(spacing: 4) {
+                        Text(String(format: "%.2f", sessionDistance))
+                            .font(.system(size: 36, weight: .black))
+                            .foregroundColor(.black)
+                        Text("km")
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.black)
                     }
 
-                    // Stats Grid
-                    HStack(spacing: 24) {
+                    // Status Text
+                    Text("Inspelning pågår")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
+
+                    // Three Column Stats
+                    HStack(spacing: 20) {
                         VStack(spacing: 4) {
                             Text(String(format: "%.2f", sessionDistance))
-                                .font(.system(size: 24, weight: .black))
+                                .font(.system(size: 20, weight: .black))
                                 .foregroundColor(.black)
-                            Text("km")
+                            Text("Distans")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
                         }
                         
                         VStack(spacing: 4) {
                             Text(formattedTime(sessionDuration))
-                                .font(.system(size: 24, weight: .black))
+                                .font(.system(size: 20, weight: .black))
                                 .foregroundColor(.black)
                             Text("Tid")
                                 .font(.system(size: 12, weight: .semibold))
@@ -208,14 +216,12 @@ struct SessionMapView: View {
                         
                         VStack(spacing: 4) {
                             Text(currentPace)
-                                .font(.system(size: 24, weight: .black))
+                                .font(.system(size: 20, weight: .black))
                                 .foregroundColor(.black)
                             Text("Tempo")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
                         }
-                        
-                        Spacer()
                     }
                     .padding(.horizontal, 16)
 
@@ -283,7 +289,7 @@ struct SessionMapView: View {
             let paceSeconds = (Double(sessionDuration) / sessionDistance) * 1000 // sekunder per km
             let minutes = Int(paceSeconds / 60)
             let seconds = Int(paceSeconds.truncatingRemainder(dividingBy: 60))
-            currentPace = String(format: "%d'%02d\"/km", minutes, seconds)
+            currentPace = String(format: "%d:%02d", minutes, seconds)
         }
     }
 
