@@ -134,10 +134,39 @@ struct MainTabView: View {
                     }
                 }
                 .frame(height: 80)
-                .background(Color.white)
-                .border(Color.gray.opacity(0.2), width: 1)
+                .background(
+                    ZStack {
+                        // Liquid Glass Effect Background
+                        Color.white.opacity(0.7)
+                        
+                        // Blur effect
+                        .background(.ultraThinMaterial)
+                    }
+                )
+                .backdrop()
+                .cornerRadius(20)
+                .padding(12)
             }
         }
+    }
+}
+
+// Glass morphism backdrop modifier
+struct GlassBackdrop: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.white.opacity(0.1))
+                    .background(.ultraThinMaterial)
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
+    }
+}
+
+extension View {
+    func backdrop() -> some View {
+        modifier(GlassBackdrop())
     }
 }
 
