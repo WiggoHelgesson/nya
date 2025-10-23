@@ -147,13 +147,30 @@ struct SessionMapView: View {
     var body: some View {
         ZStack {
             // MARK: - Map Background
-            MapReader { reader in
-                Map(coordinateRegion: $region, showsUserLocation: true) {
-                    // Visa rutten som en svart linje
-                    MapPolyline(coordinates: locationManager.routeCoordinates)
-                        .stroke(.black, lineWidth: 4)
-                }
+            Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
+                .overlay(
+                    // Route visualization overlay
+                    GeometryReader { geometry in
+                        Path { path in
+                            guard locationManager.routeCoordinates.count > 1 else { return }
+                            
+                            for (index, coordinate) in locationManager.routeCoordinates.enumerated() {
+                                let point = CGPoint(
+                                    x: CGFloat(coordinate.longitude - region.center.longitude) * 100000 + geometry.size.width / 2,
+                                    y: CGFloat(region.center.latitude - coordinate.latitude) * 100000 + geometry.size.height / 2
+                                )
+                                
+                                if index == 0 {
+                                    path.move(to: point)
+                                } else {
+                                    path.addLine(to: point)
+                                }
+                            }
+                        }
+                        .stroke(.black, lineWidth: 4)
+                    }
+                )
                 .onAppear {
                     // Request location permission and start tracking
                     locationManager.requestLocationPermission()
@@ -164,7 +181,6 @@ struct SessionMapView: View {
                         region.center = location
                     }
                 }
-            }
 
             // MARK: - Back Button
             VStack {
