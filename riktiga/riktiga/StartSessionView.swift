@@ -74,7 +74,7 @@ struct SelectActivityView: View {
                         HStack(spacing: 16) {
                             Image(systemName: activity.icon)
                                 .font(.system(size: 32))
-                                .foregroundColor(AppColors.brandBlue)
+                                .foregroundColor(.black)
                                 .frame(width: 60, height: 60)
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
