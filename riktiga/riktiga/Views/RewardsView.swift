@@ -413,6 +413,7 @@ struct CheckoutView: View {
     @State private var lastName = ""
     @State private var email = ""
     @State private var city = ""
+    @State private var showConfirmation = false
     
     var body: some View {
         NavigationStack {
@@ -476,9 +477,7 @@ struct CheckoutView: View {
                     
                     // Confirm purchase button
                     Button(action: {
-                        // Handle purchase confirmation
-                        print("Confirming purchase for \(reward.brandName)")
-                        dismiss()
+                        showConfirmation = true
                     }) {
                         Text("Bekräfta köp")
                             .font(.system(size: 16, weight: .bold))
@@ -502,6 +501,165 @@ struct CheckoutView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showConfirmation) {
+                ConfirmationView(reward: reward)
+            }
+        }
+    }
+}
+
+struct ConfirmationView: View {
+    let reward: RewardCard
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Main content card
+                VStack(spacing: 24) {
+                    // Confirmation message
+                    VStack(spacing: 16) {
+                        Text("Tack för din beställning!")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("För att ta del av erbjudandet:")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Text("1. Kopiera koden nedan")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                            
+                            Text("2. Använd den på erbjudandets hemsida")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.top, 40)
+                    
+                    // Code section
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text(getDiscountCode(for: reward.brandName))
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Color.white)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                            
+                            Button(action: {
+                                // Copy code to clipboard
+                                UIPasteboard.general.string = getDiscountCode(for: reward.brandName)
+                            }) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color.black)
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                    
+                    // Additional information
+                    Text("Du hittar information om din beställning i 'Mina köp'")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                    
+                    Spacer()
+                    
+                    // Action buttons
+                    VStack(spacing: 12) {
+                        Button(action: {
+                            // Visit website action
+                            print("Visiting website for \(reward.brandName)")
+                        }) {
+                            Text("BESÖK HEMSIDA")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(16)
+                                .background(Color.black)
+                                .cornerRadius(10)
+                        }
+                        
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            Text("INTE NU")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(16)
+                                .background(Color.white)
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.black, lineWidth: 1)
+                                )
+                        }
+                    }
+                    .padding(.bottom, 20)
+                }
+                .padding(.horizontal, 20)
+                .background(Color.white)
+                .cornerRadius(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
+            }
+            .background(Color(.systemGray6))
+            .navigationTitle("FRAMGÅNGSAKADEMIN")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.black)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.systemGray5))
+                            .cornerRadius(16)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func getDiscountCode(for brandName: String) -> String {
+        switch brandName {
+        case "PLIKTGOLF":
+            return "PLIKT2025"
+        case "PEGMATE":
+            return "PEGMATE2025"
+        case "LONEGOLF":
+            return "LONE2025"
+        case "WINWIZE":
+            return "WINWIZE2025"
+        case "SCANDIGOLF":
+            return "SCANDI2025"
+        case "Exotic Golf":
+            return "EXOTIC2025"
+        case "HAPPYALBA":
+            return "HAPPY2025"
+        case "RETROGOLF":
+            return "RETRO2025"
+        case "PUMPLABS":
+            return "PUMP2025"
+        case "ZEN ENERGY":
+            return "ZEN2025"
+        default:
+            return "CODE2025"
         }
     }
 }
