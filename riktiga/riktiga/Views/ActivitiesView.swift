@@ -68,8 +68,8 @@ struct WorkoutPostCard: View {
                     .foregroundColor(.gray)
             }
             
-            if !post.description.isEmpty {
-                Text(post.description)
+            if let description = post.description, !description.isEmpty {
+                Text(description)
                     .font(.caption)
                     .lineLimit(3)
                     .foregroundColor(.gray)

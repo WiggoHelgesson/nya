@@ -5,7 +5,7 @@ struct WorkoutPost: Codable, Identifiable {
     let userId: String
     let activityType: String
     let title: String
-    let description: String
+    let description: String?
     let createdAt: String
     
     enum CodingKeys: String, CodingKey {
@@ -17,7 +17,7 @@ struct WorkoutPost: Codable, Identifiable {
         case createdAt = "created_at"
     }
     
-    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String) {
+    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
