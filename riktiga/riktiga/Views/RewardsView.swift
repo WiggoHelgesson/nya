@@ -638,7 +638,7 @@ struct ConfirmationView: View {
             .onAppear {
                 // Save purchase when confirmation view appears
                 if let userId = authViewModel.currentUser?.id {
-                    purchaseService.addMockPurchase(reward: reward, userId: userId)
+                    purchaseService.addMockPurchase(brandName: reward.brandName, discount: reward.discount, userId: userId)
                 }
             }
         }

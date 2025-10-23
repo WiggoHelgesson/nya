@@ -28,43 +28,57 @@ struct MainTabView: View {
                     
                     HStack(spacing: 0) {
                         // Hem
-                        Button(action: { selectedTab = 0 }) {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedTab = 0 
+                            }
+                        }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "house.fill")
                                     .font(.title3)
+                                    .scaleEffect(selectedTab == 0 ? 1.1 : 1.0)
                                 Text("Hem")
                                     .font(.caption)
+                                    .fontWeight(selectedTab == 0 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 0 ? .black : .gray.opacity(0.6))
                         }
                         
                         // Aktiviteter
-                        Button(action: { selectedTab = 1 }) {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedTab = 1 
+                            }
+                        }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "figure.walk")
                                     .font(.title3)
+                                    .scaleEffect(selectedTab == 1 ? 1.1 : 1.0)
                                 Text("Aktiviteter")
                                     .font(.caption)
+                                    .fontWeight(selectedTab == 1 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 1 ? .black : .gray.opacity(0.6))
                         }
                         
-                        // Starta Pass - Center Button
-                        Button(action: { showStartSession = true }) {
-                            VStack(spacing: 4) {
-                                Text("STARTA\nPASS")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.center)
+                        // Starta Pass - Round Center Button
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                                showStartSession = true 
                             }
-                            .frame(maxWidth: .infinity)
-                            .font(.caption)
+                        }) {
+                            VStack(spacing: 2) {
+                                Text("STARTA")
+                                    .font(.system(size: 10, weight: .black))
+                                Text("PASS")
+                                    .font(.system(size: 10, weight: .black))
+                            }
                             .foregroundColor(.white)
-                            .padding(12)
+                            .frame(width: 60, height: 60)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                Circle()
                                     .fill(
                                         LinearGradient(
                                             gradient: Gradient(colors: [
@@ -75,63 +89,95 @@ struct MainTabView: View {
                                             endPoint: .bottomTrailing
                                         )
                                     )
-                                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                    .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                                    .shadow(color: Color.white.opacity(0.2), radius: 4, x: 0, y: -2)
                             )
                         }
                         
                         // Belöningar
-                        Button(action: { selectedTab = 2 }) {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedTab = 2 
+                            }
+                        }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "shippingbox.fill")
                                     .font(.title3)
+                                    .scaleEffect(selectedTab == 2 ? 1.1 : 1.0)
                                 Text("Belöningar")
                                     .font(.caption)
+                                    .fontWeight(selectedTab == 2 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 2 ? .black : .gray.opacity(0.6))
                         }
                         
                         // Profil
-                        Button(action: { selectedTab = 3 }) {
+                        Button(action: { 
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedTab = 3 
+                            }
+                        }) {
                             VStack(spacing: 4) {
                                 Image(systemName: "person.fill")
                                     .font(.title3)
+                                    .scaleEffect(selectedTab == 3 ? 1.1 : 1.0)
                                 Text("Profil")
                                     .font(.caption)
+                                    .fontWeight(selectedTab == 3 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 3 ? .black : .gray.opacity(0.6))
                         }
                     }
-                    .frame(height: 70)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .frame(height: 80)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                     .background(
-                        // Liquid Glass Background with strong blur
+                        // Enhanced Liquid Glass Background
                         ZStack {
-                            // Blur layer
-                            RoundedRectangle(cornerRadius: 24)
+                            // Base blur layer
+                            RoundedRectangle(cornerRadius: 28)
                                 .fill(.ultraThinMaterial)
+                                .blur(radius: 0.5)
                             
-                            // Glass overlay
-                            RoundedRectangle(cornerRadius: 24)
+                            // Glass overlay with gradient
+                            RoundedRectangle(cornerRadius: 28)
                                 .fill(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            Color.white.opacity(0.25),
-                                            Color.white.opacity(0.1)
+                                            Color.white.opacity(0.3),
+                                            Color.white.opacity(0.15),
+                                            Color.white.opacity(0.05)
                                         ]),
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
                             
-                            // Border for glass effect
-                            RoundedRectangle(cornerRadius: 24)
+                            // Animated shimmer effect
+                            RoundedRectangle(cornerRadius: 28)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.clear,
+                                            Color.white.opacity(0.1),
+                                            Color.clear
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .rotationEffect(.degrees(45))
+                                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: selectedTab)
+                            
+                            // Enhanced border
+                            RoundedRectangle(cornerRadius: 28)
                                 .stroke(
                                     LinearGradient(
                                         gradient: Gradient(colors: [
-                                            Color.white.opacity(0.4),
+                                            Color.white.opacity(0.5),
+                                            Color.white.opacity(0.2),
                                             Color.white.opacity(0.1)
                                         ]),
                                         startPoint: .topLeading,
@@ -140,11 +186,11 @@ struct MainTabView: View {
                                     lineWidth: 1.5
                                 )
                         }
-                        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 4)
-                        .shadow(color: Color.white.opacity(0.5), radius: 6, x: 0, y: -2)
+                        .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
+                        .shadow(color: Color.white.opacity(0.6), radius: 8, x: 0, y: -4)
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
                 
                 NavigationLink(isActive: $showStartSession) {

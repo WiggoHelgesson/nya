@@ -51,12 +51,12 @@ class PurchaseService: ObservableObject {
     }
     
     // For demo purposes - add mock purchases
-    func addMockPurchase(reward: RewardCard, userId: String) {
+    func addMockPurchase(brandName: String, discount: String, userId: String) {
         let purchase = Purchase(
             userId: userId,
-            brandName: reward.brandName,
-            discount: reward.discount,
-            discountCode: getDiscountCode(for: reward.brandName),
+            brandName: brandName,
+            discount: discount,
+            discountCode: getDiscountCode(for: brandName),
             purchaseDate: Date()
         )
         
