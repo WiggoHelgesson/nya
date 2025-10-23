@@ -14,26 +14,74 @@ struct RewardsView: View {
     let rewards = [
         RewardCard(
             id: 1,
-            brandName: "PLIKT GOLF",
+            brandName: "PLIKTGOLF",
             discount: "10% rabatt",
-            points: "LD 200",
+            points: "200 poäng",
             imageName: "golf_reward_1",
             isBookmarked: false
         ),
         RewardCard(
             id: 2,
-            brandName: "GOLF SHOP",
-            discount: "15% rabatt",
-            points: "LD 300",
+            brandName: "PEGMATE",
+            discount: "5% rabatt",
+            points: "200 poäng",
             imageName: "golf_reward_2",
-            isBookmarked: true
+            isBookmarked: false
         ),
         RewardCard(
             id: 3,
-            brandName: "GOLF PRO",
-            discount: "20% rabatt",
-            points: "LD 500",
+            brandName: "LONEGOLF",
+            discount: "10% rabatt",
+            points: "200 poäng",
             imageName: "golf_reward_3",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 4,
+            brandName: "WINWIZE",
+            discount: "25% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_4",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 5,
+            brandName: "SCANDIGOLF",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_5",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 6,
+            brandName: "Exotic Golf",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_6",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 7,
+            brandName: "HAPPYALBA",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_7",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 8,
+            brandName: "RETROGOLF",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_8",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 9,
+            brandName: "PUMPLABS",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "golf_reward_9",
             isBookmarked: false
         )
     ]
@@ -88,14 +136,12 @@ struct RewardsView: View {
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 16)
                             
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 16) {
-                                    ForEach(rewards) { reward in
-                                        RewardCardView(reward: reward)
-                                    }
+                            LazyVStack(spacing: 16) {
+                                ForEach(rewards) { reward in
+                                    FullScreenRewardCard(reward: reward)
                                 }
-                                .padding(.horizontal, 16)
                             }
+                            .padding(.horizontal, 16)
                         }
                         
                         Spacer(minLength: 100)
@@ -169,7 +215,7 @@ struct RewardCard: Identifiable {
     let isBookmarked: Bool
 }
 
-struct RewardCardView: View {
+struct FullScreenRewardCard: View {
     let reward: RewardCard
     @State private var isBookmarked: Bool
     
@@ -180,9 +226,9 @@ struct RewardCardView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Image Section
+            // Image Section - Takes up most of the screen
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
@@ -193,70 +239,73 @@ struct RewardCardView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 120)
+                    .frame(height: 400) // Much larger image area
                 
                 // Brand Logo in center
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        VStack(spacing: 2) {
-                            Text("PLIKT")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.white)
-                            Text("GOLF")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.white)
-                            Image(systemName: "flag.fill")
-                                .font(.system(size: 6))
-                                .foregroundColor(.white)
-                        }
-                    )
+                VStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 80, height: 80)
+                        .overlay(
+                            VStack(spacing: 4) {
+                                Text(getBrandLogoText(reward.brandName))
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                Image(systemName: "flag.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white)
+                            }
+                        )
+                    
+                    Text(reward.brandName)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.top, 8)
+                }
                 
                 // Points badge
                 VStack {
                     HStack {
                         Spacer()
                         Text(reward.points)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
                             .background(Color.black)
-                            .cornerRadius(12)
+                            .cornerRadius(16)
                     }
                     Spacer()
                 }
-                .padding(8)
+                .padding(16)
             }
             
-            // Info Section
+            // Info Section - Compact at bottom
             HStack {
                 // Small brand logo
                 Circle()
                     .fill(Color.green)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 40, height: 40)
                     .overlay(
-                        VStack(spacing: 1) {
-                            Text("PLIKT")
-                                .font(.system(size: 4, weight: .bold))
+                        VStack(spacing: 2) {
+                            Text(getBrandLogoText(reward.brandName))
+                                .font(.system(size: 6, weight: .bold))
                                 .foregroundColor(.white)
-                            Text("GOLF")
-                                .font(.system(size: 4, weight: .bold))
-                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
                             Image(systemName: "flag.fill")
-                                .font(.system(size: 3))
+                                .font(.system(size: 4))
                                 .foregroundColor(.white)
                         }
                     )
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.black)
                     
                     Text(reward.brandName)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
                 
@@ -266,16 +315,40 @@ struct RewardCardView: View {
                     isBookmarked.toggle()
                 }) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 16))
+                        .font(.system(size: 20))
                         .foregroundColor(.gray)
                 }
             }
-            .padding(12)
+            .padding(20)
             .background(Color.white)
         }
-        .frame(width: 160)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+    
+    private func getBrandLogoText(_ brandName: String) -> String {
+        switch brandName {
+        case "PLIKTGOLF":
+            return "PLIKT\nGOLF"
+        case "PEGMATE":
+            return "PEG\nMATE"
+        case "LONEGOLF":
+            return "LONE\nGOLF"
+        case "WINWIZE":
+            return "WIN\nWIZE"
+        case "SCANDIGOLF":
+            return "SCANDI\nGOLF"
+        case "Exotic Golf":
+            return "EXOTIC\nGOLF"
+        case "HAPPYALBA":
+            return "HAPPY\nALBA"
+        case "RETROGOLF":
+            return "RETRO\nGOLF"
+        case "PUMPLABS":
+            return "PUMP\nLABS"
+        default:
+            return brandName
+        }
     }
 }
 
