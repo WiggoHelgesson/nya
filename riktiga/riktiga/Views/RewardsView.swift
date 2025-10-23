@@ -17,7 +17,7 @@ struct RewardsView: View {
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_1",
+            imageName: "4", // Using image 4 for PLIKTGOLF
             isBookmarked: false
         ),
         RewardCard(
@@ -25,7 +25,7 @@ struct RewardsView: View {
             brandName: "PEGMATE",
             discount: "5% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_2",
+            imageName: "5", // Using image 5 for PEGMATE
             isBookmarked: false
         ),
         RewardCard(
@@ -33,7 +33,7 @@ struct RewardsView: View {
             brandName: "LONEGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_3",
+            imageName: "6", // Using image 6 for LONEGOLF
             isBookmarked: false
         ),
         RewardCard(
@@ -41,7 +41,7 @@ struct RewardsView: View {
             brandName: "WINWIZE",
             discount: "25% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_4",
+            imageName: "7", // Using image 7 for WINWIZE
             isBookmarked: false
         ),
         RewardCard(
@@ -49,7 +49,7 @@ struct RewardsView: View {
             brandName: "SCANDIGOLF",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_5",
+            imageName: "8", // Using image 8 for SCANDIGOLF
             isBookmarked: false
         ),
         RewardCard(
@@ -57,7 +57,7 @@ struct RewardsView: View {
             brandName: "Exotic Golf",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_6",
+            imageName: "9", // Using image 9 for Exotic Golf
             isBookmarked: false
         ),
         RewardCard(
@@ -65,7 +65,7 @@ struct RewardsView: View {
             brandName: "HAPPYALBA",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_7",
+            imageName: "10", // Using image 10 for HAPPYALBA
             isBookmarked: false
         ),
         RewardCard(
@@ -73,7 +73,7 @@ struct RewardsView: View {
             brandName: "RETROGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_8",
+            imageName: "11", // Using image 11 for RETROGOLF
             isBookmarked: false
         ),
         RewardCard(
@@ -81,7 +81,7 @@ struct RewardsView: View {
             brandName: "PUMPLABS",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "golf_reward_9",
+            imageName: "12", // Using image 12 for PUMPLABS
             isBookmarked: false
         )
     ]
@@ -136,12 +136,14 @@ struct RewardsView: View {
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 16)
                             
-                            LazyVStack(spacing: 16) {
-                                ForEach(rewards) { reward in
-                                    FullScreenRewardCard(reward: reward)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(rewards) { reward in
+                                        FullScreenRewardCard(reward: reward)
+                                    }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.horizontal, 16)
                         }
                         
                         Spacer(minLength: 100)
@@ -228,33 +230,32 @@ struct FullScreenRewardCard: View {
         VStack(spacing: 0) {
             // Image Section - Takes up most of the screen
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.green.opacity(0.7),
-                                Color.blue.opacity(0.5)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(height: 400) // Much larger image area
+                // Real brand image as background
+                Image(reward.imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 400)
+                    .clipped()
+                
+                // Dark overlay for better text readability
+                Rectangle()
+                    .fill(Color.black.opacity(0.3))
+                    .frame(height: 400)
                 
                 // Brand Logo in center
                 VStack(spacing: 8) {
                     Circle()
-                        .fill(Color.green)
+                        .fill(Color.white.opacity(0.9))
                         .frame(width: 80, height: 80)
                         .overlay(
                             VStack(spacing: 4) {
                                 Text(getBrandLogoText(reward.brandName))
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                                     .multilineTextAlignment(.center)
                                 Image(systemName: "flag.fill")
                                     .font(.system(size: 10))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                             }
                         )
                     
@@ -273,7 +274,7 @@ struct FullScreenRewardCard: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.black)
+                            .background(Color.black.opacity(0.8))
                             .cornerRadius(16)
                     }
                     Spacer()
@@ -285,17 +286,17 @@ struct FullScreenRewardCard: View {
             HStack {
                 // Small brand logo
                 Circle()
-                    .fill(Color.green)
+                    .fill(Color.white.opacity(0.9))
                     .frame(width: 40, height: 40)
                     .overlay(
                         VStack(spacing: 2) {
                             Text(getBrandLogoText(reward.brandName))
                                 .font(.system(size: 6, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                                 .multilineTextAlignment(.center)
                             Image(systemName: "flag.fill")
                                 .font(.system(size: 4))
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                         }
                     )
                 
@@ -322,6 +323,7 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
+        .frame(width: 280) // Fixed width for horizontal scroll
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
