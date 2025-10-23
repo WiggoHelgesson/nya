@@ -4,6 +4,7 @@ struct RewardsView: View {
     @State private var selectedCategory = "Golf"
     @State private var currentHeroIndex = 0
     @State private var currentRewardIndex = 0
+    @State private var selectedReward: RewardCard?
     
     let categories = ["Golf", "Löpning", "Gym", "Skidåkning"]
     
@@ -172,8 +173,11 @@ struct RewardsView: View {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 16) {
                                         ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
-                                            FullScreenRewardCard(reward: reward)
-                                                .id(index)
+                                            NavigationLink(destination: RewardDetailView(reward: reward)) {
+                                                FullScreenRewardCard(reward: reward)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                            .id(index)
                                         }
                                     }
                                     .padding(.horizontal, 16)
@@ -304,6 +308,95 @@ struct FullScreenRewardCard: View {
         .frame(width: UIScreen.main.bounds.width - 20) // Almost full screen width with small margin
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+}
+
+struct RewardDetailView: View {
+    let reward: RewardCard
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Same image as on the card
+            Image(reward.imageName)
+                .resizable()
+                .scaledToFill()
+                .frame(height: 300)
+                .clipped()
+            
+            VStack(spacing: 20) {
+                // Discount and brand name
+                VStack(spacing: 8) {
+                    Text(reward.discount)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.black)
+                    
+                    Text(reward.brandName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 20)
+                
+                // Company description
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Om företaget")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.black)
+                    
+                    Text(getCompanyDescription(for: reward.brandName))
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .lineLimit(nil)
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Get discount button
+                Button(action: {
+                    // Handle get discount action
+                    print("Getting discount for \(reward.brandName)")
+                }) {
+                    Text("Hämta rabatt")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(Color.black)
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+        .navigationTitle(reward.brandName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    
+    private func getCompanyDescription(for brandName: String) -> String {
+        switch brandName {
+        case "PLIKTGOLF":
+            return "PLIKTGOLF är Sveriges ledande golfbutik med över 30 års erfarenhet. Vi erbjuder det senaste inom golfutrustning, kläder och accessoarer från världens bästa märken."
+        case "PEGMATE":
+            return "PEGMATE specialiserar sig på högkvalitativ golfutrustning och är känt för sina innovativa produkter som hjälper golfare att förbättra sitt spel."
+        case "LONEGOLF":
+            return "LONEGOLF fokuserar på premium golfutrustning och personlig service. Vi hjälper dig att hitta rätt utrustning för ditt spel."
+        case "WINWIZE":
+            return "WINWIZE är en innovativ golfbutik som kombinerar traditionell kvalitet med moderna lösningar för att ge dig det bästa golfupplevelsen."
+        case "SCANDIGOLF":
+            return "SCANDIGOLF är en nordisk golfbutik som erbjuder högkvalitativ utrustning från Skandinaviens bästa märken."
+        case "Exotic Golf":
+            return "Exotic Golf specialiserar sig på unika och exklusiva golfprodukter från världens alla hörn."
+        case "HAPPYALBA":
+            return "HAPPYALBA fokuserar på golfkläder och accessoarer som kombinerar stil med funktionalitet för den moderna golfaren."
+        case "RETROGOLF":
+            return "RETROGOLF erbjuder klassisk golfutrustning med en modern twist, perfekt för golfare som uppskattar både tradition och innovation."
+        case "PUMPLABS":
+            return "PUMPLABS är en modern gymkedja som fokuserar på funktionell träning och personlig utveckling. Vi hjälper dig att nå dina fitnessmål."
+        case "ZEN ENERGY":
+            return "ZEN ENERGY erbjuder energidrycker och supplement som ger dig den extra energin du behöver för din träning och vardag."
+        default:
+            return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
+        }
     }
 }
 
