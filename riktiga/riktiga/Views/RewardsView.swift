@@ -328,27 +328,28 @@ struct RewardDetailView: View {
                     // Discount and brand name
                     VStack(spacing: 6) {
                         Text(reward.discount)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.black)
                         
                         Text(reward.brandName)
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                     }
-                    .padding(.top, 16)
+                    .padding(.top, 12)
+                    .padding(.horizontal, 20)
                     
                     // Company description
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Företaget")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.black)
                         
                         Text(getCompanyDescription(for: reward.brandName))
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                             .foregroundColor(.gray)
                             .lineLimit(nil)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
                     
                     // Get discount button
                     Button(action: {
@@ -356,16 +357,16 @@ struct RewardDetailView: View {
                         print("Getting discount for \(reward.brandName)")
                     }) {
                         Text("Hämta rabatt")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(14)
+                            .padding(12)
                             .background(Color.black)
-                            .cornerRadius(10)
+                            .cornerRadius(8)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
                 }
             }
         }
