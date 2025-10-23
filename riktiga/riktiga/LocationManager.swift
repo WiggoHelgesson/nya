@@ -8,6 +8,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var isTracking = false
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: String?
+    @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     
     private let locationManager = CLLocationManager()
     private var startLocation: CLLocation?
@@ -52,6 +53,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastLocation = nil
         distance = 0.0
         locationError = nil
+        routeCoordinates = []
         
         print("🚀 Starting location tracking...")
         locationManager.startUpdatingLocation()
@@ -75,6 +77,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         
+        // Filtrera bort dåliga GPS-readings
+        guard location.horizontalAccuracy <= 50 && location.horizontalAccuracy > 0 else {
+            print("⚠️ Poor GPS accuracy: \(location.horizontalAccuracy)m")
+            return
+        }
+        
         DispatchQueue.main.async {
             self.userLocation = location.coordinate
         }
@@ -82,15 +90,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         if startLocation == nil {
             startLocation = location
             lastLocation = location
+            // Lägg till första punkten i rutten
+            DispatchQueue.main.async {
+                self.routeCoordinates.append(location.coordinate)
+            }
         } else if let lastLoc = lastLocation {
             let newDistance = location.distance(from: lastLoc)
-            if newDistance < 100 && newDistance > 0 {
+            
+            // Filtrera bort för stora hopp (GPS-fel)
+            if newDistance < 200 && newDistance > 1 {
                 totalDistance += newDistance
                 DispatchQueue.main.async {
                     self.distance = self.totalDistance / 1000.0
+                    // Lägg till nya punkten i rutten
+                    self.routeCoordinates.append(location.coordinate)
                 }
+                lastLocation = location
             }
-            lastLocation = location
         }
     }
     

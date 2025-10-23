@@ -147,18 +147,24 @@ struct SessionMapView: View {
     var body: some View {
         ZStack {
             // MARK: - Map Background
-            Map(coordinateRegion: $region, showsUserLocation: true)
-                .ignoresSafeArea()
-                .onAppear {
-                    // Request location permission and start tracking
-                    locationManager.requestLocationPermission()
-                    locationManager.startTracking()
+            Map(coordinateRegion: $region, showsUserLocation: true) {
+                // Visa rutten som en svart linje
+                if locationManager.routeCoordinates.count > 1 {
+                    MapPolyline(coordinates: locationManager.routeCoordinates)
+                        .stroke(.black, lineWidth: 4)
                 }
-                .onReceive(locationManager.$userLocation) { newLocation in
-                    if let location = newLocation {
-                        region.center = location
-                    }
+            }
+            .ignoresSafeArea()
+            .onAppear {
+                // Request location permission and start tracking
+                locationManager.requestLocationPermission()
+                locationManager.startTracking()
+            }
+            .onReceive(locationManager.$userLocation) { newLocation in
+                if let location = newLocation {
+                    region.center = location
                 }
+            }
 
             // MARK: - Back Button
             VStack {
