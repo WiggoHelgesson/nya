@@ -12,13 +12,14 @@ struct RewardsView: View {
         "3"
     ]
     
-    let rewards = [
+    let allRewards = [
         RewardCard(
             id: 1,
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "4", // Using image 4 for PLIKTGOLF
+            imageName: "4",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -26,7 +27,8 @@ struct RewardsView: View {
             brandName: "PEGMATE",
             discount: "5% rabatt",
             points: "200 poäng",
-            imageName: "5", // Using image 5 for PEGMATE
+            imageName: "5",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -34,7 +36,8 @@ struct RewardsView: View {
             brandName: "LONEGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "6", // Using image 6 for LONEGOLF
+            imageName: "6",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -42,7 +45,8 @@ struct RewardsView: View {
             brandName: "WINWIZE",
             discount: "25% rabatt",
             points: "200 poäng",
-            imageName: "7", // Using image 7 for WINWIZE
+            imageName: "7",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -50,7 +54,8 @@ struct RewardsView: View {
             brandName: "SCANDIGOLF",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "8", // Using image 8 for SCANDIGOLF
+            imageName: "8",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -58,7 +63,8 @@ struct RewardsView: View {
             brandName: "Exotic Golf",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "9", // Using image 9 for Exotic Golf
+            imageName: "9",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -66,7 +72,8 @@ struct RewardsView: View {
             brandName: "HAPPYALBA",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "10", // Using image 10 for HAPPYALBA
+            imageName: "10",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -74,7 +81,8 @@ struct RewardsView: View {
             brandName: "RETROGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "11", // Using image 11 for RETROGOLF
+            imageName: "11",
+            category: "Golf",
             isBookmarked: false
         ),
         RewardCard(
@@ -82,10 +90,15 @@ struct RewardsView: View {
             brandName: "PUMPLABS",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "12", // Using image 12 for PUMPLABS
+            imageName: "12",
+            category: "Gym",
             isBookmarked: false
         )
     ]
+    
+    var filteredRewards: [RewardCard] {
+        return allRewards.filter { $0.category == selectedCategory }
+    }
     
     var body: some View {
         NavigationStack {
@@ -140,7 +153,7 @@ struct RewardsView: View {
                             ScrollViewReader { proxy in
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 16) {
-                                        ForEach(Array(rewards.enumerated()), id: \.element.id) { index, reward in
+                                        ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
                                             FullScreenRewardCard(reward: reward)
                                                 .id(index)
                                         }
@@ -223,6 +236,7 @@ struct RewardCard: Identifiable {
     let discount: String
     let points: String
     let imageName: String
+    let category: String
     let isBookmarked: Bool
 }
 
