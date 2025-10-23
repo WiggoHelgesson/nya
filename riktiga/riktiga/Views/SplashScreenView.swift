@@ -15,14 +15,14 @@ struct SplashScreenView: View {
                 .ignoresSafeArea()
             
             if !isFinished {
-                VStack(spacing: 40) {
+                VStack(spacing: 35) {
                     Spacer()
                     
                     // MARK: - Logo Image Animation
                     Image("1")
                         .resizable()
                         .scaledToFit()
-                        .frame(height: 180)
+                        .frame(height: 160)
                         .cornerRadius(20)
                         .clipped()
                         .scaleEffect(logoScale)
@@ -32,17 +32,18 @@ struct SplashScreenView: View {
                     // MARK: - Text Animation (exakt som auth-sidan)
                     VStack(spacing: 2) {
                         Text("TRÄNA,")
-                            .font(.system(size: 44, weight: .black))
+                            .font(.system(size: 40, weight: .black))
                             .foregroundColor(.black)
                             .lineLimit(1)
                         
                         Text("FÅ BELÖNINGAR")
-                            .font(.system(size: 36, weight: .black))
+                            .font(.system(size: 32, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 11)
                             .background(AppColors.brandBlue)
                             .cornerRadius(8)
                             .rotationEffect(.degrees(-3))
