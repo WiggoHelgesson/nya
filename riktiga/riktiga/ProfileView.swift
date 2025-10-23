@@ -4,6 +4,7 @@ struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
+    @State private var showSettings = false
     
     var body: some View {
         NavigationStack {
@@ -144,8 +145,22 @@ struct ProfileView: View {
             }
             .navigationTitle("Inställningar")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showSettings = true
+                    }) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.title3)
+                            .foregroundColor(.black)
+                    }
+                }
+            }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
         }
     }
