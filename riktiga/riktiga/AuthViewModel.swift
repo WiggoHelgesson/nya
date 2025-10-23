@@ -19,14 +19,24 @@ class AuthViewModel: ObservableObject {
             do {
                 let session = try await supabase.auth.signIn(email: email, password: password)
                 
-                DispatchQueue.main.async {
-                    self.currentUser = User(
-                        id: session.user.id.uuidString,
-                        name: email.prefix(while: { $0 != "@" }).capitalized,
-                        email: email
-                    )
-                    self.isLoggedIn = true
-                    self.isLoading = false
+                // Hämta profil-data från Supabase
+                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                    DispatchQueue.main.async {
+                        self.currentUser = profile
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                    }
+                } else {
+                    // Fallback om profil inte finns
+                    DispatchQueue.main.async {
+                        self.currentUser = User(
+                            id: session.user.id.uuidString,
+                            name: email.prefix(while: { $0 != "@" }).capitalized,
+                            email: email
+                        )
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -67,14 +77,24 @@ class AuthViewModel: ObservableObject {
             do {
                 let session = try await supabase.auth.signUp(email: email, password: password)
                 
-                DispatchQueue.main.async {
-                    self.currentUser = User(
-                        id: session.user.id.uuidString,
-                        name: name,
-                        email: email
-                    )
-                    self.isLoggedIn = true
-                    self.isLoading = false
+                // Hämta profil-data från Supabase
+                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                    DispatchQueue.main.async {
+                        self.currentUser = profile
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                    }
+                } else {
+                    // Fallback om profil inte finns
+                    DispatchQueue.main.async {
+                        self.currentUser = User(
+                            id: session.user.id.uuidString,
+                            name: name,
+                            email: email
+                        )
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                    }
                 }
             } catch {
                 DispatchQueue.main.async {

@@ -25,6 +25,47 @@ struct ProfileView: View {
                     }
                     .padding(.top, 20)
                     
+                    // XP Display
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("U")
+                                    .font(.system(size: 40, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 60, height: 60)
+                                    .background(Color.black)
+                                    .cornerRadius(12)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                
+                                if let currentLevel = authViewModel.currentUser?.currentLevel {
+                                    Text("Level \(currentLevel)")
+                                        .font(.body)
+                                        .foregroundColor(.gray)
+                                }
+                                
+                                if let isProMember = authViewModel.currentUser?.isProMember, isProMember {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill")
+                                            .font(.caption)
+                                        Text("Pro Member")
+                                            .font(.caption)
+                                    }
+                                    .foregroundColor(.orange)
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    
                     // Statistik
                     VStack(spacing: 12) {
                         Text("Din statistik")
@@ -196,4 +237,12 @@ struct SettingsRow: View {
 #Preview {
     ProfileView()
         .environmentObject(AuthViewModel())
+}
+
+// MARK: - Helper Functions
+func formatNumber(_ number: Int) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.groupingSeparator = ","
+    return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
 }
