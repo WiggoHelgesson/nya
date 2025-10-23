@@ -82,7 +82,7 @@ struct MainTabView: View {
                         // Belöningar
                         Button(action: { selectedTab = 2 }) {
                             VStack(spacing: 4) {
-                                Image(systemName: "star.fill")
+                                Image(systemName: "shippingbox.fill")
                                     .font(.title3)
                                 Text("Belöningar")
                                     .font(.caption)
