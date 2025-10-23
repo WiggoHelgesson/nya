@@ -10,10 +10,20 @@ import SwiftUI
 @main
 struct riktigaApp: App {
     @StateObject var authViewModel = AuthViewModel()
+    @State private var showSplash = true
     
     var body: some Scene {
         WindowGroup {
-            if authViewModel.isLoggedIn {
+            if showSplash {
+                SplashScreenView()
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation {
+                                showSplash = false
+                            }
+                        }
+                    }
+            } else if authViewModel.isLoggedIn {
                 MainTabView()
                     .environmentObject(authViewModel)
             } else {

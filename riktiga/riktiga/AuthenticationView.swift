@@ -7,39 +7,50 @@ struct AuthenticationView: View {
     var body: some View {
         ZStack {
             // Vit bakgrund
-            Color.white
+            AppColors.white
                 .ignoresSafeArea()
             
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 // Bild från Xcode (Image 1)
                 Image("1")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 200)
-                    .cornerRadius(20)
+                    .frame(height: 160)
+                    .cornerRadius(16)
                     .clipped()
-                    .padding(.vertical, 20)
-                    .padding(.top, 40)
+                    .padding(.vertical, 12)
+                    .padding(.top, 32)
                 
-                // Text under bilden
-                VStack(spacing: 8) {
-                    Text("Träna, Få belöningar")
-                        .font(.system(size: 24, weight: .bold))
+                // Text under bilden - WANTZEN Style
+                VStack(spacing: 2) {
+                    Text("TRÄNA,")
+                        .font(.system(size: 44, weight: .black))
                         .foregroundColor(.black)
-                        .multilineTextAlignment(.center)
+                    
+                    HStack(spacing: 0) {
+                        Text("FÅ BELÖNINGAR")
+                            .font(.system(size: 44, weight: .black))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(AppColors.brandBlue)
+                    .cornerRadius(6)
+                    .rotationEffect(.degrees(-2))
                 }
-                .padding(.bottom, 20)
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 12)
                 
                 Spacer()
                 
                 // Login/Signup formulär
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     Picker("Välj läge", selection: $isLoginMode) {
                         Text("Logga in").tag(true)
                         Text("Skapa konto").tag(false)
                     }
                     .pickerStyle(.segmented)
-                    .padding(.bottom, 20)
+                    .padding(.bottom, 12)
                     
                     if isLoginMode {
                         LoginFormView()
@@ -49,11 +60,10 @@ struct AuthenticationView: View {
                             .environmentObject(authViewModel)
                     }
                 }
-                .padding(30)
-                .background(Color.white)
-                .cornerRadius(20)
-                .shadow(radius: 10)
-                .padding(20)
+                .padding(24)
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
+                .padding(16)
                 
                 Spacer()
             }
@@ -67,19 +77,19 @@ struct LoginFormView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             TextField("Email", text: $email)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
                 .autocapitalization(.none)
             
             SecureField("Lösenord", text: $password)
                 .textContentType(.password)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
             
             if !authViewModel.errorMessage.isEmpty {
@@ -95,15 +105,15 @@ struct LoginFormView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Logga in")
+                    Text("LOGGA IN")
+                        .font(.system(size: 16, weight: .black))
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(Color.black)
+            .padding(14)
+            .background(AppColors.brandBlue)
             .foregroundColor(.white)
-            .cornerRadius(25)
-            .font(.headline)
+            .cornerRadius(10)
             .disabled(authViewModel.isLoading)
         }
     }
@@ -117,30 +127,30 @@ struct SignupFormView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             TextField("Namn", text: $name)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
             
             TextField("Email", text: $email)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
                 .autocapitalization(.none)
             
             SecureField("Lösenord", text: $password)
                 .textContentType(.newPassword)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
             
             SecureField("Bekräfta lösenord", text: $confirmPassword)
                 .textContentType(.newPassword)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color.white)
                 .cornerRadius(8)
             
             if !authViewModel.errorMessage.isEmpty {
@@ -156,15 +166,15 @@ struct SignupFormView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Skapa konto")
+                    Text("SKAPA KONTO")
+                        .font(.system(size: 16, weight: .black))
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(Color.black)
-            .foregroundColor(.white)
-            .cornerRadius(25)
-            .font(.headline)
+            .padding(14)
+            .background(AppColors.brandGreen)
+            .foregroundColor(.black)
+            .cornerRadius(10)
             .disabled(authViewModel.isLoading)
         }
     }
