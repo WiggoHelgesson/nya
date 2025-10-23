@@ -10,67 +10,132 @@ struct MainTabView: View {
                 // Hem tab
                 HomeView()
                     .tabItem {
-                        Image(systemName: "house.fill")
-                        Text("Hem")
+                        VStack(spacing: 4) {
+                            Image(systemName: "house.fill")
+                            Text("Hem")
+                        }
                     }
                     .tag(0)
                 
-                // Aktiviteter tab
-                ActivitiesView()
-                    .tabItem {
-                        Image(systemName: "figure.walk")
-                        Text("Aktiviteter")
+                // Socialt tab
+                VStack {
+                    Text("Socialt")
+                        .font(.title)
+                    Spacer()
+                }
+                .tabItem {
+                    VStack(spacing: 4) {
+                        Image(systemName: "person.2.fill")
+                        Text("Socialt")
                     }
-                    .tag(1)
+                }
+                .tag(1)
+                
+                // Placeholder för mittknappen
+                VStack {
+                    Text("Starta Pass")
+                }
+                .tabItem {
+                    VStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                        Text("Pass")
+                    }
+                }
+                .tag(2)
                 
                 // Belöningar tab
                 RewardsView()
                     .tabItem {
-                        Image(systemName: "star.fill")
-                        Text("Belöningar")
+                        VStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                            Text("Belöningar")
+                        }
                     }
-                    .tag(2)
+                    .tag(3)
                 
                 // Profil tab
                 ProfileView()
                     .tabItem {
-                        Image(systemName: "person.fill")
-                        Text("Profil")
-                    }
-                    .tag(3)
-            }
-            
-            // Starta pass button - floating action button
-            VStack {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        NavigationLink(destination: StartSessionView()) {
-                            VStack(spacing: 4) {
-                                Image(systemName: "play.fill")
-                                    .font(.headline)
-                                Text("Starta pass")
-                                    .font(.caption)
-                            }
-                            .frame(width: 60, height: 60)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(red: 0.1, green: 0.6, blue: 0.8),
-                                        Color(red: 0.2, green: 0.4, blue: 0.9)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .foregroundColor(.white)
-                            .clipShape(Circle())
-                            .shadow(radius: 5)
+                        VStack(spacing: 4) {
+                            Image(systemName: "person.fill")
+                            Text("Profil")
                         }
-                        Spacer()
                     }
-                    .padding(20)
+                    .tag(4)
+            }
+            .tint(.black)
+            
+            // Custom Tab Bar
+            VStack {
+                Spacer()
+                
+                HStack(spacing: 0) {
+                    // Hem
+                    Button(action: { selectedTab = 0 }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "house.fill")
+                                .font(.title3)
+                            Text("Hem")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 0 ? .black : .gray)
+                    }
+                    
+                    // Socialt
+                    Button(action: { selectedTab = 1 }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "person.2.fill")
+                                .font(.title3)
+                            Text("Socialt")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 1 ? .black : .gray)
+                    }
+                    
+                    // Starta Pass - Center Button
+                    NavigationLink(destination: StartSessionView()) {
+                        VStack(spacing: 4) {
+                            Text("STARTA\nPASS")
+                                .font(.system(size: 12, weight: .bold))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(width: 70, height: 70)
+                        .background(Color(red: 0.1, green: 0.15, blue: 0.25))
+                        .foregroundColor(.white)
+                        .clipShape(Circle())
+                        .shadow(radius: 5)
+                    }
+                    
+                    // Belöningar
+                    Button(action: { selectedTab = 3 }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "star.fill")
+                                .font(.title3)
+                            Text("Belöningar")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 3 ? .black : .gray)
+                    }
+                    
+                    // Profil
+                    Button(action: { selectedTab = 4 }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "person.fill")
+                                .font(.title3)
+                            Text("Profil")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 4 ? .black : .gray)
+                    }
                 }
+                .frame(height: 80)
+                .background(Color.white)
+                .border(Color.gray.opacity(0.2), width: 1)
             }
         }
     }
