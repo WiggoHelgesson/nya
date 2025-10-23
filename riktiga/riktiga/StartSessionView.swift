@@ -137,6 +137,8 @@ struct SessionMapView: View {
     @State private var sessionDistance: Double = 0.0
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
+    @State private var showCompletionPopup = false
+    @State private var earnedPoints: Int = 0
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -164,7 +166,7 @@ struct SessionMapView: View {
                 Spacer()
             }
 
-            // MARK: - Bottom Stats and Controls (Exakt som bilden)
+            // MARK: - Bottom Stats and Controls
             VStack {
                 Spacer()
 
@@ -244,10 +246,6 @@ struct SessionMapView: View {
                             .cornerRadius(12)
                     }
                     .padding(.horizontal, 16)
-
-                    // View Other Options
-                    NavigationLink(destination: Text("Andra alternativ")) {
-                    }
                 }
                 .padding(20)
                 .background(
@@ -256,6 +254,45 @@ struct SessionMapView: View {
                         .shadow(radius: 10)
                 )
                 .padding(16)
+            }
+            
+            // MARK: - Completion Popup
+            if showCompletionPopup {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        Text("GRYMT JOBBAT!")
+                            .font(.system(size: 28, weight: .black))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("Du fick \(earnedPoints) poäng")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppColors.brandBlue)
+                            .multilineTextAlignment(.center)
+                        
+                        Button(action: {
+                            showCompletionPopup = false
+                            dismiss()
+                        }) {
+                            Text("STÄNG")
+                                .font(.system(size: 16, weight: .black))
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(AppColors.brandBlue)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                    .padding(30)
+                    .background(Color.white)
+                    .cornerRadius(20)
+                    .shadow(radius: 20)
+                    .padding(40)
+                }
             }
         }
         .onDisappear {
@@ -277,6 +314,13 @@ struct SessionMapView: View {
         isRunning = false
         timer?.invalidate()
         timer = nil
+    }
+    
+    func endSession() {
+        stopTimer()
+        // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
+        earnedPoints = Int(sessionDistance * 15)
+        showCompletionPopup = true
     }
 
     func updatePace() {
