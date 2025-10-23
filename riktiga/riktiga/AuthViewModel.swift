@@ -1,52 +1,104 @@
 import Foundation
 import SwiftUI
 import Combine
+import Supabase
 
 class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
     @Published var currentUser: User?
     @Published var errorMessage = ""
+    @Published var isLoading = false
+    
+    private let supabase = SupabaseConfig.supabase
     
     func login(email: String, password: String) {
-        // Simulerad login - i en riktigt app skulle detta anropa en backend API
-        if email.contains("@") && password.count >= 6 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.currentUser = User(id: UUID().uuidString, name: email.prefix(while: { $0 != "@" }).capitalized, email: email)
-                self.isLoggedIn = true
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let session = try await supabase.auth.signIn(email: email, password: password)
+                
+                DispatchQueue.main.async {
+                    self.currentUser = User(
+                        id: session.user.id.uuidString,
+                        name: email.prefix(while: { $0 != "@" }).capitalized,
+                        email: email
+                    )
+                    self.isLoggedIn = true
+                    self.isLoading = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Login misslyckades: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
-        } else {
-            errorMessage = "Ogiltig email eller lösenord (min 6 tecken)"
         }
     }
     
     func signup(name: String, email: String, password: String, confirmPassword: String) {
+        isLoading = true
+        errorMessage = ""
+        
         // Validering
         if name.isEmpty {
             errorMessage = "Namnet kan inte vara tomt"
+            isLoading = false
             return
         }
         if !email.contains("@") {
             errorMessage = "Ogiltig email-adress"
+            isLoading = false
             return
         }
         if password.count < 6 {
             errorMessage = "Lösenordet måste vara minst 6 tecken"
+            isLoading = false
             return
         }
         if password != confirmPassword {
             errorMessage = "Lösenorden matchar inte"
+            isLoading = false
             return
         }
         
-        // Simulerad signup - i en riktigt app skulle detta anropa en backend API
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.currentUser = User(id: UUID().uuidString, name: name, email: email)
-            self.isLoggedIn = true
+        Task {
+            do {
+                let session = try await supabase.auth.signUp(email: email, password: password)
+                
+                DispatchQueue.main.async {
+                    self.currentUser = User(
+                        id: session.user.id.uuidString,
+                        name: name,
+                        email: email
+                    )
+                    self.isLoggedIn = true
+                    self.isLoading = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Signup misslyckades: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
         }
     }
     
     func logout() {
-        isLoggedIn = false
-        currentUser = nil
+        Task {
+            do {
+                try await supabase.auth.signOut()
+                
+                DispatchQueue.main.async {
+                    self.isLoggedIn = false
+                    self.currentUser = nil
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Logout misslyckades: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 }
