@@ -17,10 +17,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 10
-        locationManager.pausesLocationUpdatesAutomatically = false
         
+        // VIKTIGT: Inte pausera uppdateringar automatiskt
         if #available(iOS 11.0, *) {
-            locationManager.allowsBackgroundLocationUpdates = true
+            locationManager.pausesLocationUpdatesAutomatically = false
         }
     }
     
@@ -29,7 +29,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func requestBackgroundLocationPermission() {
-        locationManager.requestAlwaysAuthorization()
+        // Bara requestera whenInUse för simulator
+        locationManager.requestWhenInUseAuthorization()
     }
     
     func startTracking() {
@@ -38,6 +39,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         totalDistance = 0.0
         lastLocation = nil
         distance = 0.0
+        
+        // Starta endast cuando quando användaren är i appen
         locationManager.startUpdatingLocation()
     }
     
