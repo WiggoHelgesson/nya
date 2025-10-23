@@ -42,6 +42,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // Starta endast cuando quando användaren är i appen
         locationManager.startUpdatingLocation()
+        
+        // Fallback för simulator
+        #if targetEnvironment(simulator)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if self.userLocation == nil {
+                self.userLocation = CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686) // Stockholm
+            }
+        }
+        #endif
     }
     
     func stopTracking() {
@@ -73,6 +82,26 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location error: \(error.localizedDescription)")
+        
+        // Hantera simulator-problem
+        if let clError = error as? CLError {
+            switch clError.code {
+            case .locationUnknown:
+                print("⚠️ Location unknown - common in simulator")
+                // Simulera en position för simulator
+                #if targetEnvironment(simulator)
+                DispatchQueue.main.async {
+                    self.userLocation = CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686) // Stockholm
+                }
+                #endif
+            case .denied:
+                print("❌ Location access denied")
+            case .network:
+                print("❌ Network error")
+            default:
+                print("❌ Other location error: \(clError.localizedDescription)")
+            }
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {

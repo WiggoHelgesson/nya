@@ -6,6 +6,9 @@ struct WorkoutPost: Codable, Identifiable {
     let activityType: String
     let title: String
     let description: String?
+    let distance: Double?
+    let duration: Int?
+    let imageUrl: String?
     let createdAt: String
     
     enum CodingKeys: String, CodingKey {
@@ -14,15 +17,21 @@ struct WorkoutPost: Codable, Identifiable {
         case activityType = "activity_type"
         case title
         case description
+        case distance
+        case duration
+        case imageUrl = "image_url"
         case createdAt = "created_at"
     }
     
-    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String? = nil) {
+    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String? = nil, distance: Double? = nil, duration: Int? = nil, imageUrl: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
         self.title = title
         self.description = description
+        self.distance = distance
+        self.duration = duration
+        self.imageUrl = imageUrl
         self.createdAt = ISO8601DateFormatter().string(from: Date())
     }
 }

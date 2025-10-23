@@ -134,7 +134,10 @@ struct SessionCompleteView: View {
             userId: authViewModel.currentUser?.id ?? "",
             activityType: activity.rawValue,
             title: title,
-            description: description
+            description: description,
+            distance: distance,
+            duration: duration,
+            imageUrl: nil // TODO: Implement image upload to Supabase Storage
         )
         
         Task {
