@@ -2,7 +2,7 @@ import Foundation
 
 struct User: Codable, Identifiable {
     let id: String
-    let name: String
+    var name: String
     let email: String
     var currentXP: Int = 0
     var currentLevel: Int = 0
@@ -15,5 +15,14 @@ struct User: Codable, Identifiable {
         case currentXP = "current_xp"
         case currentLevel = "current_level"
         case isProMember = "is_pro_member"
+    }
+    
+    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false) {
+        self.id = id
+        self.name = name
+        self.email = email
+        self.currentXP = currentXP
+        self.currentLevel = currentLevel
+        self.isProMember = isProMember
     }
 }
