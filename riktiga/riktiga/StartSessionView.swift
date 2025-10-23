@@ -128,6 +128,7 @@ struct SelectActivityView: View {
 struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
+    @StateObject private var locationManager = LocationManager()
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -135,7 +136,6 @@ struct SessionMapView: View {
     @State private var isRunning = false
     @State private var isPaused = false
     @State private var sessionDuration: Int = 0
-    @State private var sessionDistance: Double = 0.0
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
     @State private var showCompletionPopup = false
@@ -148,11 +148,22 @@ struct SessionMapView: View {
             // MARK: - Map Background
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
+                .onAppear {
+                    // Request location permission and start tracking
+                    locationManager.requestLocationPermission()
+                    locationManager.startTracking()
+                }
+                .onChange(of: locationManager.userLocation) { newLocation in
+                    if let location = newLocation {
+                        region.center = location
+                    }
+                }
 
             // MARK: - Back Button
             VStack {
                 HStack {
                     Button(action: {
+                        locationManager.stopTracking()
                         dismiss()
                         stopTimer()
                     }) {
@@ -175,17 +186,26 @@ struct SessionMapView: View {
                 VStack(spacing: 16) {
                     // GPS Status
                     HStack(spacing: 8) {
-                        Image(systemName: "location.fill")
+                        Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
                             .font(.system(size: 14))
-                            .foregroundColor(AppColors.brandBlue)
-                        Text("GPS")
+                            .foregroundColor(locationManager.userLocation != nil ? AppColors.brandBlue : .red)
+                        Text(locationManager.userLocation != nil ? "GPS" : "GPS Ej tillgänglig")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(locationManager.userLocation != nil ? .black : .red)
+                    }
+                    
+                    // Location Error Display
+                    if let error = locationManager.locationError {
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
                     }
 
                     // Main Distance Display (Längst upp i fetstil)
                     VStack(spacing: 4) {
-                        Text(String(format: "%.2f", sessionDistance))
+                        Text(String(format: "%.2f", locationManager.distance))
                             .font(.system(size: 36, weight: .black))
                             .foregroundColor(.black)
                         Text("km")
@@ -201,7 +221,7 @@ struct SessionMapView: View {
                     // Three Column Stats
                     HStack(spacing: 20) {
                         VStack(spacing: 4) {
-                            Text(String(format: "%.2f", sessionDistance))
+                            Text(String(format: "%.2f", locationManager.distance))
                                 .font(.system(size: 20, weight: .black))
                                 .foregroundColor(.black)
                             Text("Distans")
@@ -335,7 +355,7 @@ struct SessionMapView: View {
             if showSessionComplete {
                 SessionCompleteView(
                     activity: activity,
-                    distance: sessionDistance,
+                    distance: locationManager.distance,
                     duration: sessionDuration,
                     earnedPoints: earnedPoints,
                     isPresented: $showSessionComplete,
@@ -376,20 +396,21 @@ struct SessionMapView: View {
     
     func endSession() {
         stopTimer()
+        locationManager.stopTracking()
         // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
-        earnedPoints = Int(sessionDistance * 15)
+        earnedPoints = Int(locationManager.distance * 15)
         showCompletionPopup = true
     }
 
     func updatePace() {
         // Om vi inte har kört tillräckligt länge eller distans, visa "0:00"
-        if sessionDuration < 10 || sessionDistance < 0.01 {
+        if sessionDuration < 10 || locationManager.distance < 0.01 {
             currentPace = "0:00"
             return
         }
         
         // Beräkna tempo (sekunder per km)
-        let paceSeconds = (Double(sessionDuration) / sessionDistance) * 1000
+        let paceSeconds = (Double(sessionDuration) / locationManager.distance) * 1000
         
         // Om tempot är för långsamt (över 20 min/km), visa "0:00"
         if paceSeconds > 1200 {

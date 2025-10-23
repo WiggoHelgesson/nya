@@ -6,6 +6,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var userLocation: CLLocationCoordinate2D?
     @Published var distance: Double = 0.0
     @Published var isTracking = false
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    @Published var locationError: String?
     
     private let locationManager = CLLocationManager()
     private var startLocation: CLLocation?
@@ -22,6 +24,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         if #available(iOS 11.0, *) {
             locationManager.pausesLocationUpdatesAutomatically = false
         }
+        
+        // Kontrollera initial authorization status
+        authorizationStatus = locationManager.authorizationStatus
     }
     
     func requestLocationPermission() {
@@ -34,19 +39,28 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func startTracking() {
+        // Kontrollera permissions först
+        guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
+            print("❌ Location permission not granted. Current status: \(authorizationStatus.rawValue)")
+            locationError = "Platstillstånd krävs för att spåra din aktivitet"
+            return
+        }
+        
         isTracking = true
         startLocation = nil
         totalDistance = 0.0
         lastLocation = nil
         distance = 0.0
+        locationError = nil
         
-        // Starta endast cuando quando användaren är i appen
+        print("🚀 Starting location tracking...")
         locationManager.startUpdatingLocation()
         
         // Fallback för simulator
         #if targetEnvironment(simulator)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if self.userLocation == nil {
+                print("📍 Setting simulator location to Stockholm")
                 self.userLocation = CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686) // Stockholm
             }
         }
@@ -105,14 +119,26 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        DispatchQueue.main.async {
+            self.authorizationStatus = status
+        }
+        
         switch status {
         case .notDetermined:
+            print("📍 Location permission not determined, requesting...")
             requestLocationPermission()
         case .restricted, .denied:
-            print("Location access denied")
+            print("❌ Location access denied")
+            DispatchQueue.main.async {
+                self.locationError = "Platstillstånd nekades. Gå till Inställningar för att aktivera platsåtkomst."
+            }
         case .authorizedWhenInUse, .authorizedAlways:
-            print("Location access granted")
+            print("✅ Location access granted")
+            DispatchQueue.main.async {
+                self.locationError = nil
+            }
         @unknown default:
+            print("⚠️ Unknown location authorization status")
             break
         }
     }
