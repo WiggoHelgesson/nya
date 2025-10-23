@@ -343,6 +343,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				UIBackgroundModes = "location background-processing background-fetch";
+				BGTaskSchedulerPermittedIdentifiers = "com.roboreabapp.productions.location-sync com.roboreabapp.productions.data-refresh";
 				UIRequiredDeviceCapabilities = "location-services accelerometer gyroscope camera bluetooth-le";
 			};
 			name = Debug;
@@ -399,6 +400,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				UIBackgroundModes = "location background-processing background-fetch";
+				BGTaskSchedulerPermittedIdentifiers = "com.roboreabapp.productions.location-sync com.roboreabapp.productions.data-refresh";
 				UIRequiredDeviceCapabilities = "location-services accelerometer gyroscope camera bluetooth-le";
 			};
 			name = Release;
