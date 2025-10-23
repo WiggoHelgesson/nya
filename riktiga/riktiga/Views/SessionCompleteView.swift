@@ -128,17 +128,11 @@ struct SessionCompleteView: View {
     func saveWorkout() {
         isSaving = true
         
-        var imageBase64: String? = nil
-        if let image = sessionImage, let imageData = image.jpegData(compressionQuality: 0.7) {
-            imageBase64 = imageData.base64EncodedString()
-        }
-        
         let post = WorkoutPost(
             userId: authViewModel.currentUser?.id ?? "",
             activityType: activity.rawValue,
             title: title,
-            description: description,
-            imageData: imageBase64
+            description: description
         )
         
         Task {

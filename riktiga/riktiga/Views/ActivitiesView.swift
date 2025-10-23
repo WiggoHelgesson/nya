@@ -68,15 +68,6 @@ struct WorkoutPostCard: View {
                     .foregroundColor(.gray)
             }
             
-            if let imageData = post.imageData, let imageUIImage = decodeImage(imageData) {
-                Image(uiImage: imageUIImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 150)
-                    .cornerRadius(8)
-                    .clipped()
-            }
-            
             if !post.description.isEmpty {
                 Text(post.description)
                     .font(.caption)
@@ -118,13 +109,6 @@ struct WorkoutPostCard: View {
             return dateFormatter.string(from: date)
         }
         return dateString
-    }
-    
-    func decodeImage(_ base64: String) -> UIImage? {
-        if let data = Data(base64Encoded: base64) {
-            return UIImage(data: data)
-        }
-        return nil
     }
 }
 
