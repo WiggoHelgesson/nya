@@ -6,80 +6,101 @@ struct MainTabView: View {
     
     var body: some View {
         ZStack {
-            TabView(selection: $selectedTab) {
-                // Hem tab
-                HomeView()
-                    .tabItem {
+            // Tab Content
+            Group {
+                if selectedTab == 0 {
+                    HomeView()
+                } else if selectedTab == 1 {
+                    VStack {
+                        Text("Aktiviteter")
+                            .font(.title)
+                        Spacer()
+                    }
+                } else if selectedTab == 2 {
+                    RewardsView()
+                } else if selectedTab == 3 {
+                    ProfileView()
+                }
+            }
+            
+            // Custom Navigation Bar - Liquid Glass
+            VStack {
+                Spacer()
+                
+                HStack(spacing: 0) {
+                    // Hem
+                    Button(action: { selectedTab = 0 }) {
                         VStack(spacing: 4) {
                             Image(systemName: "house.fill")
+                                .font(.title3)
                             Text("Hem")
+                                .font(.caption)
                         }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 0 ? .black : .gray)
                     }
-                    .tag(0)
-                
-                // Socialt tab
-                VStack {
-                    Text("Socialt")
-                        .font(.title)
-                    Spacer()
-                }
-                .tabItem {
-                    VStack(spacing: 4) {
-                        Image(systemName: "person.2.fill")
-                        Text("Socialt")
+                    
+                    // Aktiviteter
+                    Button(action: { selectedTab = 1 }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "figure.walk")
+                                .font(.title3)
+                            Text("Aktiviteter")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 1 ? .black : .gray)
                     }
-                }
-                .tag(1)
-                
-                // Starta Pass - Center button placeholder
-                VStack {
-                    Text("Starta Pass")
-                }
-                .tabItem {
-                    VStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                        Text("Pass")
+                    
+                    // Starta Pass - Center Button
+                    NavigationLink(destination: StartSessionView()) {
+                        VStack(spacing: 4) {
+                            Text("STARTA\nPASS")
+                                .font(.system(size: 11, weight: .bold))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color(red: 0.15, green: 0.2, blue: 0.35))
+                        .cornerRadius(8)
                     }
-                }
-                .tag(2)
-                
-                // Belöningar tab
-                RewardsView()
-                    .tabItem {
+                    
+                    // Belöningar
+                    Button(action: { selectedTab = 2 }) {
                         VStack(spacing: 4) {
                             Image(systemName: "star.fill")
+                                .font(.title3)
                             Text("Belöningar")
+                                .font(.caption)
                         }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 2 ? .black : .gray)
                     }
-                    .tag(3)
-                
-                // Profil tab
-                ProfileView()
-                    .tabItem {
+                    
+                    // Profil
+                    Button(action: { selectedTab = 3 }) {
                         VStack(spacing: 4) {
                             Image(systemName: "person.fill")
+                                .font(.title3)
                             Text("Profil")
+                                .font(.caption)
                         }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(selectedTab == 3 ? .black : .gray)
                     }
-                    .tag(4)
-            }
-            .tint(.black)
-            .onAppear {
-                let appearance = UITabBarAppearance()
-                
-                // Liquid Glass Effect
-                appearance.backgroundEffect = UIBlurEffect(style: .light)
-                appearance.backgroundColor = UIColor.white.withAlphaComponent(0.7)
-                
-                // Tab bar styling
-                appearance.stackedLayoutAppearance.normal.iconColor = UIColor.gray
-                appearance.stackedLayoutAppearance.normal.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.gray]
-                
-                appearance.stackedLayoutAppearance.selected.iconColor = UIColor.black
-                appearance.stackedLayoutAppearance.selected.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-                
-                UITabBar.appearance().standardAppearance = appearance
-                UITabBar.appearance().scrollEdgeAppearance = appearance
+                }
+                .frame(height: 70)
+                .background(
+                    ZStack {
+                        Color.white.opacity(0.7)
+                        .background(.ultraThinMaterial)
+                    }
+                )
+                .cornerRadius(20)
+                .padding(12)
             }
         }
     }
