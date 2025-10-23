@@ -16,10 +16,10 @@ struct AuthenticationView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(height: 200)
-                    .padding(.vertical, 20)
-                    .padding(.top, 40)
                     .cornerRadius(20)
                     .clipped()
+                    .padding(.vertical, 20)
+                    .padding(.top, 40)
                 
                 // Text under bilden
                 VStack(spacing: 8) {
