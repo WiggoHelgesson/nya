@@ -128,9 +128,198 @@ struct SelectActivityView: View {
 struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
-    
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
+        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+    )
+    @State private var isRunning = false
+    @State private var isPaused = false
+    @State private var sessionDuration: Int = 0
+    @State private var sessionDistance: Double = 0.0
+    @State private var currentPace: String = "0'00\"/km"
+    @State private var timer: Timer?
+    @Environment(\.dismiss) var dismiss
+
     var body: some View {
-        Text("SessionMapView")
+        ZStack {
+            // MARK: - Map Background
+            Map(coordinateRegion: $region, showsUserLocation: true)
+                .ignoresSafeArea()
+
+            // MARK: - Back Button
+            VStack {
+                HStack {
+                    Button(action: {
+                        dismiss()
+                        stopTimer()
+                    }) {
+                        Image(systemName: "chevron.left.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.white)
+                            .shadow(radius: 5)
+                    }
+                    .padding(.leading, 16)
+                    Spacer()
+                }
+                .padding(.top, 16)
+                Spacer()
+            }
+
+            // MARK: - Stats and Controls Overlay
+            VStack {
+                Spacer()
+
+                VStack(spacing: 16) {
+                    // Activity Title
+                    Text(activity.rawValue)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.black)
+
+                    // Stats
+                    HStack(spacing: 16) {
+                        StatView(
+                            value: String(format: "%.2f", sessionDistance / 1000),
+                            label: "KM"
+                        )
+                        StatView(
+                            value: formattedTime(sessionDuration),
+                            label: "TID"
+                        )
+                        StatView(
+                            value: currentPace,
+                            label: "TEMPO"
+                        )
+                    }
+                    .padding(.vertical, 12)
+
+                    // Control Buttons
+                    if isPaused {
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                isPaused = false
+                                isRunning = true
+                                startTimer()
+                            }) {
+                                Text("FORTSÄTT")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(AppColors.brandBlue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+
+                            Button(action: {
+                                stopTimer()
+                                dismiss()
+                            }) {
+                                Text("AVSLUTA")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(.black)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+                        }
+                    } else {
+                        Button(action: {
+                            if isRunning {
+                                isPaused = true
+                                isRunning = false
+                                stopTimer()
+                            } else {
+                                startTimer()
+                                isRunning = true
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: isRunning ? "pause.fill" : "play.fill")
+                                Text(isRunning ? "PAUSA" : "STARTA")
+                            }
+                            .font(.system(size: 16, weight: .black))
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        AppColors.brandBlue,
+                                        AppColors.brandGreen
+                                    ]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.95))
+                        .shadow(radius: 10)
+                )
+                .padding(16)
+            }
+        }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+
+    func startTimer() {
+        isRunning = true
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            sessionDuration += 1
+            // Simulera distans (ca 10 km/h för löpning)
+            sessionDistance += 0.00278
+            updatePace()
+        }
+    }
+
+    func stopTimer() {
+        isRunning = false
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func updatePace() {
+        if sessionDuration > 0 && sessionDistance > 0 {
+            let paceSeconds = (Double(sessionDuration) / sessionDistance) * 1000 // sekunder per km
+            let minutes = Int(paceSeconds / 60)
+            let seconds = Int(paceSeconds.truncatingRemainder(dividingBy: 60))
+            currentPace = String(format: "%d'%02d\"/km", minutes, seconds)
+        }
+    }
+
+    func formattedTime(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%02d:%02d", minutes, secs)
+        }
+    }
+}
+
+struct StatView: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 18, weight: .black))
+                .foregroundColor(.black)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
