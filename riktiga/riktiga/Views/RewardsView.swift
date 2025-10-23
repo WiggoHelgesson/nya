@@ -7,8 +7,8 @@ struct RewardsView: View {
     let categories = ["Golf", "Löpning", "Gym", "Skidåkning"]
     
     let heroImages = [
-        "golf_course_hero",
-        "golf_autumn_hero"
+        "2",
+        "3"
     ]
     
     let rewards = [
@@ -50,9 +50,6 @@ struct RewardsView: View {
                         TabView(selection: $currentHeroIndex) {
                             ForEach(0..<heroImages.count, id: \.self) { index in
                                 HeroBannerCard(
-                                    title: "ALLT FÖR HÖSTGOLFEN PÅ ETT STÄLLE",
-                                    brandName: "PLIKT GOLF",
-                                    website: "Pliktgolf.se",
                                     imageName: heroImages[index]
                                 )
                                 .tag(index)
@@ -113,61 +110,15 @@ struct RewardsView: View {
 }
 
 struct HeroBannerCard: View {
-    let title: String
-    let brandName: String
-    let website: String
     let imageName: String
     
     var body: some View {
-        ZStack {
-            // Background Image (placeholder)
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.green.opacity(0.8),
-                            Color.blue.opacity(0.6)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            
-            VStack(spacing: 12) {
-                // Brand Logo
-                VStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            VStack(spacing: 2) {
-                                Text("PLIKT")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                Text("GOLF")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                Image(systemName: "flag.fill")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.white)
-                            }
-                        )
-                }
-                
-                // Title
-                Text(title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                
-                // Website
-                Text(website)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            .padding(20)
-        }
+        Image(imageName)
+            .resizable()
+            .scaledToFill()
+            .frame(height: 200)
+            .clipped()
+            .cornerRadius(12)
     }
 }
 
