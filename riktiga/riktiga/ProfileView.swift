@@ -7,139 +7,146 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // Profilbild och namn
+                VStack(spacing: 0) {
+                    // MARK: - Profile Header
                     VStack(spacing: 16) {
+                        // Profilbild
                         Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 100))
+                            .font(.system(size: 80))
                             .foregroundColor(Color(red: 0.1, green: 0.6, blue: 0.8))
                         
-                        VStack(spacing: 4) {
-                            Text(authViewModel.currentUser?.name ?? "User")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            Text(authViewModel.currentUser?.email ?? "user@example.com")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .padding(.top, 20)
-                    
-                    // XP Display
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("U")
-                                    .font(.system(size: 40, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black)
-                                    .cornerRadius(12)
+                        // Namn
+                        Text(authViewModel.currentUser?.name ?? "User")
+                            .font(.system(size: 24, weight: .bold))
+                        
+                        // Stats
+                        HStack(spacing: 30) {
+                            VStack(spacing: 4) {
+                                Text("1")
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("Träningspass")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
                             }
                             
+                            VStack(spacing: 4) {
+                                Text("12")
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("Följare")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            VStack(spacing: 4) {
+                                Text("18")
+                                    .font(.system(size: 18, weight: .bold))
+                                Text("Följer")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        
+                        // Edit profil link
+                        NavigationLink(destination: Text("Redigera profil")) {
+                            Text("Förhandsgranska din profil")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                                .underline()
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(24)
+                    .background(Color(.systemGray6))
+                    
+                    // MARK: - XP Display Box
+                    VStack(spacing: 0) {
+                        HStack(spacing: 16) {
+                            // U Symbol
+                            Text("U")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 60, height: 60)
+                                .background(Color.black)
+                                .cornerRadius(12)
+                            
+                            // XP Text
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
+                                    .font(.system(size: 20, weight: .bold))
                                 
                                 if let currentLevel = authViewModel.currentUser?.currentLevel {
                                     Text("Level \(currentLevel)")
                                         .font(.body)
                                         .foregroundColor(.gray)
                                 }
-                                
-                                if let isProMember = authViewModel.currentUser?.isProMember, isProMember {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "star.fill")
-                                            .font(.caption)
-                                        Text("Pro Member")
-                                            .font(.caption)
-                                    }
-                                    .foregroundColor(.orange)
-                                }
                             }
                             
                             Spacer()
                         }
+                        .padding(20)
+                        .background(Color.black)
+                        .cornerRadius(12)
                     }
                     .padding(16)
+                    
+                    // MARK: - Stats Buttons
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            StatButton(
+                                icon: "cart.fill",
+                                label: "Mina köp"
+                            )
+                            
+                            StatButton(
+                                icon: "chart.bar.fill",
+                                label: "Statistik"
+                            )
+                        }
+                        
+                        HStack(spacing: 12) {
+                            StatButton(
+                                icon: "arrow.up.right.circle.fill",
+                                label: "Utveckling"
+                            )
+                            
+                            StatButton(
+                                icon: "target",
+                                label: "Mål"
+                            )
+                        }
+                    }
+                    .padding(16)
+                    
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    // MARK: - Settings
+                    VStack(spacing: 0) {
+                        NavigationLink(destination: Text("Redigera profil")) {
+                            SettingsRow(icon: "pencil", label: "Redigera profil", color: .blue)
+                        }
+                        
+                        Divider()
+                            .padding(.leading, 50)
+                        
+                        NavigationLink(destination: Text("Notifikationsinställningar")) {
+                            SettingsRow(icon: "bell", label: "Notifikationer", color: .orange)
+                        }
+                        
+                        Divider()
+                            .padding(.leading, 50)
+                        
+                        NavigationLink(destination: Text("Sekretessinställningar")) {
+                            SettingsRow(icon: "lock", label: "Sekretess", color: .green)
+                        }
+                    }
                     .background(Color(.systemGray6))
-                    .cornerRadius(12)
+                    .cornerRadius(10)
+                    .padding(.horizontal, 16)
                     
-                    // Statistik
-                    VStack(spacing: 12) {
-                        Text("Din statistik")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                        
-                        VStack(spacing: 10) {
-                            ProfileStatRow(icon: "calendar", label: "Medlem sedan", value: "3 månader")
-                            ProfileStatRow(icon: "figure.walk", label: "Totala pass", value: "42")
-                            ProfileStatRow(icon: "clock", label: "Total träning", value: "123h 45m")
-                            ProfileStatRow(icon: "flame", label: "Totalt brända", value: "45,230 kcal")
-                            ProfileStatRow(icon: "target", label: "Genomsnittligt måltempo", value: "7.5 min/km")
-                        }
-                        .padding(.horizontal)
-                    }
+                    Spacer(minLength: 20)
                     
-                    Divider()
-                        .padding(.horizontal)
-                    
-                    // Inställningar
-                    VStack(spacing: 12) {
-                        Text("Inställningar")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                        
-                        VStack(spacing: 0) {
-                            NavigationLink(destination: Text("Redigera profil")) {
-                                SettingsRow(icon: "pencil", label: "Redigera profil", color: .blue)
-                            }
-                            
-                            Divider()
-                                .padding(.leading, 50)
-                            
-                            NavigationLink(destination: Text("Notifikationsinställningar")) {
-                                SettingsRow(icon: "bell", label: "Notifikationer", color: .orange)
-                            }
-                            
-                            Divider()
-                                .padding(.leading, 50)
-                            
-                            NavigationLink(destination: Text("Sekretessinställningar")) {
-                                SettingsRow(icon: "lock", label: "Sekretess", color: .green)
-                            }
-                        }
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
-                    }
-                    
-                    Divider()
-                        .padding(.horizontal)
-                    
-                    // Hjälp och annat
-                    VStack(spacing: 12) {
-                        VStack(spacing: 0) {
-                            Button(action: {}) {
-                                SettingsRow(icon: "questionmark.circle", label: "Hjälp & support", color: .purple, isButton: true)
-                            }
-                            
-                            Divider()
-                                .padding(.leading, 50)
-                            
-                            Button(action: {}) {
-                                SettingsRow(icon: "info.circle", label: "Om appen", color: .gray, isButton: true)
-                            }
-                        }
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
-                    }
-                    
-                    // Logga ut
+                    // MARK: - Logout Button
                     Button(action: {
                         showingAlert = true
                     }) {
@@ -151,11 +158,12 @@ struct ProfileView: View {
                             .cornerRadius(10)
                             .font(.headline)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 20)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
                 }
             }
-            .navigationTitle("Profil")
+            .navigationTitle("Inställningar")
+            .navigationBarTitleDisplayMode(.inline)
             .alert("Logga ut", isPresented: $showingAlert) {
                 Button("Avbryt", role: .cancel) { }
                 Button("Logga ut", role: .destructive) {
@@ -168,42 +176,26 @@ struct ProfileView: View {
     }
 }
 
-struct ProfileStatRow: View {
+struct StatButton: View {
     let icon: String
     let label: String
-    let value: String
     
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 8) {
             Image(systemName: icon)
+                .font(.title2)
                 .foregroundColor(.white)
-                .frame(width: 40, height: 40)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color(red: 0.1, green: 0.6, blue: 0.8),
-                            Color(red: 0.2, green: 0.4, blue: 0.9)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(8)
+                .frame(height: 40)
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                Text(value)
-                    .font(.headline)
-                    .fontWeight(.bold)
-            }
-            
-            Spacer()
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.black)
+                .lineLimit(1)
         }
-        .padding(10)
+        .frame(maxWidth: .infinity)
+        .padding(16)
         .background(Color(.systemGray6))
-        .cornerRadius(8)
+        .cornerRadius(10)
     }
 }
 
@@ -211,7 +203,6 @@ struct SettingsRow: View {
     let icon: String
     let label: String
     let color: Color
-    var isButton = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -224,11 +215,9 @@ struct SettingsRow: View {
             
             Spacer()
             
-            if !isButton {
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.gray)
         }
         .padding(16)
     }
