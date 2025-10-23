@@ -29,22 +29,20 @@ struct SplashScreenView: View {
                         .opacity(logoOpacity)
                         .shadow(radius: 10)
                     
-                    // MARK: - Text Animation
-                    VStack(spacing: 4) {
-                        Text("TRÄNA,")
-                            .font(.system(size: 42, weight: .black))
+                    // MARK: - Text Animation (på en rad)
+                    HStack(spacing: 8) {
+                        Text("TRÄNA, FÅ")
+                            .font(.system(size: 40, weight: .black))
                             .foregroundColor(.black)
                         
-                        HStack(spacing: 0) {
-                            Text("FÅ BELÖNINGAR")
-                                .font(.system(size: 42, weight: .black))
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
-                        .background(AppColors.brandYellow)
-                        .cornerRadius(8)
-                        .rotationEffect(.degrees(-3))
+                        Text("BELÖNINGAR")
+                            .font(.system(size: 40, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .background(AppColors.brandYellow)
+                            .cornerRadius(8)
+                            .rotationEffect(.degrees(-3))
                     }
                     .offset(y: textOffset)
                     .opacity(textOpacity)
