@@ -1,6 +1,10 @@
 import SwiftUI
 import Combine
 
+extension Notification.Name {
+    static let profileStatsUpdated = Notification.Name("profileStatsUpdated")
+}
+
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showImagePicker = false
@@ -9,6 +13,8 @@ struct ProfileView: View {
     @State private var showStatistics = false
     @State private var showMyPurchases = false
     @State private var showFindFriends = false
+    @State private var followersCount = 0
+    @State private var followingCount = 0
     
     var body: some View {
         NavigationStack {
@@ -58,7 +64,7 @@ struct ProfileView: View {
                                     }
                                     
                                     VStack(spacing: 4) {
-                                        Text("12")
+                                        Text("\(followersCount)")
                                             .font(.system(size: 16, weight: .bold))
                                         Text("Följare")
                                             .font(.caption2)
@@ -66,7 +72,7 @@ struct ProfileView: View {
                                     }
                                     
                                     VStack(spacing: 4) {
-                                        Text("18")
+                                        Text("\(followingCount)")
                                             .font(.system(size: 16, weight: .bold))
                                         Text("Följer")
                                             .font(.caption2)
@@ -166,6 +172,12 @@ struct ProfileView: View {
                 FindFriendsView()
             }
             .onAppear {
+                loadProfileStats()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
+                loadProfileStats()
+            }
+            .onAppear {
                 // Lyssna på profilbild uppdateringar
                 NotificationCenter.default.addObserver(
                     forName: .profileImageUpdated,
@@ -181,6 +193,24 @@ struct ProfileView: View {
             }
             .onDisappear {
                 NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
+            }
+        }
+    }
+    
+    private func loadProfileStats() {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        Task {
+            do {
+                let followers = try await SocialService.shared.getFollowers(userId: currentUserId)
+                let following = try await SocialService.shared.getFollowing(userId: currentUserId)
+                
+                await MainActor.run {
+                    self.followersCount = followers.count
+                    self.followingCount = following.count
+                }
+            } catch {
+                print("❌ Error loading profile stats: \(error)")
             }
         }
     }

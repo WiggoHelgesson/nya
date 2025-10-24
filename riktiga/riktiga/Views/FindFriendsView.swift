@@ -17,23 +17,13 @@ struct FindFriendsView: View {
                     
                     TextField("Sök efter användare...", text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
-                        .onSubmit {
-                            performSearch()
+                        .onChange(of: searchText) { _, newValue in
+                            if newValue.count >= 3 {
+                                performSearch()
+                            } else {
+                                findFriendsViewModel.searchResults = []
+                            }
                         }
-                    
-                    if !searchText.isEmpty {
-                        Button("Sök") {
-                            performSearch()
-                        }
-                        .foregroundColor(AppColors.brandBlue)
-                        .fontWeight(.semibold)
-                    }
-                    
-                    Button("Testa alla") {
-                        testGetAllUsers()
-                    }
-                    .foregroundColor(.orange)
-                    .fontWeight(.semibold)
                 }
                 .padding(12)
                 .background(Color(.systemGray6))
@@ -121,26 +111,6 @@ struct FindFriendsView: View {
         findFriendsViewModel.toggleFollow(followerId: currentUserId, followingId: userId)
     }
     
-    private func testGetAllUsers() {
-        print("🔍 FindFriendsView: Testing getAllUsers")
-        guard let currentUserId = authViewModel.currentUser?.id else { 
-            print("❌ FindFriendsView: No current user for test")
-            return 
-        }
-        
-        Task {
-            do {
-                let allUsers = try await SocialService.shared.getAllUsers()
-                await MainActor.run {
-                    print("🔍 FindFriendsView: Got \(allUsers.count) total users")
-                    findFriendsViewModel.searchResults = allUsers.filter { $0.id != currentUserId }
-                    findFriendsViewModel.isLoading = false
-                }
-            } catch {
-                print("❌ FindFriendsView: Error getting all users: \(error)")
-            }
-        }
-    }
 }
 
 struct UserSearchCard: View {
@@ -282,15 +252,20 @@ class FindFriendsViewModel: ObservableObject {
             do {
                 if isCurrentlyFollowing {
                     try await SocialService.shared.unfollowUser(followerId: followerId, followingId: followingId)
+                    print("✅ Unfollowed user \(followingId)")
                 } else {
                     try await SocialService.shared.followUser(followerId: followerId, followingId: followingId)
+                    print("✅ Followed user \(followingId)")
                 }
                 
                 await MainActor.run {
                     self.followingStatus[followingId] = !isCurrentlyFollowing
+                    
+                    // Notify that profile stats should be updated
+                    NotificationCenter.default.post(name: .profileStatsUpdated, object: nil)
                 }
             } catch {
-                print("Error toggling follow: \(error)")
+                print("❌ Error toggling follow: \(error)")
             }
         }
     }
