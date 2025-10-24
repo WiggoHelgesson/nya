@@ -222,20 +222,19 @@ struct CategoryButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Image(systemName: getCategoryIcon(category))
-                    .font(.system(size: 28, weight: .medium))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundColor(isSelected ? .white : .gray)
                 
                 Text(category)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(isSelected ? .white : .gray)
             }
-            .frame(width: 85, height: 85)
+            .frame(width: 80, height: 80)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? .black : Color(.systemGray6))
-                    .shadow(color: isSelected ? .black.opacity(0.3) : .clear, radius: 4, x: 0, y: 2)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? .black : Color(.systemGray5))
             )
         }
         .scaleEffect(isSelected ? 1.05 : 1.0)
