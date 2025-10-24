@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var weeklyDistance: Double = 12.5 // km
+    @StateObject private var statisticsService = StatisticsService.shared
     @State private var showStartSession = false
     @State private var showRewards = false
     
@@ -65,9 +65,15 @@ struct HomeView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.gray)
                                     
-                                    Text(String(format: "%.1f km", weeklyDistance))
-                                        .font(.system(size: 36, weight: .black))
-                                        .foregroundColor(.black)
+                                    if statisticsService.isLoading {
+                                        Text("Laddar...")
+                                            .font(.system(size: 36, weight: .black))
+                                            .foregroundColor(.gray)
+                                    } else {
+                                        Text(String(format: "%.1f km", statisticsService.weeklyStats?.totalDistance ?? 0.0))
+                                            .font(.system(size: 36, weight: .black))
+                                            .foregroundColor(.black)
+                                    }
                                 }
                                 
                                 Spacer()
@@ -77,9 +83,15 @@ struct HomeView: View {
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(.gray)
                                     
-                                    Text("\(Int((weeklyDistance / 20.0) * 100))%")
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(.black)
+                                    if statisticsService.isLoading {
+                                        Text("0%")
+                                            .font(.system(size: 20, weight: .bold))
+                                            .foregroundColor(.gray)
+                                    } else {
+                                        Text("\(Int((statisticsService.weeklyStats?.goalProgress ?? 0.0) * 100))%")
+                                            .font(.system(size: 20, weight: .bold))
+                                            .foregroundColor(.black)
+                                    }
                                 }
                             }
                             
@@ -92,7 +104,7 @@ struct HomeView: View {
                                     
                                     RoundedRectangle(cornerRadius: 8)
                                         .fill(Color.black)
-                                        .frame(width: geometry.size.width * (weeklyDistance / 20.0), height: 12)
+                                        .frame(width: geometry.size.width * (statisticsService.weeklyStats?.goalProgress ?? 0.0), height: 12)
                                 }
                             }
                             .frame(height: 12)
@@ -161,14 +173,15 @@ struct HomeView: View {
                                 .padding(.horizontal, 20)
                             
                             VStack(spacing: 12) {
-                                // Day 1 - Monday
-                                WeeklyStatRow(day: "Mån", distance: 2.1, isToday: false)
-                                WeeklyStatRow(day: "Tis", distance: 1.8, isToday: false)
-                                WeeklyStatRow(day: "Ons", distance: 3.2, isToday: false)
-                                WeeklyStatRow(day: "Tor", distance: 2.5, isToday: false)
-                                WeeklyStatRow(day: "Fre", distance: 1.9, isToday: true)
-                                WeeklyStatRow(day: "Lör", distance: 0.0, isToday: false)
-                                WeeklyStatRow(day: "Sön", distance: 0.0, isToday: false)
+                                if statisticsService.isLoading {
+                                    ForEach(0..<7) { _ in
+                                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
+                                    }
+                                } else {
+                                    ForEach(statisticsService.weeklyStats?.dailyStats ?? [], id: \.day) { dailyStat in
+                                        WeeklyStatRow(day: dailyStat.day, distance: dailyStat.distance, isToday: dailyStat.isToday)
+                                    }
+                                }
                             }
                             .padding(20)
                             .background(Color.white)
@@ -190,6 +203,13 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showRewards) {
             RewardsView()
+        }
+        .onAppear {
+            if let userId = authViewModel.currentUser?.id {
+                Task {
+                    await statisticsService.fetchWeeklyStats(userId: userId)
+                }
+            }
         }
     }
 }

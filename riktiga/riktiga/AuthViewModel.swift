@@ -123,31 +123,59 @@ class AuthViewModel: ObservableObject {
     }
     
     func updateProfileImage(image: UIImage) {
-        guard let currentUser = currentUser else { return }
+        guard let currentUser = currentUser else { 
+            print("❌ No current user found")
+            return 
+        }
+        
+        print("🔄 Starting profile image update for user: \(currentUser.id)")
         
         Task {
             do {
                 // Konvertera UIImage till Data
                 guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                    print("❌ Could not convert image to JPEG data")
                     DispatchQueue.main.async {
                         self.errorMessage = "Kunde inte konvertera bilden"
                     }
                     return
                 }
                 
+                print("✅ Image converted to data, size: \(imageData.count) bytes")
+                
                 // Skapa unikt filnamn
                 let fileName = "\(currentUser.id)_avatar.jpg"
+                print("📁 Uploading file: \(fileName)")
                 
                 // Ladda upp till Supabase Storage
                 let filePath = "avatars/\(fileName)"
-                _ = try await supabase.storage.from("avatars").upload(
-                    path: filePath,
-                    file: imageData,
-                    options: FileOptions(contentType: "image/jpeg")
-                )
+                
+                // Kontrollera om bucket finns, skapa om den inte finns
+                do {
+                    _ = try await supabase.storage.from("avatars").upload(
+                        path: filePath,
+                        file: imageData,
+                        options: FileOptions(contentType: "image/jpeg")
+                    )
+                } catch {
+                    print("❌ Upload failed, trying to create bucket first: \(error)")
+                    // Försök skapa bucket om den inte finns
+                    try await supabase.storage.createBucket("avatars", options: BucketOptions(public: true))
+                    print("✅ Created avatars bucket")
+                    
+                    // Försök upload igen
+                    _ = try await supabase.storage.from("avatars").upload(
+                        path: filePath,
+                        file: imageData,
+                        options: FileOptions(contentType: "image/jpeg")
+                    )
+                }
+                
+                print("✅ Image uploaded to storage: \(filePath)")
                 
                 // Hämta public URL
                 let publicURL = try supabase.storage.from("avatars").getPublicURL(path: filePath)
+                print("🔗 Public URL: \(publicURL.absoluteString)")
                 
                 // Uppdatera användarens avatar_url i databasen
                 try await supabase
@@ -156,12 +184,16 @@ class AuthViewModel: ObservableObject {
                     .eq("id", value: currentUser.id)
                     .execute()
                 
+                print("✅ Database updated with new avatar URL")
+                
                 // Uppdatera lokal användardata
                 DispatchQueue.main.async {
                     self.currentUser?.avatarUrl = publicURL.absoluteString
+                    print("✅ Local user data updated")
                 }
                 
             } catch {
+                print("❌ Error updating profile image: \(error)")
                 DispatchQueue.main.async {
                     self.errorMessage = "Kunde inte uppdatera profilbild: \(error.localizedDescription)"
                 }

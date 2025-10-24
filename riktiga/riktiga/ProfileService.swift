@@ -13,7 +13,7 @@ class ProfileService {
             do {
                 var profiles: [User] = try await supabase
                     .from("profiles")
-                    .select("id, username, current_xp, current_level, is_pro_member")  // NO email!
+                    .select("id, username, current_xp, current_level, is_pro_member, avatar_url")  // Added avatar_url
                     .eq("id", value: userId)
                     .execute()
                     .value
@@ -24,7 +24,7 @@ class ProfileService {
                     // Hämta email från auth.user
                     let session = try await supabase.auth.session
                     profile.email = session.user.email ?? ""
-                    print("💾 Profile found: \(profile.name), Email: \(profile.email), XP: \(profile.currentXP), Level: \(profile.currentLevel)")
+                    print("💾 Profile found: \(profile.name), Email: \(profile.email), XP: \(profile.currentXP), Level: \(profile.currentLevel), Avatar: \(profile.avatarUrl ?? "nil")")
                     return profile
                 } else {
                     print("❌ No profile found for userId: \(userId)")
