@@ -17,20 +17,21 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         // MARK: - Welcome Section
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Välkommen")
-                                .font(.system(size: 24, weight: .black))
+                            Text("VÄLKOMMEN")
+                                .font(.system(size: 32, weight: .black))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 16)
                                 .background(Color.black)
-                                .cornerRadius(12)
-                                .rotationEffect(.degrees(-1))
+                                .cornerRadius(16)
+                                .rotationEffect(.degrees(-2))
+                                .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                             
                             Text((authViewModel.currentUser?.name ?? "ANVÄNDARE").uppercased())
-                                .font(.system(size: 32, weight: .black))
+                                .font(.system(size: 36, weight: .black))
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 20)
-                                .padding(.top, 8)
+                                .padding(.top, 12)
                         }
                         .padding(.top, 20)
                         
