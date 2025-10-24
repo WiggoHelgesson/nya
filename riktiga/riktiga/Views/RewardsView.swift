@@ -283,7 +283,7 @@ struct FullScreenRewardCard: View {
             Image(reward.imageName)
                 .resizable()
                 .scaledToFill()
-                .frame(height: 200) // Reduced height
+                .frame(height: 240) // Increased height for longer cards
                 .clipped()
             
             // Info Section - Clean like in the image
@@ -308,13 +308,13 @@ struct FullScreenRewardCard: View {
                         .foregroundColor(.gray)
                 }
             }
-            .padding(16)
+            .padding(20)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width * 0.75, height: 280) // Smaller width and height
+        .frame(width: UIScreen.main.bounds.width * 0.85, height: 320) // Wider and taller
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
     }
 }
 
