@@ -150,8 +150,30 @@ class SocialService {
     
     // MARK: - User Search Functions
     
+    func getAllUsers() async throws -> [UserSearchResult] {
+        do {
+            print("🔍 Getting all users from profiles table")
+            
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .limit(50)
+                .execute()
+                .value
+            
+            print("✅ Found \(users.count) total users in database: \(users.map { $0.name })")
+            return users
+        } catch {
+            print("❌ Error getting all users: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
     func searchUsers(query: String, currentUserId: String) async throws -> [UserSearchResult] {
         do {
+            print("🔍 Searching for users with query: '\(query)', currentUserId: '\(currentUserId)'")
+            
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
                 .select("id, username, avatar_url")
@@ -161,10 +183,11 @@ class SocialService {
                 .execute()
                 .value
             
-            print("✅ Found \(users.count) users matching '\(query)'")
+            print("✅ Found \(users.count) users matching '\(query)': \(users.map { $0.name })")
             return users
         } catch {
             print("❌ Error searching users: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
             return []
         }
     }

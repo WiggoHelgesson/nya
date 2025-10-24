@@ -28,6 +28,12 @@ struct FindFriendsView: View {
                         .foregroundColor(AppColors.brandBlue)
                         .fontWeight(.semibold)
                     }
+                    
+                    Button("Testa alla") {
+                        testGetAllUsers()
+                    }
+                    .foregroundColor(.orange)
+                    .fontWeight(.semibold)
                 }
                 .padding(12)
                 .background(Color(.systemGray6))
@@ -98,9 +104,14 @@ struct FindFriendsView: View {
     }
     
     private func performSearch() {
+        print("🔍 FindFriendsView: performSearch called with text: '\(searchText)'")
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let currentUserId = authViewModel.currentUser?.id else { return }
+              let currentUserId = authViewModel.currentUser?.id else { 
+            print("❌ FindFriendsView: Search text empty or no current user")
+            return 
+        }
         
+        print("🔍 FindFriendsView: Calling searchUsers with query: '\(searchText)', userId: '\(currentUserId)'")
         findFriendsViewModel.searchUsers(query: searchText, currentUserId: currentUserId)
     }
     
@@ -108,6 +119,27 @@ struct FindFriendsView: View {
         guard let currentUserId = authViewModel.currentUser?.id else { return }
         
         findFriendsViewModel.toggleFollow(followerId: currentUserId, followingId: userId)
+    }
+    
+    private func testGetAllUsers() {
+        print("🔍 FindFriendsView: Testing getAllUsers")
+        guard let currentUserId = authViewModel.currentUser?.id else { 
+            print("❌ FindFriendsView: No current user for test")
+            return 
+        }
+        
+        Task {
+            do {
+                let allUsers = try await SocialService.shared.getAllUsers()
+                await MainActor.run {
+                    print("🔍 FindFriendsView: Got \(allUsers.count) total users")
+                    findFriendsViewModel.searchResults = allUsers.filter { $0.id != currentUserId }
+                    findFriendsViewModel.isLoading = false
+                }
+            } catch {
+                print("❌ FindFriendsView: Error getting all users: \(error)")
+            }
+        }
     }
 }
 
@@ -198,6 +230,7 @@ class FindFriendsViewModel: ObservableObject {
     @Published var followingStatus: [String: Bool] = [:]
     
     func searchUsers(query: String, currentUserId: String) {
+        print("🔍 FindFriendsViewModel: Starting search for '\(query)' with userId '\(currentUserId)'")
         isLoading = true
         
         Task {
@@ -205,6 +238,7 @@ class FindFriendsViewModel: ObservableObject {
                 let results = try await SocialService.shared.searchUsers(query: query, currentUserId: currentUserId)
                 
                 await MainActor.run {
+                    print("🔍 FindFriendsViewModel: Got \(results.count) results")
                     self.searchResults = results
                     self.isLoading = false
                     
@@ -213,10 +247,11 @@ class FindFriendsViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
+                    print("❌ FindFriendsViewModel: Error occurred, clearing results")
                     self.searchResults = []
                     self.isLoading = false
                 }
-                print("Error searching users: \(error)")
+                print("❌ FindFriendsViewModel: Error searching users: \(error)")
             }
         }
     }
