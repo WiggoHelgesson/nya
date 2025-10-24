@@ -50,11 +50,12 @@ struct HomeView: View {
                             .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                             
                             Text((authViewModel.currentUser?.name ?? "ANVÄNDARE").uppercased())
-                                .font(.system(size: 36, weight: .regular))
+                                .font(.system(size: 36, weight: .bold))
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 20)
                                 .padding(.top, 12)
-                                .rotationEffect(.degrees(1))
+                                .rotationEffect(.degrees(-2))
+                                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                         }
                         .padding(.top, 20)
                         

@@ -317,7 +317,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 51.0;
+				MARKETING_VERSION = 52.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -373,7 +373,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 51.0;
+				MARKETING_VERSION = 52.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
