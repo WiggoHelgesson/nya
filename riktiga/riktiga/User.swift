@@ -7,6 +7,7 @@ struct User: Codable, Identifiable {
     var currentXP: Int = 0
     var currentLevel: Int = 0
     var isProMember: Bool = false
+    var avatarUrl: String? = nil
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -15,6 +16,7 @@ struct User: Codable, Identifiable {
         case currentXP = "current_xp"
         case currentLevel = "current_level"
         case isProMember = "is_pro_member"
+        case avatarUrl = "avatar_url"
     }
     
     // Custom decode för att hantera att email inte finns i profiles
@@ -26,6 +28,7 @@ struct User: Codable, Identifiable {
         currentXP = try container.decodeIfPresent(Int.self, forKey: .currentXP) ?? 0
         currentLevel = try container.decodeIfPresent(Int.self, forKey: .currentLevel) ?? 0
         isProMember = try container.decodeIfPresent(Bool.self, forKey: .isProMember) ?? false
+        avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -36,14 +39,16 @@ struct User: Codable, Identifiable {
         try container.encode(currentXP, forKey: .currentXP)
         try container.encode(currentLevel, forKey: .currentLevel)
         try container.encode(isProMember, forKey: .isProMember)
+        try container.encodeIfPresent(avatarUrl, forKey: .avatarUrl)
     }
     
-    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false) {
+    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil) {
         self.id = id
         self.name = name
         self.email = email
         self.currentXP = currentXP
         self.currentLevel = currentLevel
         self.isProMember = isProMember
+        self.avatarUrl = avatarUrl
     }
 }

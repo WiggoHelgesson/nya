@@ -19,17 +19,17 @@ struct ProfileView: View {
                             Button(action: {
                                 showImagePicker = true
                             }) {
-                                if let profileImage = profileImage {
-                                    Image(uiImage: profileImage)
+                                AsyncImage(url: URL(string: authViewModel.currentUser?.avatarUrl ?? "")) { image in
+                                    image
                                         .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 80, height: 80)
-                                        .clipShape(Circle())
-                                } else {
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
                                     Image(systemName: "person.crop.circle.fill")
                                         .font(.system(size: 80))
                                         .foregroundColor(.gray)
                                 }
+                                .frame(width: 80, height: 80)
+                                .clipShape(Circle())
                             }
                             
                             VStack(alignment: .leading, spacing: 12) {
@@ -141,7 +141,7 @@ struct ProfileView: View {
                 }
             }
             .sheet(isPresented: $showImagePicker) {
-                ImagePicker(image: $profileImage)
+                ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
@@ -183,6 +183,7 @@ struct ActionButton: View {
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
+    let authViewModel: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -208,6 +209,8 @@ struct ImagePicker: UIViewControllerRepresentable {
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
             if let uiImage = info[.originalImage] as? UIImage {
                 parent.image = uiImage
+                // Spara profilbilden via AuthViewModel
+                parent.authViewModel.updateProfileImage(image: uiImage)
             }
             parent.presentationMode.wrappedValue.dismiss()
         }

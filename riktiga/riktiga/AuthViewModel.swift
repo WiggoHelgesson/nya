@@ -121,4 +121,51 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+    
+    func updateProfileImage(image: UIImage) {
+        guard let currentUser = currentUser else { return }
+        
+        Task {
+            do {
+                // Konvertera UIImage till Data
+                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                    DispatchQueue.main.async {
+                        self.errorMessage = "Kunde inte konvertera bilden"
+                    }
+                    return
+                }
+                
+                // Skapa unikt filnamn
+                let fileName = "\(currentUser.id)_avatar.jpg"
+                
+                // Ladda upp till Supabase Storage
+                let filePath = "avatars/\(fileName)"
+                _ = try await supabase.storage.from("avatars").upload(
+                    path: filePath,
+                    file: imageData,
+                    options: FileOptions(contentType: "image/jpeg")
+                )
+                
+                // Hämta public URL
+                let publicURL = try supabase.storage.from("avatars").getPublicURL(path: filePath)
+                
+                // Uppdatera användarens avatar_url i databasen
+                try await supabase
+                    .from("profiles")
+                    .update(["avatar_url": publicURL.absoluteString])
+                    .eq("id", value: currentUser.id)
+                    .execute()
+                
+                // Uppdatera lokal användardata
+                DispatchQueue.main.async {
+                    self.currentUser?.avatarUrl = publicURL.absoluteString
+                }
+                
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Kunde inte uppdatera profilbild: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
 }
