@@ -148,7 +148,7 @@ struct RewardsView: View {
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 16)
                             
-                            HStack(spacing: 12) {
+                            HStack(spacing: 16) {
                                 ForEach(categories, id: \.self) { category in
                                     CategoryButton(
                                         category: category,
@@ -159,6 +159,7 @@ struct RewardsView: View {
                                     )
                                 }
                             }
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                         }
                         
@@ -221,19 +222,24 @@ struct CategoryButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 Image(systemName: getCategoryIcon(category))
-                    .font(.system(size: 24))
+                    .font(.system(size: 28, weight: .medium))
                     .foregroundColor(isSelected ? .white : .gray)
                 
                 Text(category)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(isSelected ? .white : .gray)
             }
-            .frame(width: 70, height: 70)
-            .background(isSelected ? .black : Color(.systemGray6))
-            .cornerRadius(12)
+            .frame(width: 85, height: 85)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? .black : Color(.systemGray6))
+                    .shadow(color: isSelected ? .black.opacity(0.3) : .clear, radius: 4, x: 0, y: 2)
+            )
         }
+        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
     
     func getCategoryIcon(_ category: String) -> String {
