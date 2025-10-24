@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import Supabase
+import UIKit
 
 class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
@@ -125,10 +126,18 @@ class AuthViewModel: ObservableObject {
     func updateProfileImage(image: UIImage) {
         guard let currentUser = currentUser else { 
             print("❌ No current user found")
+            DispatchQueue.main.async {
+                self.errorMessage = "Ingen användare hittades"
+            }
             return 
         }
         
         print("🔄 Starting profile image update for user: \(currentUser.id)")
+        
+        // Visa loading state
+        DispatchQueue.main.async {
+            self.errorMessage = ""
+        }
         
         Task {
             do {
@@ -143,8 +152,9 @@ class AuthViewModel: ObservableObject {
                 
                 print("✅ Image converted to data, size: \(imageData.count) bytes")
                 
-                // Skapa unikt filnamn
-                let fileName = "\(currentUser.id)_avatar.jpg"
+                // Skapa unikt filnamn med timestamp för att undvika cache-problem
+                let timestamp = Int(Date().timeIntervalSince1970)
+                let fileName = "\(currentUser.id)_avatar_\(timestamp).jpg"
                 print("📁 Uploading file: \(fileName)")
                 
                 // Ladda upp till Supabase Storage
@@ -153,8 +163,8 @@ class AuthViewModel: ObservableObject {
                 // Kontrollera om bucket finns, skapa om den inte finns
                 do {
                     _ = try await supabase.storage.from("avatars").upload(
-                        path: filePath,
-                        file: imageData,
+                        filePath,
+                        data: imageData,
                         options: FileOptions(contentType: "image/jpeg")
                     )
                 } catch {
@@ -165,8 +175,8 @@ class AuthViewModel: ObservableObject {
                     
                     // Försök upload igen
                     _ = try await supabase.storage.from("avatars").upload(
-                        path: filePath,
-                        file: imageData,
+                        filePath,
+                        data: imageData,
                         options: FileOptions(contentType: "image/jpeg")
                     )
                 }
@@ -186,10 +196,13 @@ class AuthViewModel: ObservableObject {
                 
                 print("✅ Database updated with new avatar URL")
                 
-                // Uppdatera lokal användardata
+                // Uppdatera lokal användardata och trigga UI-uppdatering
                 DispatchQueue.main.async {
                     self.currentUser?.avatarUrl = publicURL.absoluteString
                     print("✅ Local user data updated")
+                    
+                    // Skicka notifikation för att uppdatera UI
+                    NotificationCenter.default.post(name: .profileImageUpdated, object: publicURL.absoluteString)
                 }
                 
             } catch {
@@ -200,4 +213,9 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+}
+
+// MARK: - NotificationCenter Extensions
+extension Notification.Name {
+    static let profileImageUpdated = Notification.Name("profileImageUpdated")
 }

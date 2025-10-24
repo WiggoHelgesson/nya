@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -210,6 +211,21 @@ struct HomeView: View {
                     await statisticsService.fetchWeeklyStats(userId: userId)
                 }
             }
+            
+            // Lyssna på profilbild uppdateringar
+            NotificationCenter.default.addObserver(
+                forName: .profileImageUpdated,
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let newImageUrl = notification.object as? String {
+                    print("🔄 Profile image updated in HomeView: \(newImageUrl)")
+                    authViewModel.objectWillChange.send()
+                }
+            }
+        }
+        .onDisappear {
+            NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
         }
     }
 }

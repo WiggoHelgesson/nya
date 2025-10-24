@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -152,6 +153,23 @@ struct ProfileView: View {
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
             }
+            .onAppear {
+                // Lyssna på profilbild uppdateringar
+                NotificationCenter.default.addObserver(
+                    forName: .profileImageUpdated,
+                    object: nil,
+                    queue: .main
+                ) { notification in
+                    if let newImageUrl = notification.object as? String {
+                        print("🔄 Profile image updated in UI: \(newImageUrl)")
+                        // Trigga UI-uppdatering genom att uppdatera authViewModel
+                        authViewModel.objectWillChange.send()
+                    }
+                }
+            }
+            .onDisappear {
+                NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
+            }
         }
     }
 }
@@ -211,6 +229,11 @@ struct ImagePicker: UIViewControllerRepresentable {
                 parent.image = uiImage
                 // Spara profilbilden via AuthViewModel
                 parent.authViewModel.updateProfileImage(image: uiImage)
+                
+                // Visa en bekräftelse att bilden sparas
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("🔄 Profile image update initiated")
+                }
             }
             parent.presentationMode.wrappedValue.dismiss()
         }
