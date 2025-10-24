@@ -15,41 +15,6 @@ struct HomeView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        // MARK: - Top Section: Månadens Pris
-                        VStack(spacing: 0) {
-                            Button(action: {
-                                // Navigate to monthly prize
-                            }) {
-                                HStack {
-                                    Image(systemName: "trophy.fill")
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(.white)
-                                    
-                                    Text("MÅNADENS PRIS")
-                                        .font(.system(size: 16, weight: .black))
-                                        .foregroundColor(.white)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.white)
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [AppColors.brandBlue, AppColors.brandBlue.opacity(0.8)]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .cornerRadius(12)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        
                         // MARK: - Welcome Section
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Välkommen")
@@ -57,7 +22,7 @@ struct HomeView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 12)
-                                .background(AppColors.brandBlue)
+                                .background(Color.black)
                                 .cornerRadius(12)
                                 .rotationEffect(.degrees(-1))
                             
@@ -67,6 +32,7 @@ struct HomeView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.top, 8)
                         }
+                        .padding(.top, 20)
                         
                         // MARK: - Weekly Distance Section
                         VStack(spacing: 16) {
@@ -90,7 +56,7 @@ struct HomeView: View {
                                     
                                     Text("\(Int((weeklyDistance / 20.0) * 100))%")
                                         .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(AppColors.brandGreen)
+                                        .foregroundColor(.black)
                                 }
                             }
                             
@@ -102,13 +68,7 @@ struct HomeView: View {
                                         .frame(height: 12)
                                     
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [AppColors.brandGreen, AppColors.brandBlue]),
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
+                                        .fill(Color.black)
                                         .frame(width: geometry.size.width * (weeklyDistance / 20.0), height: 12)
                                 }
                             }
@@ -140,7 +100,7 @@ struct HomeView: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(AppColors.brandGreen)
+                                .background(Color.black)
                                 .foregroundColor(.white)
                                 .cornerRadius(14)
                                 .rotationEffect(.degrees(-2))
@@ -164,7 +124,7 @@ struct HomeView: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(AppColors.brandBlue)
+                                .background(Color.gray)
                                 .foregroundColor(.white)
                                 .cornerRadius(14)
                                 .rotationEffect(.degrees(2))
@@ -222,7 +182,7 @@ struct WeeklyStatRow: View {
         HStack {
             Text(day)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(isToday ? AppColors.brandBlue : .gray)
+                .foregroundColor(isToday ? .black : .gray)
                 .frame(width: 30, alignment: .leading)
             
             GeometryReader { geometry in
@@ -232,7 +192,7 @@ struct WeeklyStatRow: View {
                         .frame(height: 8)
                     
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(isToday ? AppColors.brandBlue : AppColors.brandGreen)
+                        .fill(isToday ? .black : Color.gray)
                         .frame(width: distance > 0 ? geometry.size.width * (distance / 5.0) : 0, height: 8)
                 }
             }
@@ -240,7 +200,7 @@ struct WeeklyStatRow: View {
             
             Text(String(format: "%.1f km", distance))
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isToday ? AppColors.brandBlue : .gray)
+                .foregroundColor(isToday ? .black : .gray)
                 .frame(width: 50, alignment: .trailing)
         }
     }
