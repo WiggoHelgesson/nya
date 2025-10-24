@@ -283,18 +283,18 @@ struct FullScreenRewardCard: View {
             Image(reward.imageName)
                 .resizable()
                 .scaledToFill()
-                .frame(height: 250) // Smaller height to match image proportions
+                .frame(height: 200) // Reduced height
                 .clipped()
             
             // Info Section - Clean like in the image
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.black)
                     
                     Text(reward.brandName)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
                 
@@ -304,16 +304,17 @@ struct FullScreenRewardCard: View {
                     isBookmarked.toggle()
                 }) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundColor(.gray)
                 }
             }
-            .padding(20)
+            .padding(16)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width - 20) // Almost full screen width with small margin
+        .frame(width: UIScreen.main.bounds.width * 0.75, height: 280) // Smaller width and height
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
