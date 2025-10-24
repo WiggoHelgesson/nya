@@ -181,7 +181,7 @@ struct RewardsView: View {
                                             .id(index)
                                         }
                                     }
-                                    .padding(.horizontal, 16)
+                                    .padding(.horizontal, 24)
                                     .scrollTargetLayout()
                                 }
                                 .scrollTargetBehavior(.viewAligned)
@@ -311,7 +311,7 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width * 0.85, height: 320) // Wider and taller
+        .frame(width: UIScreen.main.bounds.width * 0.8, height: 320) // Slightly narrower to prevent shadow clipping
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
