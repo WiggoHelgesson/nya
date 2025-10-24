@@ -1,0 +1,267 @@
+import SwiftUI
+import Combine
+
+struct FindFriendsView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var findFriendsViewModel = FindFriendsViewModel()
+    @State private var searchText = ""
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search Bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    
+                    TextField("Sök efter användare...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .onSubmit {
+                            performSearch()
+                        }
+                    
+                    if !searchText.isEmpty {
+                        Button("Sök") {
+                            performSearch()
+                        }
+                        .foregroundColor(AppColors.brandBlue)
+                        .fontWeight(.semibold)
+                    }
+                }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                
+                // Results
+                if findFriendsViewModel.isLoading {
+                    Spacer()
+                    ProgressView("Söker...")
+                        .foregroundColor(.gray)
+                    Spacer()
+                } else if findFriendsViewModel.searchResults.isEmpty && !searchText.isEmpty {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.crop.circle.badge.questionmark")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                        Text("Inga användare hittades")
+                            .font(.headline)
+                        Text("Prova att söka efter ett annat namn")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    Spacer()
+                } else if findFriendsViewModel.searchResults.isEmpty {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                        Text("Hitta dina vänner")
+                            .font(.headline)
+                        Text("Sök efter namn för att hitta användare att följa")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(findFriendsViewModel.searchResults) { user in
+                                UserSearchCard(
+                                    user: user,
+                                    isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
+                                    onFollowToggle: {
+                                        toggleFollow(userId: user.id)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(16)
+                    }
+                }
+            }
+            .navigationTitle("Hitta vänner")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Stäng") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func performSearch() {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        findFriendsViewModel.searchUsers(query: searchText, currentUserId: currentUserId)
+    }
+    
+    private func toggleFollow(userId: String) {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        findFriendsViewModel.toggleFollow(followerId: currentUserId, followingId: userId)
+    }
+}
+
+struct UserSearchCard: View {
+    let user: UserSearchResult
+    let isFollowing: Bool
+    let onFollowToggle: () -> Void
+    @State private var isProcessing = false
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // User Avatar
+            AsyncImage(url: URL(string: user.avatarUrl ?? "")) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+            } placeholder: {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 20))
+                    )
+            }
+            
+            // User Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(user.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Text(user.email)
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Follow Button
+            Button(action: {
+                guard !isProcessing else { return }
+                isProcessing = true
+                onFollowToggle()
+                
+                // Reset processing state after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isProcessing = false
+                }
+            }) {
+                HStack(spacing: 6) {
+                    if isProcessing {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Image(systemName: isFollowing ? "person.badge.minus" : "person.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    
+                    Text(isFollowing ? "Avfölj" : "Följ")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(isFollowing ? Color(.systemGray4) : AppColors.brandBlue)
+                )
+            }
+            .disabled(isProcessing)
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+class FindFriendsViewModel: ObservableObject {
+    @Published var searchResults: [UserSearchResult] = []
+    @Published var isLoading = false
+    @Published var followingStatus: [String: Bool] = [:]
+    
+    func searchUsers(query: String, currentUserId: String) {
+        isLoading = true
+        
+        Task {
+            do {
+                let results = try await SocialService.shared.searchUsers(query: query, currentUserId: currentUserId)
+                
+                await MainActor.run {
+                    self.searchResults = results
+                    self.isLoading = false
+                    
+                    // Check follow status for each user
+                    self.checkFollowStatus(for: results, currentUserId: currentUserId)
+                }
+            } catch {
+                await MainActor.run {
+                    self.searchResults = []
+                    self.isLoading = false
+                }
+                print("Error searching users: \(error)")
+            }
+        }
+    }
+    
+    private func checkFollowStatus(for users: [UserSearchResult], currentUserId: String) {
+        Task {
+            for user in users {
+                do {
+                    let isFollowing = try await SocialService.shared.isFollowing(
+                        followerId: currentUserId,
+                        followingId: user.id
+                    )
+                    
+                    await MainActor.run {
+                        self.followingStatus[user.id] = isFollowing
+                    }
+                } catch {
+                    print("Error checking follow status for user \(user.id): \(error)")
+                }
+            }
+        }
+    }
+    
+    func toggleFollow(followerId: String, followingId: String) {
+        let isCurrentlyFollowing = followingStatus[followingId] ?? false
+        
+        Task {
+            do {
+                if isCurrentlyFollowing {
+                    try await SocialService.shared.unfollowUser(followerId: followerId, followingId: followingId)
+                } else {
+                    try await SocialService.shared.followUser(followerId: followerId, followingId: followingId)
+                }
+                
+                await MainActor.run {
+                    self.followingStatus[followingId] = !isCurrentlyFollowing
+                }
+            } catch {
+                print("Error toggling follow: \(error)")
+            }
+        }
+    }
+}
+
+#Preview {
+    FindFriendsView()
+        .environmentObject(AuthViewModel())
+}

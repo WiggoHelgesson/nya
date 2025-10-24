@@ -8,6 +8,7 @@ struct ProfileView: View {
     @State private var showSettings = false
     @State private var showStatistics = false
     @State private var showMyPurchases = false
+    @State private var showFindFriends = false
     
     var body: some View {
         NavigationStack {
@@ -105,7 +106,7 @@ struct ProfileView: View {
                     .cornerRadius(12)
                     .border(Color.black, width: 2)
                     
-                    // MARK: - Action Buttons (2x1)
+                    // MARK: - Action Buttons (3x1)
                     HStack(spacing: 12) {
                         ActionButton(
                             icon: "cart.fill",
@@ -120,6 +121,14 @@ struct ProfileView: View {
                             label: "Statistik",
                             action: {
                                 showStatistics = true
+                            }
+                        )
+                        
+                        ActionButton(
+                            icon: "person.badge.plus.fill",
+                            label: "Hitta vänner",
+                            action: {
+                                showFindFriends = true
                             }
                         )
                     }
@@ -152,6 +161,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
+            }
+            .sheet(isPresented: $showFindFriends) {
+                FindFriendsView()
             }
             .onAppear {
                 // Lyssna på profilbild uppdateringar

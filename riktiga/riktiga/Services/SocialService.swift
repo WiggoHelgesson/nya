@@ -148,6 +148,45 @@ class SocialService {
         }
     }
     
+    // MARK: - User Search Functions
+    
+    func searchUsers(query: String, currentUserId: String) async throws -> [UserSearchResult] {
+        do {
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, name, email, avatar_url")
+                .ilike("name", pattern: "%\(query)%")
+                .neq("id", value: currentUserId)
+                .limit(20)
+                .execute()
+                .value
+            
+            print("✅ Found \(users.count) users matching '\(query)'")
+            return users
+        } catch {
+            print("❌ Error searching users: \(error)")
+            return []
+        }
+    }
+    
+    func isFollowing(followerId: String, followingId: String) async throws -> Bool {
+        do {
+            let follows: [Follow] = try await supabase
+                .from("follows")
+                .select()
+                .eq("follower_id", value: followerId)
+                .eq("following_id", value: followingId)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !follows.isEmpty
+        } catch {
+            print("❌ Error checking follow status: \(error)")
+            return false
+        }
+    }
+    
     // MARK: - Social Feed Functions
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
