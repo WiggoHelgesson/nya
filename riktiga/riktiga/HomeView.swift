@@ -19,21 +19,10 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 16) {
                                 // Profile Picture Circle
-                                AsyncImage(url: URL(string: authViewModel.currentUser?.avatarUrl ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Image(systemName: "person.circle.fill")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.white)
-                                }
-                                .frame(width: 50, height: 50)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 2)
-                                )
+                                Image(systemName: "person.circle.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.white)
+                                    .frame(width: 50, height: 50)
                                 
                                 Text("VÄLKOMMEN")
                                     .font(.system(size: 32, weight: .black))
