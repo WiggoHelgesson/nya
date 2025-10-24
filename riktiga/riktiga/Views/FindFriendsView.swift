@@ -143,7 +143,7 @@ struct UserSearchCard: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.black)
                 
-                Text(user.email)
+                Text("Användare")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .lineLimit(1)

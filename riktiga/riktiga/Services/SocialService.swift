@@ -154,8 +154,8 @@ class SocialService {
         do {
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, name, email, avatar_url")
-                .ilike("name", pattern: "%\(query)%")
+                .select("id, username, avatar_url")
+                .ilike("username", pattern: "%\(query)%")
                 .neq("id", value: currentUserId)
                 .limit(20)
                 .execute()
