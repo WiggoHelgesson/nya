@@ -14,7 +14,7 @@ struct MainTabView: View {
                     if selectedTab == 0 {
                         HomeView()
                     } else if selectedTab == 1 {
-                        ActivitiesView()
+                        SocialView()
                     } else if selectedTab == 2 {
                         RewardsView()
                     } else if selectedTab == 3 {
@@ -45,17 +45,17 @@ struct MainTabView: View {
                             .foregroundColor(selectedTab == 0 ? .black : .gray.opacity(0.6))
                         }
                         
-                        // Aktiviteter
+                        // Socialt
                         Button(action: { 
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedTab = 1 
                             }
                         }) {
                             VStack(spacing: 4) {
-                                Image(systemName: "figure.walk")
+                                Image(systemName: "person.2.fill")
                                     .font(.title3)
                                     .scaleEffect(selectedTab == 1 ? 1.1 : 1.0)
-                                Text("Aktiviteter")
+                                Text("Socialt")
                                     .font(.caption)
                                     .fontWeight(selectedTab == 1 ? .bold : .regular)
                             }
