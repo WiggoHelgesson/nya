@@ -17,15 +17,36 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         // MARK: - Welcome Section
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("VÄLKOMMEN")
-                                .font(.system(size: 32, weight: .black))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 16)
-                                .background(Color.black)
-                                .cornerRadius(16)
-                                .rotationEffect(.degrees(-2))
-                                .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                            HStack(spacing: 16) {
+                                // Profile Picture Circle
+                                AsyncImage(url: URL(string: authViewModel.currentUser?.avatarUrl ?? "")) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Image(systemName: "person.circle.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(width: 50, height: 50)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                )
+                                
+                                Text("VÄLKOMMEN")
+                                    .font(.system(size: 32, weight: .black))
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .cornerRadius(16)
+                            .rotationEffect(.degrees(-2))
+                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                             
                             Text((authViewModel.currentUser?.name ?? "ANVÄNDARE").uppercased())
                                 .font(.system(size: 36, weight: .black))
@@ -89,22 +110,21 @@ struct HomeView: View {
                             }) {
                                 HStack(spacing: 12) {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 20, weight: .bold))
+                                        .font(.system(size: 18, weight: .medium))
                                     
                                     Text("STARTA PASS")
-                                        .font(.system(size: 18, weight: .black))
+                                        .font(.system(size: 16, weight: .semibold))
                                     
                                     Spacer()
                                     
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.system(size: 14, weight: .medium))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(Color.black)
-                                .foregroundColor(.white)
-                                .cornerRadius(14)
-                                .rotationEffect(.degrees(-2))
+                                .background(Color(.systemGray5))
+                                .foregroundColor(.primary)
+                                .cornerRadius(12)
                             }
                             
                             // Se Varumärken Button
@@ -113,22 +133,21 @@ struct HomeView: View {
                             }) {
                                 HStack(spacing: 12) {
                                     Image(systemName: "shippingbox.fill")
-                                        .font(.system(size: 20, weight: .bold))
+                                        .font(.system(size: 18, weight: .medium))
                                     
                                     Text("SE VARUMÄRKEN")
-                                        .font(.system(size: 18, weight: .black))
+                                        .font(.system(size: 16, weight: .semibold))
                                     
                                     Spacer()
                                     
                                     Image(systemName: "chevron.right")
-                                        .font(.system(size: 16, weight: .semibold))
+                                        .font(.system(size: 14, weight: .medium))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(Color.gray)
-                                .foregroundColor(.white)
-                                .cornerRadius(14)
-                                .rotationEffect(.degrees(2))
+                                .background(Color(.systemGray5))
+                                .foregroundColor(.primary)
+                                .cornerRadius(12)
                             }
                         }
                         .padding(.horizontal, 20)
