@@ -40,7 +40,7 @@ struct ProfileView: View {
                                     Spacer()
                                     
                                     Button(action: {}) {
-                                        Image(systemName: "pencil.square")
+                                        Image(systemName: "pencil")
                                             .font(.title3)
                                             .foregroundColor(.black)
                                     }
