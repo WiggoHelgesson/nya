@@ -22,15 +22,44 @@ struct MainTabView: View {
                     }
                 }
                 
-                // Custom Navigation Bar - Liquid Glass
+                // Starta Pass Button - Above Navigation
+                VStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                            showStartSession = true
+                        }
+                    }) {
+                        Text("STARTA PASS")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.black, Color.gray.opacity(0.8)]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100) // Position above navigation
+                }
+                
+                // Custom Navigation Bar - Apple Liquid Glass
                 VStack {
                     Spacer()
                     
                     HStack(spacing: 0) {
                         // Hem
-                        Button(action: { 
+                        Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 0 
+                                selectedTab = 0
                             }
                         }) {
                             VStack(spacing: 4) {
@@ -43,73 +72,30 @@ struct MainTabView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 0 ? .blue : .secondary)
-                            .background(
-                                selectedTab == 0 ? 
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.thinMaterial)
-                                : nil
-                            )
                         }
                         
-                        // Topplistor (Leaderboards)
-                        Button(action: { 
+                        // Socialt
+                        Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 1 
+                                selectedTab = 1
                             }
                         }) {
                             VStack(spacing: 4) {
-                                Image(systemName: "trophy.fill")
+                                Image(systemName: "person.2.fill")
                                     .font(.title3)
                                     .scaleEffect(selectedTab == 1 ? 1.1 : 1.0)
-                                Text("Topplistor")
+                                Text("Socialt")
                                     .font(.caption)
                                     .fontWeight(selectedTab == 1 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 1 ? .blue : .secondary)
-                            .background(
-                                selectedTab == 1 ? 
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.thinMaterial)
-                                : nil
-                            )
-                        }
-                        
-                        // Starta Pass - Round Center Button
-                        Button(action: { 
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                                showStartSession = true 
-                            }
-                        }) {
-                            VStack(spacing: 2) {
-                                Text("STARTA")
-                                    .font(.system(size: 10, weight: .black))
-                                Text("PASS")
-                                    .font(.system(size: 10, weight: .black))
-                            }
-                            .foregroundColor(.white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color(red: 0.2, green: 0.25, blue: 0.4),
-                                                Color(red: 0.15, green: 0.2, blue: 0.35)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
-                                    .shadow(color: Color.white.opacity(0.2), radius: 4, x: 0, y: -2)
-                            )
                         }
                         
                         // Belöningar
-                        Button(action: { 
+                        Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 2 
+                                selectedTab = 2
                             }
                         }) {
                             VStack(spacing: 4) {
@@ -122,18 +108,12 @@ struct MainTabView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 2 ? .blue : .secondary)
-                            .background(
-                                selectedTab == 2 ? 
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.thinMaterial)
-                                : nil
-                            )
                         }
                         
                         // Profil
-                        Button(action: { 
+                        Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 3 
+                                selectedTab = 3
                             }
                         }) {
                             VStack(spacing: 4) {
@@ -146,12 +126,6 @@ struct MainTabView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .foregroundColor(selectedTab == 3 ? .blue : .secondary)
-                            .background(
-                                selectedTab == 3 ? 
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(.thinMaterial)
-                                : nil
-                            )
                         }
                     }
                     .frame(height: 80)
@@ -159,12 +133,7 @@ struct MainTabView: View {
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 28)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28)
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                            )
-                            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                            .glassEffect()
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
