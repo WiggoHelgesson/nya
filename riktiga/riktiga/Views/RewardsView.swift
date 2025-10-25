@@ -5,6 +5,12 @@ struct RewardsView: View {
     @State private var currentHeroIndex = 0
     @State private var currentRewardIndex = 0
     @State private var selectedReward: RewardCard?
+    @State private var searchText = ""
+    @State private var showSearchView = false
+    @State private var showFavorites = false
+    @State private var showMyPurchases = false
+    @State private var favoritedRewards: Set<Int> = []
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     let categories = ["Golf", "Löpning", "Gym", "Skidåkning"]
     
@@ -119,13 +125,116 @@ struct RewardsView: View {
         return allRewards.filter { $0.category == selectedCategory }
     }
     
+    var sortedAllRewards: [RewardCard] {
+        // Remove duplicates by brand name
+        let uniqueRewards = Dictionary(grouping: allRewards, by: { $0.brandName })
+            .compactMapValues { $0.first }
+            .values
+        
+        return Array(uniqueRewards).sorted { first, second in
+            // PUMPLABS first
+            if first.brandName == "PUMPLABS" && second.brandName != "PUMPLABS" {
+                return true
+            }
+            if second.brandName == "PUMPLABS" && first.brandName != "PUMPLABS" {
+                return false
+            }
+            
+            // ZEN ENERGY second
+            if first.brandName == "ZEN ENERGY" && second.brandName != "ZEN ENERGY" && second.brandName != "PUMPLABS" {
+                return true
+            }
+            if second.brandName == "ZEN ENERGY" && first.brandName != "ZEN ENERGY" && first.brandName != "PUMPLABS" {
+                return false
+            }
+            
+            // Rest in alphabetical order
+            return first.brandName < second.brandName
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
                 Color(.systemBackground)
-                    .ignoresSafeArea()
                 
-                ScrollView {
+                VStack(spacing: 0) {
+                    // MARK: - Header with Search, Favorites, and Points
+                    VStack(spacing: 16) {
+                        // Top row with points and icons
+                        HStack {
+                // Points display
+                HStack(spacing: 8) {
+                    Image(systemName: "gift.fill")
+                        .foregroundColor(.white)
+                        .font(.system(size: 16))
+                    
+                    Text("\(authViewModel.currentUser?.currentXP ?? 0)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black)
+                .cornerRadius(20)
+                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                            
+                            Spacer()
+                            
+                            // Right side icons
+                            HStack(spacing: 16) {
+                                Button(action: {
+                                    // Navigate to My Purchases
+                                    showMyPurchases = true
+                                }) {
+                                    Image(systemName: "bag.fill")
+                                        .foregroundColor(.black)
+                                        .font(.system(size: 20))
+                                }
+                                
+                                Button(action: {
+                                    // Navigate to favorited discounts
+                                    showFavorites = true
+                                }) {
+                                    Image(systemName: "bookmark.fill")
+                                        .foregroundColor(.black)
+                                        .font(.system(size: 20))
+                                }
+                            }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+                        
+                        // Search bar
+                        Button(action: {
+                            showSearchView = true
+                        }) {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 16))
+                                
+                                Text("Sök")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.gray)
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    .padding(.bottom, 16)
+                    .background(Color(.systemBackground))
+                    
+                    ScrollView {
                     VStack(spacing: 24) {
                         // MARK: - Hero Banner Slider
                         ScrollViewReader { proxy in
@@ -183,7 +292,7 @@ struct RewardsView: View {
                                     HStack(spacing: 16) {
                                         ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
                                             NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                                FullScreenRewardCard(reward: reward)
+                                                FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                                             }
                                             .buttonStyle(PlainButtonStyle())
                                             .id(index)
@@ -199,13 +308,51 @@ struct RewardsView: View {
                             }
                         }
                         
+                        // MARK: - Alla belöningar Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Alla belöningar")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                            
+                            ScrollViewReader { proxy in
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 16) {
+                                        ForEach(Array(sortedAllRewards.enumerated()), id: \.element.id) { index, reward in
+                                            NavigationLink(destination: RewardDetailView(reward: reward)) {
+                                                FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                            .id(index)
+                                        }
+                                    }
+                                    .padding(.horizontal, 24)
+                                    .scrollTargetLayout()
+                                }
+                                .scrollTargetBehavior(.viewAligned)
+                                .onAppear {
+                                    proxy.scrollTo(0, anchor: .center)
+                                }
+                            }
+                        }
+                        
                         Spacer(minLength: 100)
                     }
                     .padding(.top, 8)
+                    }
                 }
             }
             .navigationTitle("Belöningar")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showSearchView) {
+                SearchRewardsView(allRewards: allRewards)
+            }
+            .sheet(isPresented: $showFavorites) {
+                FavoritesView(favoritedRewards: $favoritedRewards, allRewards: allRewards)
+            }
+            .sheet(isPresented: $showMyPurchases) {
+                MyPurchasesView()
+            }
         }
     }
 }
@@ -277,21 +424,41 @@ struct RewardCard: Identifiable {
 
 struct FullScreenRewardCard: View {
     let reward: RewardCard
-    @State private var isBookmarked: Bool
+    @Binding var favoritedRewards: Set<Int>
     
-    init(reward: RewardCard) {
-        self.reward = reward
-        self._isBookmarked = State(initialValue: reward.isBookmarked)
+    private var isBookmarked: Bool {
+        favoritedRewards.contains(reward.id)
     }
     
     var body: some View {
         VStack(spacing: 0) {
             // Image Section - Clean brand image only
-            Image(reward.imageName)
-                .resizable()
-                .scaledToFill()
-                .frame(height: 240) // Increased height for longer cards
-                .clipped()
+            ZStack {
+                Image(reward.imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 240) // Increased height for longer cards
+                    .clipped()
+                
+                // Points overlay
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text("200 poäng")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black)
+                            .cornerRadius(8)
+                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                            .padding(.trailing, 96)
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .padding(.leading, 8)
+            }
             
             // Info Section - Clean like in the image
             HStack(spacing: 12) {
@@ -315,11 +482,15 @@ struct FullScreenRewardCard: View {
                 Spacer()
                 
                 Button(action: {
-                    isBookmarked.toggle()
+                    if isBookmarked {
+                        favoritedRewards.remove(reward.id)
+                    } else {
+                        favoritedRewards.insert(reward.id)
+                    }
                 }) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .font(.system(size: 18))
-                        .foregroundColor(.gray)
+                        .foregroundColor(isBookmarked ? .black : .gray)
                 }
             }
             .padding(20)
@@ -351,56 +522,98 @@ struct RewardDetailView: View {
     @State private var showCheckout = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Same image as on the card
-                Image(reward.imageName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 250)
-                    .clipped()
-                
-                VStack(spacing: 20) {
-                    // Discount and brand name
+        ZStack {
+            // Gray background like in the image
+            Color.gray.opacity(0.1)
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Company description card - like the white card in the image
+                    VStack(spacing: 16) {
+                        // Company logo at the top
+                        VStack(spacing: 12) {
+                            // Logo placeholder - circular white badge
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 80, height: 80)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                // Company logo or initial
+                                Text(String(reward.brandName.prefix(2)))
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                            
+                            // Company name
+                            Text(reward.brandName)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                        .padding(.top, 20)
+                        
+                        // Company description
+                        Text(getCompanyDescription(for: reward.brandName))
+                            .font(.system(size: 14))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(nil)
+                            .padding(.horizontal, 20)
+                        
+                        // Visit website button (like in the image)
+                        Button(action: {
+                            // Open company website
+                        }) {
+                            Text("BESÖK HEMSIDA")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                                .cornerRadius(8)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    }
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    
+                    // Discount info
                     VStack(spacing: 8) {
                         Text(reward.discount)
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.black)
                         
-                        Text(reward.brandName)
-                            .font(.system(size: 14, weight: .medium))
+                        Text("för \(reward.brandName)")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                     }
-                    .padding(.top, 16)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, 20)
                     
-                    // Company description
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Företaget")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.black)
-                        
-                        Text(getCompanyDescription(for: reward.brandName))
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                            .lineLimit(nil)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Get discount button
+                    // Claim reward button (like the purple button in the image)
                     Button(action: {
                         showCheckout = true
                     }) {
-                        Text("Hämta rabatt")
-                            .font(.system(size: 14, weight: .bold))
+                        Text("HÄMTA BELÖNING")
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(12)
+                            .padding(.vertical, 16)
                             .background(Color.black)
-                            .cornerRadius(8)
+                            .cornerRadius(12)
                     }
-                    .padding(.horizontal, 40)
-                    .padding(.top, 20)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 30)
                 }
             }
@@ -748,6 +961,56 @@ struct ConfirmationView: View {
     }
 }
 
+struct AllRewardsCard: View {
+    let reward: RewardCard
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Brand logo
+            Image(getBrandLogo(for: reward.imageName))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 30, height: 30)
+                .clipShape(Circle())
+            
+            VStack(spacing: 2) {
+                Text(reward.discount)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.center)
+                
+                Text(reward.brandName)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+        }
+        .frame(width: 80, height: 80)
+        .padding(8)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+    
+    private func getBrandLogo(for imageName: String) -> String {
+        switch imageName {
+        case "4": return "15" // PLIKTGOLF
+        case "5": return "5"  // PEGMATE
+        case "6": return "14" // LONEGOLF
+        case "7": return "17" // WINWIZE
+        case "8": return "18" // SCANDIGOLF
+        case "9": return "19" // Exotic Golf
+        case "10": return "16" // HAPPYALBA (Alba)
+        case "11": return "20" // RETROGOLF
+        case "12": return "21" // PUMPLABS
+        case "13": return "22" // ZEN ENERGY
+        default: return "5" // Default to PEGMATE
+        }
+    }
+}
+
 #Preview {
     RewardsView()
+        .environmentObject(AuthViewModel())
 }

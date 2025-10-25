@@ -315,55 +315,6 @@ class WorkoutPostsViewModel: ObservableObject {
     }
 }
 
-struct AllRewardsCard: View {
-    let reward: RewardCard
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            // Brand logo
-            Image(getBrandLogo(for: reward.imageName))
-                .resizable()
-                .scaledToFit()
-                .frame(width: 30, height: 30)
-                .clipShape(Circle())
-            
-            VStack(spacing: 2) {
-                Text(reward.discount)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.center)
-                
-                Text(reward.brandName)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
-        }
-        .frame(width: 80, height: 80)
-        .padding(8)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-    }
-    
-    private func getBrandLogo(for imageName: String) -> String {
-        switch imageName {
-        case "4": return "15" // PLIKTGOLF
-        case "5": return "5"  // PEGMATE
-        case "6": return "14" // LONEGOLF
-        case "7": return "17" // WINWIZE
-        case "8": return "18" // SCANDIGOLF
-        case "9": return "19" // Exotic Golf
-        case "10": return "16" // HAPPYALBA (Alba)
-        case "11": return "20" // RETROGOLF
-        case "12": return "21" // PUMPLABS
-        case "13": return "22" // ZEN ENERGY
-        default: return "5" // Default to PEGMATE
-        }
-    }
-}
-
 #Preview {
     ActivitiesView()
         .environmentObject(AuthViewModel())
