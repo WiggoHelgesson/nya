@@ -61,7 +61,7 @@ struct MainTabView: View {
                             .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 20) // Position closer to bottom
+                    .padding(.bottom, 30) // Move up slightly
                 }
                 
                 NavigationLink(isActive: $showStartSession) {
