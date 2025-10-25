@@ -57,8 +57,10 @@ struct ProfileView: View {
                                     
                                     Spacer()
                                     
-                                    Button(action: {}) {
-                                        Image(systemName: "pencil")
+                                    Button(action: {
+                                        showSettings = true
+                                    }) {
+                                        Image(systemName: "gearshape.fill")
                                             .font(.title3)
                                             .foregroundColor(.black)
                                     }
@@ -178,17 +180,6 @@ struct ProfileView: View {
             }
             .navigationTitle("Inställningar")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showSettings = true
-                    }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.title3)
-                            .foregroundColor(.black)
-                    }
-                }
-            }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
