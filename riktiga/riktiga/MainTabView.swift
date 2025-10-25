@@ -14,7 +14,7 @@ struct MainTabView: View {
                     if selectedTab == 0 {
                         HomeView()
                     } else if selectedTab == 1 {
-                        SocialView()
+                        SocialView() // This will show leaderboards/social content
                     } else if selectedTab == 2 {
                         RewardsView()
                     } else if selectedTab == 3 {
@@ -42,25 +42,37 @@ struct MainTabView: View {
                                     .fontWeight(selectedTab == 0 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 0 ? .black : .gray.opacity(0.6))
+                            .foregroundColor(selectedTab == 0 ? .blue : .secondary)
+                            .background(
+                                selectedTab == 0 ? 
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.thinMaterial)
+                                : nil
+                            )
                         }
                         
-                        // Socialt
+                        // Topplistor (Leaderboards)
                         Button(action: { 
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedTab = 1 
                             }
                         }) {
                             VStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
+                                Image(systemName: "trophy.fill")
                                     .font(.title3)
                                     .scaleEffect(selectedTab == 1 ? 1.1 : 1.0)
-                                Text("Socialt")
+                                Text("Topplistor")
                                     .font(.caption)
                                     .fontWeight(selectedTab == 1 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 1 ? .black : .gray.opacity(0.6))
+                            .foregroundColor(selectedTab == 1 ? .blue : .secondary)
+                            .background(
+                                selectedTab == 1 ? 
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.thinMaterial)
+                                : nil
+                            )
                         }
                         
                         // Starta Pass - Round Center Button
@@ -101,7 +113,7 @@ struct MainTabView: View {
                             }
                         }) {
                             VStack(spacing: 4) {
-                                Image(systemName: "shippingbox.fill")
+                                Image(systemName: "gift.fill")
                                     .font(.title3)
                                     .scaleEffect(selectedTab == 2 ? 1.1 : 1.0)
                                 Text("Belöningar")
@@ -109,7 +121,13 @@ struct MainTabView: View {
                                     .fontWeight(selectedTab == 2 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 2 ? .black : .gray.opacity(0.6))
+                            .foregroundColor(selectedTab == 2 ? .blue : .secondary)
+                            .background(
+                                selectedTab == 2 ? 
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.thinMaterial)
+                                : nil
+                            )
                         }
                         
                         // Profil
@@ -127,7 +145,13 @@ struct MainTabView: View {
                                     .fontWeight(selectedTab == 3 ? .bold : .regular)
                             }
                             .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 3 ? .black : .gray.opacity(0.6))
+                            .foregroundColor(selectedTab == 3 ? .blue : .secondary)
+                            .background(
+                                selectedTab == 3 ? 
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.thinMaterial)
+                                : nil
+                            )
                         }
                     }
                     .frame(height: 80)
@@ -138,27 +162,9 @@ struct MainTabView: View {
                             .fill(.ultraThinMaterial)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 28)
-                                    .fill(.thinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28)
-                                    .stroke(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                Color.white.opacity(0.2),
-                                                Color.white.opacity(0.1),
-                                                Color.clear,
-                                                Color.white.opacity(0.1),
-                                                Color.white.opacity(0.2)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.5
-                                    )
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
                             )
                             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-                            .shadow(color: Color.white.opacity(0.3), radius: 5, x: 0, y: -2)
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)

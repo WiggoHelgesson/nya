@@ -65,6 +65,20 @@ struct FindFriendsView: View {
                     }
                     Spacer()
                 } else {
+                    // Show cache indicator if using cached data
+                    if findFriendsViewModel.isUsingCache {
+                        HStack {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundColor(.blue)
+                            Text("Visar sparad data")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                    }
+                    
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(findFriendsViewModel.searchResults) { user in
@@ -122,22 +136,7 @@ struct UserSearchCard: View {
     var body: some View {
         HStack(spacing: 12) {
             // User Avatar
-            AsyncImage(url: URL(string: user.avatarUrl ?? "")) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-            } placeholder: {
-                Circle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.gray)
-                            .font(.system(size: 20))
-                    )
-            }
+            ProfileImage(url: user.avatarUrl, size: 50)
             
             // User Info
             VStack(alignment: .leading, spacing: 4) {
@@ -198,28 +197,61 @@ class FindFriendsViewModel: ObservableObject {
     @Published var searchResults: [UserSearchResult] = []
     @Published var isLoading = false
     @Published var followingStatus: [String: Bool] = [:]
+    @Published var isUsingCache = false
+    
+    private let cacheManager = AppCacheManager.shared
     
     func searchUsers(query: String, currentUserId: String) {
         print("🔍 FindFriendsViewModel: Starting search for '\(query)' with userId '\(currentUserId)'")
         isLoading = true
         
+        // First, try to load from cache for instant display
+        if let cachedUsers = cacheManager.getCachedAllUsers() {
+            let filteredUsers = cachedUsers.filter { user in
+                user.name.lowercased().contains(query.lowercased())
+            }
+            
+            if !filteredUsers.isEmpty {
+                DispatchQueue.main.async {
+                    self.searchResults = filteredUsers
+                    self.isLoading = false
+                    self.isUsingCache = true
+                    print("✅ Loaded \(filteredUsers.count) users from cache")
+                    
+                    // Check follow status for each user
+                    self.checkFollowStatus(for: filteredUsers, currentUserId: currentUserId)
+                }
+            }
+        }
+        
+        // Then fetch fresh data in background
         Task {
             do {
                 let results = try await SocialService.shared.searchUsers(query: query, currentUserId: currentUserId)
                 
                 await MainActor.run {
                     print("🔍 FindFriendsViewModel: Got \(results.count) results")
-                    self.searchResults = results
+                    // Only update if we got new data or cache was empty
+                    if self.searchResults.isEmpty || !self.isUsingCache {
+                        self.searchResults = results
+                    }
                     self.isLoading = false
+                    self.isUsingCache = false
                     
                     // Check follow status for each user
                     self.checkFollowStatus(for: results, currentUserId: currentUserId)
+                    
+                    // Save all users to cache for future searches
+                    self.cacheManager.saveAllUsers(results)
                 }
             } catch {
                 await MainActor.run {
                     print("❌ FindFriendsViewModel: Error occurred, clearing results")
-                    self.searchResults = []
+                    if !self.isUsingCache {
+                        self.searchResults = []
+                    }
                     self.isLoading = false
+                    self.isUsingCache = false
                 }
                 print("❌ FindFriendsViewModel: Error searching users: \(error)")
             }

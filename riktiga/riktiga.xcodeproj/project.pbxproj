@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
+		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269AE2EAA5E2D00A4EC93 /* Auth */; };
 		86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B02EAA5E2D00A4EC93 /* Functions */; };
 		86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B22EAA5E2D00A4EC93 /* PostgREST */; };
@@ -48,6 +50,8 @@
 				86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */,
 				86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */,
 				86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */,
+				86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */,
+				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
 				86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */,
 				86B269B72EAA5E2D00A4EC93 /* Storage in Frameworks */,
 				86B269B52EAA5E2D00A4EC93 /* Realtime in Frameworks */,
@@ -107,6 +111,8 @@
 				86B269B42EAA5E2D00A4EC93 /* Realtime */,
 				86B269B62EAA5E2D00A4EC93 /* Storage */,
 				86B269B92EAA5E3900A4EC93 /* Supabase */,
+				86158EAC2EACDAA400064CAA /* ReceiptParser */,
+				86158EAE2EACDAA400064CAA /* RevenueCat */,
 			);
 			productName = riktiga;
 			productReference = 86B269892EAA2EBB00A4EC93 /* riktiga.app */;
@@ -138,6 +144,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -300,6 +307,7 @@
 				CFBundleDevelopmentRegion = sv;
 				CFBundleDisplayName = "Up&Down";
 				CFBundleLocalizations = "sv en";
+				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
@@ -356,6 +364,7 @@
 				CFBundleDevelopmentRegion = sv;
 				CFBundleDisplayName = "Up&Down";
 				CFBundleLocalizations = "sv en";
+				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
@@ -427,6 +436,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.45.0;
+			};
+		};
 		86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -438,6 +455,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		86158EAC2EACDAA400064CAA /* ReceiptParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = ReceiptParser;
+		};
+		86158EAE2EACDAA400064CAA /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
 		86B269AE2EAA5E2D00A4EC93 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */;

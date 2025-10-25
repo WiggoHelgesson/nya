@@ -1,4 +1,6 @@
 import SwiftUI
+import AuthenticationServices
+import Supabase
 
 struct AuthenticationView: View {
     @State private var isLoginMode = true
@@ -115,6 +117,43 @@ struct LoginFormView: View {
             .foregroundColor(.white)
             .cornerRadius(10)
             .disabled(authViewModel.isLoading)
+            
+            // Divider
+            HStack {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+                
+                Text("ELLER")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 8)
+                
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+            }
+            .padding(.vertical, 8)
+            
+            // Apple Sign In Button
+            SignInWithAppleButton(
+                onRequest: { request in
+                    request.requestedScopes = [.fullName, .email]
+                },
+                onCompletion: { result in
+                    switch result {
+                    case .success(let authorization):
+                        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                            handleAppleSignIn(credential: appleIDCredential, isSignUp: false)
+                        }
+                    case .failure(let error):
+                        authViewModel.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
+                    }
+                }
+            )
+            .signInWithAppleButtonStyle(.black)
+            .frame(height: 50)
+            .cornerRadius(10)
         }
     }
 }
@@ -176,6 +215,101 @@ struct SignupFormView: View {
             .foregroundColor(.black)
             .cornerRadius(10)
             .disabled(authViewModel.isLoading)
+            
+            // Divider
+            HStack {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+                
+                Text("ELLER")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 8)
+                
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+            }
+            .padding(.vertical, 8)
+            
+            // Apple Sign In Button
+            SignInWithAppleButton(
+                onRequest: { request in
+                    request.requestedScopes = [.fullName, .email]
+                },
+                onCompletion: { result in
+                    switch result {
+                    case .success(let authorization):
+                        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                            handleAppleSignIn(credential: appleIDCredential, isSignUp: true)
+                        }
+                    case .failure(let error):
+                        authViewModel.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
+                    }
+                }
+            )
+            .signInWithAppleButtonStyle(.black)
+            .frame(height: 50)
+            .cornerRadius(10)
+        }
+    }
+}
+
+// MARK: - Apple Sign In Helper
+private func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, isSignUp: Bool) {
+    guard let identityToken = credential.identityToken,
+          let identityTokenString = String(data: identityToken, encoding: .utf8) else {
+        return
+    }
+    
+    Task {
+        do {
+            let supabase = SupabaseConfig.supabase
+            let session = try await supabase.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .apple,
+                    idToken: identityTokenString,
+                    nonce: nil
+                )
+            )
+            
+            print("✅ Apple Sign-In successful for user: \(session.user.id)")
+            
+            // Hämta profil-data från Supabase
+            if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                DispatchQueue.main.async {
+                    // Användaren är redan inloggad via AuthViewModel
+                    print("✅ User logged in with Apple: \(profile.name)")
+                }
+            } else {
+                // Skapa profil för ny Apple-användare
+                let fullName = credential.fullName
+                let displayName = [fullName?.givenName, fullName?.familyName]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                
+                let userName = displayName.isEmpty ? "Apple User" : displayName
+                
+                // Skapa profil för ny användare
+                let newUser = User(
+                    id: session.user.id.uuidString,
+                    name: userName,
+                    email: session.user.email ?? ""
+                )
+                
+                // Spara profil till databasen
+                try await ProfileService.shared.createUserProfile(newUser)
+                
+                DispatchQueue.main.async {
+                    // Användaren är redan inloggad via AuthViewModel
+                    print("✅ New Apple user created and logged in: \(userName)")
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                print("❌ Apple Sign-In error: \(error)")
+            }
         }
     }
 }

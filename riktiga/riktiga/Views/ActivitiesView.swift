@@ -112,23 +112,15 @@ struct WorkoutPostCard: View {
             
             // Image if available
             if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                AsyncImage(url: URL(string: imageUrl)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 150)
-                        .clipped()
-                        .cornerRadius(8)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 150)
-                        .cornerRadius(8)
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                        )
+                GeometryReader { geometry in
+                    OptimizedAsyncImage(
+                        url: imageUrl,
+                        width: geometry.size.width,
+                        height: 150,
+                        cornerRadius: 8
+                    )
                 }
+                .frame(height: 150)
             }
         }
         .padding(16)

@@ -414,12 +414,16 @@ struct RewardDetailView: View {
 struct CheckoutView: View {
     let reward: RewardCard
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var purchaseService = PurchaseService.shared
     
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var email = ""
     @State private var city = ""
     @State private var showConfirmation = false
+    @State private var showSubscriptionView = false
+    @State private var isProcessingPurchase = false
     
     var body: some View {
         NavigationStack {
@@ -483,19 +487,28 @@ struct CheckoutView: View {
                     
                     // Confirm purchase button
                     Button(action: {
-                        showConfirmation = true
+                        Task {
+                            await processPurchase()
+                        }
                     }) {
-                        Text("Bekräfta köp")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(16)
-                            .background(Color.black)
-                            .cornerRadius(10)
+                        HStack {
+                            if isProcessingPurchase {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            }
+                            Text(isProcessingPurchase ? "Bearbetar..." : "Bekräfta köp")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(Color.black)
+                        .cornerRadius(10)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
-                    .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty)
+                    .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty || isProcessingPurchase)
                 }
             }
             .navigationTitle("Checkout")
@@ -510,7 +523,35 @@ struct CheckoutView: View {
             .sheet(isPresented: $showConfirmation) {
                 ConfirmationView(reward: reward)
             }
+            .sheet(isPresented: $showSubscriptionView) {
+                SubscriptionView()
+            }
         }
+    }
+    
+    private func processPurchase() async {
+        guard let userId = authViewModel.currentUser?.id else {
+            print("❌ No user ID available")
+            return
+        }
+        
+        isProcessingPurchase = true
+        
+        do {
+            let success = try await purchaseService.purchaseReward(reward, userId: userId)
+            
+            if success {
+                showConfirmation = true
+            } else {
+                // User doesn't have premium subscription
+                showSubscriptionView = true
+            }
+        } catch {
+            print("❌ Error processing purchase: \(error)")
+            // Handle error - could show an alert
+        }
+        
+        isProcessingPurchase = false
     }
 }
 

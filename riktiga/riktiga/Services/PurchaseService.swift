@@ -1,15 +1,76 @@
 import Foundation
 import Combine
 import Supabase
+import RevenueCat
 
 class PurchaseService: ObservableObject {
     static let shared = PurchaseService()
     private let supabase = SupabaseConfig.supabase
+    private let revenueCatManager = RevenueCatManager.shared
     
     @Published var purchases: [Purchase] = []
+    @Published var isPremium: Bool = false
+    @Published var isLoading: Bool = false
     
-    private init() {}
+    private init() {
+        // Listen to RevenueCat updates
+        revenueCatManager.$isPremium
+            .assign(to: &$isPremium)
+        
+        revenueCatManager.$isLoading
+            .assign(to: &$isLoading)
+    }
     
+    // MARK: - RevenueCat Integration
+    func purchaseReward(_ reward: RewardCard, userId: String) async throws -> Bool {
+        // First, check if user has premium subscription
+        if !revenueCatManager.isPremium {
+            // If not premium, show subscription options
+            return false
+        }
+        
+        // If premium, proceed with reward purchase
+        let purchase = Purchase(
+            userId: userId,
+            brandName: reward.brandName,
+            discount: reward.discount,
+            discountCode: getDiscountCode(for: reward.brandName),
+            purchaseDate: Date()
+        )
+        
+        try await savePurchase(purchase)
+        return true
+    }
+    
+    func purchasePremiumSubscription() async -> Bool {
+        // Try to purchase premium subscription through RevenueCat
+        guard let offerings = revenueCatManager.offerings,
+              let currentOffering = offerings.current else {
+            print("❌ No current offering available")
+            return false
+        }
+        
+        // Try to find monthly package first, then annual
+        if let monthlyPackage = currentOffering.monthly {
+            return await revenueCatManager.purchasePackage(monthlyPackage)
+        } else if let annualPackage = currentOffering.annual {
+            return await revenueCatManager.purchasePackage(annualPackage)
+        } else if let firstPackage = currentOffering.availablePackages.first {
+            return await revenueCatManager.purchasePackage(firstPackage)
+        }
+        
+        return false
+    }
+    
+    func restorePurchases() async -> Bool {
+        return await revenueCatManager.restorePurchases()
+    }
+    
+    func checkPremiumStatus() {
+        isPremium = revenueCatManager.checkPurchaseStatus()
+    }
+    
+    // MARK: - Legacy Methods (for backward compatibility)
     func savePurchase(_ purchase: Purchase) async throws {
         do {
             _ = try await supabase

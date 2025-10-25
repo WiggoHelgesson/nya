@@ -3,6 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
+    @StateObject private var purchaseService = PurchaseService.shared
+    @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var showSubscriptionView = false
+    @State private var showProManagementView = false
     
     var body: some View {
         NavigationStack {
@@ -20,19 +24,67 @@ struct SettingsView: View {
                             .padding(.bottom, 8)
                         
                         VStack(spacing: 0) {
-                            SettingsRow(
-                                title: "Up&Down PRO",
-                                icon: "chevron.right",
-                                action: {}
-                            )
+                            // PRO Status Row
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Up&Down PRO")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.black)
+                                    
+                                    if revenueCatManager.isPremium {
+                                        Text("Aktiv prenumeration")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Text("Inaktiv")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                if revenueCatManager.isPremium {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.green)
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .padding(16)
+                            .onTapGesture {
+                                if !revenueCatManager.isPremium {
+                                    showSubscriptionView = true
+                                }
+                            }
                             
                             Divider()
                                 .padding(.leading, 16)
                             
+                            // Upgrade to PRO Row (only show if not premium)
+                            if !revenueCatManager.isPremium {
+                                SettingsRow(
+                                    title: "Uppgradera till PRO",
+                                    icon: "chevron.right",
+                                    action: {
+                                        showSubscriptionView = true
+                                    }
+                                )
+                                
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                            
+                            // Manage Subscription Row
                             SettingsRow(
                                 title: "Hantera prenumeration",
                                 icon: "chevron.right",
-                                action: {}
+                                action: {
+                                    showProManagementView = true
+                                }
                             )
                         }
                         .background(Color.white)
@@ -118,6 +170,17 @@ struct SettingsView: View {
                         dismiss()
                     }
                     .foregroundColor(.black)
+                }
+            }
+            .sheet(isPresented: $showSubscriptionView) {
+                SubscriptionView()
+            }
+            .sheet(isPresented: $showProManagementView) {
+                ProManagementView()
+            }
+            .onAppear {
+                Task {
+                    await revenueCatManager.loadCustomerInfo()
                 }
             }
         }

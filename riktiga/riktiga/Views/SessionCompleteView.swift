@@ -10,6 +10,7 @@ struct SessionCompleteView: View {
     let onComplete: () -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var revenueCatManager = RevenueCatManager.shared
     
     @State private var title: String = ""
     @State private var description: String = ""
@@ -17,6 +18,11 @@ struct SessionCompleteView: View {
     @State private var selectedItem: PhotosPickerItem?
     @State private var isSaving = false
     @State private var showDeleteConfirmation = false
+    
+    // Calculate PRO points (1.5x boost)
+    private var proPoints: Int {
+        return Int(Double(earnedPoints) * 1.5)
+    }
     
     var body: some View {
         ZStack {
@@ -39,7 +45,14 @@ struct SessionCompleteView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        ActivitySummaryCard(activity: activity, distance: distance, duration: duration, earnedPoints: earnedPoints)
+                        ActivitySummaryCard(
+                            activity: activity, 
+                            distance: distance, 
+                            duration: duration, 
+                            earnedPoints: earnedPoints,
+                            proPoints: proPoints,
+                            isPro: revenueCatManager.isPremium
+                        )
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Rubrik")
@@ -67,12 +80,26 @@ struct SessionCompleteView: View {
                                 .font(.headline)
                             
                             if let sessionImage = sessionImage {
-                                Image(uiImage: sessionImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 200)
-                                    .cornerRadius(8)
-                                    .clipped()
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: sessionImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 200)
+                                        .cornerRadius(8)
+                                        .clipped()
+                                    
+                                    Button(action: {
+                                        self.sessionImage = nil
+                                        self.selectedItem = nil
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(.white)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Circle())
+                                    }
+                                    .padding(8)
+                                }
                             } else {
                                 PhotosPicker(selection: $selectedItem, matching: .images) {
                                     VStack(spacing: 12) {
@@ -184,12 +211,12 @@ struct SessionCompleteView: View {
             description: description,
             distance: distance,
             duration: duration,
-            imageUrl: nil // TODO: Implement image upload to Supabase Storage
+            imageUrl: nil
         )
         
         Task {
             do {
-                try await WorkoutService.shared.saveWorkoutPost(post)
+                try await WorkoutService.shared.saveWorkoutPost(post, image: sessionImage)
                 print("✅ Workout saved successfully")
                 
                 DispatchQueue.main.async {
@@ -212,26 +239,81 @@ struct ActivitySummaryCard: View {
     let distance: Double
     let duration: Int
     let earnedPoints: Int
+    let proPoints: Int
+    let isPro: Bool
     
     var body: some View {
-        HStack {
-            Image(systemName: activity.icon)
-                .font(.system(size: 24))
-                .foregroundColor(AppColors.brandBlue)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(activity.rawValue)
-                    .font(.headline)
-                Text(String(format: "%.2f km • %@", distance, formattedDuration(duration)))
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                Text("\(earnedPoints) poäng")
-                    .font(.caption)
-                    .foregroundColor(AppColors.brandGreen)
-                    .fontWeight(.semibold)
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: activity.icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(AppColors.brandBlue)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(activity.rawValue)
+                        .font(.headline)
+                    Text(String(format: "%.2f km • %@", distance, formattedDuration(duration)))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
             }
             
-            Spacer()
+            // Points section
+            VStack(spacing: 8) {
+                if isPro {
+                    // PRO user - show both regular and PRO points
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Du fick")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text("\(earnedPoints) poäng")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppColors.brandGreen)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Med PRO")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text("\(proPoints) poäng")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                } else {
+                    // Non-PRO user - show regular points and PRO boost info
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Du fick")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text("\(earnedPoints) poäng")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppColors.brandGreen)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Såhär mycket skulle du fått med PRO")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.trailing)
+                            Text("\(proPoints) poäng")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
         }
         .padding(16)
         .background(Color(.systemGray6))

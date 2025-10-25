@@ -45,4 +45,46 @@ class ProfileService {
     func updateUserXP(userId: String, xpToAdd: Int) async throws {
         print("XP update called: userId: \(userId), xp: \(xpToAdd)")
     }
+    
+    func updateProStatus(userId: String, isPro: Bool) async throws {
+        do {
+            print("🔄 Updating Pro status for userId: \(userId), isPro: \(isPro)")
+            
+            try await supabase
+                .from("profiles")
+                .update(["is_pro_member": isPro])
+                .eq("id", value: userId)
+                .execute()
+            
+            print("✅ Pro status updated successfully")
+        } catch {
+            print("❌ Error updating Pro status: \(error)")
+            throw error
+        }
+    }
+    
+    func createUserProfile(_ user: User) async throws {
+        do {
+            print("🔧 Creating profile for user: \(user.name)")
+            
+            let profileData: [String: AnyEncodable] = [
+                "id": AnyEncodable(user.id),
+                "username": AnyEncodable(user.name),
+                "current_xp": AnyEncodable(0),
+                "current_level": AnyEncodable(1),
+                "is_pro_member": AnyEncodable(false),
+                "avatar_url": AnyEncodable(user.avatarUrl ?? "")
+            ]
+            
+            try await supabase
+                .from("profiles")
+                .insert(profileData)
+                .execute()
+            
+            print("✅ Profile created successfully for user: \(user.name)")
+        } catch {
+            print("❌ Error creating profile: \(error)")
+            throw error
+        }
+    }
 }

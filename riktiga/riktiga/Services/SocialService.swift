@@ -7,24 +7,39 @@ class SocialService {
     
     // MARK: - Follow Functions
     
+    /// Safely follow a user - only adds if not already following
     func followUser(followerId: String, followingId: String) async throws {
         do {
-            let follow = Follow(followerId: followerId, followingId: followingId)
-            _ = try await supabase
-                .from("follows")
-                .insert(follow)
+            // Check if already following to avoid duplicates
+            let existingFollows: [Follow] = try await supabase
+                .from("user_follows")
+                .select()
+                .eq("follower_id", value: followerId)
+                .eq("following_id", value: followingId)
                 .execute()
-            print("✅ User followed successfully")
+                .value
+            
+            if existingFollows.isEmpty {
+                let follow = Follow(followerId: followerId, followingId: followingId)
+                _ = try await supabase
+                    .from("user_follows")
+                    .insert(follow)
+                    .execute()
+                print("✅ User followed successfully")
+            } else {
+                print("✅ User already being followed")
+            }
         } catch {
             print("❌ Error following user: \(error)")
             throw error
         }
     }
     
+    /// Safely unfollow a user - only removes the specific follow relationship
     func unfollowUser(followerId: String, followingId: String) async throws {
         do {
             _ = try await supabase
-                .from("follows")
+                .from("user_follows")
                 .delete()
                 .eq("follower_id", value: followerId)
                 .eq("following_id", value: followingId)
@@ -36,45 +51,146 @@ class SocialService {
         }
     }
     
+    /// Get all users that the current user follows
     func getFollowing(userId: String) async throws -> [String] {
         do {
             let follows: [Follow] = try await supabase
-                .from("follows")
+                .from("user_follows")
                 .select()
                 .eq("follower_id", value: userId)
                 .execute()
                 .value
             
-            return follows.map { $0.followingId }
+            let followingIds = follows.map { $0.followingId }
+            print("🔍 getFollowing for user \(userId): found \(followingIds.count) following relationships")
+            print("🔍 Following IDs: \(followingIds)")
+            return followingIds
         } catch {
             print("❌ Error fetching following: \(error)")
             return []
         }
     }
     
+    /// Get detailed user information for users that the current user follows
+    func getFollowingUsers(userId: String) async throws -> [UserSearchResult] {
+        do {
+            print("🔍 Getting following users for user: \(userId)")
+            
+            // First get the following IDs
+            let followingIds = try await getFollowing(userId: userId)
+            print("🔍 Found \(followingIds.count) following IDs: \(followingIds)")
+            
+            if followingIds.isEmpty {
+                print("✅ No following found")
+                return []
+            }
+            
+            // Then get user details for those IDs
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: followingIds)
+                .not("username", operator: .is, value: "null")
+                .execute()
+                .value
+            
+            print("✅ Loaded \(users.count) following users")
+            return users
+        } catch {
+            print("❌ Error fetching following users: \(error)")
+            return []
+        }
+    }
+    
+    /// Get all users that follow the current user
     func getFollowers(userId: String) async throws -> [String] {
         do {
             let follows: [Follow] = try await supabase
-                .from("follows")
+                .from("user_follows")
                 .select()
                 .eq("following_id", value: userId)
                 .execute()
                 .value
             
-            return follows.map { $0.followerId }
+            let followerIds = follows.map { $0.followerId }
+            print("🔍 getFollowers for user \(userId): found \(followerIds.count) follower relationships")
+            print("🔍 Follower IDs: \(followerIds)")
+            return followerIds
         } catch {
             print("❌ Error fetching followers: \(error)")
             return []
         }
     }
     
-    // MARK: - Like Functions
+    /// Get detailed user information for users that follow the current user
+    func getFollowerUsers(userId: String) async throws -> [UserSearchResult] {
+        do {
+            print("🔍 Getting follower users for user: \(userId)")
+            
+            // First get the follower IDs
+            let followerIds = try await getFollowers(userId: userId)
+            print("🔍 Found \(followerIds.count) follower IDs: \(followerIds)")
+            
+            if followerIds.isEmpty {
+                print("✅ No followers found")
+                return []
+            }
+            
+            // Then get user details for those IDs
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: followerIds)
+                .not("username", operator: .is, value: "null")
+                .execute()
+                .value
+            
+            print("✅ Loaded \(users.count) follower users")
+            return users
+        } catch {
+            print("❌ Error fetching follower users: \(error)")
+            return []
+        }
+    }
+    
+    /// Check if one user is following another
+    func isFollowing(followerId: String, followingId: String) async throws -> Bool {
+        do {
+            let follows: [Follow] = try await supabase
+                .from("user_follows")
+                .select()
+                .eq("follower_id", value: followerId)
+                .eq("following_id", value: followingId)
+                .limit(1)
+                .execute()
+                .value
+            
+            return !follows.isEmpty
+        } catch {
+            print("❌ Error checking follow status: \(error)")
+            return false
+        }
+    }
+    
+    /// Get detailed follow information for debugging
+    func getFollowStats(userId: String) async throws -> (following: Int, followers: Int) {
+        do {
+            let following = try await getFollowing(userId: userId)
+            let followers = try await getFollowers(userId: userId)
+            
+            print("📊 Follow stats for user \(userId): Following: \(following.count), Followers: \(followers.count)")
+            return (following: following.count, followers: followers.count)
+        } catch {
+            print("❌ Error getting follow stats: \(error)")
+            return (following: 0, followers: 0)
+        }
+    }
     
     func likePost(postId: String, userId: String) async throws {
         do {
             let like = PostLike(postId: postId, userId: userId)
             _ = try await supabase
-                .from("post_likes")
+                .from("workout_post_likes")
                 .insert(like)
                 .execute()
             print("✅ Post liked successfully")
@@ -87,7 +203,7 @@ class SocialService {
     func unlikePost(postId: String, userId: String) async throws {
         do {
             _ = try await supabase
-                .from("post_likes")
+                .from("workout_post_likes")
                 .delete()
                 .eq("post_id", value: postId)
                 .eq("user_id", value: userId)
@@ -102,7 +218,7 @@ class SocialService {
     func getPostLikes(postId: String) async throws -> [PostLike] {
         do {
             let likes: [PostLike] = try await supabase
-                .from("post_likes")
+                .from("workout_post_likes")
                 .select()
                 .eq("post_id", value: postId)
                 .execute()
@@ -121,7 +237,7 @@ class SocialService {
         do {
             let comment = PostComment(postId: postId, userId: userId, content: content)
             _ = try await supabase
-                .from("post_comments")
+                .from("workout_post_comments")
                 .insert(comment)
                 .execute()
             print("✅ Comment added successfully")
@@ -134,7 +250,7 @@ class SocialService {
     func getPostComments(postId: String) async throws -> [PostComment] {
         do {
             let comments: [PostComment] = try await supabase
-                .from("post_comments")
+                .from("workout_post_comments")
                 .select()
                 .eq("post_id", value: postId)
                 .order("created_at", ascending: true)
@@ -157,6 +273,7 @@ class SocialService {
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
                 .select("id, username, avatar_url")
+                .not("username", operator: .is, value: "null")
                 .limit(50)
                 .execute()
                 .value
@@ -178,6 +295,7 @@ class SocialService {
                 .from("profiles")
                 .select("id, username, avatar_url")
                 .ilike("username", pattern: "%\(query)%")
+                .not("username", operator: .is, value: "null")
                 .neq("id", value: currentUserId)
                 .limit(20)
                 .execute()
@@ -192,24 +310,6 @@ class SocialService {
         }
     }
     
-    func isFollowing(followerId: String, followingId: String) async throws -> Bool {
-        do {
-            let follows: [Follow] = try await supabase
-                .from("follows")
-                .select()
-                .eq("follower_id", value: followerId)
-                .eq("following_id", value: followingId)
-                .limit(1)
-                .execute()
-                .value
-            
-            return !follows.isEmpty
-        } catch {
-            print("❌ Error checking follow status: \(error)")
-            return false
-        }
-    }
-    
     // MARK: - Social Feed Functions
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
@@ -217,20 +317,30 @@ class SocialService {
             // First get the users that the current user follows
             let following = try await getFollowing(userId: userId)
             
-            if following.isEmpty {
+            // Include current user's ID in the list of users to fetch posts from
+            var userIdsToFetch = following
+            do {
+                let currentUser = try await supabase.auth.user()
+                userIdsToFetch.append(currentUser.id.uuidString)
+            } catch {
+                print("⚠️ Could not get current user: \(error)")
+            }
+            
+            // If user doesn't follow anyone yet, still show their own posts
+            if userIdsToFetch.isEmpty {
                 return []
             }
             
-            // Get posts from followed users with social data
+            // Get posts from followed users AND current user with social data
             let posts: [SocialWorkoutPost] = try await supabase
                 .from("workout_posts")
                 .select("""
                     *,
-                    profiles!workout_posts_user_id_fkey(name, avatar_url),
-                    post_likes(count),
-                    post_comments(count)
+                    profiles!workout_posts_user_id_fkey(username, avatar_url),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
                 """)
-                .in("user_id", values: following)
+                .in("user_id", values: userIdsToFetch)
                 .order("created_at", ascending: false)
                 .execute()
                 .value

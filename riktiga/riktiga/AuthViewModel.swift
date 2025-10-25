@@ -3,14 +3,98 @@ import SwiftUI
 import Combine
 import Supabase
 import UIKit
+import AuthenticationServices
 
-class AuthViewModel: ObservableObject {
+class AuthViewModel: NSObject, ObservableObject {
     @Published var isLoggedIn = false
     @Published var currentUser: User?
     @Published var errorMessage = ""
     @Published var isLoading = false
     
     private let supabase = SupabaseConfig.supabase
+    private var cancellables = Set<AnyCancellable>()
+    
+    override init() {
+        super.init()
+        // Kontrollera om användaren redan är inloggad vid appstart
+        checkAuthStatus()
+        
+        // Lyssna på auth-state ändringar från Supabase
+        setupAuthStateListener()
+        
+        // Lyssna på Pro-status ändringar från RevenueCat
+        setupProStatusListener()
+    }
+    
+    func setupAuthStateListener() {
+        // Supabase hanterar automatiskt session-persistens
+        // Vi behöver bara kontrollera vid appstart
+        print("ℹ️ Auth state listener setup complete")
+    }
+    
+    func setupProStatusListener() {
+        // Lyssna på Pro-status ändringar från RevenueCatManager
+        RevenueCatManager.shared.$isPremium
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isPremium in
+                self?.updateLocalProStatus(isPremium: isPremium)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateLocalProStatus(isPremium: Bool) {
+        guard var user = currentUser else { return }
+        user.isProMember = isPremium
+        currentUser = user
+        print("🔄 Updated local Pro status: \(isPremium)")
+        
+        // Also update the profile in the database to keep it in sync
+        Task {
+            do {
+                try await ProfileService.shared.updateProStatus(userId: user.id, isPro: isPremium)
+                print("✅ Pro status synced to database: \(isPremium)")
+            } catch {
+                print("❌ Error syncing Pro status to database: \(error)")
+            }
+        }
+    }
+    
+    func checkAuthStatus() {
+        Task {
+            do {
+                // Kontrollera om det finns en aktiv session
+                let session = try await supabase.auth.session
+                
+                print("✅ Found existing session for user: \(session.user.id)")
+                
+                // Hämta profil-data från Supabase
+                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                    DispatchQueue.main.async {
+                        self.currentUser = profile
+                        self.isLoggedIn = true
+                        print("✅ User automatically logged in: \(profile.name)")
+                    }
+                } else {
+                    // Fallback om profil inte finns
+                    DispatchQueue.main.async {
+                        self.currentUser = User(
+                            id: session.user.id.uuidString,
+                            name: session.user.email?.prefix(while: { $0 != "@" }).capitalized ?? "Användare",
+                            email: session.user.email ?? ""
+                        )
+                        self.isLoggedIn = true
+                        print("✅ User automatically logged in (fallback): \(self.currentUser?.name ?? "Unknown")")
+                    }
+                }
+            } catch {
+                print("ℹ️ No existing session found: \(error)")
+                DispatchQueue.main.async {
+                    self.isLoggedIn = false
+                    self.currentUser = nil
+                }
+            }
+        }
+    }
     
     func login(email: String, password: String) {
         isLoading = true
@@ -114,13 +198,28 @@ class AuthViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isLoggedIn = false
                     self.currentUser = nil
+                    print("✅ User logged out successfully")
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.errorMessage = "Logout misslyckades: \(error.localizedDescription)"
+                    print("❌ Logout error: \(error)")
                 }
             }
         }
+    }
+    
+    func signInWithApple() {
+        isLoading = true
+        errorMessage = ""
+        
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
     }
     
     func updateProfileImage(image: UIImage) {
@@ -215,7 +314,95 @@ class AuthViewModel: ObservableObject {
     }
 }
 
-// MARK: - NotificationCenter Extensions
-extension Notification.Name {
-    static let profileImageUpdated = Notification.Name("profileImageUpdated")
+// MARK: - Apple Sign In Delegate
+extension AuthViewModel: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            DispatchQueue.main.async {
+                self.errorMessage = "Apple Sign-In misslyckades: Ogiltig autentisering"
+                self.isLoading = false
+            }
+            return
+        }
+        
+        guard let identityToken = appleIDCredential.identityToken,
+              let identityTokenString = String(data: identityToken, encoding: .utf8) else {
+            DispatchQueue.main.async {
+                self.errorMessage = "Apple Sign-In misslyckades: Ingen identitetstoken"
+                self.isLoading = false
+            }
+            return
+        }
+        
+        Task {
+            do {
+                let session = try await supabase.auth.signInWithIdToken(
+                    credentials: .init(
+                        provider: .apple,
+                        idToken: identityTokenString,
+                        nonce: nil
+                    )
+                )
+                
+                print("✅ Apple Sign-In successful for user: \(session.user.id)")
+                
+                // Hämta profil-data från Supabase
+                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                    DispatchQueue.main.async {
+                        self.currentUser = profile
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                        print("✅ User logged in with Apple: \(profile.name)")
+                    }
+                } else {
+                    // Skapa profil för ny Apple-användare
+                    let fullName = appleIDCredential.fullName
+                    let displayName = [fullName?.givenName, fullName?.familyName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                    
+                    let userName = displayName.isEmpty ? "Apple User" : displayName
+                    
+                    DispatchQueue.main.async {
+                        self.currentUser = User(
+                            id: session.user.id.uuidString,
+                            name: userName,
+                            email: session.user.email ?? ""
+                        )
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                        print("✅ New Apple user logged in: \(userName)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
+                    self.isLoading = false
+                    print("❌ Apple Sign-In error: \(error)")
+                }
+            }
+        }
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        DispatchQueue.main.async {
+            self.errorMessage = "Apple Sign-In avbröts: \(error.localizedDescription)"
+            self.isLoading = false
+            print("❌ Apple Sign-In cancelled or failed: \(error)")
+        }
+    }
+}
+
+extension AuthViewModel: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            // Fallback för simulator/test
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                return UIWindow(windowScene: windowScene)
+            }
+            return UIWindow()
+        }
+        return window
+    }
 }
