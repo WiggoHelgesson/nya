@@ -63,6 +63,38 @@ class ProfileService {
         }
     }
     
+    func updateUserPoints(userId: String, pointsToAdd: Int) async throws {
+        do {
+            print("🔄 Updating points for userId: \(userId), pointsToAdd: \(pointsToAdd)")
+            
+            // First get current XP
+            let profiles: [User] = try await supabase
+                .from("profiles")
+                .select("current_xp")
+                .eq("id", value: userId)
+                .execute()
+                .value
+            
+            guard let currentProfile = profiles.first else {
+                throw NSError(domain: "ProfileError", code: 1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
+            }
+            
+            let newXP = currentProfile.currentXP + pointsToAdd
+            
+            // Update with new XP
+            try await supabase
+                .from("profiles")
+                .update(["current_xp": newXP])
+                .eq("id", value: userId)
+                .execute()
+            
+            print("✅ Points updated successfully. New XP: \(newXP)")
+        } catch {
+            print("❌ Error updating points: \(error)")
+            throw error
+        }
+    }
+    
     func createUserProfile(_ user: User) async throws {
         do {
             print("🔧 Creating profile for user: \(user.name)")

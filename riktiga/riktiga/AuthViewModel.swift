@@ -209,6 +209,24 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
+    func loadUserProfile() async {
+        guard let userId = currentUser?.id else {
+            print("❌ No user ID available for profile reload")
+            return
+        }
+        
+        do {
+            if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                DispatchQueue.main.async {
+                    self.currentUser = profile
+                    print("✅ User profile reloaded: \(profile.name), XP: \(profile.currentXP)")
+                }
+            }
+        } catch {
+            print("❌ Error reloading user profile: \(error)")
+        }
+    }
+    
     func signInWithApple() {
         isLoading = true
         errorMessage = ""

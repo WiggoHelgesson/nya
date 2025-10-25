@@ -50,7 +50,7 @@ struct RewardsView: View {
         RewardCard(
             id: 4,
             brandName: "WINWIZE",
-            discount: "25% rabatt",
+            discount: "20% rabatt",
             points: "200 poäng",
             imageName: "7",
             category: "Golf",
@@ -520,108 +520,129 @@ struct FullScreenRewardCard: View {
 struct RewardDetailView: View {
     let reward: RewardCard
     @State private var showCheckout = false
+    @State private var showConfirmation = false
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
+    private var hasEnoughPoints: Bool {
+        return (authViewModel.currentUser?.currentXP ?? 0) >= 200
+    }
     
     var body: some View {
         ZStack {
-            // Gray background like in the image
-            Color.gray.opacity(0.1)
+            // White background for the entire page
+            Color.white
                 .ignoresSafeArea()
             
             ScrollView {
-                VStack(spacing: 24) {
-                    // Company description card - like the white card in the image
-                    VStack(spacing: 16) {
-                        // Company logo at the top
-                        VStack(spacing: 12) {
-                            // Logo placeholder - circular white badge
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white)
+                VStack(spacing: 0) {
+                    // 1. Cover image
+                    Image(reward.imageName)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 250)
+                        .clipped()
+                    
+                    VStack(spacing: 24) {
+                        // 2. Discount text and title
+                        VStack(spacing: 8) {
+                            Text(reward.discount)
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.black)
+                            
+                            Text("för \(reward.brandName)")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.top, 20)
+                        .padding(.horizontal, 20)
+                        
+                        // 3. Company description card - gray background
+                        VStack(spacing: 20) {
+                            // Company logo at the top
+                            VStack(spacing: 12) {
+                                // Real company logo
+                                Image(getCompanyLogo(for: reward.brandName))
+                                    .resizable()
+                                    .scaledToFit()
                                     .frame(width: 80, height: 80)
+                                    .background(Color.white)
+                                    .clipShape(Circle())
                                     .overlay(
                                         Circle()
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                     )
                                 
-                                // Company logo or initial
-                                Text(String(reward.brandName.prefix(2)))
-                                    .font(.system(size: 24, weight: .bold))
+                                // Company name
+                                Text(reward.brandName)
+                                    .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.black)
                             }
+                            .padding(.top, 24)
                             
-                            // Company name
-                            Text(reward.brandName)
-                                .font(.system(size: 18, weight: .bold))
+                            // Company description
+                            Text(getCompanyDescription(for: reward.brandName))
+                                .font(.system(size: 14))
                                 .foregroundColor(.black)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil)
+                                .padding(.horizontal, 20)
+                            
+                            // Add extra vertical spacing
+                            Spacer()
+                                .frame(height: 20)
                         }
-                        .padding(.top, 20)
-                        
-                        // Company description
-                        Text(getCompanyDescription(for: reward.brandName))
-                            .font(.system(size: 14))
-                            .foregroundColor(.black)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(nil)
-                            .padding(.horizontal, 20)
-                        
-                        // Visit website button (like in the image)
-                        Button(action: {
-                            // Open company website
-                        }) {
-                            Text("BESÖK HEMSIDA")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.white)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                                .cornerRadius(8)
-                        }
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-                    }
-                    .background(Color.white)
-                    .cornerRadius(16)
-                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    
-                    // Discount info
-                    VStack(spacing: 8) {
-                        Text(reward.discount)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.black)
                         
-                        Text("för \(reward.brandName)")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.gray)
+                        // 4. Action buttons - shorter width
+                        VStack(spacing: 12) {
+                            // Visit website button
+                            Button(action: {
+                                openCompanyWebsite(for: reward.brandName)
+                            }) {
+                                Text("BESÖK HEMSIDA")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.black)
+                                    .frame(width: 280) // Shorter width
+                                    .padding(.vertical, 16)
+                                    .background(Color.white)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .cornerRadius(12)
+                            }
+                            
+                            // Claim reward button
+                            Button(action: {
+                                if hasEnoughPoints {
+                                    showCheckout = true
+                                }
+                            }) {
+                                Text(hasEnoughPoints ? "HÄMTA BELÖNING" : "INTE TILLRÄCKLIGT MED POÄNG")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 280) // Shorter width
+                                    .padding(.vertical, 16)
+                                    .background(hasEnoughPoints ? Color.black : Color.gray)
+                                    .cornerRadius(12)
+                            }
+                            .disabled(!hasEnoughPoints)
+                        }
+                        .padding(.bottom, 30)
                     }
-                    .padding(.horizontal, 20)
-                    
-                    // Claim reward button (like the purple button in the image)
-                    Button(action: {
-                        showCheckout = true
-                    }) {
-                        Text("HÄMTA BELÖNING")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.black)
-                            .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 30)
                 }
             }
         }
         .navigationTitle(reward.brandName)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showCheckout) {
-            CheckoutView(reward: reward)
+            CheckoutView(reward: reward, showConfirmation: $showConfirmation)
+        }
+        .sheet(isPresented: $showConfirmation) {
+            ConfirmationView(reward: reward)
         }
     }
     
@@ -651,10 +672,71 @@ struct RewardDetailView: View {
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
     }
+    
+    private func getCompanyLogo(for brandName: String) -> String {
+        switch brandName {
+        case "PLIKTGOLF":
+            return "15" // Pliktgolf logo
+        case "PEGMATE":
+            return "5" // Pegmate logo
+        case "LONEGOLF":
+            return "14" // Lonegolf logo
+        case "WINWIZE":
+            return "17" // WinWize logo
+        case "SCANDIGOLF":
+            return "18" // Scandigolf logo
+        case "Exotic Golf":
+            return "19" // Exotic Golf logo
+        case "HAPPYALBA":
+            return "16" // Alba logo
+        case "RETROGOLF":
+            return "20" // Retro golf logo
+        case "PUMPLABS":
+            return "21" // Pumplabs logo
+        case "ZEN ENERGY":
+            return "22" // Zen energy logo
+        default:
+            return "5" // Default to Pegmate logo
+        }
+    }
+    
+    private func openCompanyWebsite(for brandName: String) {
+        let urlString: String
+        
+        switch brandName {
+        case "PUMPLABS":
+            urlString = "https://pumplab.se/"
+        case "Exotic Golf":
+            urlString = "https://exoticagolf.se/"
+        case "ZEN ENERGY":
+            urlString = "https://zenenergydrinks.com/?srsltid=AfmBOoo0XewnkvbPLeH1CbuslALX3C-hEOOaf_jJuHh3XMGlHm-rB2Pb"
+        case "HAPPYALBA":
+            urlString = "https://www.happyalba.com/"
+        case "LONEGOLF":
+            urlString = "https://lonegolf.se/?srsltid=AfmBOopu2tfDkMnsvsc2hH59Bvis1B_3rzrOy3I3-5eF7tFcOvT6gfOh"
+        case "PEGMATE":
+            urlString = "https://pegmate.se/en/"
+        case "PLIKTGOLF":
+            urlString = "https://pliktgolf.se/?srsltid=AfmBOop6tGP9-2K-6KSTSjjU-8Tsl5BqFMPLGnRwgcu56raQcMloZq_s"
+        case "RETROGOLF":
+            urlString = "https://retrogolfacademy.se/"
+        case "SCANDIGOLF":
+            urlString = "https://www.scandigolf.se/"
+        case "WINWIZE":
+            urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
+        default:
+            urlString = "https://google.com" // Fallback
+        }
+        
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
 }
 
 struct CheckoutView: View {
     let reward: RewardCard
+    @Binding var showConfirmation: Bool
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var purchaseService = PurchaseService.shared
@@ -663,7 +745,6 @@ struct CheckoutView: View {
     @State private var lastName = ""
     @State private var email = ""
     @State private var city = ""
-    @State private var showConfirmation = false
     @State private var showSubscriptionView = false
     @State private var isProcessingPurchase = false
     
@@ -712,6 +793,16 @@ struct CheckoutView: View {
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(email.isEmpty || (email.contains("@") && email.contains(".")) ? Color.gray.opacity(0.3) : Color.red, lineWidth: 1)
+                                )
+                            
+                            if !email.isEmpty && (!email.contains("@") || !email.contains(".")) {
+                                Text("Ange en giltig e-postadress")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                            }
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
@@ -750,7 +841,7 @@ struct CheckoutView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
-                    .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty || isProcessingPurchase)
+                    .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty || isProcessingPurchase || !email.contains("@") || !email.contains("."))
                 }
             }
             .navigationTitle("Checkout")
@@ -762,9 +853,6 @@ struct CheckoutView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showConfirmation) {
-                ConfirmationView(reward: reward)
-            }
             .sheet(isPresented: $showSubscriptionView) {
                 SubscriptionView()
             }
@@ -772,19 +860,58 @@ struct CheckoutView: View {
     }
     
     private func processPurchase() async {
+        print("🔄 Starting purchase process...")
+        
         guard let userId = authViewModel.currentUser?.id else {
             print("❌ No user ID available")
             return
         }
         
+        print("✅ User ID: \(userId)")
+        
+        // Validate email format
+        guard email.contains("@") && email.contains(".") else {
+            print("❌ Invalid email format: \(email)")
+            return
+        }
+        
+        print("✅ Email format valid: \(email)")
+        
+        // Check if user has enough points
+        guard let user = authViewModel.currentUser, user.currentXP >= 200 else {
+            print("❌ Not enough points. Current XP: \(authViewModel.currentUser?.currentXP ?? 0)")
+            return
+        }
+        
+        print("✅ User has enough points: \(user.currentXP)")
+        
         isProcessingPurchase = true
         
         do {
+            print("🔄 Calling purchaseService.purchaseReward...")
             let success = try await purchaseService.purchaseReward(reward, userId: userId)
+            print("✅ Purchase service returned: \(success)")
             
             if success {
-                showConfirmation = true
+                print("🔄 Deducting 200 points from user account...")
+                // Deduct 200 points from user's account
+                try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: -200)
+                print("✅ Points deducted successfully")
+                
+                print("🔄 Refreshing user profile...")
+                // Refresh user profile to update points
+                await authViewModel.loadUserProfile()
+                print("✅ User profile refreshed")
+                
+                print("🔄 Closing checkout and showing confirmation...")
+                // Close checkout view and show confirmation
+                DispatchQueue.main.async {
+                    dismiss()
+                    showConfirmation = true
+                }
+                print("✅ Checkout closed and confirmation shown")
             } else {
+                print("❌ Purchase service returned false")
                 // User doesn't have premium subscription
                 showSubscriptionView = true
             }
@@ -794,6 +921,7 @@ struct CheckoutView: View {
         }
         
         isProcessingPurchase = false
+        print("🔄 Purchase process completed")
     }
 }
 
@@ -938,23 +1066,23 @@ struct ConfirmationView: View {
         case "PLIKTGOLF":
             return "PLIKT2025"
         case "PEGMATE":
-            return "PEGMATE2025"
+            return "Pegmate2026"
         case "LONEGOLF":
-            return "LONE2025"
+            return "UP&DOWN_10"
         case "WINWIZE":
-            return "WINWIZE2025"
+            return "9AEWBGBZV5HR"
         case "SCANDIGOLF":
-            return "SCANDI2025"
+            return "A0Z8JNnsE"
         case "Exotic Golf":
-            return "EXOTIC2025"
+            return "upanddown15"
         case "HAPPYALBA":
             return "HAPPY2025"
         case "RETROGOLF":
-            return "RETRO2025"
+            return "Upanddown20"
         case "PUMPLABS":
-            return "PUMP2025"
+            return "UPNDOWN15"
         case "ZEN ENERGY":
-            return "ZEN2025"
+            return "UPDOWN15"
         default:
             return "CODE2025"
         }

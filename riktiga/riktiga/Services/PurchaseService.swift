@@ -23,13 +23,9 @@ class PurchaseService: ObservableObject {
     
     // MARK: - RevenueCat Integration
     func purchaseReward(_ reward: RewardCard, userId: String) async throws -> Bool {
-        // First, check if user has premium subscription
-        if !revenueCatManager.isPremium {
-            // If not premium, show subscription options
-            return false
-        }
+        print("🔄 PurchaseService: Starting reward purchase for \(reward.brandName)")
         
-        // If premium, proceed with reward purchase
+        // Proceed with reward purchase (no PRO membership required)
         let purchase = Purchase(
             userId: userId,
             brandName: reward.brandName,
@@ -38,7 +34,11 @@ class PurchaseService: ObservableObject {
             purchaseDate: Date()
         )
         
+        print("🔄 PurchaseService: Created purchase object: \(purchase.id)")
+        
         try await savePurchase(purchase)
+        print("✅ PurchaseService: Purchase saved successfully")
+        
         return true
     }
     
@@ -72,19 +72,23 @@ class PurchaseService: ObservableObject {
     
     // MARK: - Legacy Methods (for backward compatibility)
     func savePurchase(_ purchase: Purchase) async throws {
+        print("🔄 SavePurchase: Starting to save purchase \(purchase.id)")
+        
         do {
+            print("🔄 SavePurchase: Inserting into Supabase...")
             _ = try await supabase
                 .from("purchases")
                 .insert(purchase)
                 .execute()
-            print("✅ Purchase saved: \(purchase.id)")
+            print("✅ SavePurchase: Purchase saved to database: \(purchase.id)")
             
             // Add to local array
             DispatchQueue.main.async {
                 self.purchases.append(purchase)
+                print("✅ SavePurchase: Added to local array")
             }
         } catch {
-            print("❌ Error saving purchase: \(error)")
+            print("❌ SavePurchase: Error saving purchase: \(error)")
             throw error
         }
     }
@@ -132,23 +136,23 @@ class PurchaseService: ObservableObject {
         case "PLIKTGOLF":
             return "PLIKT2025"
         case "PEGMATE":
-            return "PEGMATE2025"
+            return "Pegmate2026"
         case "LONEGOLF":
-            return "LONE2025"
+            return "UP&DOWN_10"
         case "WINWIZE":
-            return "WINWIZE2025"
+            return "9AEWBGBZV5HR"
         case "SCANDIGOLF":
-            return "SCANDI2025"
+            return "A0Z8JNnsE"
         case "Exotic Golf":
-            return "EXOTIC2025"
+            return "upanddown15"
         case "HAPPYALBA":
             return "HAPPY2025"
         case "RETROGOLF":
-            return "RETRO2025"
+            return "Upanddown20"
         case "PUMPLABS":
-            return "PUMP2025"
+            return "UPNDOWN15"
         case "ZEN ENERGY":
-            return "ZEN2025"
+            return "UPDOWN15"
         default:
             return "CODE2025"
         }
