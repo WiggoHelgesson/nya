@@ -64,12 +64,14 @@ struct MainTabView: View {
                     .padding(.bottom, 90) // Position just above TabView without touching
                 }
                 
-                NavigationLink(isActive: $showStartSession) {
-                    StartSessionView()
-                } label: {
-                    EmptyView()
-                }
+                // Sheet presentation handled by .sheet modifier
             }
+        }
+        .sheet(isPresented: $showStartSession) {
+            StartSessionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActivities"))) { _ in
             // TabView will handle navigation automatically
