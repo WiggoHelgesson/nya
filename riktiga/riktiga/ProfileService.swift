@@ -67,19 +67,12 @@ class ProfileService {
         do {
             print("🔄 Updating points for userId: \(userId), pointsToAdd: \(pointsToAdd)")
             
-            // First get current XP
-            let profiles: [User] = try await supabase
-                .from("profiles")
-                .select("current_xp")
-                .eq("id", value: userId)
-                .execute()
-                .value
-            
-            guard let currentProfile = profiles.first else {
+            // Get current user profile to access current XP
+            guard let currentUser = try await fetchUserProfile(userId: userId) else {
                 throw NSError(domain: "ProfileError", code: 1, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])
             }
             
-            let newXP = currentProfile.currentXP + pointsToAdd
+            let newXP = currentUser.currentXP + pointsToAdd
             
             // Update with new XP
             try await supabase

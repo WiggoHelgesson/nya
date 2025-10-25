@@ -95,7 +95,7 @@ struct RewardsView: View {
         RewardCard(
             id: 9,
             brandName: "PUMPLABS",
-            discount: "10% rabatt",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "12",
             category: "Gym",
@@ -104,7 +104,7 @@ struct RewardsView: View {
         RewardCard(
             id: 10,
             brandName: "ZEN ENERGY",
-            discount: "10% rabatt",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "13",
             category: "Gym",
@@ -113,7 +113,7 @@ struct RewardsView: View {
         RewardCard(
             id: 11,
             brandName: "ZEN ENERGY",
-            discount: "10% rabatt",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "13",
             category: "Löpning",
@@ -906,8 +906,12 @@ struct CheckoutView: View {
                 print("🔄 Closing checkout and showing confirmation...")
                 // Close checkout view and show confirmation
                 DispatchQueue.main.async {
-                    dismiss()
                     showConfirmation = true
+                }
+                
+                // Close checkout view after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    dismiss()
                 }
                 print("✅ Checkout closed and confirmation shown")
             } else {
@@ -1000,8 +1004,7 @@ struct ConfirmationView: View {
                     // Action buttons
                     VStack(spacing: 12) {
                         Button(action: {
-                            // Visit website action
-                            print("Visiting website for \(reward.brandName)")
+                            openCompanyWebsite(for: reward.brandName)
                         }) {
                             Text("BESÖK HEMSIDA")
                                 .font(.system(size: 16, weight: .bold))
@@ -1037,7 +1040,7 @@ struct ConfirmationView: View {
                 .padding(.vertical, 20)
             }
             .background(Color(.systemGray6))
-            .navigationTitle("FRAMGÅNGSAKADEMIN")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1064,7 +1067,7 @@ struct ConfirmationView: View {
     private func getDiscountCode(for brandName: String) -> String {
         switch brandName {
         case "PLIKTGOLF":
-            return "PLIKT2025"
+            return "T59W1DH7B81J"
         case "PEGMATE":
             return "Pegmate2026"
         case "LONEGOLF":
@@ -1085,6 +1088,39 @@ struct ConfirmationView: View {
             return "UPDOWN15"
         default:
             return "CODE2025"
+        }
+    }
+    
+    private func openCompanyWebsite(for brandName: String) {
+        let urlString: String
+        
+        switch brandName {
+        case "PUMPLABS":
+            urlString = "https://pumplab.se/"
+        case "Exotic Golf":
+            urlString = "https://exoticagolf.se/"
+        case "ZEN ENERGY":
+            urlString = "https://zenenergydrinks.com/?srsltid=AfmBOoo0XewnkvbPLeH1CbuslALX3C-hEOOaf_jJuHh3XMGlHm-rB2Pb"
+        case "HAPPYALBA":
+            urlString = "https://www.happyalba.com/"
+        case "LONEGOLF":
+            urlString = "https://lonegolf.se/?srsltid=AfmBOopu2tfDkMnsvsc2hH59Bvis1B_3rzrOy3I3-5eF7tFcOvT6gfOh"
+        case "PEGMATE":
+            urlString = "https://pegmate.se/en/"
+        case "PLIKTGOLF":
+            urlString = "https://pliktgolf.se/?srsltid=AfmBOop6tGP9-2K-6KSTSjjU-8Tsl5BqFMPLGnRwgcu56raQcMloZq_s"
+        case "RETROGOLF":
+            urlString = "https://retrogolfacademy.se/"
+        case "SCANDIGOLF":
+            urlString = "https://www.scandigolf.se/"
+        case "WINWIZE":
+            urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
+        default:
+            urlString = "https://google.com" // Fallback
+        }
+        
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
         }
     }
 }

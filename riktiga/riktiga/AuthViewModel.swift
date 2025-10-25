@@ -110,6 +110,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.isLoading = false
+                        
+                        // Visa review popup efter lyckad inloggning
+                        ReviewManager.shared.requestReviewIfNeeded()
                     }
                 } else {
                     // Fallback om profil inte finns
@@ -121,6 +124,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         )
                         self.isLoggedIn = true
                         self.isLoading = false
+                        
+                        // Visa review popup efter lyckad inloggning
+                        ReviewManager.shared.requestReviewIfNeeded()
                     }
                 }
             } catch {
@@ -371,6 +377,9 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         self.isLoggedIn = true
                         self.isLoading = false
                         print("✅ User logged in with Apple: \(profile.name)")
+                        
+                        // Visa review popup efter lyckad inloggning
+                        ReviewManager.shared.requestReviewIfNeeded()
                     }
                 } else {
                     // Skapa profil för ny Apple-användare
@@ -390,6 +399,9 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         self.isLoggedIn = true
                         self.isLoading = false
                         print("✅ New Apple user logged in: \(userName)")
+                        
+                        // Visa review popup efter lyckad inloggning
+                        ReviewManager.shared.requestReviewIfNeeded()
                     }
                 }
             } catch {

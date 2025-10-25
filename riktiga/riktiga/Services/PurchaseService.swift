@@ -134,7 +134,7 @@ class PurchaseService: ObservableObject {
     private func getDiscountCode(for brandName: String) -> String {
         switch brandName {
         case "PLIKTGOLF":
-            return "PLIKT2025"
+            return "T59W1DH7B81J"
         case "PEGMATE":
             return "Pegmate2026"
         case "LONEGOLF":
