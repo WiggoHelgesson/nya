@@ -128,18 +128,26 @@ struct RewardsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // MARK: - Hero Banner Slider
-                        TabView(selection: $currentHeroIndex) {
-                            ForEach(0..<heroImages.count, id: \.self) { index in
-                                HeroBannerCard(
-                                    imageName: heroImages[index]
-                                )
-                                .tag(index)
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(0..<heroImages.count, id: \.self) { index in
+                                        HeroBannerCard(
+                                            imageName: heroImages[index]
+                                        )
+                                        .frame(width: UIScreen.main.bounds.width - 32)
+                                        .id(index)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .scrollTargetLayout()
+                            }
+                            .scrollTargetBehavior(.viewAligned)
+                            .onAppear {
+                                proxy.scrollTo(currentHeroIndex, anchor: .leading)
                             }
                         }
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                         .frame(height: 200)
-                        .cornerRadius(12)
-                        .padding(.horizontal, 16)
                         
                         // MARK: - Categories Section
                         VStack(alignment: .leading, spacing: 16) {
@@ -222,13 +230,13 @@ struct CategoryButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Image(systemName: getCategoryIcon(category))
-                    .font(.system(size: 24, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(isSelected ? .white : .gray)
                 
                 Text(category)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(isSelected ? .white : .gray)
             }
             .frame(width: 80, height: 80)
@@ -286,7 +294,14 @@ struct FullScreenRewardCard: View {
                 .clipped()
             
             // Info Section - Clean like in the image
-            HStack {
+            HStack(spacing: 12) {
+                // Brand logo based on imageName
+                Image(getBrandLogo(for: reward.imageName))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
                         .font(.system(size: 18, weight: .bold))
@@ -310,10 +325,24 @@ struct FullScreenRewardCard: View {
             .padding(20)
             .background(Color.white)
         }
-        .frame(width: UIScreen.main.bounds.width * 0.8, height: 320) // Slightly narrower to prevent shadow clipping
+        .frame(width: UIScreen.main.bounds.width * 0.8, height: 320)
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.2), radius: 15, x: 0, y: 8)
-        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
+    }
+    
+    private func getBrandLogo(for imageName: String) -> String {
+        switch imageName {
+        case "4": return "15" // PLIKTGOLF
+        case "5": return "5"  // PEGMATE
+        case "6": return "14" // LONEGOLF
+        case "7": return "17" // WINWIZE
+        case "8": return "18" // SCANDIGOLF
+        case "9": return "19" // Exotic Golf
+        case "10": return "16" // HAPPYALBA (Alba)
+        case "11": return "20" // RETROGOLF
+        case "12": return "21" // PUMPLABS
+        case "13": return "22" // ZEN ENERGY
+        default: return "5" // Default to PEGMATE
+        }
     }
 }
 
