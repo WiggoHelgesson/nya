@@ -131,11 +131,11 @@ struct MainTabView: View {
                     .frame(height: 80)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
+                    .background(.thinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
                     )
                     .shadow(radius: 8)
                     .padding(.horizontal, 16)
