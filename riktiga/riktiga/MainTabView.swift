@@ -3,26 +3,39 @@ import Combine
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var selectedTab = 0
     @State private var showStartSession = false
     
     var body: some View {
         NavigationStack {
             ZStack {
-                // Tab Content
-                Group {
-                    if selectedTab == 0 {
-                        HomeView()
-                    } else if selectedTab == 1 {
-                        SocialView() // This will show leaderboards/social content
-                    } else if selectedTab == 2 {
-                        RewardsView()
-                    } else if selectedTab == 3 {
-                        ProfileView()
-                    }
+                // Standard TabView with automatic Liquid Glass
+                TabView {
+                    HomeView()
+                        .tabItem {
+                            Image(systemName: "house.fill")
+                            Text("Hem")
+                        }
+                    
+                    SocialView()
+                        .tabItem {
+                            Image(systemName: "person.2.fill")
+                            Text("Socialt")
+                        }
+                    
+                    RewardsView()
+                        .tabItem {
+                            Image(systemName: "gift.fill")
+                            Text("Belöningar")
+                        }
+                    
+                    ProfileView()
+                        .tabItem {
+                            Image(systemName: "person.fill")
+                            Text("Profil")
+                        }
                 }
                 
-                // Starta Pass Button - Above Navigation
+                // Starta Pass Button - Floating above TabView
                 VStack {
                     Spacer()
                     
@@ -48,92 +61,7 @@ struct MainTabView: View {
                             .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 100) // Position above navigation
-                }
-                
-                // Custom Navigation Bar - Apple Liquid Glass
-                VStack {
-                    Spacer()
-                    
-                    HStack(spacing: 0) {
-                        // Hem
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 0
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: "house.fill")
-                                    .font(.title3)
-                                    .scaleEffect(selectedTab == 0 ? 1.1 : 1.0)
-                                Text("Hem")
-                                    .font(.caption)
-                                    .fontWeight(selectedTab == 0 ? .bold : .regular)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 0 ? .blue : .secondary)
-                        }
-                        
-                        // Socialt
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 1
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.title3)
-                                    .scaleEffect(selectedTab == 1 ? 1.1 : 1.0)
-                                Text("Socialt")
-                                    .font(.caption)
-                                    .fontWeight(selectedTab == 1 ? .bold : .regular)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 1 ? .blue : .secondary)
-                        }
-                        
-                        // Belöningar
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 2
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: "gift.fill")
-                                    .font(.title3)
-                                    .scaleEffect(selectedTab == 2 ? 1.1 : 1.0)
-                                Text("Belöningar")
-                                    .font(.caption)
-                                    .fontWeight(selectedTab == 2 ? .bold : .regular)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 2 ? .blue : .secondary)
-                        }
-                        
-                        // Profil
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = 3
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: "person.fill")
-                                    .font(.title3)
-                                    .scaleEffect(selectedTab == 3 ? 1.1 : 1.0)
-                                Text("Profil")
-                                    .font(.caption)
-                                    .fontWeight(selectedTab == 3 ? .bold : .regular)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(selectedTab == 3 ? .blue : .secondary)
-                        }
-                    }
-                    .frame(height: 80)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 100) // Position above TabView
                 }
                 
                 NavigationLink(isActive: $showStartSession) {
@@ -144,7 +72,7 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActivities"))) { _ in
-            selectedTab = 1 // Switch to Activities tab
+            // TabView will handle navigation automatically
         }
     }
 }
