@@ -144,7 +144,7 @@ struct LoginFormView: View {
                     switch result {
                     case .success(let authorization):
                         if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                            handleAppleSignIn(credential: appleIDCredential, isSignUp: false)
+                            handleAppleSignIn(credential: appleIDCredential, isSignUp: false, authViewModel: authViewModel)
                         }
                     case .failure(let error):
                         authViewModel.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
@@ -242,7 +242,7 @@ struct SignupFormView: View {
                     switch result {
                     case .success(let authorization):
                         if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                            handleAppleSignIn(credential: appleIDCredential, isSignUp: true)
+                            handleAppleSignIn(credential: appleIDCredential, isSignUp: true, authViewModel: authViewModel)
                         }
                     case .failure(let error):
                         authViewModel.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
@@ -257,7 +257,7 @@ struct SignupFormView: View {
 }
 
 // MARK: - Apple Sign In Helper
-private func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, isSignUp: Bool) {
+private func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, isSignUp: Bool, authViewModel: AuthViewModel) {
     guard let identityToken = credential.identityToken,
           let identityTokenString = String(data: identityToken, encoding: .utf8) else {
         return
@@ -279,7 +279,9 @@ private func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, isS
             // Hämta profil-data från Supabase
             if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
                 DispatchQueue.main.async {
-                    // Användaren är redan inloggad via AuthViewModel
+                    authViewModel.currentUser = profile
+                    authViewModel.isLoggedIn = true
+                    authViewModel.isLoading = false
                     print("✅ User logged in with Apple: \(profile.name)")
                 }
             } else {
@@ -302,12 +304,16 @@ private func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential, isS
                 try await ProfileService.shared.createUserProfile(newUser)
                 
                 DispatchQueue.main.async {
-                    // Användaren är redan inloggad via AuthViewModel
+                    authViewModel.currentUser = newUser
+                    authViewModel.isLoggedIn = true
+                    authViewModel.isLoading = false
                     print("✅ New Apple user created and logged in: \(userName)")
                 }
             }
         } catch {
             DispatchQueue.main.async {
+                authViewModel.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
+                authViewModel.isLoading = false
                 print("❌ Apple Sign-In error: \(error)")
             }
         }
