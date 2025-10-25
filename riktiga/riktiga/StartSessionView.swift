@@ -58,7 +58,7 @@ struct SelectActivityView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 40)
+            .padding(.top, 80)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
             .background(AppColors.brandBlue.opacity(0.8))
