@@ -40,22 +40,22 @@ class MonthlyStatsService {
             for post in workoutPosts {
                 let userId = post.userId
                 let distance = post.distance ?? 0.0
-                // Convert km to meters (assuming distance is stored in km)
-                userDistances[userId, default: 0.0] += distance * 1000.0
+                // Distance is already stored in km
+                userDistances[userId, default: 0.0] += distance
             }
             
             // Fetch user profiles and create MonthlyUser objects
             var users: [MonthlyUser] = []
             
             for (userId, distance) in userDistances {
-                // Only include users who walked at least 100 meters
-                if distance >= 100.0 {
+                // Only include users who walked at least 0.1 km (100 meters)
+                if distance >= 0.1 {
                     if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
                         let user = MonthlyUser(
                             id: userId,
                             username: profile.name,
                             avatarUrl: profile.avatarUrl,
-                            distance: distance / 1000.0, // Convert meters to km
+                            distance: distance,
                             isPro: profile.isProMember
                         )
                         users.append(user)
@@ -113,8 +113,8 @@ class MonthlyStatsService {
             for post in workoutPosts {
                 let userId = post.userId
                 let distance = post.distance ?? 0.0
-                // Convert km to meters (assuming distance is stored in km)
-                userDistances[userId, default: 0.0] += distance * 1000.0
+                // Distance is already stored in km
+                userDistances[userId, default: 0.0] += distance
             }
             
             // Find the user with the highest distance
@@ -127,7 +127,7 @@ class MonthlyStatsService {
                         id: userId,
                         username: profile.name,
                         avatarUrl: profile.avatarUrl,
-                        distance: distance / 1000.0, // Convert meters to km
+                        distance: distance,
                         isPro: profile.isProMember
                     )
                     print("✅ Found last month winner: \(profile.name) with \(winner.distance) km")
