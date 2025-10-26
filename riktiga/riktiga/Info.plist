@@ -4,8 +4,6 @@
 <dict>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>processing</string>
-		<string>fetch</string>
 		<string>location</string>
 	</array>
 </dict>
