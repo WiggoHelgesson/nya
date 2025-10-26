@@ -449,119 +449,121 @@ struct ProfileActivityCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with user info - exactly like SocialPostCard
             HStack(spacing: 12) {
-                // User avatar - use current user's avatar
+                // User avatar
                 ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 40)
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(authViewModel.currentUser?.name ?? "Du")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black)
                     
                     Text(formatDate(activity.createdAt))
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.gray)
                 }
                 
                 Spacer()
                 
-                // Activity type icon - exactly like SocialPostCard
-                Image(systemName: getActivityIcon(activity.activityType))
-                    .font(.system(size: 18))
-                    .foregroundColor(AppColors.brandBlue)
+                Button(action: {}) {
+                    Image(systemName: "ellipsis")
+                        .foregroundColor(.black)
+                        .font(.system(size: 16))
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
             
-            // Post content - exactly like SocialPostCard
+            // Large image
+            if let imageUrl = activity.imageUrl, !imageUrl.isEmpty {
+                if imageUrl.hasPrefix("http") {
+                    // Remote URL
+                    AsyncImage(url: URL(string: imageUrl)) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 400)
+                            .clipped()
+                    } placeholder: {
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 300)
+                            .overlay(
+                                ProgressView()
+                            )
+                    }
+                } else {
+                    // Local file path
+                    let fileURL = URL(fileURLWithPath: imageUrl)
+                    if let imageData = try? Data(contentsOf: fileURL),
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 400)
+                            .clipped()
+                    } else {
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 300)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 24))
+                            )
+                    }
+                }
+            }
+            
+            // Content below image
             VStack(alignment: .leading, spacing: 12) {
                 // Title
                 Text(activity.title)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.black)
                     .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 
-                // Stats row
-                HStack(spacing: 24) {
+                // Stats row with white background
+                HStack(spacing: 0) {
                     if let distance = activity.distance {
-                        HStack(spacing: 6) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.brandGreen)
+                        VStack(spacing: 6) {
+                            Text("Distans")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
                             Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.black)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
                     
                     if let duration = activity.duration {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.brandBlue)
+                        if activity.distance != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        
+                        VStack(spacing: 6) {
+                            Text("Tid")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
                             Text(formatDuration(duration))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.black)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
-                    
-                    Spacer()
                 }
+                .background(Color.white)
+                .cornerRadius(12)
                 .padding(.horizontal, 16)
-                
-                // Description
-                if let description = activity.description, !description.isEmpty {
-                    Text(description)
-                        .font(.system(size: 15))
-                        .foregroundColor(.black)
-                        .lineLimit(nil)
-                        .padding(.horizontal, 16)
-                }
-                
-                // Image if available
-                if let imageUrl = activity.imageUrl, !imageUrl.isEmpty {
-                    GeometryReader { geometry in
-                        OptimizedAsyncImage(
-                            url: imageUrl,
-                            width: geometry.size.width,
-                            height: 300,
-                            cornerRadius: 0
-                        )
-                    }
-                    .frame(maxHeight: 300)
-                    .padding(.horizontal, 16)
-                }
+                .padding(.bottom, 16)
             }
-            
-            // Action buttons - exactly like SocialPostCard but without like/comment functionality
-            HStack(spacing: 24) {
-                // Placeholder for like button (disabled for own posts)
-                HStack(spacing: 6) {
-                    Image(systemName: "heart")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                    
-                    Text("0")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                }
-                
-                // Placeholder for comment button (disabled for own posts)
-                HStack(spacing: 6) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                    
-                    Text("0")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
-        .background(Color.white)
+        .background(Color(.systemGray6))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
