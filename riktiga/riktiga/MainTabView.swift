@@ -60,7 +60,7 @@ struct MainTabView: View {
                             .padding(.vertical, 16)
                             .background(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                                    gradient: Gradient(colors: [Color.black, Color.gray.opacity(0.8)]),
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
