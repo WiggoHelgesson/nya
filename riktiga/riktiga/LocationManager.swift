@@ -53,7 +53,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.requestAlwaysAuthorization()
     }
     
-    func startTracking() {
+    func startTracking(preserveData: Bool = false) {
         // Kontrollera permissions först
         guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
             print("❌ Location permission not granted. Current status: \(authorizationStatus.rawValue)")
@@ -61,8 +61,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         
-        // Only reset if not already tracking
-        if !isTracking {
+        // Only reset if not preserving data and not already tracking
+        if !preserveData && !isTracking {
             // Only reset location data when starting a new session
             if startLocation == nil {
                 // Reset everything for a new session
@@ -77,7 +77,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         isTracking = true
         
-        print("🚀 Starting/Resuming location tracking...")
+        if preserveData {
+            print("🚀 Resuming location tracking with preserved data...")
+        } else {
+            print("🚀 Starting location tracking...")
+        }
         
         // Enable background updates if authorized
         enableBackgroundLocationIfAuthorized()

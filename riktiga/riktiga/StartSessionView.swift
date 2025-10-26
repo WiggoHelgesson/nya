@@ -202,9 +202,9 @@ struct SessionMapView: View {
                         // Calculate earned points for the current distance
                         updateEarnedPoints()
                         
-                        // Resume tracking if session was running
+                        // Resume tracking if session was running (preserve existing data)
                         if !session.isPaused {
-                            locationManager.startTracking()
+                            locationManager.startTracking(preserveData: true)
                             startTimer()
                         }
                         
@@ -320,8 +320,8 @@ struct SessionMapView: View {
                         // Paused state - show Continue and End buttons
                         VStack(spacing: 12) {
                             Button(action: {
-                                // Resume tracking
-                                locationManager.startTracking()
+                                // Resume tracking (preserve existing data)
+                                locationManager.startTracking(preserveData: true)
                                 startTimer()
                                 isPaused = false
                                 isRunning = true
