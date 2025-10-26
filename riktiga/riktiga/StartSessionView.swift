@@ -415,9 +415,6 @@ struct SessionMapView: View {
                 sessionManager.clearActiveSession()
             }
         }
-        .onDisappear {
-            stopTimer()
-        }
     }
 
     func startTimer() {
