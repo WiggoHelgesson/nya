@@ -27,17 +27,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             locationManager.pausesLocationUpdatesAutomatically = false
         }
         
+        // Enable background location updates
+        if #available(iOS 9.0, *) {
+            locationManager.allowsBackgroundLocationUpdates = true
+        }
+        
         // Kontrollera initial authorization status
         authorizationStatus = locationManager.authorizationStatus
     }
     
     func requestLocationPermission() {
-        locationManager.requestWhenInUseAuthorization()
+        // Request always authorization for background tracking
+        locationManager.requestAlwaysAuthorization()
     }
     
     func requestBackgroundLocationPermission() {
-        // Bara requestera whenInUse för simulator
-        locationManager.requestWhenInUseAuthorization()
+        // Request always authorization
+        locationManager.requestAlwaysAuthorization()
     }
     
     func startTracking() {
@@ -57,7 +63,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         routeCoordinates = []
         
         print("🚀 Starting location tracking...")
+        
+        // Ensure background location is enabled
+        if #available(iOS 9.0, *) {
+            locationManager.allowsBackgroundLocationUpdates = true
+        }
+        
         locationManager.startUpdatingLocation()
+        
+        print("✅ Location tracking started with background updates")
         
         // Fallback för simulator
         #if targetEnvironment(simulator)
@@ -163,8 +177,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             DispatchQueue.main.async {
                 self.locationError = "Platstillstånd nekades. Gå till Inställningar för att aktivera platsåtkomst."
             }
-        case .authorizedWhenInUse, .authorizedAlways:
-            print("✅ Location access granted")
+        case .authorizedWhenInUse:
+            print("✅ Location access granted (when in use)")
+            DispatchQueue.main.async {
+                self.locationError = nil
+            }
+        case .authorizedAlways:
+            print("✅ Location access granted (always - background tracking enabled)")
+            // Enable background updates when always authorization is granted
+            if #available(iOS 9.0, *) {
+                locationManager.allowsBackgroundLocationUpdates = true
+            }
             DispatchQueue.main.async {
                 self.locationError = nil
             }
