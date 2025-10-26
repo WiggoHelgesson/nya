@@ -197,10 +197,16 @@ struct HomeView: View {
                         
                         // MARK: - Weekly Steps Section
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Steg denna vecka")
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 20)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Steg denna vecka")
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(.black)
+                                
+                                Text("Gå 10k steg och få 10 poäng varje dag")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 20)
                             
                             VStack(spacing: 12) {
                                 if isLoadingSteps {
@@ -251,6 +257,9 @@ struct HomeView: View {
             healthKitManager.getWeeklySteps { steps in
                 weeklySteps = steps
                 isLoadingSteps = false
+                
+                // Kontrollera om användaren nått 10k steg idag och ge poäng
+                checkAndAwardDailyStepsReward(steps: steps)
             }
             
             // Lyssna på profilbild uppdateringar
@@ -267,6 +276,45 @@ struct HomeView: View {
         }
         .onDisappear {
             NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
+        }
+    }
+    
+    private func checkAndAwardDailyStepsReward(steps: [DailySteps]) {
+        // Hitta dagens steg
+        guard let todaySteps = steps.first(where: { Calendar.current.isDateInToday($0.date) }),
+              todaySteps.steps >= 10000 else {
+            return
+        }
+        
+        // Kontrollera om användaren redan fått poäng idag
+        let today = Calendar.current.startOfDay(for: Date())
+        let lastRewardDate = UserDefaults.standard.object(forKey: "lastStepsRewardDate") as? Date ?? Date.distantPast
+        let lastRewardDay = Calendar.current.startOfDay(for: lastRewardDate)
+        
+        // Om användaren inte har fått poäng idag, ge 10 poäng
+        if today > lastRewardDay {
+            Task {
+                guard let userId = authViewModel.currentUser?.id else { return }
+                
+                do {
+                    // Ge 10 poäng
+                    try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: 10)
+                    
+                    // Spara att vi har gett poäng idag
+                    UserDefaults.standard.set(Date(), forKey: "lastStepsRewardDate")
+                    
+                    // Reload user profile to update XP
+                    if let updatedProfile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                        await MainActor.run {
+                            authViewModel.currentUser = updatedProfile
+                        }
+                    }
+                    
+                    print("✅ Awarded 10 points for reaching 10k steps")
+                } catch {
+                    print("❌ Error awarding steps points: \(error)")
+                }
+            }
         }
     }
 }
@@ -318,6 +366,10 @@ struct WeeklyStepsRow: View {
         return formatter.string(from: date)
     }
     
+    private var reachedGoal: Bool {
+        steps >= 10000
+    }
+    
     var body: some View {
         HStack {
             Text(dayName)
@@ -332,7 +384,7 @@ struct WeeklyStepsRow: View {
                         .frame(height: 8)
                     
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(isToday ? .black : Color.gray)
+                        .fill(reachedGoal ? Color.green : Color.red)
                         .frame(width: steps > 0 ? geometry.size.width * (CGFloat(steps) / 10000.0) : 0, height: 8)
                 }
             }
