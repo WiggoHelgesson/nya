@@ -132,6 +132,7 @@ struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var revenueCatManager = RevenueCatManager.shared
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -416,7 +417,15 @@ struct SessionMapView: View {
         stopTimer()
         locationManager.stopTracking()
         // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
-        earnedPoints = Int(locationManager.distance * 15)
+        let basePoints = Int(locationManager.distance * 15)
+        
+        // PRO-medlemmar får 1.5x poäng
+        if revenueCatManager.isPremium {
+            earnedPoints = Int(Double(basePoints) * 1.5)
+        } else {
+            earnedPoints = basePoints
+        }
+        
         showCompletionPopup = true
     }
 

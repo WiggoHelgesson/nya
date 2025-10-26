@@ -1,4 +1,6 @@
 import SwiftUI
+import RevenueCat
+import RevenueCatUI
 
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -173,7 +175,7 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showSubscriptionView) {
-                SubscriptionView()
+                PresentPaywallView()
             }
             .sheet(isPresented: $showProManagementView) {
                 ProManagementView()
@@ -207,6 +209,14 @@ struct SettingsRow: View {
             }
             .padding(16)
         }
+    }
+}
+
+struct PresentPaywallView: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        PaywallView()
     }
 }
 

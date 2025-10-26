@@ -102,7 +102,7 @@ class WorkoutService {
         }
     }
     
-    func saveWorkoutPost(_ post: WorkoutPost, image: UIImage? = nil) async throws {
+    func saveWorkoutPost(_ post: WorkoutPost, image: UIImage? = nil, earnedPoints: Int = 0) async throws {
         do {
             var postToSave = post
             
@@ -142,6 +142,12 @@ class WorkoutService {
                 .insert(minimalPost)
                 .execute()
             print("✅ Workout post saved: \(postToSave.id)")
+            
+            // Update user's XP in database
+            if earnedPoints > 0 {
+                try await ProfileService.shared.updateUserPoints(userId: post.userId, pointsToAdd: earnedPoints)
+                print("✅ XP updated: +\(earnedPoints)")
+            }
         } catch {
             print("❌ Error saving workout post: \(error)")
             throw error

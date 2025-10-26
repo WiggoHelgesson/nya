@@ -216,8 +216,17 @@ struct SessionCompleteView: View {
         
         Task {
             do {
-                try await WorkoutService.shared.saveWorkoutPost(post, image: sessionImage)
+                try await WorkoutService.shared.saveWorkoutPost(post, image: sessionImage, earnedPoints: earnedPoints)
                 print("✅ Workout saved successfully")
+                
+                // Reload user profile to update XP
+                if let userId = authViewModel.currentUser?.id {
+                    if let updatedProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
+                        await MainActor.run {
+                            authViewModel.currentUser = updatedProfile
+                        }
+                    }
+                }
                 
                 DispatchQueue.main.async {
                     isSaving = false
