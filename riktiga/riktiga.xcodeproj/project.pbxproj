@@ -19,7 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		86B269892EAA2EBB00A4EC93 /* riktiga.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = riktiga.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -118,7 +118,7 @@
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
 			);
 			productName = "Up&Down";
-			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
+			productReference = 86B269892EAA2EBB00A4EC93 /* riktiga.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -317,8 +317,21 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = riktiga/Info.plist;
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Vi använder din platsdata för att tracka dina träningspass";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
+				INFOPLIST_KEY_NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Denna app behöver tillgång till kameran för att ta bilder på dina träningspass.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass och visa din position på kartan.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -374,8 +387,21 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = riktiga/Info.plist;
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Vi använder din platsdata för att tracka dina träningspass";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
+				INFOPLIST_KEY_NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Denna app behöver tillgång till kameran för att ta bilder på dina träningspass.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass och visa din position på kartan.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

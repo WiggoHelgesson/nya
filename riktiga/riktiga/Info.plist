@@ -2,40 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>location</string>
-	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Denna app behöver tillgång till din plats för att spåra dina träningspass och visa din position på kartan.</string>
+	<string>We need your location to track your workouts and provide accurate distance measurements.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.</string>
+	<string>We need your location to track your workouts even when the app is in the background.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.</string>
-	<key>NSLocationUsageDescription</key>
-	<string>Denna app behöver tillgång till din plats för att spåra dina träningspass.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Denna app behöver tillgång till kameran för att ta bilder på dina träningspass.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.</string>
-	<key>NSMotionUsageDescription</key>
-	<string>Denna app kan använda motion data för att förbättra träningsspårningen.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Denna app kan dela hälsodata för att spåra dina träningspass.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Denna app kan uppdatera hälsodata med information från dina träningspass.</string>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>Denna app kan använda Apple Music för att spela musik under träningspass.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Denna app använder spårning för att ge dig personliga träningsrekommendationer.</string>
+	<string>We need your location to track your workouts even when the app is in the background.</string>
 </dict>
 </plist>
