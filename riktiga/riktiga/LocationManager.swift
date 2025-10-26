@@ -27,11 +27,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             locationManager.pausesLocationUpdatesAutomatically = false
         }
         
-        // Enable background location updates
-        if #available(iOS 9.0, *) {
-            locationManager.allowsBackgroundLocationUpdates = true
-        }
-        
         // Kontrollera initial authorization status
         authorizationStatus = locationManager.authorizationStatus
     }
@@ -63,11 +58,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         routeCoordinates = []
         
         print("🚀 Starting location tracking...")
-        
-        // Ensure background location is enabled
-        if #available(iOS 9.0, *) {
-            locationManager.allowsBackgroundLocationUpdates = true
-        }
         
         locationManager.startUpdatingLocation()
         
@@ -183,11 +173,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 self.locationError = nil
             }
         case .authorizedAlways:
-            print("✅ Location access granted (always - background tracking enabled)")
-            // Enable background updates when always authorization is granted
-            if #available(iOS 9.0, *) {
-                locationManager.allowsBackgroundLocationUpdates = true
-            }
+            print("✅ Location access granted (always)")
             DispatchQueue.main.async {
                 self.locationError = nil
             }
