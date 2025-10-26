@@ -187,9 +187,8 @@ struct SessionMapView: View {
                     }
                 )
                 .onAppear {
-                    // Request location permission and start tracking
+                    // Request location permission but DON'T start tracking yet
                     locationManager.requestLocationPermission()
-                    locationManager.startTracking()
                 }
                 .onReceive(locationManager.$userLocation) { newLocation in
                     if let location = newLocation {
@@ -323,9 +322,12 @@ struct SessionMapView: View {
                         Button(action: {
                             if isRunning {
                                 stopTimer()
+                                locationManager.stopTracking()
                                 isRunning = false
                                 isPaused = true
                             } else {
+                                // Start tracking when user presses button
+                                locationManager.startTracking()
                                 startTimer()
                                 isRunning = true
                             }
@@ -389,23 +391,22 @@ struct SessionMapView: View {
                 }
             }
             
-            // MARK: - Session Complete View
-            if showSessionComplete {
-                SessionCompleteView(
-                    activity: activity,
-                    distance: locationManager.distance,
-                    duration: sessionDuration,
-                    earnedPoints: earnedPoints,
-                    isPresented: $showSessionComplete,
-                    onComplete: {
-                        // Navigate to Activities tab after saving
-                        NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
-                        dismiss()
-                    }
-                )
-            }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showSessionComplete) {
+            SessionCompleteView(
+                activity: activity,
+                distance: locationManager.distance,
+                duration: sessionDuration,
+                earnedPoints: earnedPoints,
+                isPresented: $showSessionComplete,
+                onComplete: {
+                    // Navigate to Activities tab after saving
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
+                    dismiss()
+                }
+            )
+        }
         .onDisappear {
             stopTimer()
         }
