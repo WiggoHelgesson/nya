@@ -422,13 +422,6 @@ struct SessionMapView: View {
                     .shadow(radius: 20)
                     .padding(40)
                 }
-                .onChange(of: showSessionComplete) { oldValue, newValue in
-                    // Clear session when completion view is shown
-                    if newValue {
-                        print("🗑️ Clearing active session when showing completion view")
-                        sessionManager.clearActiveSession()
-                    }
-                }
             }
             
         }
@@ -446,6 +439,13 @@ struct SessionMapView: View {
                     dismiss()
                 }
             )
+        }
+        .onChange(of: showSessionComplete) { oldValue, newValue in
+            // When session complete sheet is dismissed, clear session
+            if !newValue && oldValue {
+                print("🗑️ SessionCompleteView dismissed, clearing session")
+                sessionManager.clearActiveSession()
+            }
         }
     }
 
