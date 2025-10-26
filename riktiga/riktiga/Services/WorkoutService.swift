@@ -45,12 +45,28 @@ class WorkoutService {
             // Create unique file name
             let fileName = "\(postId)_\(UUID().uuidString).jpg"
             
-            // Upload to Supabase Storage
-            _ = try await supabase.storage
-                .from("workout-images")
-                .upload(fileName, data: imageData)
+            print("📤 Uploading image to Supabase Storage: \(fileName)")
+            print("📊 Image size: \(imageData.count) bytes")
             
-            print("✅ Image uploaded to Supabase Storage: \(fileName)")
+            // Upload to Supabase Storage
+            do {
+                _ = try await supabase.storage
+                    .from("workout-images")
+                    .upload(fileName, data: imageData)
+                
+                print("✅ Image uploaded successfully to Supabase Storage: \(fileName)")
+            } catch {
+                print("❌ Upload failed: \(error)")
+                // If upload fails, maybe bucket doesn't exist - save locally as fallback
+                print("⚠️ Falling back to local storage...")
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                let imagesDirectory = documentsPath.appendingPathComponent("WorkoutImages")
+                try FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+                let fileURL = imagesDirectory.appendingPathComponent(fileName)
+                try imageData.write(to: fileURL)
+                print("✅ Image saved locally as fallback: \(fileURL.path)")
+                return fileURL.path
+            }
             
             // Return the public URL
             let url = try supabase.storage
@@ -62,6 +78,17 @@ class WorkoutService {
             
         } catch {
             print("❌ Error uploading image to Supabase: \(error)")
+            // Try to save locally as fallback
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let fileName = "\(postId)_\(UUID().uuidString).jpg"
+            let imagesDirectory = documentsPath.appendingPathComponent("WorkoutImages")
+            try FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+            let fileURL = imagesDirectory.appendingPathComponent(fileName)
+            if let imageData = image.jpegData(compressionQuality: 0.8) {
+                try imageData.write(to: fileURL)
+                print("✅ Image saved locally: \(fileURL.path)")
+                return fileURL.path
+            }
             throw error
         }
     }

@@ -300,32 +300,66 @@ class WorkoutPostsViewModel: ObservableObject {
 // Helper view for loading images
 struct LocalAsyncImage: View {
     let path: String
+    @State private var localImage: UIImage?
     
     var body: some View {
-        AsyncImage(url: URL(string: path)) { phase in
-            switch phase {
-            case .empty:
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 300)
-                    .overlay(ProgressView())
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: 400)
-                    .clipped()
-            case .failure:
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 300)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                            .font(.system(size: 24))
-                    )
-            @unknown default:
-                EmptyView()
+        if path.hasPrefix("http") {
+            // Remote URL
+            AsyncImage(url: URL(string: path)) { phase in
+                switch phase {
+                case .empty:
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 300)
+                        .overlay(ProgressView())
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                        .clipped()
+                case .failure:
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 300)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 24))
+                        )
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        } else if let image = localImage {
+            // Local file
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: 400)
+                .clipped()
+        } else {
+            // Loading or error
+            Rectangle()
+                .fill(Color(.systemGray5))
+                .frame(height: 300)
+                .overlay(ProgressView())
+                .onAppear {
+                    loadLocalImage()
+                }
+        }
+    }
+    
+    private func loadLocalImage() {
+        guard !path.hasPrefix("http") else { return }
+        
+        Task {
+            let fileURL = URL(fileURLWithPath: path)
+            if let imageData = try? Data(contentsOf: fileURL),
+               let uiImage = UIImage(data: imageData) {
+                await MainActor.run {
+                    self.localImage = uiImage
+                }
             }
         }
     }
