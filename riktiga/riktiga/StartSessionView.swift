@@ -6,12 +6,21 @@ import Combine
 struct StartSessionView: View {
     @State private var showActivitySelection = true
     @State private var selectedActivityType: ActivityType?
+    @StateObject private var sessionManager = SessionManager.shared
     
     var body: some View {
-        if showActivitySelection {
+        if sessionManager.hasActiveSession, let session = sessionManager.activeSession {
+            // Resume active session
+            if let activity = ActivityType(rawValue: session.activityType) {
+                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true)
+            } else {
+                // If activity type not found, show selection
+                SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+            }
+        } else if showActivitySelection {
             SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
         } else if let activity = selectedActivityType {
-            SessionMapView(activity: activity, isPresented: $showActivitySelection)
+            SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false)
         }
     }
 }
@@ -131,8 +140,10 @@ struct SelectActivityView: View {
 struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
+    let resumeSession: Bool
     @StateObject private var locationManager = LocationManager()
     @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @StateObject private var sessionManager = SessionManager.shared
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -140,6 +151,7 @@ struct SessionMapView: View {
     @State private var isRunning = false
     @State private var isPaused = false
     @State private var sessionDuration: Int = 0
+    @State private var sessionStartTime: Date?
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
     @State private var showCompletionPopup = false
