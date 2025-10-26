@@ -128,7 +128,7 @@ class WorkoutService {
             }
             
             // Create a minimal post object with only the columns that exist in the database
-            let minimalPost: [String: AnyEncodable] = [
+            var minimalPost: [String: AnyEncodable] = [
                 "id": AnyEncodable(postToSave.id),
                 "user_id": AnyEncodable(postToSave.userId),
                 "activity_type": AnyEncodable(postToSave.activityType),
@@ -136,6 +136,21 @@ class WorkoutService {
                 "description": AnyEncodable(postToSave.description ?? NSNull()),
                 "created_at": AnyEncodable(postToSave.createdAt)
             ]
+            
+            // Add image_url if it exists
+            if let imageUrl = postToSave.imageUrl {
+                minimalPost["image_url"] = AnyEncodable(imageUrl)
+            }
+            
+            // Add distance if it exists
+            if let distance = postToSave.distance {
+                minimalPost["distance"] = AnyEncodable(distance)
+            }
+            
+            // Add duration if it exists
+            if let duration = postToSave.duration {
+                minimalPost["duration"] = AnyEncodable(duration)
+            }
             
             _ = try await supabase
                 .from("workout_posts")
