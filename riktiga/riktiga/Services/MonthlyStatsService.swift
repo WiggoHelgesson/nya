@@ -26,7 +26,7 @@ class MonthlyStatsService {
             // Get data from workout_posts table
             let workoutPosts: [WorkoutPost] = try await supabase
                 .from("workout_posts")
-                .select("id, user_id, activity_type, distance, created_at")
+                .select("id, user_id, activity_type, title, distance, created_at")
                 .gte("created_at", value: startOfMonth.ISO8601Format())
                 .lte("created_at", value: endOfMonth.ISO8601Format())
                 .execute()
@@ -101,7 +101,7 @@ class MonthlyStatsService {
             // Get data from workout_posts for last month
             let workoutPosts: [WorkoutPost] = try await supabase
                 .from("workout_posts")
-                .select("id, user_id, activity_type, distance, created_at")
+                .select("id, user_id, activity_type, title, distance, created_at")
                 .gte("created_at", value: startOfLastMonth.ISO8601Format())
                 .lte("created_at", value: endOfLastMonth.ISO8601Format())
                 .execute()
