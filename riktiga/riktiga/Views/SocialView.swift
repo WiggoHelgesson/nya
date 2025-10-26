@@ -24,7 +24,8 @@ struct SocialView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
-                            ForEach(socialViewModel.posts) { post in
+                            // Show only first 5 posts
+                            ForEach(Array(socialViewModel.posts.prefix(5))) { post in
                                 SocialPostCard(post: post)
                             }
                         }
