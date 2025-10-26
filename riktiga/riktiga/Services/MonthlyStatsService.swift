@@ -48,6 +48,27 @@ class MonthlyStatsService {
             
             print("📊 Found \(golfRounds.count) golf rounds this month")
             
+            // Also fetch all users' data from workout_posts as fallback
+            let workoutPosts: [WorkoutPost] = try await supabase
+                .from("workout_posts")
+                .select("id, user_id, activity_type, title, distance, created_at")
+                .gte("created_at", value: startOfMonthStr)
+                .lte("created_at", value: endOfMonthStr)
+                .execute()
+                .value
+            
+            print("📊 Found \(workoutPosts.count) workout posts this month")
+            
+            // Group by user and sum distances (convert meters to km)
+            var userDistances: [String: Double] = [:]
+            
+            // Add workout posts data to user distances
+            for post in workoutPosts {
+                let userId = post.userId
+                let distance = post.distance ?? 0.0
+                userDistances[userId, default: 0.0] += distance
+            }
+            
             // Get data from completed_training_sessions
             struct TrainingSession: Decodable {
                 let userId: String
@@ -68,9 +89,6 @@ class MonthlyStatsService {
                 .value
             
             print("📊 Found \(trainingSessions.count) training sessions this month")
-            
-            // Group by user and sum distances (convert meters to km)
-            var userDistances: [String: Double] = [:]
             
             for round in golfRounds {
                 let userId = round.userId
