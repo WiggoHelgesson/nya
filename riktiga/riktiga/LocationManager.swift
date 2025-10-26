@@ -61,15 +61,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         
-        isTracking = true
-        startLocation = nil
-        totalDistance = 0.0
-        lastLocation = nil
-        distance = 0.0
-        locationError = nil
-        routeCoordinates = []
+        // Only reset if not already tracking
+        if !isTracking {
+            // Only reset location data when starting a new session
+            if startLocation == nil {
+                // Reset everything for a new session
+                startLocation = nil
+                totalDistance = 0.0
+                lastLocation = nil
+                distance = 0.0
+                locationError = nil
+                routeCoordinates = []
+            }
+        }
         
-        print("🚀 Starting location tracking...")
+        isTracking = true
+        
+        print("🚀 Starting/Resuming location tracking...")
         
         // Enable background updates if authorized
         enableBackgroundLocationIfAuthorized()
@@ -87,6 +95,19 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
         #endif
+    }
+    
+    // Function to start a fresh tracking session (resets everything)
+    func startNewTracking() {
+        // Reset everything for a new session
+        startLocation = nil
+        totalDistance = 0.0
+        lastLocation = nil
+        distance = 0.0
+        locationError = nil
+        routeCoordinates = []
+        
+        startTracking()
     }
     
     func stopTracking() {

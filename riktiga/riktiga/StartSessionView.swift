@@ -320,6 +320,8 @@ struct SessionMapView: View {
                         // Paused state - show Continue and End buttons
                         VStack(spacing: 12) {
                             Button(action: {
+                                // Resume tracking
+                                locationManager.startTracking()
                                 startTimer()
                                 isPaused = false
                                 isRunning = true
@@ -355,8 +357,10 @@ struct SessionMapView: View {
                                 isRunning = false
                                 isPaused = true
                             } else {
-                                // Start tracking when user presses button
-                                locationManager.startTracking()
+                                // Start tracking when user presses button for new session
+                                if !isRunning {
+                                    locationManager.startNewTracking()
+                                }
                                 startTimer()
                                 isRunning = true
                             }
