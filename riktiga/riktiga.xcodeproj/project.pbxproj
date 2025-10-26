@@ -109,7 +109,7 @@
 			fileSystemSynchronizedGroups = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 			);
-			name = riktiga;
+			name = "Up&Down";
 			packageProductDependencies = (
 				86B269AE2EAA5E2D00A4EC93 /* Auth */,
 				86B269B02EAA5E2D00A4EC93 /* Functions */,
