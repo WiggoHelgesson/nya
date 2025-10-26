@@ -5,7 +5,6 @@ struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var statisticsService = StatisticsService.shared
     private let healthKitManager = HealthKitManager.shared
-    @State private var showStartSession = false
     @State private var showRewards = false
     @State private var weeklySteps: [DailySteps] = []
     @State private var isLoadingSteps = false
@@ -120,40 +119,17 @@ struct HomeView: View {
                         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
                         .padding(.horizontal, 20)
                         
-                        // MARK: - Action Buttons
+                        // MARK: - Action Button
                         VStack(spacing: 12) {
-                            // Starta Pass Button
-                            Button(action: {
-                                showStartSession = true
-                            }) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 18, weight: .medium))
-                                    
-                                    Text("STARTA PASS")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(16)
-                                .background(Color(.systemGray5))
-                                .foregroundColor(.primary)
-                                .cornerRadius(12)
-                            }
-                            
-                            // Se Varumärken Button
+                            // Månadens Pris Button
                             Button(action: {
                                 showRewards = true
                             }) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "shippingbox.fill")
+                                    Image(systemName: "trophy.fill")
                                         .font(.system(size: 18, weight: .medium))
                                     
-                                    Text("SE VARUMÄRKEN")
+                                    Text("MÅNADENS PRIS")
                                         .font(.system(size: 16, weight: .semibold))
                                     
                                     Spacer()
@@ -238,9 +214,6 @@ struct HomeView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .sheet(isPresented: $showStartSession) {
-            StartSessionView()
         }
         .sheet(isPresented: $showRewards) {
             RewardsView()
