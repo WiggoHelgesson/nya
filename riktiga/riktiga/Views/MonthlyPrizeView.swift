@@ -70,23 +70,52 @@ struct MonthlyPrizeView: View {
                             .padding(.horizontal, 20)
                         }
                         
-                        // MARK: - Current Month Ranking
-                        VStack(spacing: 0) {
-                            ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
-                                MonthlyUserRow(
-                                    rank: index + 1,
-                                    user: user
-                                )
+                        // MARK: - Loading State
+                        if isLoading {
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                Text("Laddar topplistan...")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.vertical, 60)
+                        } else if topUsers.isEmpty {
+                            // MARK: - Empty State
+                            VStack(spacing: 16) {
+                                Image(systemName: "trophy")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.gray)
                                 
-                                if index < topUsers.count - 1 {
-                                    Divider()
-                                        .padding(.leading, 60)
+                                Text("Inga träningspass hittades")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.black)
+                                
+                                Text("Starta ditt första pass för att hamna på topplistan!")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.vertical, 60)
+                        } else {
+                            // MARK: - Current Month Ranking
+                            VStack(spacing: 0) {
+                                ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
+                                    MonthlyUserRow(
+                                        rank: index + 1,
+                                        user: user
+                                    )
+                                    
+                                    if index < topUsers.count - 1 {
+                                        Divider()
+                                            .padding(.leading, 60)
+                                    }
                                 }
                             }
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .padding(.horizontal, 20)
                         }
-                        .background(Color.white)
-                        .cornerRadius(12)
-                        .padding(.horizontal, 20)
                         
                         Spacer(minLength: 50)
                     }
