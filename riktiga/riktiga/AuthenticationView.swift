@@ -13,8 +13,8 @@ struct AuthenticationView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 16) {
-                // Bild från Xcode (Image 1)
-                Image("1")
+                // Bild från Xcode (Image 23)
+                Image("23")
                     .resizable()
                     .scaledToFit()
                     .frame(height: 160)
