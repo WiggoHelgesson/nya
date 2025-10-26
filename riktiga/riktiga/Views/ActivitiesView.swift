@@ -300,66 +300,78 @@ class WorkoutPostsViewModel: ObservableObject {
 // Helper view for loading images
 struct LocalAsyncImage: View {
     let path: String
-    @State private var localImage: UIImage?
+    @State private var image: UIImage?
     
     var body: some View {
-        if path.hasPrefix("http") {
-            // Remote URL
-            AsyncImage(url: URL(string: path)) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 300)
-                        .overlay(ProgressView())
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: 400)
-                        .clipped()
-                case .failure:
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 300)
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                                .font(.system(size: 24))
-                        )
-                @unknown default:
-                    EmptyView()
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: 400)
+                    .clipped()
+            } else if path.hasPrefix("http") {
+                // Remote URL
+                AsyncImage(url: URL(string: path)) { phase in
+                    switch phase {
+                    case .empty:
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 300)
+                            .overlay(ProgressView())
+                    case .success(let img):
+                        img
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 400)
+                            .clipped()
+                    case .failure:
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 300)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 24))
+                            )
+                    @unknown default:
+                        EmptyView()
+                    }
                 }
+            } else {
+                // Loading or error for local file
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .frame(height: 300)
+                    .overlay(ProgressView())
             }
-        } else if let image = localImage {
-            // Local file
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: 400)
-                .clipped()
-        } else {
-            // Loading or error
-            Rectangle()
-                .fill(Color(.systemGray5))
-                .frame(height: 300)
-                .overlay(ProgressView())
-                .onAppear {
-                    loadLocalImage()
-                }
+        }
+        .onAppear {
+            loadImage()
         }
     }
     
-    private func loadLocalImage() {
-        guard !path.hasPrefix("http") else { return }
+    private func loadImage() {
+        if path.hasPrefix("http") {
+            return // Will be handled by AsyncImage
+        }
         
         Task {
+            print("🔍 Attempting to load local image from: \(path)")
             let fileURL = URL(fileURLWithPath: path)
-            if let imageData = try? Data(contentsOf: fileURL),
-               let uiImage = UIImage(data: imageData) {
-                await MainActor.run {
-                    self.localImage = uiImage
+            
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                if let imageData = try? Data(contentsOf: fileURL),
+                   let uiImage = UIImage(data: imageData) {
+                    await MainActor.run {
+                        self.image = uiImage
+                        print("✅ Successfully loaded local image from: \(path)")
+                    }
+                } else {
+                    print("❌ Failed to decode image data from: \(path)")
                 }
+            } else {
+                print("❌ File does not exist at path: \(path)")
             }
         }
     }
@@ -369,3 +381,4 @@ struct LocalAsyncImage: View {
     ActivitiesView()
         .environmentObject(AuthViewModel())
 }
+
