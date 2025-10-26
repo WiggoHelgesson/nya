@@ -40,8 +40,6 @@ struct SplashScreenView: View {
                             .font(.system(size: 32, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 11)
                             .background(AppColors.brandBlue)
