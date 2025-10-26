@@ -324,10 +324,10 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
-				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to track your workouts even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to track your workouts even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass och visa din position på kartan.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track your workouts and provide accurate distance measurements.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
@@ -394,10 +394,10 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
-				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass även när appen är i bakgrunden.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to track your workouts even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to track your workouts even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Denna app behöver tillgång till din plats för att spåra dina träningspass och visa din position på kartan.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track your workouts and provide accurate distance measurements.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";

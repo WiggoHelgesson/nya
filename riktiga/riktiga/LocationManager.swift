@@ -31,6 +31,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         authorizationStatus = locationManager.authorizationStatus
     }
     
+    // Helper to safely enable background location
+    private func enableBackgroundLocationIfAuthorized() {
+        guard authorizationStatus == .authorizedAlways else { return }
+        
+        if #available(iOS 9.0, *) {
+            locationManager.allowsBackgroundLocationUpdates = true
+            print("✅ Background location updates enabled")
+        }
+    }
+    
     func requestLocationPermission() {
         // Request always authorization for background tracking
         locationManager.requestAlwaysAuthorization()
@@ -59,9 +69,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         print("🚀 Starting location tracking...")
         
+        // Enable background updates if authorized
+        enableBackgroundLocationIfAuthorized()
+        
         locationManager.startUpdatingLocation()
         
-        print("✅ Location tracking started with background updates")
+        print("✅ Location tracking started")
         
         // Fallback för simulator
         #if targetEnvironment(simulator)
@@ -174,6 +187,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         case .authorizedAlways:
             print("✅ Location access granted (always)")
+            // Enable background location updates now that we have permission
+            enableBackgroundLocationIfAuthorized()
             DispatchQueue.main.async {
                 self.locationError = nil
             }
