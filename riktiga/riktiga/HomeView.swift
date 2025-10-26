@@ -159,8 +159,17 @@ struct HomeView: View {
                                         WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
                                     }
                                 } else {
-                                    ForEach(statisticsService.weeklyStats?.dailyStats ?? [], id: \.day) { dailyStat in
-                                        WeeklyStatRow(day: dailyStat.day, distance: dailyStat.distance, isToday: dailyStat.isToday)
+                                    let dailyStats = statisticsService.weeklyStats?.dailyStats ?? []
+                                    if dailyStats.isEmpty {
+                                        // Show empty week if no data
+                                        let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+                                        ForEach(days, id: \.self) { day in
+                                            WeeklyStatRow(day: day, distance: 0.0, isToday: false)
+                                        }
+                                    } else {
+                                        ForEach(dailyStats, id: \.day) { dailyStat in
+                                            WeeklyStatRow(day: dailyStat.day, distance: dailyStat.distance, isToday: dailyStat.isToday)
+                                        }
                                     }
                                 }
                             }
@@ -190,10 +199,11 @@ struct HomeView: View {
                                         WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
                                     }
                                 } else if weeklySteps.isEmpty {
-                                    Text("Ingen stegdata tillgänglig")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                        .padding()
+                                    // Show empty week for steps
+                                    let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+                                    ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+                                        WeeklyStepsRow(date: Date(), steps: 0, dayName: day) // Use dummy date and provide day name
+                                    }
                                 } else {
                                     ForEach(weeklySteps) { dailySteps in
                                         WeeklyStepsRow(date: dailySteps.date, steps: dailySteps.steps)
@@ -328,12 +338,22 @@ struct WeeklyStatRow: View {
 struct WeeklyStepsRow: View {
     let date: Date
     let steps: Int
+    let dayNameOverride: String?
+    
+    init(date: Date, steps: Int, dayName: String? = nil) {
+        self.date = date
+        self.steps = steps
+        self.dayNameOverride = dayName
+    }
     
     private var isToday: Bool {
         Calendar.current.isDateInToday(date)
     }
     
     private var dayName: String {
+        if let override = dayNameOverride {
+            return override
+        }
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
         return formatter.string(from: date)
