@@ -78,9 +78,10 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         
-        // Accept location if accuracy is reasonable
-        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
-            print("⚠️ Poor GPS accuracy: \(location.horizontalAccuracy)m")
+        // Accept location if accuracy is reasonable (more lenient to avoid stopping tracking)
+        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 100 else {
+            print("⚠️ Poor GPS accuracy: \(location.horizontalAccuracy)m, skipping but NOT stopping tracking")
+            // Don't update location but keep tracking active
             return
         }
         

@@ -399,11 +399,21 @@ struct SessionMapView: View {
                 earnedPoints: earnedPoints,
                 isPresented: $showSessionComplete,
                 onComplete: {
+                    // Clear active session AFTER saving to completion view
+                    sessionManager.clearActiveSession()
+                    
                     // Navigate to Activities tab after saving
                     NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
                     dismiss()
                 }
             )
+        }
+        .onChange(of: showSessionComplete) { oldValue, newValue in
+            // When session complete sheet is dismissed, clear session
+            if !newValue && oldValue {
+                print("🗑️ Session completed, clearing active session")
+                sessionManager.clearActiveSession()
+            }
         }
         .onDisappear {
             stopTimer()
@@ -450,11 +460,16 @@ struct SessionMapView: View {
     }
     
     func endSession() {
+        print("🏁 Ending session...")
+        
+        // Stop timer and tracking
         stopTimer()
         locationManager.stopTracking()
         
-        // Clear active session
-        sessionManager.clearActiveSession()
+        // Save session data before showing completion
+        print("💾 Distance: \(locationManager.distance) km")
+        print("💾 Duration: \(sessionDuration) seconds")
+        print("💾 Route points: \(locationManager.routeCoordinates.count)")
         
         // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
         let basePoints = Int(locationManager.distance * 15)
@@ -466,6 +481,12 @@ struct SessionMapView: View {
             earnedPoints = basePoints
         }
         
+        print("💾 Earned points: \(earnedPoints)")
+        
+        // Clear active session AFTER showing completion
+        // (Don't clear yet - wait for completion view to dismiss)
+        
+        print("✅ Showing completion popup...")
         showCompletionPopup = true
     }
 
