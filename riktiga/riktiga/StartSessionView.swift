@@ -434,21 +434,11 @@ struct SessionMapView: View {
                 earnedPoints: earnedPoints,
                 isPresented: $showSessionComplete,
                 onComplete: {
-                    // Clear active session AFTER saving to completion view
-                    sessionManager.clearActiveSession()
-                    
                     // Navigate to Activities tab after saving
                     NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
                     dismiss()
                 }
             )
-        }
-        .onChange(of: showSessionComplete) { oldValue, newValue in
-            // When session complete sheet is dismissed, clear session
-            if !newValue && oldValue {
-                print("🗑️ Session completed, clearing active session")
-                sessionManager.clearActiveSession()
-            }
         }
     }
 
@@ -529,8 +519,9 @@ struct SessionMapView: View {
         
         print("💾 Earned points: \(earnedPoints)")
         
-        // Clear active session AFTER showing completion
-        // (Don't clear yet - wait for completion view to dismiss)
+        // Clear active session immediately when ending
+        print("🗑️ Clearing active session immediately")
+        sessionManager.clearActiveSession()
         
         print("✅ Showing completion popup...")
         showCompletionPopup = true
