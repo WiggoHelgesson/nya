@@ -75,6 +75,7 @@ struct AuthenticationView: View {
 struct LoginFormView: View {
     @State private var email = ""
     @State private var password = ""
+    @State private var isPasswordVisible = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
@@ -87,11 +88,29 @@ struct LoginFormView: View {
                 .cornerRadius(8)
                 .autocapitalization(.none)
             
-            SecureField("Lösenord", text: $password)
-                .textContentType(.password)
-                .padding(12)
-                .background(Color.white)
-                .cornerRadius(8)
+            ZStack(alignment: .trailing) {
+                if isPasswordVisible {
+                    TextField("Lösenord", text: $password)
+                        .textContentType(.password)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                } else {
+                    SecureField("Lösenord", text: $password)
+                        .textContentType(.password)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                }
+                
+                Button(action: {
+                    isPasswordVisible.toggle()
+                }) {
+                    Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
+                        .foregroundColor(.gray)
+                        .padding(.trailing, 12)
+                }
+            }
             
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
@@ -127,6 +146,8 @@ struct SignupFormView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
@@ -150,17 +171,53 @@ struct SignupFormView: View {
                 .cornerRadius(8)
                 .autocapitalization(.none)
             
-            SecureField("Lösenord", text: $password)
-                .textContentType(.newPassword)
-                .padding(12)
-                .background(Color.white)
-                .cornerRadius(8)
+            ZStack(alignment: .trailing) {
+                if isPasswordVisible {
+                    TextField("Lösenord", text: $password)
+                        .textContentType(.newPassword)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                } else {
+                    SecureField("Lösenord", text: $password)
+                        .textContentType(.newPassword)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                }
+                
+                Button(action: {
+                    isPasswordVisible.toggle()
+                }) {
+                    Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
+                        .foregroundColor(.gray)
+                        .padding(.trailing, 12)
+                }
+            }
             
-            SecureField("Bekräfta lösenord", text: $confirmPassword)
-                .textContentType(.newPassword)
-                .padding(12)
-                .background(Color.white)
-                .cornerRadius(8)
+            ZStack(alignment: .trailing) {
+                if isConfirmPasswordVisible {
+                    TextField("Bekräfta lösenord", text: $confirmPassword)
+                        .textContentType(.newPassword)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                } else {
+                    SecureField("Bekräfta lösenord", text: $confirmPassword)
+                        .textContentType(.newPassword)
+                        .padding(12)
+                        .background(Color.white)
+                        .cornerRadius(8)
+                }
+                
+                Button(action: {
+                    isConfirmPasswordVisible.toggle()
+                }) {
+                    Image(systemName: isConfirmPasswordVisible ? "eye.slash.fill" : "eye.fill")
+                        .foregroundColor(.gray)
+                        .padding(.trailing, 12)
+                }
+            }
             
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 860308202EAE82D00023EA7B /* StoreKit.framework */; };
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
@@ -19,6 +20,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		860308202EAE82D00023EA7B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		86B269892EAA2EBB00A4EC93 /* riktiga.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = riktiga.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,6 +57,7 @@
 				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
 				86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */,
 				86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */,
+				860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */,
 				86B269B72EAA5E2D00A4EC93 /* Storage in Frameworks */,
 				86B269B52EAA5E2D00A4EC93 /* Realtime in Frameworks */,
 			);
@@ -83,6 +86,7 @@
 		86B269B82EAA5E3900A4EC93 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				860308202EAE82D00023EA7B /* StoreKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -366,7 +370,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				UIBackgroundModes = "location";
+				UIBackgroundModes = location;
 				UIRequiredDeviceCapabilities = "location-services accelerometer gyroscope camera bluetooth-le";
 			};
 			name = Debug;
@@ -436,7 +440,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				UIBackgroundModes = "location";
+				UIBackgroundModes = location;
 				UIRequiredDeviceCapabilities = "location-services accelerometer gyroscope camera bluetooth-le";
 			};
 			name = Release;
