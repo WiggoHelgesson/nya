@@ -161,20 +161,18 @@ struct SessionMapView: View {
 
     var body: some View {
         ZStack {
-            // MARK: - Map Background
+            // MARK: - Map Background with route
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
                 .overlay(
-                    // Route visualization overlay
+                    // Route visualization - simple and smooth
                     GeometryReader { geometry in
                         Path { path in
                             guard locationManager.routeCoordinates.count > 1 else { return }
                             
+                            // Convert coordinates to screen points using simple mercator projection
                             for (index, coordinate) in locationManager.routeCoordinates.enumerated() {
-                                let point = CGPoint(
-                                    x: CGFloat(coordinate.longitude - region.center.longitude) * 100000 + geometry.size.width / 2,
-                                    y: CGFloat(region.center.latitude - coordinate.latitude) * 100000 + geometry.size.height / 2
-                                )
+                                let point = convertToMapPoint(coordinate, in: geometry.size)
                                 
                                 if index == 0 {
                                     path.move(to: point)
@@ -507,6 +505,25 @@ struct SessionMapView: View {
         } else {
             return String(format: "%02d:%02d", minutes, secs)
         }
+    }
+    
+    // Convert coordinate to map point for path drawing
+    func convertToMapPoint(_ coordinate: CLLocationCoordinate2D, in size: CGSize) -> CGPoint {
+        let centerLat = region.center.latitude
+        let centerLon = region.center.longitude
+        
+        // Calculate delta in meters
+        let latDelta = region.span.latitudeDelta
+        let lonDelta = region.span.longitudeDelta
+        
+        // Convert to pixels
+        let pixelsPerDegreeLat = size.height / latDelta
+        let pixelsPerDegreeLon = size.width / lonDelta
+        
+        let x = (coordinate.longitude - centerLon) * pixelsPerDegreeLon + size.width / 2
+        let y = (centerLat - coordinate.latitude) * pixelsPerDegreeLat + size.height / 2
+        
+        return CGPoint(x: x, y: y)
     }
 }
 
