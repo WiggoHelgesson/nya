@@ -19,7 +19,7 @@ struct SplashScreenView: View {
                     Spacer()
                     
                     // MARK: - Logo Image Animation
-                    Image("1")
+                    Image("23")
                         .resizable()
                         .scaledToFit()
                         .frame(height: 160)
