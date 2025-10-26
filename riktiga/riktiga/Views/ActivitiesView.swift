@@ -297,86 +297,35 @@ class WorkoutPostsViewModel: ObservableObject {
     }
 }
 
-// Helper view for loading local images
+// Helper view for loading images
 struct LocalAsyncImage: View {
     let path: String
-    @State private var image: UIImage?
-    @State private var loadError: String?
     
     var body: some View {
-        Group {
-            if path.hasPrefix("http") {
-                AsyncImage(url: URL(string: path)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: 400)
-                        .clipped()
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 300)
-                        .overlay(ProgressView())
-                }
-            } else if let image = image {
-                Image(uiImage: image)
+        AsyncImage(url: URL(string: path)) { phase in
+            switch phase {
+            case .empty:
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .frame(height: 300)
+                    .overlay(ProgressView())
+            case .success(let image):
+                image
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: 400)
                     .clipped()
-            } else {
+            case .failure:
                 Rectangle()
                     .fill(Color(.systemGray5))
                     .frame(height: 300)
                     .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                                .font(.system(size: 24))
-                            if let error = loadError {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                            }
-                        }
+                        Image(systemName: "photo")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 24))
                     )
-            }
-        }
-        .onAppear {
-            loadLocalImage()
-        }
-    }
-    
-    private func loadLocalImage() {
-        guard !path.hasPrefix("http") else { return }
-        
-        Task {
-            let fileURL = URL(fileURLWithPath: path)
-            print("🖼️ Trying to load image from: \(path)")
-            print("🖼️ Full URL: \(fileURL)")
-            
-            // Check if file exists
-            let fileExists = FileManager.default.fileExists(atPath: path)
-            print("🖼️ File exists: \(fileExists)")
-            
-            if fileExists {
-                if let imageData = try? Data(contentsOf: fileURL),
-                   let uiImage = UIImage(data: imageData) {
-                    print("✅ Successfully loaded image, size: \(uiImage.size)")
-                    await MainActor.run {
-                        self.image = uiImage
-                    }
-                } else {
-                    print("❌ Failed to create UIImage from data")
-                    await MainActor.run {
-                        self.loadError = "Could not decode image"
-                    }
-                }
-            } else {
-                print("❌ File does not exist at path: \(path)")
-                await MainActor.run {
-                    self.loadError = "File not found"
-                }
+            @unknown default:
+                EmptyView()
             }
         }
     }

@@ -42,27 +42,26 @@ class WorkoutService {
                 throw NSError(domain: "ImageConversionError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not convert image to JPEG"])
             }
             
-            // Save image locally to Documents directory
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let imagesDirectory = documentsPath.appendingPathComponent("WorkoutImages")
-            
-            // Create directory if it doesn't exist
-            try FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
-            
-            // Create file name
+            // Create unique file name
             let fileName = "\(postId)_\(UUID().uuidString).jpg"
-            let fileURL = imagesDirectory.appendingPathComponent(fileName)
             
-            // Save image to local file
-            try imageData.write(to: fileURL)
+            // Upload to Supabase Storage
+            _ = try await supabase.storage
+                .from("workout-images")
+                .upload(fileName, data: imageData)
             
-            print("✅ Image saved locally: \(fileURL.path)")
+            print("✅ Image uploaded to Supabase Storage: \(fileName)")
             
-            // Return local file path as "URL"
-            return fileURL.path
+            // Return the public URL
+            let url = try supabase.storage
+                .from("workout-images")
+                .getPublicURL(path: fileName)
+            
+            print("✅ Image public URL: \(url)")
+            return url.absoluteString
             
         } catch {
-            print("❌ Error saving image locally: \(error)")
+            print("❌ Error uploading image to Supabase: \(error)")
             throw error
         }
     }
