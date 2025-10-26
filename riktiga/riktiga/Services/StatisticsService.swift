@@ -42,7 +42,7 @@ class StatisticsService: ObservableObject {
             // Hämta workout posts från denna vecka
             let workoutPosts: [WorkoutPost] = try await supabase
                 .from("workout_posts")
-                .select("id, distance, created_at")
+                .select("id, user_id, activity_type, title, distance, duration, created_at")
                 .eq("user_id", value: userId)
                 .gte("created_at", value: startOfWeek.ISO8601Format())
                 .lte("created_at", value: endOfWeek.ISO8601Format())
@@ -114,7 +114,7 @@ class StatisticsService: ObservableObject {
             // Hämta workout posts från denna månad
             let workoutPosts: [WorkoutPost] = try await supabase
                 .from("workout_posts")
-                .select("id, distance, created_at")
+                .select("id, user_id, activity_type, title, distance, duration, created_at")
                 .eq("user_id", value: userId)
                 .gte("created_at", value: startOfMonth.ISO8601Format())
                 .lte("created_at", value: endOfMonth.ISO8601Format())
