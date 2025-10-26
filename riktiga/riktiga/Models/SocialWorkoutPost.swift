@@ -65,6 +65,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
     // Social data
     let userName: String?
     let userAvatarUrl: String?
+    let userIsPro: Bool?
+    let location: String?
+    let strokes: Int?
     let likeCount: Int?
     let commentCount: Int?
     let isLikedByCurrentUser: Bool?
@@ -81,6 +84,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case createdAt = "created_at"
         case userName = "user_name"
         case userAvatarUrl = "user_avatar_url"
+        case userIsPro = "user_is_pro"
+        case location
+        case strokes
         case likeCount = "like_count"
         case commentCount = "comment_count"
         case isLikedByCurrentUser = "is_liked_by_current_user"
@@ -104,6 +110,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         // Map social data from JOIN results
         userName = raw.profiles?.username
         userAvatarUrl = raw.profiles?.avatarUrl
+        userIsPro = nil // Will be set from profiles table
+        location = nil // Will be set if available
+        strokes = nil // Will be set if available
         
         // Map like and comment counts
         likeCount = raw.workoutPostLikes?.first?.count ?? 0
@@ -112,7 +121,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         isLikedByCurrentUser = false // Will be set separately
     }
     
-    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
+    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
         self.id = post.id
         self.userId = post.userId
         self.activityType = post.activityType
@@ -124,6 +133,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.createdAt = post.createdAt
         self.userName = userName
         self.userAvatarUrl = userAvatarUrl
+        self.userIsPro = userIsPro
+        self.location = location
+        self.strokes = strokes
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser

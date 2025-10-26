@@ -65,143 +65,138 @@ struct SocialPostCard: View {
                     image
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
                 } placeholder: {
-                    Circle()
-                        .fill(Color(.systemGray5))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .foregroundColor(.gray)
-                        )
+                    Image(systemName: "person.circle.fill")
+                        .foregroundColor(.gray)
                 }
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(post.userName ?? "Okänd användare")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black)
                     
                     Text(formatDate(post.createdAt))
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.gray)
+                    
+                    if let location = post.location {
+                        Text(location)
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                    }
                 }
                 
                 Spacer()
                 
-                // Activity type icon
-                Image(systemName: getActivityIcon(post.activityType))
-                    .font(.system(size: 18))
-                    .foregroundColor(AppColors.brandBlue)
+                Button(action: {}) {
+                    Image(systemName: "ellipsis")
+                        .foregroundColor(.black)
+                        .font(.system(size: 16))
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
             
-            // Post content
+            // Large image
+            if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
+                AsyncImage(url: URL(string: imageUrl)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                        .clipped()
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 300)
+                        .overlay(
+                            ProgressView()
+                        )
+                }
+            }
+            
+            // Content below image
             VStack(alignment: .leading, spacing: 12) {
-                // Title
-                Text(post.title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
+                // Title with PRO badge
+                HStack(spacing: 8) {
+                    Text(post.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.black)
+                    
+                    if let isPro = post.userIsPro, isPro {
+                        Text("PRO")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.yellow)
+                            .cornerRadius(4)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
                 
-                // Stats row
-                HStack(spacing: 24) {
+                // Stats row with white background
+                HStack(spacing: 0) {
                     if let distance = post.distance {
-                        HStack(spacing: 6) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.brandGreen)
+                        VStack(spacing: 6) {
+                            Text("Distans")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
                             Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.black)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
                     
                     if let duration = post.duration {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.brandBlue)
+                        if post.distance != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        
+                        VStack(spacing: 6) {
+                            Text("Tid")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
                             Text(formatDuration(duration))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.black)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                     }
                     
-                    Spacer()
+                    if let strokes = post.strokes {
+                        if post.distance != nil || post.duration != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        
+                        VStack(spacing: 6) {
+                            Text("Slag")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                            Text("\(strokes)")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
                 }
+                .background(Color.white)
+                .cornerRadius(12)
                 .padding(.horizontal, 16)
-                
-                // Description
-                if let description = post.description, !description.isEmpty {
-                    Text(description)
-                        .font(.system(size: 15))
-                        .foregroundColor(.black)
-                        .lineLimit(nil)
-                        .padding(.horizontal, 16)
-                }
-                
-                // Image if available
-                if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                    AsyncImage(url: URL(string: imageUrl)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxHeight: 300)
-                            .clipped()
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 200)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.gray)
-                                    .font(.system(size: 24))
-                            )
-                    }
-                    .padding(.horizontal, 16)
-                }
+                .padding(.bottom, 16)
             }
-            
-            // Action buttons
-            HStack(spacing: 24) {
-                // Like button
-                Button(action: {
-                    toggleLike()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .font(.system(size: 16))
-                            .foregroundColor(isLiked ? .red : .gray)
-                        
-                        Text("\(likeCount)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                // Comment button
-                Button(action: {
-                    showComments = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.left")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                        
-                        Text("\(commentCount)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
-        .background(Color.white)
+        .background(Color(.systemGray6))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
         .onAppear {

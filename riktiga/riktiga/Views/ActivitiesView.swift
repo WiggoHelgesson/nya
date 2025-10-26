@@ -167,81 +167,76 @@ struct WorkoutPostCard: View {
     let post: WorkoutPost
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header with activity icon, title and date
-            HStack {
-                Image(systemName: getActivityIcon(post.activityType))
-                    .font(.system(size: 20))
-                    .foregroundColor(AppColors.brandBlue)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(post.title)
-                        .font(.headline)
-                        .foregroundColor(.black)
-                    Text(post.activityType)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                Text(formatDate(post.createdAt))
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-            
-            // Stats row (distance, time)
-            HStack(spacing: 20) {
-                if let distance = post.distance {
-                    HStack(spacing: 4) {
-                        Image(systemName: "location.fill")
-                            .font(.caption)
-                            .foregroundColor(AppColors.brandGreen)
-                        Text(String(format: "%.2f km", distance))
-                            .font(.caption)
-                            .foregroundColor(.black)
-                    }
-                }
-                
-                if let duration = post.duration {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption)
-                            .foregroundColor(AppColors.brandBlue)
-                        Text(formatDuration(duration))
-                            .font(.caption)
-                            .foregroundColor(.black)
-                    }
-                }
-                
-                Spacer()
-            }
-            
-            // Description
-            if let description = post.description, !description.isEmpty {
-                Text(description)
-                    .font(.caption)
-                    .lineLimit(3)
-                    .foregroundColor(.gray)
-            }
-            
-            // Image if available
+        VStack(alignment: .leading, spacing: 0) {
+            // Large image
             if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                GeometryReader { geometry in
-                    OptimizedAsyncImage(
-                        url: imageUrl,
-                        width: geometry.size.width,
-                        height: 150,
-                        cornerRadius: 8
-                    )
+                AsyncImage(url: URL(string: imageUrl)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                        .clipped()
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 300)
+                        .overlay(
+                            ProgressView()
+                        )
                 }
-                .frame(height: 150)
+            }
+            
+            // Content below image
+            VStack(alignment: .leading, spacing: 12) {
+                // Title
+                Text(post.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                
+                // Stats row with white background
+                HStack(spacing: 0) {
+                    if let distance = post.distance {
+                        VStack(spacing: 6) {
+                            Text("Distans")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                            Text(String(format: "%.2f km", distance))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    
+                    if let duration = post.duration {
+                        if post.distance != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        
+                        VStack(spacing: 6) {
+                            Text("Tid")
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                            Text(formatDuration(duration))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                }
+                .background(Color.white)
+                .cornerRadius(12)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
         }
-        .padding(16)
-        .background(Color.white)
+        .background(Color(.systemGray6))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
     
     func getActivityIcon(_ activity: String) -> String {
