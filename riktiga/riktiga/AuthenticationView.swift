@@ -160,6 +160,7 @@ struct LoginFormView: View {
 
 struct SignupFormView: View {
     @State private var name = ""
+    @State private var username = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -171,6 +172,12 @@ struct SignupFormView: View {
                 .padding(12)
                 .background(Color.white)
                 .cornerRadius(8)
+            
+            TextField("Användarnamn", text: $username)
+                .padding(12)
+                .background(Color.white)
+                .cornerRadius(8)
+                .autocapitalization(.none)
             
             TextField("Email", text: $email)
                 .textContentType(.emailAddress)
@@ -199,7 +206,7 @@ struct SignupFormView: View {
             }
             
             Button(action: {
-                authViewModel.signup(name: name, email: email, password: password, confirmPassword: confirmPassword)
+                authViewModel.signup(name: name, username: username, email: email, password: password, confirmPassword: confirmPassword)
             }) {
                 if authViewModel.isLoading {
                     ProgressView()

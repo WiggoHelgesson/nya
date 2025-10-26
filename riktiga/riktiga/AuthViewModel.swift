@@ -10,6 +10,7 @@ class AuthViewModel: NSObject, ObservableObject {
     @Published var currentUser: User?
     @Published var errorMessage = ""
     @Published var isLoading = false
+    @Published var showUsernameRequiredPopup = false
     
     private let supabase = SupabaseConfig.supabase
     private var cancellables = Set<AnyCancellable>()
@@ -72,6 +73,14 @@ class AuthViewModel: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.currentUser = profile
                         self.isLoggedIn = true
+                        
+                        // Check if user has a valid username (not "Användare" or empty)
+                        let hasValidUsername = !profile.name.isEmpty && profile.name != "Användare"
+                        
+                        if !hasValidUsername {
+                            self.showUsernameRequiredPopup = true
+                        }
+                        
                         print("✅ User automatically logged in: \(profile.name)")
                     }
                 } else {
@@ -138,13 +147,18 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
-    func signup(name: String, email: String, password: String, confirmPassword: String) {
+    func signup(name: String, username: String, email: String, password: String, confirmPassword: String) {
         isLoading = true
         errorMessage = ""
         
         // Validering
         if name.isEmpty {
             errorMessage = "Namnet kan inte vara tomt"
+            isLoading = false
+            return
+        }
+        if username.isEmpty {
+            errorMessage = "Användarnamnet kan inte vara tomt"
             isLoading = false
             return
         }
@@ -180,7 +194,7 @@ class AuthViewModel: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.currentUser = User(
                             id: session.user.id.uuidString,
-                            name: name,
+                            name: username,  // Use username as the name
                             email: email
                         )
                         self.isLoggedIn = true

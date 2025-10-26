@@ -76,6 +76,10 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActivities"))) { _ in
             // TabView will handle navigation automatically
         }
+        .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
+            UsernameRequiredView()
+                .environmentObject(authViewModel)
+        }
     }
 }
 

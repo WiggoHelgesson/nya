@@ -112,4 +112,21 @@ class ProfileService {
             throw error
         }
     }
+    
+    func updateUsername(userId: String, username: String) async throws {
+        do {
+            print("🔄 Updating username for userId: \(userId), username: \(username)")
+            
+            try await supabase
+                .from("profiles")
+                .update(["username": username])
+                .eq("id", value: userId)
+                .execute()
+            
+            print("✅ Username updated successfully")
+        } catch {
+            print("❌ Error updating username: \(error)")
+            throw error
+        }
+    }
 }
