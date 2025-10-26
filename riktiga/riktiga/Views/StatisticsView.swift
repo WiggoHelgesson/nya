@@ -3,24 +3,9 @@ import SwiftUI
 struct StatisticsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    
-    // Sample data for charts
-    let weeklyData = [
-        ("Mån", 2.5),
-        ("Tis", 3.2),
-        ("Ons", 1.8),
-        ("Tor", 4.1),
-        ("Fre", 2.9),
-        ("Lör", 5.2),
-        ("Sön", 3.7)
-    ]
-    
-    let monthlyData = [
-        ("Vecka 1", 18.5),
-        ("Vecka 2", 22.3),
-        ("Vecka 3", 19.8),
-        ("Vecka 4", 25.1)
-    ]
+    @StateObject private var statisticsService = StatisticsService.shared
+    @State private var monthlyStats: MonthlyStats?
+    @State private var isLoadingMonthlyStats = false
     
     var body: some View {
         NavigationStack {
@@ -39,20 +24,23 @@ struct StatisticsView: View {
                             HStack(spacing: 20) {
                                 StatCard(
                                     title: "Denna vecka",
-                                    value: "23.2",
+                                    value: String(format: "%.1f", statisticsService.weeklyStats?.totalDistance ?? 0.0),
                                     unit: "km",
                                     color: AppColors.brandBlue
                                 )
                                 
                                 StatCard(
                                     title: "Denna månad",
-                                    value: "89.7",
+                                    value: String(format: "%.1f", monthlyStats?.totalDistance ?? 0.0),
                                     unit: "km",
                                     color: AppColors.brandGreen
                                 )
                             }
                         }
                         .padding(.top, 20)
+                        .onAppear {
+                            loadMonthlyStats()
+                        }
                         
                         // MARK: - Weekly Chart
                         VStack(alignment: .leading, spacing: 12) {
@@ -60,28 +48,42 @@ struct StatisticsView: View {
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.black)
                             
-                            VStack(spacing: 8) {
-                                ForEach(weeklyData, id: \.0) { day, distance in
-                                    HStack {
-                                        Text(day)
-                                            .font(.system(size: 14, weight: .medium))
+                            if statisticsService.isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                VStack(spacing: 8) {
+                                    let dailyStats = statisticsService.weeklyStats?.dailyStats ?? []
+                                    if dailyStats.isEmpty {
+                                        Text("Ingen aktivitet denna vecka")
+                                            .font(.system(size: 14))
                                             .foregroundColor(.gray)
-                                            .frame(width: 30, alignment: .leading)
-                                        
-                                        ZStack(alignment: .leading) {
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(Color(.systemGray5))
-                                                .frame(height: 20)
-                                            
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(AppColors.brandBlue)
-                                                .frame(width: CGFloat(distance * 10), height: 20)
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                            .padding(.vertical, 20)
+                                    } else {
+                                        ForEach(dailyStats, id: \.day) { dailyStat in
+                                            HStack {
+                                                Text(dailyStat.day)
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundColor(.gray)
+                                                    .frame(width: 30, alignment: .leading)
+                                                
+                                                ZStack(alignment: .leading) {
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .fill(Color(.systemGray5))
+                                                        .frame(height: 20)
+                                                    
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .fill(AppColors.brandBlue)
+                                                        .frame(width: CGFloat(dailyStat.distance * 10), height: 20)
+                                                }
+                                                
+                                                Text(String(format: "%.1f km", dailyStat.distance))
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.black)
+                                                    .frame(width: 50, alignment: .trailing)
+                                            }
                                         }
-                                        
-                                        Text(String(format: "%.1f km", distance))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(.black)
-                                            .frame(width: 50, alignment: .trailing)
                                     }
                                 }
                             }
@@ -96,28 +98,42 @@ struct StatisticsView: View {
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.black)
                             
-                            VStack(spacing: 8) {
-                                ForEach(monthlyData, id: \.0) { week, distance in
-                                    HStack {
-                                        Text(week)
-                                            .font(.system(size: 14, weight: .medium))
+                            if isLoadingMonthlyStats {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                VStack(spacing: 8) {
+                                    let weeklyStats = monthlyStats?.weeklyStats ?? []
+                                    if weeklyStats.isEmpty {
+                                        Text("Ingen aktivitet denna månad")
+                                            .font(.system(size: 14))
                                             .foregroundColor(.gray)
-                                            .frame(width: 60, alignment: .leading)
-                                        
-                                        ZStack(alignment: .leading) {
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(Color(.systemGray5))
-                                                .frame(height: 20)
-                                            
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(AppColors.brandGreen)
-                                                .frame(width: CGFloat(distance * 2), height: 20)
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                            .padding(.vertical, 20)
+                                    } else {
+                                        ForEach(weeklyStats, id: \.week) { weeklyStat in
+                                            HStack {
+                                                Text(weeklyStat.week)
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundColor(.gray)
+                                                    .frame(width: 60, alignment: .leading)
+                                                
+                                                ZStack(alignment: .leading) {
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .fill(Color(.systemGray5))
+                                                        .frame(height: 20)
+                                                    
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .fill(AppColors.brandGreen)
+                                                        .frame(width: CGFloat(weeklyStat.distance * 2), height: 20)
+                                                }
+                                                
+                                                Text(String(format: "%.1f km", weeklyStat.distance))
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.black)
+                                                    .frame(width: 50, alignment: .trailing)
+                                            }
                                         }
-                                        
-                                        Text(String(format: "%.1f km", distance))
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(.black)
-                                            .frame(width: 50, alignment: .trailing)
                                     }
                                 }
                             }
@@ -136,22 +152,8 @@ struct StatisticsView: View {
                                 AchievementRow(
                                     icon: "flame.fill",
                                     title: "Veckans längsta löpning",
-                                    value: "5.2 km",
+                                    value: String(format: "%.1f km", statisticsService.weeklyStats?.dailyStats.max(by: { $0.distance < $1.distance })?.distance ?? 0.0),
                                     color: AppColors.brandBlue
-                                )
-                                
-                                AchievementRow(
-                                    icon: "clock.fill",
-                                    title: "Snabbaste tempo",
-                                    value: "4:32/km",
-                                    color: AppColors.brandGreen
-                                )
-                                
-                                AchievementRow(
-                                    icon: "calendar",
-                                    title: "Aktiva dagar denna månad",
-                                    value: "18 dagar",
-                                    color: AppColors.brandYellow
                                 )
                                 
                                 AchievementRow(
@@ -179,6 +181,21 @@ struct StatisticsView: View {
                         dismiss()
                     }
                     .foregroundColor(.black)
+                }
+            }
+        }
+    }
+    
+    func loadMonthlyStats() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isLoadingMonthlyStats = true
+        
+        Task {
+            await StatisticsService.shared.fetchMonthlyStats(userId: userId) { stats in
+                DispatchQueue.main.async {
+                    self.monthlyStats = stats
+                    self.isLoadingMonthlyStats = false
                 }
             }
         }

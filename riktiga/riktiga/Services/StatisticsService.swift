@@ -100,4 +100,70 @@ class StatisticsService: ObservableObject {
             }
         }
     }
+    
+    func fetchMonthlyStats(userId: String, completion: @escaping (MonthlyStats) -> Void) async {
+        do {
+            // Hämta alla aktiviteter för användaren från denna månad
+            let calendar = Calendar.current
+            let now = Date()
+            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+            let endOfMonth = calendar.dateInterval(of: .month, for: now)?.end ?? now
+            
+            print("📊 Fetching monthly stats from \(startOfMonth) to \(endOfMonth)")
+            
+            // Hämta workout posts från denna månad
+            let workoutPosts: [WorkoutPost] = try await supabase
+                .from("workout_posts")
+                .select("id, distance, created_at")
+                .eq("user_id", value: userId)
+                .gte("created_at", value: startOfMonth.ISO8601Format())
+                .lte("created_at", value: endOfMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            print("📊 Found \(workoutPosts.count) workout posts this month")
+            
+            // Beräkna total distans
+            let totalDistance = workoutPosts.reduce(0) { $0 + ($1.distance ?? 0.0) }
+            
+            // Dela upp i veckor
+            var weeklyStats: [WeeklyStat] = []
+            let weekNumbers = calendar.component(.weekOfMonth, from: now)
+            
+            for weekNum in 1...weekNumbers {
+                let weekStart = calendar.date(byAdding: .weekOfMonth, value: weekNum - 1, to: startOfMonth) ?? startOfMonth
+                let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+                
+                let weekDistance = workoutPosts
+                    .filter { post in
+                        if let postDate = ISO8601DateFormatter().date(from: post.createdAt) {
+                            return postDate >= weekStart && postDate < weekEnd
+                        }
+                        return false
+                    }
+                    .reduce(0) { $0 + ($1.distance ?? 0.0) }
+                
+                weeklyStats.append(WeeklyStat(
+                    week: "Vecka \(weekNum)",
+                    distance: weekDistance
+                ))
+            }
+            
+            completion(MonthlyStats(totalDistance: totalDistance, weeklyStats: weeklyStats))
+            
+        } catch {
+            print("❌ Error fetching monthly stats: \(error)")
+            completion(MonthlyStats(totalDistance: 0.0, weeklyStats: []))
+        }
+    }
+}
+
+struct MonthlyStats {
+    let totalDistance: Double
+    let weeklyStats: [WeeklyStat]
+}
+
+struct WeeklyStat {
+    let week: String
+    let distance: Double
 }
