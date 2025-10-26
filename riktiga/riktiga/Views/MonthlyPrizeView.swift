@@ -70,7 +70,34 @@ struct MonthlyPrizeView: View {
                             .padding(.horizontal, 20)
                         }
                         
-                        // MARK: - Loading State
+                        // MARK: - Under Construction Message
+                        VStack(spacing: 16) {
+                            Image(systemName: "hammer.circle.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(.gray)
+                            
+                            Text("Under konstruktion")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.black)
+                            
+                            Text("Ute igen snart")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.vertical, 60)
+                        
+                        // MARK: - Loading State (hidden)
+                        if isLoading {
+                            EmptyView()
+                        } else if topUsers.isEmpty {
+                            EmptyView()
+                        } else {
+                            EmptyView()
+                        }
+                        
+                        // OLD CODE - commented out
+                        /*
                         if isLoading {
                             VStack(spacing: 16) {
                                 ProgressView()
@@ -116,6 +143,7 @@ struct MonthlyPrizeView: View {
                             .cornerRadius(12)
                             .padding(.horizontal, 20)
                         }
+                        */
                         
                         Spacer(minLength: 50)
                     }
