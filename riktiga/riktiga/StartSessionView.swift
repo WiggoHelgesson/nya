@@ -201,9 +201,9 @@ struct SessionMapView: View {
             VStack {
                 HStack {
                     Button(action: {
-                        locationManager.stopTracking()
-                        dismiss()
-                        stopTimer()
+                        // Don't stop tracking or dismiss
+                        // Just go back to home but keep session running
+                        isPresented = false
                     }) {
                         Image(systemName: "chevron.left.circle.fill")
                             .font(.system(size: 32))
@@ -413,10 +413,35 @@ struct SessionMapView: View {
 
     func startTimer() {
         isRunning = true
+        if sessionStartTime == nil {
+            sessionStartTime = Date()
+        }
+        
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             sessionDuration += 1
             updatePace()
+            
+            // Save session state every 10 seconds
+            if sessionDuration % 10 == 0 {
+                saveSessionState()
+            }
         }
+    }
+    
+    func saveSessionState() {
+        guard let startTime = sessionStartTime else { return }
+        
+        // Get route coordinates from location manager
+        let coords = locationManager.routeCoordinates
+        
+        // Save to SessionManager
+        sessionManager.saveActiveSession(
+            activityType: activity.rawValue,
+            startTime: startTime,
+            isPaused: isPaused,
+            duration: sessionDuration,
+            routeCoordinates: coords
+        )
     }
 
     func stopTimer() {
@@ -428,6 +453,10 @@ struct SessionMapView: View {
     func endSession() {
         stopTimer()
         locationManager.stopTracking()
+        
+        // Clear active session
+        sessionManager.clearActiveSession()
+        
         // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
         let basePoints = Int(locationManager.distance * 15)
         
