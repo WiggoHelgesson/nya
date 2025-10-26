@@ -223,9 +223,9 @@ struct SocialPostCard: View {
             do {
                 try await WorkoutService.shared.deleteWorkoutPost(postId: post.id)
                 print("✅ Post deleted successfully")
-                // Refresh the feed
+                // Remove post from the list immediately
                 await MainActor.run {
-                    viewModel.fetchSocialFeed(userId: authViewModel.currentUser?.id ?? "")
+                    viewModel.posts.removeAll { $0.id == post.id }
                 }
             } catch {
                 print("❌ Error deleting post: \(error)")

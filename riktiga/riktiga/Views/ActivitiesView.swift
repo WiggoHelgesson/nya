@@ -301,6 +301,7 @@ class WorkoutPostsViewModel: ObservableObject {
 struct LocalAsyncImage: View {
     let path: String
     @State private var image: UIImage?
+    @State private var loadError: String?
     
     var body: some View {
         Group {
@@ -328,9 +329,16 @@ struct LocalAsyncImage: View {
                     .fill(Color(.systemGray5))
                     .frame(height: 300)
                     .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                            .font(.system(size: 24))
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 24))
+                            if let error = loadError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                        }
                     )
             }
         }
@@ -344,10 +352,30 @@ struct LocalAsyncImage: View {
         
         Task {
             let fileURL = URL(fileURLWithPath: path)
-            if let imageData = try? Data(contentsOf: fileURL),
-               let uiImage = UIImage(data: imageData) {
-                DispatchQueue.main.async {
-                    self.image = uiImage
+            print("🖼️ Trying to load image from: \(path)")
+            print("🖼️ Full URL: \(fileURL)")
+            
+            // Check if file exists
+            let fileExists = FileManager.default.fileExists(atPath: path)
+            print("🖼️ File exists: \(fileExists)")
+            
+            if fileExists {
+                if let imageData = try? Data(contentsOf: fileURL),
+                   let uiImage = UIImage(data: imageData) {
+                    print("✅ Successfully loaded image, size: \(uiImage.size)")
+                    await MainActor.run {
+                        self.image = uiImage
+                    }
+                } else {
+                    print("❌ Failed to create UIImage from data")
+                    await MainActor.run {
+                        self.loadError = "Could not decode image"
+                    }
+                }
+            } else {
+                print("❌ File does not exist at path: \(path)")
+                await MainActor.run {
+                    self.loadError = "File not found"
                 }
             }
         }
