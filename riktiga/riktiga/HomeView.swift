@@ -256,6 +256,20 @@ struct HomeView: View {
                     authViewModel.objectWillChange.send()
                 }
             }
+            
+            // Lyssna på uppdateringar efter att en workout har sparats
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("WorkoutSaved"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                print("🔄 Workout saved, refreshing weekly stats...")
+                if let userId = authViewModel.currentUser?.id {
+                    Task {
+                        await statisticsService.fetchWeeklyStats(userId: userId)
+                    }
+                }
+            }
         }
         .onDisappear {
             NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)

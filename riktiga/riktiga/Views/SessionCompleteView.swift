@@ -228,6 +228,9 @@ struct SessionCompleteView: View {
                     }
                 }
                 
+                // Notify that workout was saved to refresh stats
+                NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
+                
                 DispatchQueue.main.async {
                     isSaving = false
                     isPresented = false
