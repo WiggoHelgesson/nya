@@ -23,25 +23,61 @@ class MonthlyStatsService {
             
             print("📅 Fetching stats from \(startOfMonth) to \(endOfMonth)")
             
-            // Get data from workout_posts table
-            let workoutPosts: [WorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select("id, user_id, activity_type, title, distance, created_at")
-                .gte("created_at", value: startOfMonth.ISO8601Format())
-                .lte("created_at", value: endOfMonth.ISO8601Format())
+            // Get data from golf_rounds
+            struct GolfRound: Decodable {
+                let userId: String
+                let distanceWalkedMeters: Double
+                
+                enum CodingKeys: String, CodingKey {
+                    case userId = "user_id"
+                    case distanceWalkedMeters = "distance_walked_meters"
+                }
+            }
+            
+            let golfRounds: [GolfRound] = try await supabase
+                .from("golf_rounds")
+                .select("user_id, distance_walked_meters")
+                .gte("start_time", value: startOfMonth.ISO8601Format())
+                .lte("start_time", value: endOfMonth.ISO8601Format())
                 .execute()
                 .value
             
-            print("📊 Found \(workoutPosts.count) workout posts this month")
+            print("📊 Found \(golfRounds.count) golf rounds this month")
             
-            // Group by user and sum distances
+            // Get data from completed_training_sessions
+            struct TrainingSession: Decodable {
+                let userId: String
+                let distanceWalkedMeters: Double
+                
+                enum CodingKeys: String, CodingKey {
+                    case userId = "user_id"
+                    case distanceWalkedMeters = "distance_walked_meters"
+                }
+            }
+            
+            let trainingSessions: [TrainingSession] = try await supabase
+                .from("completed_training_sessions")
+                .select("user_id, distance_walked_meters")
+                .gte("start_time", value: startOfMonth.ISO8601Format())
+                .lte("start_time", value: endOfMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            print("📊 Found \(trainingSessions.count) training sessions this month")
+            
+            // Group by user and sum distances (convert meters to km)
             var userDistances: [String: Double] = [:]
             
-            for post in workoutPosts {
-                let userId = post.userId
-                let distance = post.distance ?? 0.0
-                // Distance is already stored in km
-                userDistances[userId, default: 0.0] += distance
+            for round in golfRounds {
+                let userId = round.userId
+                let distance = round.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
+            }
+            
+            for session in trainingSessions {
+                let userId = session.userId
+                let distance = session.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
             // Fetch user profiles and create MonthlyUser objects
@@ -98,23 +134,57 @@ class MonthlyStatsService {
             
             print("📅 Fetching last month stats from \(startOfLastMonth) to \(endOfLastMonth)")
             
-            // Get data from workout_posts for last month
-            let workoutPosts: [WorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select("id, user_id, activity_type, title, distance, created_at")
-                .gte("created_at", value: startOfLastMonth.ISO8601Format())
-                .lte("created_at", value: endOfLastMonth.ISO8601Format())
+            // Get data from golf_rounds for last month
+            struct GolfRound: Decodable {
+                let userId: String
+                let distanceWalkedMeters: Double
+                
+                enum CodingKeys: String, CodingKey {
+                    case userId = "user_id"
+                    case distanceWalkedMeters = "distance_walked_meters"
+                }
+            }
+            
+            let golfRounds: [GolfRound] = try await supabase
+                .from("golf_rounds")
+                .select("user_id, distance_walked_meters")
+                .gte("start_time", value: startOfLastMonth.ISO8601Format())
+                .lte("start_time", value: endOfLastMonth.ISO8601Format())
                 .execute()
                 .value
             
-            // Group by user and sum distances
+            // Get data from completed_training_sessions for last month
+            struct TrainingSession: Decodable {
+                let userId: String
+                let distanceWalkedMeters: Double
+                
+                enum CodingKeys: String, CodingKey {
+                    case userId = "user_id"
+                    case distanceWalkedMeters = "distance_walked_meters"
+                }
+            }
+            
+            let trainingSessions: [TrainingSession] = try await supabase
+                .from("completed_training_sessions")
+                .select("user_id, distance_walked_meters")
+                .gte("start_time", value: startOfLastMonth.ISO8601Format())
+                .lte("start_time", value: endOfLastMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            // Group by user and sum distances (convert meters to km)
             var userDistances: [String: Double] = [:]
             
-            for post in workoutPosts {
-                let userId = post.userId
-                let distance = post.distance ?? 0.0
-                // Distance is already stored in km
-                userDistances[userId, default: 0.0] += distance
+            for round in golfRounds {
+                let userId = round.userId
+                let distance = round.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
+            }
+            
+            for session in trainingSessions {
+                let userId = session.userId
+                let distance = session.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
             // Find the user with the highest distance
