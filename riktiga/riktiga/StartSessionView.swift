@@ -422,6 +422,13 @@ struct SessionMapView: View {
                     .shadow(radius: 20)
                     .padding(40)
                 }
+                .onChange(of: showSessionComplete) { oldValue, newValue in
+                    // Clear session when completion view is shown
+                    if newValue {
+                        print("🗑️ Clearing active session when showing completion view")
+                        sessionManager.clearActiveSession()
+                    }
+                }
             }
             
         }
@@ -518,10 +525,6 @@ struct SessionMapView: View {
         }
         
         print("💾 Earned points: \(earnedPoints)")
-        
-        // Clear active session immediately when ending
-        print("🗑️ Clearing active session immediately")
-        sessionManager.clearActiveSession()
         
         print("✅ Showing completion popup...")
         showCompletionPopup = true
