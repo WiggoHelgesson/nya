@@ -170,43 +170,7 @@ struct WorkoutPostCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Large image
             if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                if imageUrl.hasPrefix("http") {
-                    // Remote URL
-                    AsyncImage(url: URL(string: imageUrl)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                ProgressView()
-                            )
-                    }
-                } else {
-                    // Local file path
-                    let fileURL = URL(fileURLWithPath: imageUrl)
-                    if let imageData = try? Data(contentsOf: fileURL),
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.gray)
-                                    .font(.system(size: 24))
-                            )
-                    }
-                }
+                LocalAsyncImage(path: imageUrl)
             }
             
             // Content below image
@@ -329,6 +293,63 @@ class WorkoutPostsViewModel: ObservableObject {
             }
         } catch {
             print("Error refreshing user posts: \(error)")
+        }
+    }
+}
+
+// Helper view for loading local images
+struct LocalAsyncImage: View {
+    let path: String
+    @State private var image: UIImage?
+    
+    var body: some View {
+        Group {
+            if path.hasPrefix("http") {
+                AsyncImage(url: URL(string: path)) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: 400)
+                        .clipped()
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 300)
+                        .overlay(ProgressView())
+                }
+            } else if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: 400)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .frame(height: 300)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 24))
+                    )
+            }
+        }
+        .onAppear {
+            loadLocalImage()
+        }
+    }
+    
+    private func loadLocalImage() {
+        guard !path.hasPrefix("http") else { return }
+        
+        Task {
+            let fileURL = URL(fileURLWithPath: path)
+            if let imageData = try? Data(contentsOf: fileURL),
+               let uiImage = UIImage(data: imageData) {
+                DispatchQueue.main.async {
+                    self.image = uiImage
+                }
+            }
         }
     }
 }

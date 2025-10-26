@@ -476,43 +476,7 @@ struct ProfileActivityCard: View {
             
             // Large image
             if let imageUrl = activity.imageUrl, !imageUrl.isEmpty {
-                if imageUrl.hasPrefix("http") {
-                    // Remote URL
-                    AsyncImage(url: URL(string: imageUrl)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                ProgressView()
-                            )
-                    }
-                } else {
-                    // Local file path
-                    let fileURL = URL(fileURLWithPath: imageUrl)
-                    if let imageData = try? Data(contentsOf: fileURL),
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.gray)
-                                    .font(.system(size: 24))
-                            )
-                    }
-                }
+                LocalAsyncImage(path: imageUrl)
             }
             
             // Content below image

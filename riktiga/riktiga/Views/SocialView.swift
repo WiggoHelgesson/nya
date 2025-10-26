@@ -54,7 +54,10 @@ struct SocialPostCard: View {
     @State private var isLiked = false
     @State private var likeCount = 0
     @State private var commentCount = 0
+    @State private var showMenu = false
+    @State private var showDeleteAlert = false
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var viewModel = SocialViewModel()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -90,10 +93,15 @@ struct SocialPostCard: View {
                 
                 Spacer()
                 
-                Button(action: {}) {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(.black)
-                        .font(.system(size: 16))
+                // Only show menu button for posts by current user
+                if post.userId == authViewModel.currentUser?.id {
+                    Button(action: {
+                        showMenu = true
+                    }) {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(.black)
+                            .font(.system(size: 16))
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -102,43 +110,7 @@ struct SocialPostCard: View {
             
             // Large image
             if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                if imageUrl.hasPrefix("http") {
-                    // Remote URL
-                    AsyncImage(url: URL(string: imageUrl)) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                ProgressView()
-                            )
-                    }
-                } else {
-                    // Local file path
-                    let fileURL = URL(fileURLWithPath: imageUrl)
-                    if let imageData = try? Data(contentsOf: fileURL),
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity, maxHeight: 400)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 300)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.gray)
-                                    .font(.system(size: 24))
-                            )
-                    }
-                }
+                LocalAsyncImage(path: imageUrl)
             }
             
             // Content below image
@@ -229,6 +201,35 @@ struct SocialPostCard: View {
         }
         .sheet(isPresented: $showComments) {
             CommentsView(postId: post.id)
+        }
+        .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
+            Button("Ta bort inlägg", role: .destructive) {
+                showDeleteAlert = true
+            }
+            Button("Avbryt", role: .cancel) {}
+        }
+        .alert("Ta bort inlägg", isPresented: $showDeleteAlert) {
+            Button("Avbryt", role: .cancel) {}
+            Button("Ta bort", role: .destructive) {
+                deletePost()
+            }
+        } message: {
+            Text("Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.")
+        }
+    }
+    
+    private func deletePost() {
+        Task {
+            do {
+                try await WorkoutService.shared.deleteWorkoutPost(postId: post.id)
+                print("✅ Post deleted successfully")
+                // Refresh the feed
+                await MainActor.run {
+                    viewModel.fetchSocialFeed(userId: authViewModel.currentUser?.id ?? "")
+                }
+            } catch {
+                print("❌ Error deleting post: \(error)")
+            }
         }
     }
     
