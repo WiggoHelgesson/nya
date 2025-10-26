@@ -5,7 +5,7 @@ struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var statisticsService = StatisticsService.shared
     private let healthKitManager = HealthKitManager.shared
-    @State private var showRewards = false
+    @State private var showMonthlyPrize = false
     @State private var weeklySteps: [DailySteps] = []
     @State private var isLoadingSteps = false
     
@@ -123,7 +123,7 @@ struct HomeView: View {
                         VStack(spacing: 12) {
                             // Månadens Pris Button
                             Button(action: {
-                                showRewards = true
+                                showMonthlyPrize = true
                             }) {
                                 HStack(spacing: 12) {
                                     Image(systemName: "trophy.fill")
@@ -225,8 +225,8 @@ struct HomeView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .sheet(isPresented: $showRewards) {
-            RewardsView()
+        .sheet(isPresented: $showMonthlyPrize) {
+            MonthlyPrizeView()
         }
         .onAppear {
             if let userId = authViewModel.currentUser?.id {
