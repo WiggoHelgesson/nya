@@ -105,9 +105,12 @@ class MonthlyStatsService {
             // Fetch user profiles and create MonthlyUser objects
             var users: [MonthlyUser] = []
             
-            for (userId, distance) in userDistances {
+            print("📊 Processing \(userDistances.count) unique users...")
+            
+            for (index, (userId, distance)) in userDistances.enumerated() {
                 // Only include users who walked at least 0.1 km (100 meters)
                 if distance >= 0.1 {
+                    print("📊 Fetching profile \(index + 1)/\(userDistances.count) for userId: \(userId)")
                     if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
                         let user = MonthlyUser(
                             id: userId,
@@ -117,6 +120,9 @@ class MonthlyStatsService {
                             isPro: profile.isProMember
                         )
                         users.append(user)
+                        print("✅ Added user: \(profile.name) with \(distance) km")
+                    } else {
+                        print("❌ Failed to fetch profile for userId: \(userId)")
                     }
                 }
             }
@@ -126,6 +132,13 @@ class MonthlyStatsService {
             let topUsers = Array(users.prefix(limit))
             
             print("✅ Fetched \(topUsers.count) top users")
+            print("📊 Total unique users with distance data: \(userDistances.count)")
+            
+            // Debug print top 20
+            for (index, user) in topUsers.enumerated() {
+                print("\(index + 1). \(user.username): \(user.distance) km")
+            }
+            
             return topUsers
             
         } catch {
