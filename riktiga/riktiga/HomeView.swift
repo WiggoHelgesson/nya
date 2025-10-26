@@ -323,7 +323,7 @@ struct WeeklyStatRow: View {
     let isToday: Bool
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(day)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(isToday ? .black : .gray)
@@ -337,7 +337,7 @@ struct WeeklyStatRow: View {
                     
                     RoundedRectangle(cornerRadius: 4)
                         .fill(isToday ? .black : Color.gray)
-                        .frame(width: distance > 0 ? geometry.size.width * (distance / 5.0) : 0, height: 8)
+                        .frame(width: min(geometry.size.width * (distance / 10.0), geometry.size.width), height: 8)
                 }
             }
             .frame(height: 8)
@@ -345,8 +345,9 @@ struct WeeklyStatRow: View {
             Text(String(format: "%.1f km", distance))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(isToday ? .black : .gray)
-                .frame(width: 50, alignment: .trailing)
+                .frame(width: 55, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -379,7 +380,7 @@ struct WeeklyStepsRow: View {
     }
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(dayName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(isToday ? .black : .gray)
@@ -393,7 +394,7 @@ struct WeeklyStepsRow: View {
                     
                     RoundedRectangle(cornerRadius: 4)
                         .fill(reachedGoal ? Color.green : Color.red)
-                        .frame(width: steps > 0 ? geometry.size.width * (CGFloat(steps) / 10000.0) : 0, height: 8)
+                        .frame(width: steps > 0 ? min(geometry.size.width * (CGFloat(steps) / 20000.0), geometry.size.width) : 0, height: 8)
                 }
             }
             .frame(height: 8)
@@ -401,8 +402,9 @@ struct WeeklyStepsRow: View {
             Text("\(steps)")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(isToday ? .black : .gray)
-                .frame(width: 50, alignment: .trailing)
+                .frame(width: 55, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
