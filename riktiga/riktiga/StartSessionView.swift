@@ -141,7 +141,7 @@ struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
     let resumeSession: Bool
-    @StateObject private var locationManager = LocationManager()
+    @ObservedObject private var locationManager = LocationManager.shared
     @StateObject private var revenueCatManager = RevenueCatManager.shared
     @StateObject private var sessionManager = SessionManager.shared
     @State private var region = MKCoordinateRegion(

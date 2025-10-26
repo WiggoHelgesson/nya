@@ -3,6 +3,8 @@ import CoreLocation
 import Combine
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    static let shared = LocationManager()
+    
     @Published var userLocation: CLLocationCoordinate2D?
     @Published var distance: Double = 0.0
     @Published var isTracking = false
