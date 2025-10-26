@@ -27,10 +27,18 @@ struct ProfileView: View {
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
                             // Profilbild - Tappable
-                            Button(action: {
-                                showImagePicker = true
-                            }) {
-                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 80)
+                            VStack(spacing: 4) {
+                                Button(action: {
+                                    showImagePicker = true
+                                }) {
+                                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 80)
+                                }
+                                
+                                Text("Tryck på bilden ovan för att byta profilbild")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 80)
                             }
                             
                             VStack(alignment: .leading, spacing: 12) {
