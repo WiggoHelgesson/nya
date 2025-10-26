@@ -21,16 +21,16 @@
 
 /* Begin PBXFileReference section */
 		860308202EAE82D00023EA7B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
-		86B269892EAA2EBB00A4EC93 /* riktiga.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = riktiga.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "riktiga" target */ = {
+		86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "Up&Down" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 86B269882EAA2EBB00A4EC93 /* riktiga */;
+			target = 86B269882EAA2EBB00A4EC93 /* Up&Down */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -38,7 +38,7 @@
 		86B2698B2EAA2EBB00A4EC93 /* riktiga */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "riktiga" target */,
+				86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "Up&Down" target */,
 			);
 			path = riktiga;
 			sourceTree = "<group>";
@@ -78,7 +78,7 @@
 		86B2698A2EAA2EBB00A4EC93 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				86B269892EAA2EBB00A4EC93 /* riktiga.app */,
+				86B269892EAA2EBB00A4EC93 /* Up&Down.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,9 +94,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		86B269882EAA2EBB00A4EC93 /* riktiga */ = {
+		86B269882EAA2EBB00A4EC93 /* Up&Down */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 86B269942EAA2EBC00A4EC93 /* Build configuration list for PBXNativeTarget "riktiga" */;
+			buildConfigurationList = 86B269942EAA2EBC00A4EC93 /* Build configuration list for PBXNativeTarget "Up&Down" */;
 			buildPhases = (
 				86B269852EAA2EBB00A4EC93 /* Sources */,
 				86B269862EAA2EBB00A4EC93 /* Frameworks */,
@@ -109,7 +109,7 @@
 			fileSystemSynchronizedGroups = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 			);
-			name = "Up&Down";
+			name = riktiga;
 			packageProductDependencies = (
 				86B269AE2EAA5E2D00A4EC93 /* Auth */,
 				86B269B02EAA5E2D00A4EC93 /* Functions */,
@@ -122,7 +122,7 @@
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
 			);
 			productName = "Up&Down";
-			productReference = 86B269892EAA2EBB00A4EC93 /* riktiga.app */;
+			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -140,7 +140,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 86B269842EAA2EBB00A4EC93 /* Build configuration list for PBXProject "riktiga" */;
+			buildConfigurationList = 86B269842EAA2EBB00A4EC93 /* Build configuration list for PBXProject "Up&Down" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -158,7 +158,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				86B269882EAA2EBB00A4EC93 /* riktiga */,
+				86B269882EAA2EBB00A4EC93 /* Up&Down */,
 			);
 		};
 /* End PBXProject section */
@@ -448,7 +448,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		86B269842EAA2EBB00A4EC93 /* Build configuration list for PBXProject "riktiga" */ = {
+		86B269842EAA2EBB00A4EC93 /* Build configuration list for PBXProject "Up&Down" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				86B269922EAA2EBC00A4EC93 /* Debug */,
@@ -457,7 +457,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		86B269942EAA2EBC00A4EC93 /* Build configuration list for PBXNativeTarget "riktiga" */ = {
+		86B269942EAA2EBC00A4EC93 /* Build configuration list for PBXNativeTarget "Up&Down" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				86B269952EAA2EBC00A4EC93 /* Debug */,
