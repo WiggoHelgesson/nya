@@ -108,6 +108,8 @@ class MonthlyStatsService {
             print("📊 Processing \(userDistances.count) unique users...")
             
             for (index, (userId, distance)) in userDistances.enumerated() {
+                print("📊 Processing user \(index + 1)/\(userDistances.count): userId=\(userId), distance=\(distance) km")
+                
                 // Only include users who walked at least 0.1 km (100 meters)
                 if distance >= 0.1 {
                     print("📊 Fetching profile \(index + 1)/\(userDistances.count) for userId: \(userId)")
@@ -124,6 +126,8 @@ class MonthlyStatsService {
                     } else {
                         print("❌ Failed to fetch profile for userId: \(userId)")
                     }
+                } else {
+                    print("⏭️ Skipping user \(userId) - distance too low: \(distance) km < 0.1 km")
                 }
             }
             
