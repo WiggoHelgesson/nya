@@ -14,26 +14,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var startLocation: CLLocation?
     private var totalDistance: Double = 0.0
     private var lastLocation: CLLocation?
-    private var filteredLocation: CLLocation?
-    private var locationBuffer: [CLLocation] = []
-    private let maxBufferSize = 5
     
     override init() {
         super.init()
         locationManager.delegate = self
-        // Use kCLLocationAccuracyHundredMeters for better battery life
-        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        locationManager.distanceFilter = 5 // Small filter for smoother tracking
-        locationManager.activityType = .fitness // Optimize for workout tracking
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.activityType = .fitness
         
         // VIKTIGT: Inte pausera uppdateringar automatiskt
         if #available(iOS 11.0, *) {
             locationManager.pausesLocationUpdatesAutomatically = false
-        }
-        
-        // Enable deferred location updates for battery optimization
-        if #available(iOS 6.0, *) {
-            locationManager.allowsBackgroundLocationUpdates = false // For better battery life
         }
         
         // Kontrollera initial authorization status
@@ -87,113 +78,51 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         
-        // Kalman-style filtering for better accuracy
-        let filtered = filterLocation(location)
+        // Accept location if accuracy is reasonable
+        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
+            print("⚠️ Poor GPS accuracy: \(location.horizontalAccuracy)m")
+            return
+        }
         
-        // Update user location
+        print("📍 GPS Update: accuracy=\(location.horizontalAccuracy)m")
+        
+        // Update user location on main thread
         DispatchQueue.main.async {
-            self.userLocation = filtered.coordinate
+            self.userLocation = location.coordinate
         }
         
         if startLocation == nil {
-            startLocation = filtered
-            lastLocation = filtered
-            filteredLocation = filtered
-            // Lägg till första punkten i rutten
+            // First location
+            startLocation = location
+            lastLocation = location
+            
+            // Add first point to route
             DispatchQueue.main.async {
-                self.routeCoordinates.append(filtered.coordinate)
+                self.routeCoordinates.append(location.coordinate)
             }
+            print("🚀 Tracking started at: \(location.coordinate)")
         } else if let lastLoc = lastLocation {
-            let newDistance = filtered.distance(from: lastLoc)
+            // Calculate distance from last location
+            let newDistance = location.distance(from: lastLoc)
             
-            // Adaptive filtering based on speed and accuracy
-            let maxJump = calculateMaxJump(from: lastLoc, to: filtered)
-            
-            if newDistance <= maxJump && newDistance > 0.5 {
+            // Accept reasonable distances (up to 100m jumps)
+            if newDistance > 0 && newDistance < 100 {
                 totalDistance += newDistance
+                
                 DispatchQueue.main.async {
                     self.distance = self.totalDistance / 1000.0
-                    // Lägg till nya punkten i rutten för smidigare linje
-                    self.routeCoordinates.append(filtered.coordinate)
+                    // Add point to route for visualization
+                    self.routeCoordinates.append(location.coordinate)
+                    print("📏 Distance updated: \(self.distance) km")
                 }
-                lastLocation = filtered
-                filteredLocation = filtered
+                
+                lastLocation = location
             } else {
-                print("⚠️ Skipped GPS reading - jump too large: \(newDistance)m (max: \(maxJump)m)")
+                print("⚠️ Skipped GPS jump: \(newDistance)m")
             }
         }
     }
     
-    // Kalman-style filtering
-    private func filterLocation(_ location: CLLocation) -> CLLocation {
-        // Filter out bad accuracy readings
-        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
-            // Return last known good location if accuracy is too poor
-            return filteredLocation ?? location
-        }
-        
-        // If no previous location, just return this one
-        guard filteredLocation != nil else {
-            locationBuffer.append(location)
-            return location
-        }
-        
-        // Add to buffer for averaging
-        locationBuffer.append(location)
-        if locationBuffer.count > maxBufferSize {
-            locationBuffer.removeFirst()
-        }
-        
-        // Calculate weighted average of recent locations
-        let filteredLat = weightedAverage(for: locationBuffer.map { $0.coordinate.latitude })
-        let filteredLon = weightedAverage(for: locationBuffer.map { $0.coordinate.longitude })
-        
-        // Create filtered location with better accuracy
-        let filtered = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: filteredLat, longitude: filteredLon),
-            altitude: location.altitude,
-            horizontalAccuracy: location.horizontalAccuracy,
-            verticalAccuracy: location.verticalAccuracy,
-            timestamp: location.timestamp
-        )
-        
-        return filtered
-    }
-    
-    // Weighted average gives more weight to recent locations
-    private func weightedAverage(for values: [Double]) -> Double {
-        guard !values.isEmpty else { return 0.0 }
-        
-        let count = Double(values.count)
-        var weightedSum: Double = 0.0
-        var weightSum: Double = 0.0
-        
-        for (index, value) in values.enumerated() {
-            let weight = Double(index + 1) / count // More recent = more weight
-            weightedSum += value * weight
-            weightSum += weight
-        }
-        
-        return weightedSum / weightSum
-    }
-    
-    // Calculate max allowed jump based on speed and accuracy
-    private func calculateMaxJump(from: CLLocation, to: CLLocation) -> Double {
-        let timeDiff = to.timestamp.timeIntervalSince(from.timestamp)
-        
-        // Calculate speed (for potential future use)
-        let _ = timeDiff > 0 ? to.distance(from: from) / timeDiff : 0
-        
-        // Estimate max realistic jump based on speed
-        // For running: ~10 m/s, for walking: ~1.4 m/s
-        let maxSpeed: Double = 12.0 // m/s (faster than Usain Bolt)
-        let estimatedMaxDistance = maxSpeed * timeDiff + 50 // Add 50m buffer
-        
-        // Also consider accuracy
-        let accuracyBuffer = min(to.horizontalAccuracy, from.horizontalAccuracy)
-        
-        return min(estimatedMaxDistance, accuracyBuffer * 2) + 50
-    }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location error: \(error.localizedDescription)")
