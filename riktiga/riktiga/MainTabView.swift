@@ -41,39 +41,60 @@ struct MainTabView: View {
                 VStack {
                     Spacer()
                     
-                    Button(action: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                            if sessionManager.hasActiveSession {
+                    // Only show button if there's an active session
+                    if sessionManager.hasActiveSession {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showResumeSession = true
-                            } else {
-                                showStartSession = true
                             }
-                        }
-                    }) {
-                        HStack {
-                            if sessionManager.hasActiveSession {
+                        }) {
+                            HStack {
                                 Image(systemName: "play.circle.fill")
                                     .font(.system(size: 18))
+                                Text("ÅTERUPPTA SESSION")
+                                    .font(.headline)
+                                    .fontWeight(.bold)
                             }
-                            Text(sessionManager.hasActiveSession ? "ÅTERUPPTA SESSION" : "STARTA PASS")
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 90)
+                    } else {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                                showStartSession = true
+                            }
+                        }) {
+                            Text("STARTA PASS")
                                 .font(.headline)
                                 .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.black, Color.gray.opacity(0.8)]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .cornerRadius(12)
+                                .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: sessionManager.hasActiveSession ? [Color.green, Color.green.opacity(0.8)] : [Color.black, Color.gray.opacity(0.8)]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 90)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 90) // Position just above TabView without touching
                 }
                 
                 // Sheet presentation handled by .sheet modifier
