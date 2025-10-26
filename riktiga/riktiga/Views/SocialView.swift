@@ -6,11 +6,20 @@ struct SocialView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
-        NavigationStack {
+            NavigationStack {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 
-                if socialViewModel.posts.isEmpty {
+                if socialViewModel.isLoading {
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .tint(AppColors.brandBlue)
+                            .scaleEffect(1.5)
+                        Text("Laddar inlägg...")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                } else if socialViewModel.posts.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 48))
@@ -425,16 +434,22 @@ struct CommentRow: View {
 
 class SocialViewModel: ObservableObject {
     @Published var posts: [SocialWorkoutPost] = []
+    @Published var isLoading: Bool = false
     
     func fetchSocialFeed(userId: String) {
+        isLoading = true
         Task {
             do {
                 let fetchedPosts = try await SocialService.shared.getSocialFeed(userId: userId)
                 await MainActor.run {
                     self.posts = fetchedPosts
+                    self.isLoading = false
                 }
             } catch {
                 print("Error fetching social feed: \(error)")
+                await MainActor.run {
+                    self.isLoading = false
+                }
             }
         }
     }
