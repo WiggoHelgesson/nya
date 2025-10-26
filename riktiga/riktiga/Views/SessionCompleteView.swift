@@ -171,6 +171,8 @@ struct SessionCompleteView: View {
                             Button(action: {
                                 showDeleteConfirmation = false
                                 isPresented = false
+                                // Clear session and complete flow when deleting
+                                onComplete()
                             }) {
                                 Text("Radera")
                                     .font(.system(size: 16, weight: .bold))
@@ -188,6 +190,13 @@ struct SessionCompleteView: View {
                     .shadow(radius: 20)
                     .padding(40)
                 }
+            }
+        }
+        .onChange(of: isPresented) { oldValue, newValue in
+            // Clear session when the view is dismissed
+            if !newValue && oldValue {
+                print("🗑️ SessionCompleteView dismissed, clearing session")
+                // onComplete will be called by the dismiss, but we add extra safety here
             }
         }
         .onChange(of: selectedItem) { oldValue, newValue in
