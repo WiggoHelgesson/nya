@@ -14,62 +14,6 @@ struct MonthlyPrizeView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // MARK: - Header
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Vinnaren får månadens pris")
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.black)
-                            
-                            Text("Se vilka som gått längst den här månaden")
-                                .font(.system(size: 16))
-                                .foregroundColor(.gray)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        
-                        // MARK: - Last Month's Winner
-                        if let winner = lastMonthWinner {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Förra månadens vinnare")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.gray)
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 16)
-                                
-                                HStack(spacing: 12) {
-                                    AsyncImage(url: URL(string: winner.avatarUrl ?? "")) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        Image(systemName: "person.circle.fill")
-                                            .font(.system(size: 50))
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(Circle())
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(winner.username)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.black)
-                                        
-                                        Text(String(format: "%.1f km", winner.distance))
-                                            .font(.system(size: 14))
-                                            .foregroundColor(.gray)
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 16)
-                            }
-                            .background(Color(.systemGray5))
-                            .cornerRadius(12)
-                            .padding(.horizontal, 20)
-                        }
-                        
                         // MARK: - Under Construction Message
                         VStack(spacing: 16) {
                             Image(systemName: "hammer.circle.fill")
