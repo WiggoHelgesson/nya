@@ -219,14 +219,24 @@ struct SignupFormView: View {
                 }
             }
             
+            // Valideringsfel
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            } else if password != confirmPassword && !password.isEmpty && !confirmPassword.isEmpty {
+                Text("Lösenorden matchar inte")
                     .foregroundColor(.red)
                     .font(.caption)
             }
             
             Button(action: {
-                authViewModel.signup(name: name, username: username, email: email, password: password, confirmPassword: confirmPassword)
+                // Validera lösenorden matchar
+                if password != confirmPassword {
+                    authViewModel.errorMessage = "Lösenorden matchar inte"
+                } else {
+                    authViewModel.signup(name: name, username: username, email: email, password: password, confirmPassword: confirmPassword)
+                }
             }) {
                 if authViewModel.isLoading {
                     ProgressView()
@@ -241,7 +251,7 @@ struct SignupFormView: View {
             .background(AppColors.brandGreen)
             .foregroundColor(.black)
             .cornerRadius(10)
-            .disabled(authViewModel.isLoading)
+            .disabled(authViewModel.isLoading || password != confirmPassword || username.isEmpty)
         }
     }
 }
