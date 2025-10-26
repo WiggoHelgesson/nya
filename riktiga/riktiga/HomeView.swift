@@ -4,8 +4,11 @@ import Combine
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var statisticsService = StatisticsService.shared
+    private let healthKitManager = HealthKitManager.shared
     @State private var showStartSession = false
     @State private var showRewards = false
+    @State private var weeklySteps: [DailySteps] = []
+    @State private var isLoadingSteps = false
     
     var body: some View {
         NavigationStack {
@@ -192,6 +195,36 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 20)
                         
+                        // MARK: - Weekly Steps Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Steg denna vecka")
+                                .font(.system(size: 20, weight: .black))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 20)
+                            
+                            VStack(spacing: 12) {
+                                if isLoadingSteps {
+                                    ForEach(0..<7) { _ in
+                                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
+                                    }
+                                } else if weeklySteps.isEmpty {
+                                    Text("Ingen stegdata tillgänglig")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                        .padding()
+                                } else {
+                                    ForEach(weeklySteps) { dailySteps in
+                                        WeeklyStepsRow(date: dailySteps.date, steps: dailySteps.steps)
+                                    }
+                                }
+                            }
+                            .padding(20)
+                            .background(Color.white)
+                            .cornerRadius(16)
+                            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                        }
+                        .padding(.horizontal, 20)
+                        
                         Spacer(minLength: 50)
                     }
                     .padding(.vertical, 12)
@@ -211,6 +244,13 @@ struct HomeView: View {
                 Task {
                     await statisticsService.fetchWeeklyStats(userId: userId)
                 }
+            }
+            
+            // Hämta stegdata från Apple Health
+            isLoadingSteps = true
+            healthKitManager.getWeeklySteps { steps in
+                weeklySteps = steps
+                isLoadingSteps = false
             }
             
             // Lyssna på profilbild uppdateringar
@@ -257,6 +297,48 @@ struct WeeklyStatRow: View {
             .frame(height: 8)
             
             Text(String(format: "%.1f km", distance))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isToday ? .black : .gray)
+                .frame(width: 50, alignment: .trailing)
+        }
+    }
+}
+
+struct WeeklyStepsRow: View {
+    let date: Date
+    let steps: Int
+    
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(date)
+    }
+    
+    private var dayName: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
+        return formatter.string(from: date)
+    }
+    
+    var body: some View {
+        HStack {
+            Text(dayName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isToday ? .black : .gray)
+                .frame(width: 30, alignment: .leading)
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray6))
+                        .frame(height: 8)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isToday ? .black : Color.gray)
+                        .frame(width: steps > 0 ? geometry.size.width * (CGFloat(steps) / 10000.0) : 0, height: 8)
+                }
+            }
+            .frame(height: 8)
+            
+            Text("\(steps)")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(isToday ? .black : .gray)
                 .frame(width: 50, alignment: .trailing)
