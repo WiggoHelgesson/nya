@@ -21,12 +21,16 @@ class MonthlyStatsService {
                 throw NSError(domain: "MonthlyStatsService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to calculate month boundaries"])
             }
             
-            print("📅 Fetching stats from \(startOfMonth) to \(endOfMonth)")
+            let startOfMonthStr = startOfMonth.ISO8601Format()
+            let endOfMonthStr = endOfMonth.ISO8601Format()
+            
+            print("📅 Current month is: \(calendar.component(.month, from: now)), year: \(calendar.component(.year, from: now))")
+            print("📅 Fetching stats from \(startOfMonthStr) to \(endOfMonthStr)")
             
             // Get data from golf_rounds
             struct GolfRound: Decodable {
                 let userId: String
-                let distanceWalkedMeters: Double
+                let distanceWalkedMeters: Double?
                 
                 enum CodingKeys: String, CodingKey {
                     case userId = "user_id"
@@ -47,7 +51,7 @@ class MonthlyStatsService {
             // Get data from completed_training_sessions
             struct TrainingSession: Decodable {
                 let userId: String
-                let distanceWalkedMeters: Double
+                let distanceWalkedMeters: Double?
                 
                 enum CodingKeys: String, CodingKey {
                     case userId = "user_id"
@@ -70,13 +74,13 @@ class MonthlyStatsService {
             
             for round in golfRounds {
                 let userId = round.userId
-                let distance = round.distanceWalkedMeters
+                let distance = round.distanceWalkedMeters ?? 0.0
                 userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
             for session in trainingSessions {
                 let userId = session.userId
-                let distance = session.distanceWalkedMeters
+                let distance = session.distanceWalkedMeters ?? 0.0
                 userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
@@ -137,7 +141,7 @@ class MonthlyStatsService {
             // Get data from golf_rounds for last month
             struct GolfRound: Decodable {
                 let userId: String
-                let distanceWalkedMeters: Double
+                let distanceWalkedMeters: Double?
                 
                 enum CodingKeys: String, CodingKey {
                     case userId = "user_id"
@@ -156,7 +160,7 @@ class MonthlyStatsService {
             // Get data from completed_training_sessions for last month
             struct TrainingSession: Decodable {
                 let userId: String
-                let distanceWalkedMeters: Double
+                let distanceWalkedMeters: Double?
                 
                 enum CodingKeys: String, CodingKey {
                     case userId = "user_id"
@@ -177,13 +181,13 @@ class MonthlyStatsService {
             
             for round in golfRounds {
                 let userId = round.userId
-                let distance = round.distanceWalkedMeters
+                let distance = round.distanceWalkedMeters ?? 0.0
                 userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
             for session in trainingSessions {
                 let userId = session.userId
-                let distance = session.distanceWalkedMeters
+                let distance = session.distanceWalkedMeters ?? 0.0
                 userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
             }
             
