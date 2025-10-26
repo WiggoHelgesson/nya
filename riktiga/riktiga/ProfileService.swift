@@ -129,4 +129,25 @@ class ProfileService {
             throw error
         }
     }
+    
+    func deleteUserAccount(userId: String) async throws {
+        do {
+            print("🗑️ Deleting user account for userId: \(userId)")
+            
+            // Ta bort användarens profil från databasen
+            try await supabase
+                .from("profiles")
+                .delete()
+                .eq("id", value: userId)
+                .execute()
+            
+            // Ta bort användaren från auth (Supabase hanterar detta automatiskt)
+            // Du kan behöva lägga till mer cleanup-hantering här beroende på dina behov
+            
+            print("✅ User account deleted successfully")
+        } catch {
+            print("❌ Error deleting user account: \(error)")
+            throw error
+        }
+    }
 }

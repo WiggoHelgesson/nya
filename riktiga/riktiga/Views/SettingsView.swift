@@ -9,6 +9,8 @@ struct SettingsView: View {
     @StateObject private var revenueCatManager = RevenueCatManager.shared
     @State private var showSubscriptionView = false
     @State private var showProManagementView = false
+    @State private var showDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
     
     var body: some View {
         NavigationStack {
@@ -141,6 +143,26 @@ struct SettingsView: View {
                     
                     Spacer()
                     
+                    // MARK: - Radera konto Button
+                    Button(action: {
+                        showDeleteAccountConfirmation = true
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.red)
+                            
+                            Text("Radera konto")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.red)
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                    }
+                    
                     // MARK: - Logga ut Button
                     Button(action: {
                         authViewModel.logout()
@@ -185,6 +207,39 @@ struct SettingsView: View {
                     await revenueCatManager.loadCustomerInfo()
                 }
             }
+            .confirmationDialog("Radera konto", isPresented: $showDeleteAccountConfirmation, titleVisibility: .visible) {
+                Button("Radera konto", role: .destructive) {
+                    Task {
+                        await deleteAccount()
+                    }
+                }
+                Button("Avbryt", role: .cancel) {}
+            } message: {
+                Text("Är du säker på att du vill radera ditt konto? Denna åtgärd kan inte ångras.")
+            }
+        }
+    }
+    
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        
+        do {
+            guard let userId = authViewModel.currentUser?.id else {
+                isDeletingAccount = false
+                return
+            }
+            
+            // Ta bort användare från databasen
+            try await ProfileService.shared.deleteUserAccount(userId: userId)
+            
+            // Logga ut användaren
+            await MainActor.run {
+                authViewModel.logout()
+                dismiss()
+            }
+        } catch {
+            print("❌ Error deleting account: \(error)")
+            isDeletingAccount = false
         }
     }
 }

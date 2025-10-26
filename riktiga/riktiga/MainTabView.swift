@@ -83,6 +83,9 @@ struct MainTabView: View {
         .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
             PaywallAfterSignupView()
                 .environmentObject(authViewModel)
+                .onDisappear {
+                    // Allow dismissal
+                }
         }
     }
 }
