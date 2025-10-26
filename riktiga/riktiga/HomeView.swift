@@ -273,6 +273,7 @@ struct HomeView: View {
         }
         .onDisappear {
             NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
+            NotificationCenter.default.removeObserver(self, name: NSNotification.Name("WorkoutSaved"), object: nil)
         }
     }
     
