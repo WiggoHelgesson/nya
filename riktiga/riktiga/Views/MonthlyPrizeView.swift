@@ -113,34 +113,20 @@ struct MonthlyPrizeView: View {
     private func loadMonthlyStats() {
         isLoading = true
         
-        // TODO: Fetch actual data from database
-        // For now, use mock data
-        
         Task {
-            // Simulate loading
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            
-            // Mock data for testing
-            topUsers = generateMockData()
-            
-            // Set last month winner (first user from data)
-            if let firstUser = topUsers.first {
-                lastMonthWinner = firstUser
+            do {
+                // Fetch top 20 users for current month
+                topUsers = try await MonthlyStatsService.shared.fetchTopMonthlyUsers(limit: 20)
+                
+                // Fetch last month's winner
+                lastMonthWinner = try await MonthlyStatsService.shared.fetchLastMonthWinner()
+                
+                isLoading = false
+            } catch {
+                print("❌ Error loading monthly stats: \(error)")
+                isLoading = false
             }
-            
-            isLoading = false
         }
-    }
-    
-    private func generateMockData() -> [MonthlyUser] {
-        return [
-            MonthlyUser(id: "1", username: "elvin.sjoman", avatarUrl: "", distance: 133.3),
-            MonthlyUser(id: "2", username: "andrew.kai", avatarUrl: "", distance: 20.6),
-            MonthlyUser(id: "3", username: "Wiggo Helgesson", avatarUrl: "", distance: 7.9, isPro: true),
-            MonthlyUser(id: "4", username: "alvinglisell", avatarUrl: "", distance: 7.3),
-            MonthlyUser(id: "5", username: "Alexandra", avatarUrl: "", distance: 6.7),
-            MonthlyUser(id: "6", username: "ingrid.brunmarker", avatarUrl: "", distance: 6.6)
-        ]
     }
 }
 
