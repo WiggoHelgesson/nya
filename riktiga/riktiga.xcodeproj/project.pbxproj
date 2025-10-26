@@ -19,7 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		86B269892EAA2EBB00A4EC93 /* riktiga.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = riktiga.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -118,7 +118,7 @@
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
 			);
 			productName = "Up&Down";
-			productReference = 86B269892EAA2EBB00A4EC93 /* riktiga.app */;
+			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
