@@ -80,6 +80,10 @@ struct MainTabView: View {
             UsernameRequiredView()
                 .environmentObject(authViewModel)
         }
+        .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
+            PaywallAfterSignupView()
+                .environmentObject(authViewModel)
+        }
     }
 }
 

@@ -11,6 +11,7 @@ class AuthViewModel: NSObject, ObservableObject {
     @Published var errorMessage = ""
     @Published var isLoading = false
     @Published var showUsernameRequiredPopup = false
+    @Published var showPaywallAfterSignup = false
     
     private let supabase = SupabaseConfig.supabase
     private var cancellables = Set<AnyCancellable>()
@@ -188,6 +189,8 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.isLoading = false
+                        // Visa paywall efter lyckad registrering
+                        self.showPaywallAfterSignup = true
                     }
                 } else {
                     // Fallback om profil inte finns
@@ -199,6 +202,8 @@ class AuthViewModel: NSObject, ObservableObject {
                         )
                         self.isLoggedIn = true
                         self.isLoading = false
+                        // Visa paywall efter lyckad registrering
+                        self.showPaywallAfterSignup = true
                     }
                 }
             } catch {
