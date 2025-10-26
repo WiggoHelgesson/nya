@@ -117,7 +117,7 @@
 				86158EAE2EACDAA400064CAA /* RevenueCat */,
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
 			);
-			productName = riktiga;
+			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* riktiga.app */;
 			productType = "com.apple.product-type.application";
 		};

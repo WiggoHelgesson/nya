@@ -1,6 +1,6 @@
 //
-//  riktigaApp.swift
-//  riktiga
+//  UpAndDownApp.swift
+//  Up&Down
 //
 //  Created by Wiggo Helgesson on 2025-10-23.
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct riktigaApp: App {
+struct UpAndDownApp: App {
     @StateObject var authViewModel = AuthViewModel()
     @State private var showSplash = true
     
