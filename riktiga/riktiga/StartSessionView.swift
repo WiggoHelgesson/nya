@@ -190,11 +190,17 @@ struct SessionMapView: View {
                     
                     // If resuming a session, load saved data
                     if resumeSession, let session = sessionManager.activeSession {
-                        print("🔄 Resuming session with duration: \(session.accumulatedDuration)s")
+                        print("🔄 Resuming session with duration: \(session.accumulatedDuration)s, distance: \(session.accumulatedDistance) km")
                         sessionDuration = session.accumulatedDuration
                         sessionStartTime = session.startTime
                         isPaused = session.isPaused
                         isRunning = !session.isPaused
+                        
+                        // Set distance from saved session
+                        locationManager.distance = session.accumulatedDistance
+                        
+                        // Calculate earned points for the current distance
+                        updateEarnedPoints()
                         
                         // Resume tracking if session was running
                         if !session.isPaused {
@@ -281,10 +287,10 @@ struct SessionMapView: View {
                     // Three Column Stats
                     HStack(spacing: 20) {
                         VStack(spacing: 4) {
-                            Text(String(format: "%.2f", locationManager.distance))
+                            Text("\(earnedPoints)")
                                 .font(.system(size: 20, weight: .black))
                                 .foregroundColor(.black)
-                            Text("Distans")
+                            Text("Poäng")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
                         }
@@ -451,11 +457,24 @@ struct SessionMapView: View {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             sessionDuration += 1
             updatePace()
+            updateEarnedPoints()
             
             // Save session state every 10 seconds
             if sessionDuration % 10 == 0 {
                 saveSessionState()
             }
+        }
+    }
+    
+    func updateEarnedPoints() {
+        // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
+        let basePoints = Int(locationManager.distance * 15)
+        
+        // PRO-medlemmar får 1.5x poäng
+        if revenueCatManager.isPremium {
+            earnedPoints = Int(Double(basePoints) * 1.5)
+        } else {
+            earnedPoints = basePoints
         }
     }
     
@@ -471,6 +490,7 @@ struct SessionMapView: View {
             startTime: startTime,
             isPaused: isPaused,
             duration: sessionDuration,
+            distance: locationManager.distance,
             routeCoordinates: coords
         )
     }

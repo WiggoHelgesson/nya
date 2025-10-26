@@ -10,6 +10,7 @@ class SessionManager: ObservableObject {
         let startTime: Date
         let isPaused: Bool
         let accumulatedDuration: Int
+        let accumulatedDistance: Double
         let routeCoordinates: [LocationCoordinate]
         
         struct LocationCoordinate: Codable {
@@ -26,12 +27,13 @@ class SessionManager: ObservableObject {
         loadActiveSession()
     }
     
-    func saveActiveSession(activityType: String, startTime: Date, isPaused: Bool, duration: Int, routeCoordinates: [CLLocationCoordinate2D]) {
+    func saveActiveSession(activityType: String, startTime: Date, isPaused: Bool, duration: Int, distance: Double, routeCoordinates: [CLLocationCoordinate2D]) {
         let session = ActiveSession(
             activityType: activityType,
             startTime: startTime,
             isPaused: isPaused,
             accumulatedDuration: duration,
+            accumulatedDistance: distance,
             routeCoordinates: routeCoordinates.map { coord in
                 ActiveSession.LocationCoordinate(
                     latitude: coord.latitude,
