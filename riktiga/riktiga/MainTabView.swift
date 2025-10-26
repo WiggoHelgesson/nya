@@ -3,7 +3,9 @@ import Combine
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var sessionManager = SessionManager.shared
     @State private var showStartSession = false
+    @State private var showResumeSession = false
     
     var body: some View {
         NavigationStack {
@@ -41,24 +43,34 @@ struct MainTabView: View {
                     
                     Button(action: {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                            showStartSession = true
+                            if sessionManager.hasActiveSession {
+                                showResumeSession = true
+                            } else {
+                                showStartSession = true
+                            }
                         }
                     }) {
-                        Text("STARTA PASS")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.black, Color.gray.opacity(0.8)]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                        HStack {
+                            if sessionManager.hasActiveSession {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 18))
+                            }
+                            Text(sessionManager.hasActiveSession ? "ÅTERUPPTA SESSION" : "STARTA PASS")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: sessionManager.hasActiveSession ? [Color.green, Color.green.opacity(0.8)] : [Color.black, Color.gray.opacity(0.8)]),
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        )
+                        .cornerRadius(12)
+                        .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 90) // Position just above TabView without touching
@@ -68,6 +80,12 @@ struct MainTabView: View {
             }
         }
         .sheet(isPresented: $showStartSession) {
+            StartSessionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
+        .sheet(isPresented: $showResumeSession) {
             StartSessionView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
