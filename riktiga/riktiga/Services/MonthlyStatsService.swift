@@ -41,8 +41,8 @@ class MonthlyStatsService {
             let golfRounds: [GolfRound] = try await supabase
                 .from("golf_rounds")
                 .select("user_id, distance_walked_meters")
-                .gte("start_time", value: startOfMonth.ISO8601Format())
-                .lte("start_time", value: endOfMonth.ISO8601Format())
+                .gte("created_at", value: startOfMonth.ISO8601Format())
+                .lte("created_at", value: endOfMonth.ISO8601Format())
                 .execute()
                 .value
             
@@ -62,8 +62,8 @@ class MonthlyStatsService {
             let trainingSessions: [TrainingSession] = try await supabase
                 .from("completed_training_sessions")
                 .select("user_id, distance_walked_meters")
-                .gte("start_time", value: startOfMonth.ISO8601Format())
-                .lte("start_time", value: endOfMonth.ISO8601Format())
+                .gte("created_at", value: startOfMonth.ISO8601Format())
+                .lte("created_at", value: endOfMonth.ISO8601Format())
                 .execute()
                 .value
             
@@ -152,8 +152,8 @@ class MonthlyStatsService {
             let golfRounds: [GolfRound] = try await supabase
                 .from("golf_rounds")
                 .select("user_id, distance_walked_meters")
-                .gte("start_time", value: startOfLastMonth.ISO8601Format())
-                .lte("start_time", value: endOfLastMonth.ISO8601Format())
+                .gte("created_at", value: startOfLastMonth.ISO8601Format())
+                .lte("created_at", value: endOfLastMonth.ISO8601Format())
                 .execute()
                 .value
             
@@ -171,8 +171,8 @@ class MonthlyStatsService {
             let trainingSessions: [TrainingSession] = try await supabase
                 .from("completed_training_sessions")
                 .select("user_id, distance_walked_meters")
-                .gte("start_time", value: startOfLastMonth.ISO8601Format())
-                .lte("start_time", value: endOfLastMonth.ISO8601Format())
+                .gte("created_at", value: startOfLastMonth.ISO8601Format())
+                .lte("created_at", value: endOfLastMonth.ISO8601Format())
                 .execute()
                 .value
             
