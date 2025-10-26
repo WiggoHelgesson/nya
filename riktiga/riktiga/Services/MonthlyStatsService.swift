@@ -23,56 +23,59 @@ class MonthlyStatsService {
             
             print("📅 Fetching stats from \(startOfMonth) to \(endOfMonth)")
             
-            // Query workout_posts for current month
-            // We'll need to sum up distances and get user stats
-            let posts: [WorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select("user_id, activity_type, distance, created_at")
-                .gte("created_at", value: startOfMonth.ISO8601Format())
-                .lte("created_at", value: endOfMonth.ISO8601Format())
+            // Get data from golf_rounds
+            let golfRounds: [GolfRound] = try await supabase
+                .from("golf_rounds")
+                .select("user_id, distance_walked_meters, date")
+                .gte("date", value: startOfMonth.ISO8601Format())
+                .lte("date", value: endOfMonth.ISO8601Format())
                 .execute()
                 .value
             
-            print("📊 Found \(posts.count) workout posts this month")
+            print("📊 Found \(golfRounds.count) golf rounds this month")
+            
+            // Get data from completed_training_sessions
+            let trainingSessions: [TrainingSession] = try await supabase
+                .from("completed_training_sessions")
+                .select("user_id, distance_walked_meters, date")
+                .gte("date", value: startOfMonth.ISO8601Format())
+                .lte("date", value: endOfMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            print("📊 Found \(trainingSessions.count) training sessions this month")
             
             // Group by user and sum distances
             var userDistances: [String: Double] = [:]
-            var userMap: [String: (username: String, avatarUrl: String?, isPro: Bool)] = [:]
             
-            for post in posts {
-                let userId = post.userId
-                
-                // Add distance (assuming distance is stored in the workout post)
-                let distance = post.distance ?? 0.0
+            for round in golfRounds {
+                let userId = round.userId
+                let distance = round.distanceWalkedMeters
                 userDistances[userId, default: 0.0] += distance
-                
-                // Fetch user info if we don't have it yet
-                if userMap[userId] == nil {
-                    if let user = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
-                        userMap[userId] = (
-                            username: user.name,
-                            avatarUrl: user.avatarUrl,
-                            isPro: user.isProMember
-                        )
-                    } else {
-                        userMap[userId] = (username: "Användare", avatarUrl: nil, isPro: false)
-                    }
-                }
             }
             
-            // Convert to MonthlyUser array and sort by distance
+            for session in trainingSessions {
+                let userId = session.userId
+                let distance = session.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance
+            }
+            
+            // Fetch user profiles and create MonthlyUser objects
             var users: [MonthlyUser] = []
             
             for (userId, distance) in userDistances {
-                if let userInfo = userMap[userId] {
-                    let user = MonthlyUser(
-                        id: userId,
-                        username: userInfo.username,
-                        avatarUrl: userInfo.avatarUrl,
-                        distance: distance,
-                        isPro: userInfo.isPro
-                    )
-                    users.append(user)
+                // Only include users who walked at least 100 meters
+                if distance >= 100.0 {
+                    if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
+                        let user = MonthlyUser(
+                            id: userId,
+                            username: profile.name,
+                            avatarUrl: profile.avatarUrl,
+                            distance: distance / 1000.0, // Convert meters to km
+                            isPro: profile.isProMember
+                        )
+                        users.append(user)
+                    }
                 }
             }
             
@@ -109,65 +112,92 @@ class MonthlyStatsService {
                 throw NSError(domain: "MonthlyStatsService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to calculate last month boundaries"])
             }
             
-            // Get top 1 user from last month
-            let users = try await fetchTopMonthlyUsers(limit: 1, startDate: startOfLastMonth, endDate: endOfLastMonth)
+            print("📅 Fetching last month stats from \(startOfLastMonth) to \(endOfLastMonth)")
             
-            return users.first
+            // Get data from golf_rounds for last month
+            let golfRounds: [GolfRound] = try await supabase
+                .from("golf_rounds")
+                .select("user_id, distance_walked_meters, date")
+                .gte("date", value: startOfLastMonth.ISO8601Format())
+                .lte("date", value: endOfLastMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            // Get data from completed_training_sessions for last month
+            let trainingSessions: [TrainingSession] = try await supabase
+                .from("completed_training_sessions")
+                .select("user_id, distance_walked_meters, date")
+                .gte("date", value: startOfLastMonth.ISO8601Format())
+                .lte("date", value: endOfLastMonth.ISO8601Format())
+                .execute()
+                .value
+            
+            // Group by user and sum distances
+            var userDistances: [String: Double] = [:]
+            
+            for round in golfRounds {
+                let userId = round.userId
+                let distance = round.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance
+            }
+            
+            for session in trainingSessions {
+                let userId = session.userId
+                let distance = session.distanceWalkedMeters
+                userDistances[userId, default: 0.0] += distance
+            }
+            
+            // Find the user with the highest distance
+            if let winnerEntry = userDistances.max(by: { $0.value < $1.value }) {
+                let userId = winnerEntry.key
+                let distance = winnerEntry.value
+                
+                if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
+                    let winner = MonthlyUser(
+                        id: userId,
+                        username: profile.name,
+                        avatarUrl: profile.avatarUrl,
+                        distance: distance / 1000.0, // Convert meters to km
+                        isPro: profile.isProMember
+                    )
+                    print("✅ Found last month winner: \(profile.name) with \(winner.distance) km")
+                    return winner
+                }
+            }
+            
+            print("ℹ️ No winner found for last month")
+            return nil
             
         } catch {
             print("❌ Error fetching last month winner: \(error)")
             return nil
         }
     }
+}
+
+// Data models
+struct GolfRound: Decodable {
+    let userId: String
+    let distanceWalkedMeters: Double
+    let date: Date
     
-    private func fetchTopMonthlyUsers(limit: Int, startDate: Date, endDate: Date) async throws -> [MonthlyUser] {
-        let posts: [WorkoutPost] = try await supabase
-            .from("workout_posts")
-            .select("user_id, activity_type, distance, created_at")
-            .gte("created_at", value: startDate.ISO8601Format())
-            .lte("created_at", value: endDate.ISO8601Format())
-            .execute()
-            .value
-        
-        // Group by user and sum distances
-        var userDistances: [String: Double] = [:]
-        var userMap: [String: (username: String, avatarUrl: String?, isPro: Bool)] = [:]
-        
-        for post in posts {
-            let userId = post.userId
-            let distance = post.distance ?? 0.0
-            userDistances[userId, default: 0.0] += distance
-            
-            if userMap[userId] == nil {
-                if let user = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
-                    userMap[userId] = (
-                        username: user.name,
-                        avatarUrl: user.avatarUrl,
-                        isPro: user.isProMember
-                    )
-                } else {
-                    userMap[userId] = (username: "Användare", avatarUrl: nil, isPro: false)
-                }
-            }
-        }
-        
-        var users: [MonthlyUser] = []
-        
-        for (userId, distance) in userDistances {
-            if let userInfo = userMap[userId] {
-                let user = MonthlyUser(
-                    id: userId,
-                    username: userInfo.username,
-                    avatarUrl: userInfo.avatarUrl,
-                    distance: distance,
-                    isPro: userInfo.isPro
-                )
-                users.append(user)
-            }
-        }
-        
-        users.sort { $0.distance > $1.distance }
-        return Array(users.prefix(limit))
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case distanceWalkedMeters = "distance_walked_meters"
+        case date
     }
 }
+
+struct TrainingSession: Decodable {
+    let userId: String
+    let distanceWalkedMeters: Double
+    let date: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case distanceWalkedMeters = "distance_walked_meters"
+        case date
+    }
+}
+
 
