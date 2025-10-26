@@ -187,6 +187,28 @@ struct SessionMapView: View {
                 .onAppear {
                     // Request location permission but DON'T start tracking yet
                     locationManager.requestLocationPermission()
+                    
+                    // If resuming a session, load saved data
+                    if resumeSession, let session = sessionManager.activeSession {
+                        print("🔄 Resuming session with duration: \(session.accumulatedDuration)s")
+                        sessionDuration = session.accumulatedDuration
+                        sessionStartTime = session.startTime
+                        isPaused = session.isPaused
+                        isRunning = !session.isPaused
+                        
+                        // Resume tracking if session was running
+                        if !session.isPaused {
+                            locationManager.startTracking()
+                            startTimer()
+                        }
+                        
+                        // Load route coordinates if available
+                        if !session.routeCoordinates.isEmpty {
+                            locationManager.routeCoordinates = session.routeCoordinates.map { coord in
+                                CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)
+                            }
+                        }
+                    }
                 }
                 .onReceive(locationManager.$userLocation) { newLocation in
                     if let location = newLocation {
@@ -198,6 +220,9 @@ struct SessionMapView: View {
             VStack {
                 HStack {
                     Button(action: {
+                        // Save session state before going back
+                        saveSessionState()
+                        
                         // Don't stop tracking or dismiss
                         // Just go back to home but keep session running
                         isPresented = false
