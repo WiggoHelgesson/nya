@@ -5,6 +5,9 @@ class SocialService {
     static let shared = SocialService()
     private let supabase = SupabaseConfig.supabase
     
+    // In-memory cache for post counts (likes and comments)
+    private var postCountsCache: [String: (likeCount: Int, commentCount: Int)] = [:]
+    
     // MARK: - Follow Functions
     
     /// Safely follow a user - only adds if not already following
@@ -26,6 +29,29 @@ class SocialService {
                     .insert(follow)
                     .execute()
                 print("✅ User followed successfully")
+                
+                // Create follow notification
+                do {
+                    let currentUser = try await supabase.auth.user()
+                    let userProfile: [UserSearchResult] = try await supabase
+                        .from("profiles")
+                        .select("username, avatar_url")
+                        .eq("id", value: currentUser.id.uuidString)
+                        .execute()
+                        .value
+                    
+                    if let profile = userProfile.first {
+                        try await NotificationService.shared.createFollowNotification(
+                            userId: followingId,
+                            followedByUserId: followerId,
+                            followedByUserName: profile.name,
+                            followedByUserAvatar: profile.avatarUrl
+                        )
+                    }
+                } catch {
+                    print("⚠️ Could not create follow notification: \(error)")
+                    // Don't fail the follow operation if notification fails
+                }
             } else {
                 print("✅ User already being followed")
             }
@@ -66,6 +92,11 @@ class SocialService {
             print("🔍 Following IDs: \(followingIds)")
             return followingIds
         } catch {
+            // Don't log cancelled requests as errors
+            if let urlError = error as? URLError, urlError.code == .cancelled {
+                print("⚠️ Following request was cancelled")
+                return []
+            }
             print("❌ Error fetching following: \(error)")
             return []
         }
@@ -186,7 +217,7 @@ class SocialService {
         }
     }
     
-    func likePost(postId: String, userId: String) async throws {
+    func likePost(postId: String, userId: String, postOwnerId: String? = nil, postTitle: String = "") async throws {
         do {
             let like = PostLike(postId: postId, userId: userId)
             _ = try await supabase
@@ -194,6 +225,34 @@ class SocialService {
                 .insert(like)
                 .execute()
             print("✅ Post liked successfully")
+            
+            // Create notification if we have post owner info
+            if let postOwnerId = postOwnerId, postOwnerId != userId {
+                do {
+                    // Fetch current user info
+                    let currentUser = try await supabase.auth.user()
+                    let userProfile: [UserSearchResult] = try await supabase
+                        .from("profiles")
+                        .select("username, avatar_url")
+                        .eq("id", value: currentUser.id.uuidString)
+                        .execute()
+                        .value
+                    
+                    if let profile = userProfile.first {
+                        try await NotificationService.shared.createLikeNotification(
+                            userId: postOwnerId,
+                            likedByUserId: userId,
+                            likedByUserName: profile.name,
+                            likedByUserAvatar: profile.avatarUrl,
+                            postId: postId,
+                            postTitle: postTitle
+                        )
+                    }
+                } catch {
+                    print("⚠️ Could not create notification: \(error)")
+                    // Don't fail the like operation if notification fails
+                }
+            }
         } catch {
             print("❌ Error liking post: \(error)")
             throw error
@@ -205,7 +264,7 @@ class SocialService {
             _ = try await supabase
                 .from("workout_post_likes")
                 .delete()
-                .eq("post_id", value: postId)
+                .eq("workout_post_id", value: postId)
                 .eq("user_id", value: userId)
                 .execute()
             print("✅ Post unliked successfully")
@@ -220,7 +279,7 @@ class SocialService {
             let likes: [PostLike] = try await supabase
                 .from("workout_post_likes")
                 .select()
-                .eq("post_id", value: postId)
+                .eq("workout_post_id", value: postId)
                 .execute()
                 .value
             
@@ -233,7 +292,7 @@ class SocialService {
     
     // MARK: - Comment Functions
     
-    func addComment(postId: String, userId: String, content: String) async throws {
+    func addComment(postId: String, userId: String, content: String, postOwnerId: String? = nil, postTitle: String = "") async throws {
         do {
             let comment = PostComment(postId: postId, userId: userId, content: content)
             _ = try await supabase
@@ -241,6 +300,35 @@ class SocialService {
                 .insert(comment)
                 .execute()
             print("✅ Comment added successfully")
+            
+            // Create notification if we have post owner info
+            if let postOwnerId = postOwnerId, postOwnerId != userId {
+                do {
+                    // Fetch current user info
+                    let currentUser = try await supabase.auth.user()
+                    let userProfile: [UserSearchResult] = try await supabase
+                        .from("profiles")
+                        .select("username, avatar_url")
+                        .eq("id", value: currentUser.id.uuidString)
+                        .execute()
+                        .value
+                    
+                    if let profile = userProfile.first {
+                        try await NotificationService.shared.createCommentNotification(
+                            userId: postOwnerId,
+                            commentedByUserId: userId,
+                            commentedByUserName: profile.name,
+                            commentedByUserAvatar: profile.avatarUrl,
+                            postId: postId,
+                            postTitle: postTitle,
+                            commentText: content
+                        )
+                    }
+                } catch {
+                    print("⚠️ Could not create notification: \(error)")
+                    // Don't fail the comment operation if notification fails
+                }
+            }
         } catch {
             print("❌ Error adding comment: \(error)")
             throw error
@@ -249,15 +337,48 @@ class SocialService {
     
     func getPostComments(postId: String) async throws -> [PostComment] {
         do {
+            // Fetch comments
             let comments: [PostComment] = try await supabase
                 .from("workout_post_comments")
                 .select()
-                .eq("post_id", value: postId)
+                .eq("workout_post_id", value: postId)
                 .order("created_at", ascending: true)
                 .execute()
                 .value
             
-            return comments
+            // Get unique user IDs from comments
+            let userIds = Array(Set(comments.map { $0.userId }))
+            
+            if userIds.isEmpty {
+                return comments
+            }
+            
+            // Fetch user data for all comment authors
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: userIds)
+                .execute()
+                .value
+            
+            // Create a map of userId to user data for quick lookup
+            let userMap = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
+            
+            // Combine comments with user data
+            let enrichedComments = comments.map { comment in
+                let user = userMap[comment.userId]
+                return PostComment(
+                    id: comment.id,
+                    postId: comment.postId,
+                    userId: comment.userId,
+                    content: comment.content,
+                    createdAt: comment.createdAt,
+                    userName: user?.name,
+                    userAvatarUrl: user?.avatarUrl
+                )
+            }
+            
+            return enrichedComments
         } catch {
             print("❌ Error fetching post comments: \(error)")
             return []
@@ -283,6 +404,101 @@ class SocialService {
         } catch {
             print("❌ Error getting all users: \(error)")
             print("❌ Error details: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
+    /// Get recommended users based on mutual friends (users that follow people you also follow)
+    func getRecommendedUsers(userId: String, limit: Int = 15) async throws -> [UserSearchResult] {
+        do {
+            print("🔍 Getting recommended users for user: \(userId)")
+            
+            // Get all users that the current user follows
+            let followingIds = try await getFollowing(userId: userId)
+            
+            if followingIds.isEmpty {
+                // If user is not following anyone, return random users
+                let allUsers: [UserSearchResult] = try await supabase
+                    .from("profiles")
+                    .select("id, username, avatar_url")
+                    .neq("id", value: userId)
+                    .not("username", operator: .is, value: "null")
+                    .limit(limit)
+                    .execute()
+                    .value
+                
+                // Exclude users already being followed
+                let alreadyFollowing = try await getFollowing(userId: userId)
+                let recommended = allUsers.filter { !alreadyFollowing.contains($0.id) }
+                
+                print("✅ Found \(recommended.count) recommended users (random)")
+                return Array(recommended.prefix(limit))
+            }
+            
+            // Get all users that follow the same people as the current user
+            // This is done by finding users whose following list overlaps with the current user's following list
+            let followingSet = Set(followingIds)
+            
+            // Get all follows where the following_id is someone the current user follows
+            let mutualFollows: [Follow] = try await supabase
+                .from("user_follows")
+                .select()
+                .in("following_id", values: Array(followingSet))
+                .neq("follower_id", value: userId)
+                .execute()
+                .value
+            
+            // Count how many mutual follows each user has
+            var mutualCounts: [String: Int] = [:]
+            for follow in mutualFollows {
+                if !followingSet.contains(follow.followerId) { // Don't count if already following them
+                    mutualCounts[follow.followerId, default: 0] += 1
+                }
+            }
+            
+            // Sort by number of mutual follows (descending)
+            let sortedUserIds = mutualCounts.sorted { $0.value > $1.value }.map { $0.key }
+            
+            // Get user details for top recommendations
+            let userIdsToFetch = Array(sortedUserIds.prefix(limit))
+            
+            if userIdsToFetch.isEmpty {
+                // Fallback: get random users if no mutual friends found
+                let allUsers: [UserSearchResult] = try await supabase
+                    .from("profiles")
+                    .select("id, username, avatar_url")
+                    .neq("id", value: userId)
+                    .not("username", operator: .is, value: "null")
+                    .limit(limit)
+                    .execute()
+                    .value
+                
+                let alreadyFollowing = try await getFollowing(userId: userId)
+                let recommended = allUsers.filter { !alreadyFollowing.contains($0.id) }
+                
+                print("✅ Found \(recommended.count) recommended users (fallback)")
+                return Array(recommended.prefix(limit))
+            }
+            
+            let recommendedUsers: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: userIdsToFetch)
+                .not("username", operator: .is, value: "null")
+                .execute()
+                .value
+            
+            // Sort to maintain order from mutualCounts
+            let sortedUsers = recommendedUsers.sorted { user1, user2 in
+                let index1 = userIdsToFetch.firstIndex(of: user1.id) ?? Int.max
+                let index2 = userIdsToFetch.firstIndex(of: user2.id) ?? Int.max
+                return index1 < index2
+            }
+            
+            print("✅ Found \(sortedUsers.count) recommended users with mutual friends")
+            return sortedUsers
+        } catch {
+            print("❌ Error getting recommended users: \(error)")
             return []
         }
     }
@@ -314,7 +530,7 @@ class SocialService {
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
         do {
-            // First get the users that the current user follows
+            // Get the users that the current user follows
             let following = try await getFollowing(userId: userId)
             
             // Include current user's ID in the list of users to fetch posts from
@@ -322,12 +538,20 @@ class SocialService {
             do {
                 let currentUser = try await supabase.auth.user()
                 userIdsToFetch.append(currentUser.id.uuidString)
+            } catch let userError as URLError {
+                if userError.code == .cancelled {
+                    print("⚠️ Current user request was cancelled")
+                    // If cancelled, still try to fetch with just following IDs
+                } else {
+                    print("⚠️ Could not get current user: \(userError)")
+                }
             } catch {
                 print("⚠️ Could not get current user: \(error)")
             }
             
             // If user doesn't follow anyone yet, still show their own posts
             if userIdsToFetch.isEmpty {
+                print("⚠️ No users to fetch posts from")
                 return []
             }
             
@@ -345,11 +569,21 @@ class SocialService {
                 .execute()
                 .value
             
-            print("✅ Fetched \(posts.count) social feed posts")
+            // Cache the counts for later use
+            for post in posts {
+                postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
+            }
+            
+            print("✅ Fetched \(posts.count) social feed posts from \(userIdsToFetch.count) users")
+            
             return posts
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // Don't throw error for cancelled requests
+            print("⚠️ Social feed request was cancelled (likely due to refresh)")
+            throw CancellationError()
         } catch {
             print("❌ Error fetching social feed: \(error)")
-            return []
+            throw error
         }
     }
 }

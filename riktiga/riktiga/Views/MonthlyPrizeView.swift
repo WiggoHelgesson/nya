@@ -14,34 +14,29 @@ struct MonthlyPrizeView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // MARK: - Under Construction Message
-                        VStack(spacing: 16) {
-                            Image(systemName: "hammer.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray)
-                            
-                            Text("Under konstruktion")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.black)
-                            
-                            Text("Ute igen snart")
-                                .font(.system(size: 14))
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.vertical, 60)
-                        
-                        // MARK: - Loading State (hidden)
-                        if isLoading {
-                            EmptyView()
-                        } else if topUsers.isEmpty {
-                            EmptyView()
-                        } else {
-                            EmptyView()
+                        // Last month's winner (if available)
+                        if let winner = lastMonthWinner {
+                            VStack(spacing: 12) {
+                                Text("Förra månadens vinnare")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 20)
+                                
+                                MonthlyUserRow(rank: 1, user: winner)
+                                    .background(Color.white)
+                                    .cornerRadius(12)
+                                    .padding(.horizontal, 20)
+                            }
                         }
                         
-                        // OLD CODE - commented out
-                        /*
+                        // Current month leaderboard
+                        Text("Topplista denna månad")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                        
                         if isLoading {
                             VStack(spacing: 16) {
                                 ProgressView()
@@ -52,16 +47,14 @@ struct MonthlyPrizeView: View {
                             }
                             .padding(.vertical, 60)
                         } else if topUsers.isEmpty {
-                            // MARK: - Empty State
+                            // Empty state
                             VStack(spacing: 16) {
                                 Image(systemName: "trophy")
                                     .font(.system(size: 60))
                                     .foregroundColor(.gray)
-                                
-                                Text("Inga träningspass hittades")
+                                Text("Inga träningspass hittades den här månaden")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(.black)
-                                
                                 Text("Starta ditt första pass för att hamna på topplistan!")
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
@@ -69,14 +62,12 @@ struct MonthlyPrizeView: View {
                             }
                             .padding(.vertical, 60)
                         } else {
-                            // MARK: - Current Month Ranking
                             VStack(spacing: 0) {
                                 ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
                                     MonthlyUserRow(
                                         rank: index + 1,
                                         user: user
                                     )
-                                    
                                     if index < topUsers.count - 1 {
                                         Divider()
                                             .padding(.leading, 60)
@@ -87,13 +78,12 @@ struct MonthlyPrizeView: View {
                             .cornerRadius(12)
                             .padding(.horizontal, 20)
                         }
-                        */
                         
                         Spacer(minLength: 50)
                     }
                 }
             }
-            .navigationTitle("")
+            .navigationTitle("Månadens pris")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -113,15 +103,10 @@ struct MonthlyPrizeView: View {
     
     private func loadMonthlyStats() {
         isLoading = true
-        
         Task {
             do {
-                // Fetch top 20 users for current month
                 topUsers = try await MonthlyStatsService.shared.fetchTopMonthlyUsers(limit: 20)
-                
-                // Fetch last month's winner
                 lastMonthWinner = try await MonthlyStatsService.shared.fetchLastMonthWinner()
-                
                 isLoading = false
             } catch {
                 print("❌ Error loading monthly stats: \(error)")

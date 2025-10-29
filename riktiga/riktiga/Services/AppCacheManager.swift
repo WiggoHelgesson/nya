@@ -16,6 +16,8 @@ class AppCacheManager: ObservableObject {
         static let followers = "cached_followers_"
         static let following = "cached_following_"
         static let userWorkouts = "cached_user_workouts_"
+        static let socialFeed = "cached_social_feed_"
+        static let weeklyStats = "cached_weekly_stats_"
         static let cacheTimestamp = "cache_timestamp_"
     }
     
@@ -25,9 +27,7 @@ class AppCacheManager: ObservableObject {
             let data = try JSONEncoder().encode(users)
             userDefaults.set(data, forKey: CacheKeys.allUsers)
             userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + CacheKeys.allUsers)
-            print("✅ Saved \(users.count) users to cache")
         } catch {
-            print("❌ Error saving users to cache: \(error)")
         }
     }
     
@@ -40,10 +40,8 @@ class AppCacheManager: ObservableObject {
         
         do {
             let users = try JSONDecoder().decode([UserSearchResult].self, from: data)
-            print("✅ Loaded \(users.count) users from cache")
             return users
         } catch {
-            print("❌ Error loading users from cache: \(error)")
             return nil
         }
     }
@@ -55,9 +53,7 @@ class AppCacheManager: ObservableObject {
             let data = try JSONEncoder().encode(followers)
             userDefaults.set(data, forKey: key)
             userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
-            print("✅ Saved \(followers.count) followers for user \(userId) to cache")
         } catch {
-            print("❌ Error saving followers to cache: \(error)")
         }
     }
     
@@ -71,10 +67,8 @@ class AppCacheManager: ObservableObject {
         
         do {
             let followers = try JSONDecoder().decode([UserSearchResult].self, from: data)
-            print("✅ Loaded \(followers.count) followers for user \(userId) from cache")
             return followers
         } catch {
-            print("❌ Error loading followers from cache: \(error)")
             return nil
         }
     }
@@ -86,9 +80,7 @@ class AppCacheManager: ObservableObject {
             let data = try JSONEncoder().encode(following)
             userDefaults.set(data, forKey: key)
             userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
-            print("✅ Saved \(following.count) following for user \(userId) to cache")
         } catch {
-            print("❌ Error saving following to cache: \(error)")
         }
     }
     
@@ -102,10 +94,8 @@ class AppCacheManager: ObservableObject {
         
         do {
             let following = try JSONDecoder().decode([UserSearchResult].self, from: data)
-            print("✅ Loaded \(following.count) following for user \(userId) from cache")
             return following
         } catch {
-            print("❌ Error loading following from cache: \(error)")
             return nil
         }
     }
@@ -117,9 +107,7 @@ class AppCacheManager: ObservableObject {
             let data = try JSONEncoder().encode(workouts)
             userDefaults.set(data, forKey: key)
             userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
-            print("✅ Saved \(workouts.count) workouts for user \(userId) to cache")
         } catch {
-            print("❌ Error saving workouts to cache: \(error)")
         }
     }
     
@@ -133,10 +121,62 @@ class AppCacheManager: ObservableObject {
         
         do {
             let workouts = try JSONDecoder().decode([WorkoutPost].self, from: data)
-            print("✅ Loaded \(workouts.count) workouts for user \(userId) from cache")
             return workouts
         } catch {
-            print("❌ Error loading workouts from cache: \(error)")
+            return nil
+        }
+    }
+    
+    // MARK: - Social Feed Cache
+    func saveSocialFeed(_ posts: [SocialWorkoutPost], userId: String) {
+        let key = CacheKeys.socialFeed + userId
+        do {
+            let data = try JSONEncoder().encode(posts)
+            userDefaults.set(data, forKey: key)
+            userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
+        } catch {
+        }
+    }
+    
+    func getCachedSocialFeed(userId: String) -> [SocialWorkoutPost]? {
+        let key = CacheKeys.socialFeed + userId
+        guard let data = userDefaults.data(forKey: key),
+              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+              Date().timeIntervalSince(timestamp) < cacheExpirationTime else {
+            return nil
+        }
+        
+        do {
+            let posts = try JSONDecoder().decode([SocialWorkoutPost].self, from: data)
+            return posts
+        } catch {
+            return nil
+        }
+    }
+    
+    // MARK: - Weekly Stats Cache
+    func saveWeeklyStats(_ stats: WeeklyStats, userId: String) {
+        let key = CacheKeys.weeklyStats + userId
+        do {
+            let data = try JSONEncoder().encode(stats)
+            userDefaults.set(data, forKey: key)
+            userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
+        } catch {
+        }
+    }
+    
+    func getCachedWeeklyStats(userId: String) -> WeeklyStats? {
+        let key = CacheKeys.weeklyStats + userId
+        guard let data = userDefaults.data(forKey: key),
+              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+              Date().timeIntervalSince(timestamp) < cacheExpirationTime else {
+            return nil
+        }
+        
+        do {
+            let stats = try JSONDecoder().decode(WeeklyStats.self, from: data)
+            return stats
+        } catch {
             return nil
         }
     }
@@ -149,7 +189,6 @@ class AppCacheManager: ObservableObject {
                 userDefaults.removeObject(forKey: key)
             }
         }
-        print("✅ Cleared all app cache")
     }
     
     func clearCacheForUser(userId: String) {
@@ -157,15 +196,18 @@ class AppCacheManager: ObservableObject {
             CacheKeys.followers + userId,
             CacheKeys.following + userId,
             CacheKeys.userWorkouts + userId,
+            CacheKeys.socialFeed + userId,
+            CacheKeys.weeklyStats + userId,
             CacheKeys.cacheTimestamp + CacheKeys.followers + userId,
             CacheKeys.cacheTimestamp + CacheKeys.following + userId,
-            CacheKeys.cacheTimestamp + CacheKeys.userWorkouts + userId
+            CacheKeys.cacheTimestamp + CacheKeys.userWorkouts + userId,
+            CacheKeys.cacheTimestamp + CacheKeys.socialFeed + userId,
+            CacheKeys.cacheTimestamp + CacheKeys.weeklyStats + userId
         ]
         
         for key in keys {
             userDefaults.removeObject(forKey: key)
         }
-        print("✅ Cleared cache for user \(userId)")
     }
     
     func isCacheValid(for key: String) -> Bool {

@@ -34,6 +34,17 @@ struct ProfileView: View {
                     }
                     .padding(.top, 20)
                     
+                    // Länk till offentlig profil
+                    if let userId = authViewModel.currentUser?.id {
+                        NavigationLink(destination: UserProfileView(userId: userId)) {
+                            Text("Visa min offentliga profil")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(AppColors.brandBlue)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.horizontal)
+                        }
+                    }
+                    
                     // Statistik
                     VStack(spacing: 12) {
                         Text("Din statistik")

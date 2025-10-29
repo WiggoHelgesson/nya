@@ -3,7 +3,7 @@ import SwiftUI
 struct StatisticsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var statisticsService = StatisticsService.shared
+    @ObservedObject private var statisticsService = StatisticsService.shared
     @State private var monthlyStats: MonthlyStats?
     @State private var isLoadingMonthlyStats = false
     

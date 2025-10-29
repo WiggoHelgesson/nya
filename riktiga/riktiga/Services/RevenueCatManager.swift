@@ -36,49 +36,60 @@ class RevenueCatManager: NSObject, ObservableObject {
     }
     
     // MARK: - Customer Info
-    @MainActor
     func loadCustomerInfo() async {
-        isLoading = true
-        errorMessage = ""
+        await MainActor.run {
+            isLoading = true
+            errorMessage = ""
+        }
         
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
-            self.customerInfo = customerInfo
-            self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
-            print("✅ Customer info loaded. Premium: \(isPremium)")
+            await MainActor.run {
+                self.customerInfo = customerInfo
+                self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
+                self.isLoading = false
+                print("✅ Customer info loaded. Premium: \(self.isPremium)")
+            }
         } catch {
-            self.errorMessage = "Failed to load customer info: \(error.localizedDescription)"
-            print("❌ Error loading customer info: \(error)")
+            await MainActor.run {
+                self.errorMessage = "Failed to load customer info: \(error.localizedDescription)"
+                self.isLoading = false
+                print("❌ Error loading customer info: \(error)")
+            }
         }
-        
-        isLoading = false
     }
     
     // MARK: - Offerings
-    @MainActor
     func loadOfferings() async {
         do {
             let offerings = try await Purchases.shared.offerings()
-            self.offerings = offerings
-            print("✅ Offerings loaded: \(offerings.all.count) packages")
+            await MainActor.run {
+                self.offerings = offerings
+                print("✅ Offerings loaded: \(offerings.all.count) packages")
+            }
         } catch {
-            self.errorMessage = "Failed to load offerings: \(error.localizedDescription)"
-            print("❌ Error loading offerings: \(error)")
+            await MainActor.run {
+                self.errorMessage = "Failed to load offerings: \(error.localizedDescription)"
+                print("❌ Error loading offerings: \(error)")
+            }
         }
     }
     
     // MARK: - Purchase Methods
-    @MainActor
     func purchasePackage(_ package: Package) async -> Bool {
-        isLoading = true
-        errorMessage = ""
+        await MainActor.run {
+            isLoading = true
+            errorMessage = ""
+        }
         
         do {
             let result = try await Purchases.shared.purchase(package: package)
             
             if !result.userCancelled {
-                self.customerInfo = result.customerInfo
-                self.isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
+                await MainActor.run {
+                    self.customerInfo = result.customerInfo
+                    self.isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
+                }
                 
                 // Update Pro status in database
                 if self.isPremium {
@@ -86,73 +97,96 @@ class RevenueCatManager: NSObject, ObservableObject {
                 }
                 
                 print("✅ Purchase successful: \(package.storeProduct.productIdentifier)")
+                
+                await MainActor.run {
+                    isLoading = false
+                }
                 return true
             } else {
                 print("ℹ️ Purchase cancelled by user")
+                await MainActor.run {
+                    isLoading = false
+                }
                 return false
             }
         } catch {
-            self.errorMessage = "Purchase failed: \(error.localizedDescription)"
+            await MainActor.run {
+                self.errorMessage = "Purchase failed: \(error.localizedDescription)"
+                self.isLoading = false
+            }
             print("❌ Purchase error: \(error)")
             return false
         }
-        
-        isLoading = false
     }
     
-    @MainActor
     func purchaseProduct(_ productId: String) async -> Bool {
-        isLoading = true
-        errorMessage = ""
+        await MainActor.run {
+            isLoading = true
+            errorMessage = ""
+        }
         
         do {
             // First get the product from offerings
             guard let offerings = offerings,
                   let product = offerings.all.values.flatMap({ $0.availablePackages }).first(where: { $0.storeProduct.productIdentifier == productId }) else {
-                self.errorMessage = "Product not found: \(productId)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.errorMessage = "Product not found: \(productId)"
+                    self.isLoading = false
+                }
                 return false
             }
             
             let result = try await Purchases.shared.purchase(package: product)
             
             if !result.userCancelled {
-                self.customerInfo = result.customerInfo
-                self.isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
+                await MainActor.run {
+                    self.customerInfo = result.customerInfo
+                    self.isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
+                    self.isLoading = false
+                }
                 print("✅ Purchase successful: \(productId)")
                 return true
             } else {
                 print("ℹ️ Purchase cancelled by user")
+                await MainActor.run {
+                    isLoading = false
+                }
                 return false
             }
         } catch {
-            self.errorMessage = "Purchase failed: \(error.localizedDescription)"
+            await MainActor.run {
+                self.errorMessage = "Purchase failed: \(error.localizedDescription)"
+                isLoading = false
+            }
             print("❌ Purchase error: \(error)")
             return false
         }
-        
-        isLoading = false
     }
     
     // MARK: - Restore Purchases
-    @MainActor
     func restorePurchases() async -> Bool {
-        isLoading = true
-        errorMessage = ""
+        await MainActor.run {
+            isLoading = true
+            errorMessage = ""
+        }
         
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
-            self.customerInfo = customerInfo
-            self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
+            await MainActor.run {
+                self.customerInfo = customerInfo
+                self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
+                self.isLoading = false
+            }
             print("✅ Purchases restored successfully")
             return true
         } catch {
-            self.errorMessage = "Restore failed: \(error.localizedDescription)"
+            await MainActor.run {
+                self.errorMessage = "Restore failed: \(error.localizedDescription)"
+                self.isLoading = false
+            }
             print("❌ Restore error: \(error)")
             return false
         }
-        
-        isLoading = false
     }
     
     // MARK: - Check Purchase Status

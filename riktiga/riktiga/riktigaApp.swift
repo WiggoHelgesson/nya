@@ -17,6 +17,18 @@ struct UpAndDownApp: App {
             if showSplash {
                 SplashScreenView()
                     .onAppear {
+                        // Ask for notifications early
+                        NotificationManager.shared.requestAuthorization { _ in
+                            // After asking, evaluate today's steps and schedule if needed
+                            HealthKitManager.shared.getStepsForDate(Date()) { steps in
+                                if steps < 10_000 {
+                                    NotificationManager.shared.scheduleDailyStepsReminder(atHour: 19, minute: 0)
+                                } else {
+                                    NotificationManager.shared.cancelDailyStepsReminder()
+                                }
+                            }
+                        }
+                        
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             withAnimation {
                                 showSplash = false

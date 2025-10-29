@@ -3,7 +3,7 @@ import RevenueCat
 
 struct ProManagementView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var showSubscriptionView = false
     @State private var isRestoring = false
     @State private var showAlert = false
@@ -27,7 +27,13 @@ struct ProManagementView: View {
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
                             
-                            if revenueCatManager.isPremium {
+                            if revenueCatManager.isLoading {
+                                VStack(spacing: 8) {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .frame(height: 16)
+                                }
+                            } else if revenueCatManager.isPremium {
                                 VStack(spacing: 8) {
                                     Text("Aktiv prenumeration")
                                         .font(.system(size: 16, weight: .medium))
@@ -191,26 +197,30 @@ struct ProManagementView: View {
                 Text(alertMessage)
             }
         }
-        .onAppear {
-            Task {
+        .task {
+            // Only load if not already loaded or loading
+            if !revenueCatManager.isLoading && revenueCatManager.customerInfo == nil {
                 await revenueCatManager.loadCustomerInfo()
             }
         }
     }
     
     private func restorePurchases() async {
-        isRestoring = true
+        await MainActor.run {
+            isRestoring = true
+        }
         
         let success = await revenueCatManager.restorePurchases()
         
-        if success {
-            alertMessage = "Köp återställda framgångsrikt!"
-        } else {
-            alertMessage = "Inga köp att återställa eller återställning misslyckades."
+        await MainActor.run {
+            if success {
+                alertMessage = "Köp återställda framgångsrikt!"
+            } else {
+                alertMessage = "Inga köp att återställa eller återställning misslyckades."
+            }
+            showAlert = true
+            isRestoring = false
         }
-        
-        showAlert = true
-        isRestoring = false
     }
     
     private func formatDate(_ date: Date?) -> String {

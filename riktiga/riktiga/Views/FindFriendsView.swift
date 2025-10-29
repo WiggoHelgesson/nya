@@ -6,6 +6,9 @@ struct FindFriendsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var findFriendsViewModel = FindFriendsViewModel()
     @State private var searchText = ""
+    @State private var recommendedUsers: [UserSearchResult] = []
+    @State private var isLoadingRecommended = false
+    @State private var recommendedFollowingStatus: [String: Bool] = [:]
     
     var body: some View {
         NavigationStack {
@@ -32,66 +35,107 @@ struct FindFriendsView: View {
                 .padding(.top, 16)
                 
                 // Results
-                if findFriendsViewModel.isLoading {
-                    Spacer()
-                    ProgressView("Söker...")
-                        .foregroundColor(.gray)
-                    Spacer()
-                } else if findFriendsViewModel.searchResults.isEmpty && !searchText.isEmpty {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.crop.circle.badge.questionmark")
-                            .font(.system(size: 48))
+                if !searchText.isEmpty {
+                    // Show search results when searching
+                    if findFriendsViewModel.isLoading {
+                        Spacer()
+                        ProgressView("Söker...")
                             .foregroundColor(.gray)
-                        Text("Inga användare hittades")
-                            .font(.headline)
-                        Text("Prova att söka efter ett annat namn")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    Spacer()
-                } else if findFriendsViewModel.searchResults.isEmpty {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("Hitta dina vänner")
-                            .font(.headline)
-                        Text("Sök efter namn för att hitta användare att följa")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                    }
-                    Spacer()
-                } else {
-                    // Show cache indicator if using cached data
-                    if findFriendsViewModel.isUsingCache {
-                        HStack {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .foregroundColor(.blue)
-                            Text("Visar sparad data")
+                        Spacer()
+                    } else if findFriendsViewModel.searchResults.isEmpty {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.badge.questionmark")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            Text("Inga användare hittades")
+                                .font(.headline)
+                            Text("Prova att söka efter ett annat namn")
                                 .font(.caption)
-                                .foregroundColor(.blue)
-                            Spacer()
+                                .foregroundColor(.gray)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                    }
-                    
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(findFriendsViewModel.searchResults) { user in
-                                UserSearchCard(
-                                    user: user,
-                                    isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
-                                    onFollowToggle: {
-                                        toggleFollow(userId: user.id)
-                                    }
-                                )
+                        Spacer()
+                    } else {
+                        // Show cache indicator if using cached data
+                        if findFriendsViewModel.isUsingCache {
+                            HStack {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundColor(.blue)
+                                Text("Visar sparad data")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                                Spacer()
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                        }
+                        
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(findFriendsViewModel.searchResults) { user in
+                                    UserSearchCard(
+                                        user: user,
+                                        isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
+                                        onFollowToggle: {
+                                            toggleFollow(userId: user.id)
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(16)
+                        }
+                    }
+                } else {
+                    // Show recommended users when search is empty
+                    if isLoadingRecommended {
+                        Spacer()
+                        ProgressView("Laddar rekommendationer...")
+                            .foregroundColor(.gray)
+                        Spacer()
+                    } else if recommendedUsers.isEmpty {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.2.fill")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            Text("Rekommenderade vänner")
+                                .font(.headline)
+                            Text("Vi laddar förslag baserat på gemensamma vänner...")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
                         }
                         .padding(16)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Rekommenderade vänner")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                    
+                                    Text("Baserat på gemensamma vänner")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 16)
+                                .padding(.bottom, 8)
+                                
+                                ForEach(recommendedUsers) { user in
+                                    UserSearchCard(
+                                        user: user,
+                                        isFollowing: recommendedFollowingStatus[user.id] ?? false,
+                                        onFollowToggle: {
+                                            toggleRecommendedFollow(userId: user.id)
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.bottom, 16)
+                        }
                     }
                 }
             }
@@ -102,6 +146,38 @@ struct FindFriendsView: View {
                     Button("Stäng") {
                         dismiss()
                     }
+                }
+            }
+            .onAppear {
+                loadRecommendedUsers()
+            }
+        }
+    }
+    
+    private func loadRecommendedUsers() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isLoadingRecommended = true
+        Task {
+            do {
+                let recommended = try await SocialService.shared.getRecommendedUsers(userId: userId, limit: 8)
+                
+                // Check follow status for each recommended user
+                var followStatus: [String: Bool] = [:]
+                for user in recommended {
+                    let isFollowing = try await SocialService.shared.isFollowing(followerId: userId, followingId: user.id)
+                    followStatus[user.id] = isFollowing
+                }
+                
+                await MainActor.run {
+                    self.recommendedUsers = recommended
+                    self.recommendedFollowingStatus = followStatus
+                    self.isLoadingRecommended = false
+                }
+            } catch {
+                print("❌ Error loading recommended users: \(error)")
+                await MainActor.run {
+                    self.isLoadingRecommended = false
                 }
             }
         }
@@ -125,6 +201,28 @@ struct FindFriendsView: View {
         findFriendsViewModel.toggleFollow(followerId: currentUserId, followingId: userId)
     }
     
+    private func toggleRecommendedFollow(userId: String) {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        let isCurrentlyFollowing = recommendedFollowingStatus[userId] ?? false
+        
+        Task {
+            do {
+                if isCurrentlyFollowing {
+                    try await SocialService.shared.unfollowUser(followerId: currentUserId, followingId: userId)
+                } else {
+                    try await SocialService.shared.followUser(followerId: currentUserId, followingId: userId)
+                }
+                
+                await MainActor.run {
+                    recommendedFollowingStatus[userId] = !isCurrentlyFollowing
+                }
+            } catch {
+                print("❌ Error toggling follow: \(error)")
+            }
+        }
+    }
+    
 }
 
 struct UserSearchCard: View {
@@ -141,8 +239,9 @@ struct UserSearchCard: View {
             // User Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.black)
+                    .lineLimit(1)
                 
                 Text("Användare")
                     .font(.system(size: 14))
@@ -181,7 +280,7 @@ struct UserSearchCard: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isFollowing ? Color(.systemGray4) : AppColors.brandBlue)
+                        .fill(isFollowing ? Color(.systemGray4) : Color.black)
                 )
             }
             .disabled(isProcessing)

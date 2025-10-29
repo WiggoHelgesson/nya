@@ -12,72 +12,107 @@ class SessionManager: ObservableObject {
         let accumulatedDuration: Int
         let accumulatedDistance: Double
         let routeCoordinates: [LocationCoordinate]
+        let elevationGain: Double?
+        let maxSpeed: Double?
         
         struct LocationCoordinate: Codable {
             let latitude: Double
             let longitude: Double
             let timestamp: Date
         }
+        
+        init(activityType: String, startTime: Date, isPaused: Bool, accumulatedDuration: Int, accumulatedDistance: Double, routeCoordinates: [LocationCoordinate], elevationGain: Double? = nil, maxSpeed: Double? = nil) {
+            self.activityType = activityType
+            self.startTime = startTime
+            self.isPaused = isPaused
+            self.accumulatedDuration = accumulatedDuration
+            self.accumulatedDistance = accumulatedDistance
+            self.routeCoordinates = routeCoordinates
+            self.elevationGain = elevationGain
+            self.maxSpeed = maxSpeed
+        }
     }
     
-    @Published var hasActiveSession: Bool = false
+    @Published var hasActiveSession: Bool = false {
+        didSet {
+            print("🔄 hasActiveSession changed: \(oldValue) -> \(hasActiveSession)")
+        }
+    }
     @Published var activeSession: ActiveSession?
     
     private init() {
-        loadActiveSession()
+        // Load session synchronously to avoid init issues
+        if let data = UserDefaults.standard.data(forKey: "activeSession"),
+           let session = try? JSONDecoder().decode(ActiveSession.self, from: data) {
+            self.hasActiveSession = true
+            self.activeSession = session
+        } else {
+            self.hasActiveSession = false
+            self.activeSession = nil
+        }
     }
     
-    func saveActiveSession(activityType: String, startTime: Date, isPaused: Bool, duration: Int, distance: Double, routeCoordinates: [CLLocationCoordinate2D]) {
-        let session = ActiveSession(
-            activityType: activityType,
-            startTime: startTime,
-            isPaused: isPaused,
-            accumulatedDuration: duration,
-            accumulatedDistance: distance,
-            routeCoordinates: routeCoordinates.map { coord in
-                ActiveSession.LocationCoordinate(
-                    latitude: coord.latitude,
-                    longitude: coord.longitude,
-                    timestamp: Date()
-                )
-            }
-        )
-        
-        // Save to UserDefaults
-        if let encoded = try? JSONEncoder().encode(session) {
-            UserDefaults.standard.set(encoded, forKey: "activeSession")
-            UserDefaults.standard.set(true, forKey: "hasActiveSession")
+    func saveActiveSession(activityType: String, startTime: Date, isPaused: Bool, duration: Int, distance: Double, routeCoordinates: [CLLocationCoordinate2D], elevationGain: Double? = nil, maxSpeed: Double? = nil) {
+        Task {
+            let session = ActiveSession(
+                activityType: activityType,
+                startTime: startTime,
+                isPaused: isPaused,
+                accumulatedDuration: duration,
+                accumulatedDistance: distance,
+                routeCoordinates: routeCoordinates.map { coord in
+                    ActiveSession.LocationCoordinate(
+                        latitude: coord.latitude,
+                        longitude: coord.longitude,
+                        timestamp: Date()
+                    )
+                },
+                elevationGain: elevationGain,
+                maxSpeed: maxSpeed
+            )
             
-            DispatchQueue.main.async {
-                self.hasActiveSession = true
-                self.activeSession = session
+            // Save to UserDefaults
+            if let encoded = try? JSONEncoder().encode(session) {
+                UserDefaults.standard.set(encoded, forKey: "activeSession")
+                UserDefaults.standard.set(true, forKey: "hasActiveSession")
+                
+                await MainActor.run {
+                    self.hasActiveSession = true
+                    self.activeSession = session
+                }
             }
         }
     }
     
-    func loadActiveSession() {
-        if let data = UserDefaults.standard.data(forKey: "activeSession"),
-           let session = try? JSONDecoder().decode(ActiveSession.self, from: data) {
-            DispatchQueue.main.async {
+    func loadActiveSession() async {
+        await MainActor.run {
+            if let data = UserDefaults.standard.data(forKey: "activeSession"),
+               let session = try? JSONDecoder().decode(ActiveSession.self, from: data) {
                 self.hasActiveSession = true
                 self.activeSession = session
-            }
-        } else {
-            DispatchQueue.main.async {
+                print("✅ Loaded active session: \(session.activityType)")
+            } else {
                 self.hasActiveSession = false
                 self.activeSession = nil
+                print("ℹ️ No active session found")
             }
         }
     }
     
     func clearActiveSession() {
+        print("🗑️ clearActiveSession() called")
+        print("🗑️ Before: hasActiveSession = \(self.hasActiveSession)")
+        
+        // Clear UserDefaults FIRST to prevent reload
         UserDefaults.standard.removeObject(forKey: "activeSession")
         UserDefaults.standard.set(false, forKey: "hasActiveSession")
+        print("🗑️ UserDefaults cleared immediately")
         
-        DispatchQueue.main.async {
-            self.hasActiveSession = false
-            self.activeSession = nil
-        }
+        // Update UI state
+        self.hasActiveSession = false
+        self.activeSession = nil
+        
+        print("🗑️ After: hasActiveSession = \(self.hasActiveSession)")
     }
 }
 

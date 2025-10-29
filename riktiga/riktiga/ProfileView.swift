@@ -18,12 +18,28 @@ struct ProfileView: View {
     @State private var showFollowingList = false
     @State private var followersCount = 0
     @State private var followingCount = 0
+    @State private var profileObserver: NSObjectProtocol?
+    @State private var showEditProfile = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // MARK: - Profile Header Card
+                    // MARK: - Profile Header Card with Settings button in top right
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            showSettings = true
+                        }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.title2)
+                                .foregroundColor(.black)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                    
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
                             // Profilbild - Tappable
@@ -66,11 +82,11 @@ struct ProfileView: View {
                                     Spacer()
                                     
                                     Button(action: {
-                                        showSettings = true
+                                        showEditProfile = true
                                     }) {
-                                        Image(systemName: "gearshape.fill")
-                                            .font(.title3)
-                                            .foregroundColor(.black)
+                                        Image(systemName: "pencil.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(AppColors.brandBlue)
                                     }
                                 }
                                 
@@ -119,14 +135,23 @@ struct ProfileView: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(16)
                     
+                    // Länk: Visa min offentliga profil
+                    if let userId = authViewModel.currentUser?.id {
+                        NavigationLink(destination: UserProfileView(userId: userId)) {
+                            Text("Visa min offentliga profil")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.blue)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                    }
+
                     // MARK: - XP Box
                     HStack(spacing: 16) {
                         // Logo/Icon
-                        Text("U")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
+                        Image("23")
+                            .resizable()
+                            .scaledToFit()
                             .frame(width: 56, height: 56)
-                            .background(Color.black)
                             .cornerRadius(10)
                         
                         // XP Text
@@ -213,6 +238,9 @@ struct ProfileView: View {
                     FollowListView(userId: userId, listType: .following)
                 }
             }
+            .sheet(isPresented: $showEditProfile) {
+                EditProfileView()
+            }
             .onAppear {
                 loadProfileStats()
             }
@@ -221,7 +249,7 @@ struct ProfileView: View {
             }
             .onAppear {
                 // Lyssna på profilbild uppdateringar
-                NotificationCenter.default.addObserver(
+                profileObserver = NotificationCenter.default.addObserver(
                     forName: .profileImageUpdated,
                     object: nil,
                     queue: .main
@@ -234,7 +262,10 @@ struct ProfileView: View {
                 }
             }
             .onDisappear {
-                NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
+                if let observer = profileObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                    profileObserver = nil
+                }
             }
         }
     }
@@ -550,6 +581,8 @@ struct ProfileActivityCard: View {
             return "figure.walk"
         case "Bestiga berg":
             return "mountain.2.fill"
+        case "Skidåkning":
+            return "snowflake"
         default:
             return "figure.walk"
         }

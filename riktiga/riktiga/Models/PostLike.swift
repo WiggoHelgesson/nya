@@ -8,7 +8,7 @@ struct PostLike: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case id
-        case postId = "post_id"
+        case postId = "workout_post_id"
         case userId = "user_id"
         case createdAt = "created_at"
     }

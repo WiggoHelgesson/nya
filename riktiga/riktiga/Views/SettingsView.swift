@@ -5,8 +5,8 @@ import RevenueCatUI
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
-    @StateObject private var purchaseService = PurchaseService.shared
-    @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @ObservedObject private var purchaseService = PurchaseService.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var showSubscriptionView = false
     @State private var showProManagementView = false
     @State private var showDeleteAccountConfirmation = false
@@ -35,32 +35,40 @@ struct SettingsView: View {
                                         .font(.system(size: 16))
                                         .foregroundColor(.black)
                                     
-                                    if revenueCatManager.isPremium {
-                                        Text("Aktiv prenumeration")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.green)
+                                    if revenueCatManager.isLoading {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(height: 16)
                                     } else {
-                                        Text("Inaktiv")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.red)
+                                        if revenueCatManager.isPremium {
+                                            Text("Aktiv prenumeration")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.green)
+                                        } else {
+                                            Text("Inaktiv")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.red)
+                                        }
                                     }
                                 }
                                 
                                 Spacer()
                                 
-                                if revenueCatManager.isPremium {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.green)
-                                } else {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.gray)
+                                if !revenueCatManager.isLoading {
+                                    if revenueCatManager.isPremium {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.gray)
+                                    }
                                 }
                             }
                             .padding(16)
                             .onTapGesture {
-                                if !revenueCatManager.isPremium {
+                                if !revenueCatManager.isLoading && !revenueCatManager.isPremium {
                                     showSubscriptionView = true
                                 }
                             }
@@ -69,7 +77,7 @@ struct SettingsView: View {
                                 .padding(.leading, 16)
                             
                             // Upgrade to PRO Row (only show if not premium)
-                            if !revenueCatManager.isPremium {
+                            if !revenueCatManager.isLoading && !revenueCatManager.isPremium {
                                 SettingsRow(
                                     title: "Uppgradera till PRO",
                                     icon: "chevron.right",
@@ -107,7 +115,9 @@ struct SettingsView: View {
                             SettingsRow(
                                 title: "Hur du använder Up&Down",
                                 icon: "chevron.right",
-                                action: {}
+                                action: {
+                                    openURL("https://wiggio.se")
+                                }
                             )
                             
                             Divider()
@@ -116,7 +126,9 @@ struct SettingsView: View {
                             SettingsRow(
                                 title: "Vanliga frågor",
                                 icon: "chevron.right",
-                                action: {}
+                                action: {
+                                    openURL("https://wiggio.se")
+                                }
                             )
                             
                             Divider()
@@ -125,7 +137,9 @@ struct SettingsView: View {
                             SettingsRow(
                                 title: "Kontakta oss",
                                 icon: "chevron.right",
-                                action: {}
+                                action: {
+                                    openURL("https://wiggio.se")
+                                }
                             )
                             
                             Divider()
@@ -134,7 +148,9 @@ struct SettingsView: View {
                             SettingsRow(
                                 title: "Privacy Policy",
                                 icon: "chevron.right",
-                                action: {}
+                                action: {
+                                    openURL("https://wiggio.se/privacy")
+                                }
                             )
                         }
                         .background(Color.white)
@@ -202,8 +218,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showProManagementView) {
                 ProManagementView()
             }
-            .onAppear {
-                Task {
+            .task {
+                // Only load if not already loaded or loading
+                if !revenueCatManager.isLoading && revenueCatManager.customerInfo == nil {
                     await revenueCatManager.loadCustomerInfo()
                 }
             }
@@ -240,6 +257,12 @@ struct SettingsView: View {
         } catch {
             print("❌ Error deleting account: \(error)")
             isDeletingAccount = false
+        }
+    }
+    
+    private func openURL(_ urlString: String) {
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
         }
     }
 }

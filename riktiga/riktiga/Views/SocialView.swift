@@ -4,13 +4,16 @@ import Combine
 struct SocialView: View {
     @StateObject private var socialViewModel = SocialViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var visiblePostCount = 5 // Start with 5 posts
+    @State private var isLoadingMore = false
+    @State private var task: Task<Void, Never>?
     
     var body: some View {
             NavigationStack {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 
-                if socialViewModel.isLoading {
+                if socialViewModel.isLoading && socialViewModel.posts.isEmpty {
                     VStack(spacing: 20) {
                         ProgressView()
                             .tint(AppColors.brandBlue)
@@ -20,40 +23,114 @@ struct SocialView: View {
                             .foregroundColor(.gray)
                     }
                 } else if socialViewModel.posts.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.2.fill")
-                            .font(.system(size: 48))
+                    VStack(spacing: 20) {
+                        Image(systemName: "person.2.badge.plus")
+                            .font(.system(size: 64))
                             .foregroundColor(.gray)
-                        Text("Inga inlägg från dina vänner")
-                            .font(.headline)
-                        Text("Följ några vänner för att se deras träningspass")
-                            .font(.caption)
+                        Text("Inga inlägg än")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Skapa ett pass i Aktiviteter-tabben eller följ andra användare för att se deras inlägg")
+                            .font(.system(size: 16))
                             .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        
+                        // Debug info
+                        VStack(spacing: 4) {
+                            Text("Tips:")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.gray)
+                            Text("• Följ andra användare")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                            Text("• Eller skapa ett eget pass")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
                     }
                 } else {
                     ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            HomeHeaderView()
+                        }
+                        
                         LazyVStack(spacing: 16) {
-                            // Show only first 5 posts
-                            ForEach(Array(socialViewModel.posts.prefix(5))) { post in
-                                SocialPostCard(post: post)
+                            // Show posts dynamically based on visiblePostCount
+                            ForEach(Array(socialViewModel.posts.prefix(visiblePostCount))) { post in
+                                SocialPostCard(post: post, viewModel: socialViewModel)
+                                    .onAppear {
+                                        // Load more posts when user scrolls near the end
+                                        if let index = socialViewModel.posts.firstIndex(where: { $0.id == post.id }),
+                                           index >= visiblePostCount - 2,
+                                           visiblePostCount < socialViewModel.posts.count {
+                                            loadMorePosts()
+                                        }
+                                    }
+                            }
+                            
+                            // Loading indicator at the bottom when loading more
+                            if isLoadingMore {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                        .tint(AppColors.brandBlue)
+                                    Spacer()
+                                }
+                                .padding()
+                            }
+                            
+                            // End of list message
+                            if visiblePostCount >= socialViewModel.posts.count {
+                                Text("Inga fler inlägg")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                                    .padding()
                             }
                         }
                         .padding(16)
                     }
                 }
             }
-            .navigationTitle("Socialt")
+            .navigationTitle("")
+            .navigationBarHidden(true)
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                if let userId = authViewModel.currentUser?.id {
-                    socialViewModel.fetchSocialFeed(userId: userId)
+            .task {
+                // Cancel any previous task
+                task?.cancel()
+                
+                guard let userId = authViewModel.currentUser?.id else { return }
+                
+                // Create new task
+                task = Task {
+                    await socialViewModel.fetchSocialFeedAsync(userId: userId)
                 }
+            }
+            .onDisappear {
+                task?.cancel()
             }
             .refreshable {
                 if let userId = authViewModel.currentUser?.id {
+                    visiblePostCount = 5 // Reset to 5 posts when refreshing
                     await socialViewModel.refreshSocialFeed(userId: userId)
                 }
             }
+        }
+    }
+    
+    private func loadMorePosts() {
+        guard !isLoadingMore else { return }
+        
+        isLoadingMore = true
+        
+        // Load 5 more posts
+        let newCount = min(visiblePostCount + 5, socialViewModel.posts.count)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            visiblePostCount = newCount
+            isLoadingMore = false
         }
     }
 }
@@ -66,29 +143,42 @@ struct SocialPostCard: View {
     @State private var commentCount = 0
     @State private var showMenu = false
     @State private var showDeleteAlert = false
+    @State private var likeInProgress = false
+    @State private var showShareSheet = false
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var viewModel = SocialViewModel()
+    @ObservedObject var viewModel: SocialViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with user info
             HStack(spacing: 12) {
-                // User avatar
-                AsyncImage(url: URL(string: post.userAvatarUrl ?? "")) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .foregroundColor(.gray)
+                // User avatar -> navigate to profile
+                NavigationLink(destination: UserProfileView(userId: post.userId)) {
+                    AsyncImage(url: URL(string: post.userAvatarUrl ?? "")) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(post.userName ?? "Okänd användare")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
+                    // Username with Activity Icon -> navigate to profile
+                    NavigationLink(destination: UserProfileView(userId: post.userId)) {
+                        HStack(spacing: 6) {
+                            Text(post.userName ?? "Okänd användare")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Image(systemName: getActivityIcon(post.activityType))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppColors.brandBlue)
+                        }
+                    }
                     
                     Text(formatDate(post.createdAt))
                         .font(.system(size: 13))
@@ -118,10 +208,8 @@ struct SocialPostCard: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
             
-            // Large image
-            if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                LocalAsyncImage(path: imageUrl)
-            }
+            // Swipeable images (route and user image)
+            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
             
             // Content below image
             VStack(alignment: .leading, spacing: 12) {
@@ -200,6 +288,44 @@ struct SocialPostCard: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
             }
+            
+            // Like, Comment, Share buttons
+            HStack(spacing: 16) {
+                Button(action: toggleLike) {
+                    HStack(spacing: 6) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .foregroundColor(isLiked ? .red : .gray)
+                            .scaleEffect(isLiked ? 1.2 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
+                        Text("\(likeCount)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                            .animation(.easeInOut(duration: 0.2), value: likeCount)
+                    }
+                }
+                .disabled(likeInProgress)
+                
+                Button(action: { showComments = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.right")
+                            .foregroundColor(.gray)
+                        Text("\(commentCount)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Button(action: { showShareSheet = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
         }
         .background(Color(.systemGray6))
         .cornerRadius(12)
@@ -210,7 +336,10 @@ struct SocialPostCard: View {
             commentCount = post.commentCount ?? 0
         }
         .sheet(isPresented: $showComments) {
-            CommentsView(postId: post.id)
+            CommentsView(postId: post.id) {
+                commentCount += 1
+                viewModel.updatePostCommentCount(postId: post.id, commentCount: commentCount)
+            }
         }
         .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
             Button("Ta bort inlägg", role: .destructive) {
@@ -225,6 +354,9 @@ struct SocialPostCard: View {
             }
         } message: {
             Text("Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareActivityView(post: post)
         }
     }
     
@@ -245,24 +377,47 @@ struct SocialPostCard: View {
     
     private func toggleLike() {
         guard let userId = authViewModel.currentUser?.id else { return }
+        guard !likeInProgress else { return }
+        
+        // Store previous state for rollback
+        let previousLiked = isLiked
+        let previousCount = likeCount
+        
+        // Update UI immediately (optimistic update)
+        likeInProgress = true
+        isLiked.toggle()
+        likeCount += isLiked ? 1 : -1
         
         Task {
             do {
                 if isLiked {
-                    try await SocialService.shared.unlikePost(postId: post.id, userId: userId)
-                    await MainActor.run {
-                        isLiked = false
-                        likeCount = max(0, likeCount - 1)
+                    // When liking, check if already liked first
+                    let existingLikes = try await SocialService.shared.getPostLikes(postId: post.id)
+                    let alreadyLiked = existingLikes.contains { $0.userId == userId }
+                    
+                    if !alreadyLiked {
+                        try await SocialService.shared.likePost(postId: post.id, userId: userId)
+                        print("✅ Post liked successfully")
+                    } else {
+                        print("⚠️ Already liked this post")
                     }
                 } else {
-                    try await SocialService.shared.likePost(postId: post.id, userId: userId)
-                    await MainActor.run {
-                        isLiked = true
-                        likeCount += 1
-                    }
+                    try await SocialService.shared.unlikePost(postId: post.id, userId: userId)
+                    print("✅ Post unliked successfully")
                 }
+                
+                await MainActor.run {
+                    likeInProgress = false
+                }
+                viewModel.updatePostLikeStatus(postId: post.id, isLiked: isLiked, likeCount: likeCount)
             } catch {
-                print("Error toggling like: \(error)")
+                print("❌ Error toggling like: \(error)")
+                // Rollback on error
+                await MainActor.run {
+                    isLiked = previousLiked
+                    likeCount = previousCount
+                    likeInProgress = false
+                }
             }
         }
     }
@@ -277,6 +432,8 @@ struct SocialPostCard: View {
             return "figure.walk"
         case "Bestiga berg":
             return "mountain.2.fill"
+        case "Skidåkning":
+            return "snowflake"
         default:
             return "figure.walk"
         }
@@ -313,24 +470,46 @@ struct SocialPostCard: View {
     }
 }
 
+// Add a destination for NavigationStack value routing
+extension SocialView {
+    @ViewBuilder
+    var navigationDestination: some View {
+        EmptyView()
+    }
+}
+
 struct CommentsView: View {
     let postId: String
+    let onCommentAdded: (() -> Void)?
     @StateObject private var commentsViewModel = CommentsViewModel()
     @State private var newComment = ""
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) private var dismiss
+    @Namespace private var bottomID
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Comments list
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(commentsViewModel.comments) { comment in
-                            CommentRow(comment: comment)
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(commentsViewModel.comments) { comment in
+                                CommentRow(comment: comment)
+                            }
+                            
+                            // Anchor for scrolling to bottom
+                            Color.clear
+                                .frame(height: 0)
+                                .id(bottomID)
+                        }
+                        .padding(16)
+                    }
+                    .onChange(of: commentsViewModel.comments.count) { _ in
+                        withAnimation {
+                            scrollProxy.scrollTo(bottomID, anchor: .bottom)
                         }
                     }
-                    .padding(16)
                 }
                 
                 // Add comment section
@@ -359,8 +538,8 @@ struct CommentsView: View {
                     }
                 }
             }
-            .onAppear {
-                commentsViewModel.fetchComments(postId: postId)
+            .task {
+                await commentsViewModel.fetchCommentsAsync(postId: postId)
             }
         }
     }
@@ -369,19 +548,39 @@ struct CommentsView: View {
         guard let userId = authViewModel.currentUser?.id,
               !newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
+        let commentText = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Create optimistic comment for immediate display
+        let optimisticComment = PostComment(
+            postId: postId,
+            userId: userId,
+            content: commentText,
+            userName: authViewModel.currentUser?.name,
+            userAvatarUrl: authViewModel.currentUser?.avatarUrl
+        )
+        
+        // Add to UI immediately
+        commentsViewModel.comments.append(optimisticComment)
+        newComment = ""
+        
         Task {
             do {
                 try await SocialService.shared.addComment(
                     postId: postId,
                     userId: userId,
-                    content: newComment.trimmingCharacters(in: .whitespacesAndNewlines)
+                    content: commentText
                 )
+                print("✅ Comment added successfully")
+                
                 await MainActor.run {
-                    newComment = ""
-                    commentsViewModel.fetchComments(postId: postId)
+                    onCommentAdded?()
                 }
             } catch {
-                print("Error adding comment: \(error)")
+                print("❌ Error adding comment: \(error)")
+                // Remove optimistic comment on error
+                await MainActor.run {
+                    commentsViewModel.comments.removeAll { $0.id == optimisticComment.id }
+                }
             }
         }
     }
@@ -392,18 +591,22 @@ struct CommentRow: View {
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // User avatar placeholder
-            Circle()
-                .fill(Color(.systemGray5))
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.gray)
-                        .font(.system(size: 14))
-                )
+            // User avatar
+            if let avatarUrl = comment.userAvatarUrl, !avatarUrl.isEmpty {
+                ProfileImage(url: avatarUrl, size: 32)
+            } else {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 14))
+                    )
+            }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Användare") // TODO: Get actual username
+                Text(comment.userName ?? "Användare")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.black)
                 
@@ -435,6 +638,7 @@ struct CommentRow: View {
 class SocialViewModel: ObservableObject {
     @Published var posts: [SocialWorkoutPost] = []
     @Published var isLoading: Bool = false
+    private var isFetching = false
     
     func fetchSocialFeed(userId: String) {
         isLoading = true
@@ -454,14 +658,124 @@ class SocialViewModel: ObservableObject {
         }
     }
     
-    func refreshSocialFeed(userId: String) async {
+    func fetchSocialFeedAsync(userId: String) async {
+        // Prevent duplicate fetches
+        if isFetching { return }
+        
+        isFetching = true
+        isLoading = true
+        
+        // Try to load from cache first
+        if let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId) {
+            await MainActor.run {
+                self.posts = cachedPosts
+                self.isLoading = false
+            }
+                    }
+        
         do {
             let fetchedPosts = try await SocialService.shared.getSocialFeed(userId: userId)
+            
+            // Save to cache
+            AppCacheManager.shared.saveSocialFeed(fetchedPosts, userId: userId)
+            
             await MainActor.run {
                 self.posts = fetchedPosts
+                self.isLoading = false
+                self.isFetching = false
+            }
+        } catch is CancellationError {
+            print("⚠️ Fetch was cancelled")
+            await MainActor.run {
+                self.isLoading = false
+                self.isFetching = false
             }
         } catch {
-            print("Error refreshing social feed: \(error)")
+            print("Error fetching social feed: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
+    }
+    
+    func refreshSocialFeed(userId: String) async {
+        do {
+            // Use retry helper for better network resilience
+            let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
+                return try await SocialService.shared.getSocialFeed(userId: userId)
+            }
+            
+            // Only update posts if we got new data, don't replace with empty array
+            if !fetchedPosts.isEmpty {
+                await MainActor.run {
+                    self.posts = fetchedPosts
+                }
+            } else {
+                print("⚠️ Refresh returned empty array, keeping existing posts")
+            }
+        } catch is CancellationError {
+            // Cancelled refresh - don't update posts or log as error
+            print("⚠️ Refresh was cancelled")
+        } catch {
+            print("❌ Error refreshing social feed after retries: \(error)")
+        }
+    }
+    
+    func updatePostLikeStatus(postId: String, isLiked: Bool, likeCount: Int) {
+        if let index = posts.firstIndex(where: { $0.id == postId }) {
+            var updatedPost = posts[index]
+            updatedPost = SocialWorkoutPost(
+                from: WorkoutPost(
+                    id: updatedPost.id,
+                    userId: updatedPost.userId,
+                    activityType: updatedPost.activityType,
+                    title: updatedPost.title,
+                    description: updatedPost.description,
+                    distance: updatedPost.distance,
+                    duration: updatedPost.duration,
+                    imageUrl: updatedPost.imageUrl,
+                    elevationGain: nil,
+                    maxSpeed: nil
+                ),
+                userName: updatedPost.userName,
+                userAvatarUrl: updatedPost.userAvatarUrl,
+                userIsPro: updatedPost.userIsPro,
+                location: updatedPost.location,
+                strokes: updatedPost.strokes,
+                likeCount: likeCount,
+                commentCount: updatedPost.commentCount ?? 0,
+                isLikedByCurrentUser: isLiked
+            )
+            posts[index] = updatedPost
+        }
+    }
+    
+    func updatePostCommentCount(postId: String, commentCount: Int) {
+        if let index = posts.firstIndex(where: { $0.id == postId }) {
+            var updatedPost = posts[index]
+            updatedPost = SocialWorkoutPost(
+                from: WorkoutPost(
+                    id: updatedPost.id,
+                    userId: updatedPost.userId,
+                    activityType: updatedPost.activityType,
+                    title: updatedPost.title,
+                    description: updatedPost.description,
+                    distance: updatedPost.distance,
+                    duration: updatedPost.duration,
+                    imageUrl: updatedPost.imageUrl,
+                    elevationGain: nil,
+                    maxSpeed: nil
+                ),
+                userName: updatedPost.userName,
+                userAvatarUrl: updatedPost.userAvatarUrl,
+                userIsPro: updatedPost.userIsPro,
+                location: updatedPost.location,
+                strokes: updatedPost.strokes,
+                likeCount: updatedPost.likeCount ?? 0,
+                commentCount: commentCount,
+                isLikedByCurrentUser: updatedPost.isLikedByCurrentUser ?? false
+            )
+            posts[index] = updatedPost
         }
     }
 }
@@ -479,6 +793,17 @@ class CommentsViewModel: ObservableObject {
             } catch {
                 print("Error fetching comments: \(error)")
             }
+        }
+    }
+    
+    func fetchCommentsAsync(postId: String) async {
+        do {
+            let fetchedComments = try await SocialService.shared.getPostComments(postId: postId)
+            await MainActor.run {
+                self.comments = fetchedComments
+            }
+        } catch {
+            print("Error fetching comments: \(error)")
         }
     }
 }

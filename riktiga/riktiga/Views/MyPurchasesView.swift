@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MyPurchasesView: View {
-    @StateObject private var purchaseService = PurchaseService.shared
+    @ObservedObject private var purchaseService = PurchaseService.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {

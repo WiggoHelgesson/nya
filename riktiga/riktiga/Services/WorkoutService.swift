@@ -14,6 +14,11 @@ struct AnyEncodable: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         
+        if value is NSNull {
+            try container.encodeNil()
+            return
+        }
+        
         switch value {
         case let string as String:
             try container.encode(string)
@@ -23,9 +28,8 @@ struct AnyEncodable: Encodable {
             try container.encode(double)
         case let bool as Bool:
             try container.encode(bool)
-        case is NSNull:
-            try container.encodeNil()
         default:
+            // For any other type, encode as string description
             try container.encode(String(describing: value))
         }
     }
@@ -48,47 +52,43 @@ class WorkoutService {
             print("📤 Uploading image to Supabase Storage: \(fileName)")
             print("📊 Image size: \(imageData.count) bytes")
             
-            // Upload to Supabase Storage
+            // Upload to Supabase Storage (allow overwrite if file exists)
             do {
                 _ = try await supabase.storage
                     .from("workout-images")
-                    .upload(fileName, data: imageData)
+                    .upload(fileName, data: imageData, options: FileOptions(upsert: true))
                 
                 print("✅ Image uploaded successfully to Supabase Storage: \(fileName)")
+                
+                // Try to get a signed URL (works for private buckets)
+                do {
+                    let signedURL = try await supabase.storage
+                        .from("workout-images")
+                        .createSignedURL(path: fileName, expiresIn: 31536000) // 1 year expiry
+                    
+                    print("✅ Image signed URL: \(signedURL)")
+                    return signedURL.absoluteString
+                } catch {
+                    print("⚠️ Could not create signed URL, using public URL: \(error)")
+                    // Fall back to public URL
+                    let publicURL = try supabase.storage
+                        .from("workout-images")
+                        .getPublicURL(path: fileName)
+                    
+                    print("✅ Image public URL: \(publicURL)")
+                    return publicURL.absoluteString
+                }
+                
             } catch {
-                print("❌ Upload failed: \(error)")
-                // If upload fails, maybe bucket doesn't exist - save locally as fallback
-                print("⚠️ Falling back to local storage...")
-                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                let imagesDirectory = documentsPath.appendingPathComponent("WorkoutImages")
-                try FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
-                let fileURL = imagesDirectory.appendingPathComponent(fileName)
-                try imageData.write(to: fileURL)
-                print("✅ Image saved locally as fallback: \(fileURL.path)")
-                return fileURL.path
+                print("❌ Upload failed or couldn't get URL: \(error)")
+                print("⚠️ Cannot save image - upload to Supabase failed")
+                // Don't save locally as a fallback - throw error instead
+                throw error
             }
-            
-            // Return the public URL
-            let url = try supabase.storage
-                .from("workout-images")
-                .getPublicURL(path: fileName)
-            
-            print("✅ Image public URL: \(url)")
-            return url.absoluteString
             
         } catch {
             print("❌ Error uploading image to Supabase: \(error)")
-            // Try to save locally as fallback
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let fileName = "\(postId)_\(UUID().uuidString).jpg"
-            let imagesDirectory = documentsPath.appendingPathComponent("WorkoutImages")
-            try FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
-            let fileURL = imagesDirectory.appendingPathComponent(fileName)
-            if let imageData = image.jpegData(compressionQuality: 0.8) {
-                try imageData.write(to: fileURL)
-                print("✅ Image saved locally: \(fileURL.path)")
-                return fileURL.path
-            }
+            // Don't save locally - throw error instead
             throw error
         }
     }
@@ -128,63 +128,115 @@ class WorkoutService {
         }
     }
     
-    func saveWorkoutPost(_ post: WorkoutPost, image: UIImage? = nil, earnedPoints: Int = 0) async throws {
-        do {
-            var postToSave = post
-            
-            // Try to upload image if provided
-            if let image = image {
-                do {
-                    let imageUrl = try await uploadWorkoutImage(image, postId: post.id)
-                    postToSave = WorkoutPost(
-                        id: post.id,
-                        userId: post.userId,
-                        activityType: post.activityType,
-                        title: post.title,
-                        description: post.description,
-                        distance: post.distance,
-                        duration: post.duration,
-                        imageUrl: imageUrl
-                    )
-                    print("✅ Image uploaded successfully, saving post with image URL")
-                } catch {
-                    print("⚠️ Image upload failed, saving post without image: \(error)")
-                    // Continue with the original post (without image) if upload fails
-                }
+    func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, earnedPoints: Int = 0) async throws {
+        var postToSave = post
+        var uploadedRouteImageUrl: String? = nil
+        var uploadedUserImageUrl: String? = nil
+        
+        // Upload route image if provided
+        if let routeImage = routeImage {
+            do {
+                uploadedRouteImageUrl = try await uploadWorkoutImage(routeImage, postId: post.id)
+                print("✅ Route image uploaded successfully")
+            } catch {
+                print("⚠️ Route image upload failed: \(error)")
             }
-            
-            // Create a minimal post object with only the columns that exist in the database
+        }
+        
+        // Upload user image if provided
+        if let userImage = userImage {
+            do {
+                let userImageFileName = "\(post.id)_user_\(UUID().uuidString).jpg"
+                guard let imageData = userImage.jpegData(compressionQuality: 0.8) else {
+                    throw NSError(domain: "ImageConversionError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not convert image to JPEG"])
+                }
+                
+                print("📤 Uploading user image to Supabase Storage: \(userImageFileName)")
+                
+                _ = try await supabase.storage
+                    .from("workout-images")
+                    .upload(userImageFileName, data: imageData, options: FileOptions(upsert: true))
+                
+                print("✅ User image uploaded successfully")
+                
+                // Get signed URL
+                do {
+                    let signedURL = try await supabase.storage
+                        .from("workout-images")
+                        .createSignedURL(path: userImageFileName, expiresIn: 31536000)
+                    uploadedUserImageUrl = signedURL.absoluteString
+                } catch {
+                    print("⚠️ Could not create signed URL for user image, using public URL")
+                    let publicURL = try supabase.storage
+                        .from("workout-images")
+                        .getPublicURL(path: userImageFileName)
+                    uploadedUserImageUrl = publicURL.absoluteString
+                }
+            } catch {
+                print("⚠️ User image upload failed: \(error)")
+            }
+        }
+        
+        // Create post with both image URLs
+        postToSave = WorkoutPost(
+            id: post.id,
+            userId: post.userId,
+            activityType: post.activityType,
+            title: post.title,
+            description: post.description,
+            distance: post.distance,
+            duration: post.duration,
+            imageUrl: uploadedRouteImageUrl,
+            userImageUrl: uploadedUserImageUrl,
+            elevationGain: post.elevationGain,
+            maxSpeed: post.maxSpeed
+        )
+        
+        do {
             var minimalPost: [String: AnyEncodable] = [
                 "id": AnyEncodable(postToSave.id),
                 "user_id": AnyEncodable(postToSave.userId),
                 "activity_type": AnyEncodable(postToSave.activityType),
                 "title": AnyEncodable(postToSave.title),
-                "description": AnyEncodable(postToSave.description ?? NSNull()),
                 "created_at": AnyEncodable(postToSave.createdAt)
             ]
             
-            // Add image_url if it exists
-            if let imageUrl = postToSave.imageUrl {
-                minimalPost["image_url"] = AnyEncodable(imageUrl)
+            if let description = postToSave.description, !description.isEmpty {
+                minimalPost["description"] = AnyEncodable(description)
             }
             
-            // Add distance if it exists
+            if let imageUrl = postToSave.imageUrl, !imageUrl.isEmpty {
+                minimalPost["image_url"] = AnyEncodable(imageUrl)
+                print("✅ Saving post with route image URL: \(imageUrl)")
+            }
+            
+            if let userImageUrl = postToSave.userImageUrl, !userImageUrl.isEmpty {
+                minimalPost["user_image_url"] = AnyEncodable(userImageUrl)
+                print("✅ Saving post with user image URL: \(userImageUrl)")
+            }
+            
             if let distance = postToSave.distance {
                 minimalPost["distance"] = AnyEncodable(distance)
             }
             
-            // Add duration if it exists
             if let duration = postToSave.duration {
                 minimalPost["duration"] = AnyEncodable(duration)
             }
             
-            _ = try await supabase
+            if let elevationGain = postToSave.elevationGain {
+                minimalPost["elevation_gain"] = AnyEncodable(elevationGain)
+            }
+            
+            if let maxSpeed = postToSave.maxSpeed {
+                minimalPost["max_speed"] = AnyEncodable(maxSpeed)
+            }
+            
+            try await supabase
                 .from("workout_posts")
                 .insert(minimalPost)
                 .execute()
             print("✅ Workout post saved: \(postToSave.id)")
             
-            // Update user's XP in database
             if earnedPoints > 0 {
                 try await ProfileService.shared.updateUserPoints(userId: post.userId, pointsToAdd: earnedPoints)
                 print("✅ XP updated: +\(earnedPoints)")
@@ -193,6 +245,11 @@ class WorkoutService {
             print("❌ Error saving workout post: \(error)")
             throw error
         }
+    }
+    
+    // Backwards compatibility
+    func saveWorkoutPost(_ post: WorkoutPost, image: UIImage? = nil, earnedPoints: Int = 0) async throws {
+        try await saveWorkoutPost(post, routeImage: image, userImage: nil, earnedPoints: earnedPoints)
     }
     
     func fetchUserWorkoutPosts(userId: String) async throws -> [WorkoutPost] {

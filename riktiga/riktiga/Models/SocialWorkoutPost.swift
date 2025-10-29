@@ -10,6 +10,7 @@ struct SocialWorkoutPostRaw: Codable {
     let distance: Double?
     let duration: Int?
     let imageUrl: String?
+    let userImageUrl: String?
     let createdAt: String
     
     // JOIN data
@@ -26,6 +27,7 @@ struct SocialWorkoutPostRaw: Codable {
         case distance
         case duration
         case imageUrl = "image_url"
+        case userImageUrl = "user_image_url"
         case createdAt = "created_at"
         case profiles
         case workoutPostLikes = "workout_post_likes"
@@ -59,7 +61,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let description: String?
     let distance: Double?
     let duration: Int?
-    let imageUrl: String?
+    let imageUrl: String? // Route image
+    let userImageUrl: String? // User's own image
     let createdAt: String
     
     // Social data
@@ -81,6 +84,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case distance
         case duration
         case imageUrl = "image_url"
+        case userImageUrl = "user_image_url"
         case createdAt = "created_at"
         case userName = "user_name"
         case userAvatarUrl = "user_avatar_url"
@@ -105,6 +109,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         distance = raw.distance
         duration = raw.duration
         imageUrl = raw.imageUrl
+        userImageUrl = raw.userImageUrl
         createdAt = raw.createdAt
         
         // Map social data from JOIN results
@@ -130,6 +135,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.distance = post.distance
         self.duration = post.duration
         self.imageUrl = post.imageUrl
+        self.userImageUrl = post.userImageUrl
         self.createdAt = post.createdAt
         self.userName = userName
         self.userAvatarUrl = userAvatarUrl

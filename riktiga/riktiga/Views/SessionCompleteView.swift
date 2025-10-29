@@ -6,11 +6,15 @@ struct SessionCompleteView: View {
     let distance: Double
     let duration: Int
     let earnedPoints: Int
+    let routeImage: UIImage?
+    let elevationGain: Double?
+    let maxSpeed: Double?
     @Binding var isPresented: Bool
     let onComplete: () -> Void
+    let onDelete: () -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     
     @State private var title: String = ""
     @State private var description: String = ""
@@ -35,7 +39,11 @@ struct SessionCompleteView: View {
                         .font(.headline)
                     Spacer()
                     Button(action: {
-                        showDeleteConfirmation = true
+                        Task {
+                            await MainActor.run {
+                                showDeleteConfirmation = true
+                            }
+                        }
                     }) {
                         Image(systemName: "xmark")
                             .foregroundColor(.black)
@@ -51,7 +59,9 @@ struct SessionCompleteView: View {
                             duration: duration, 
                             earnedPoints: earnedPoints,
                             proPoints: proPoints,
-                            isPro: revenueCatManager.isPremium
+                            isPro: revenueCatManager.isPremium,
+                            elevationGain: elevationGain,
+                            maxSpeed: maxSpeed
                         )
                         
                         VStack(alignment: .leading, spacing: 8) {
@@ -75,6 +85,24 @@ struct SessionCompleteView: View {
                         }
                         .padding(.horizontal, 16)
                         
+                        // Show route image if available
+                        if let routeImage = routeImage {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Din rutt")
+                                    .font(.headline)
+                                
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: routeImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 200)
+                                        .cornerRadius(8)
+                                        .clipped()
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                        
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Bild")
                                 .font(.headline)
@@ -88,10 +116,14 @@ struct SessionCompleteView: View {
                                         .cornerRadius(8)
                                         .clipped()
                                     
-                                    Button(action: {
+                            Button(action: {
+                                Task {
+                                    await MainActor.run {
                                         self.sessionImage = nil
                                         self.selectedItem = nil
-                                    }) {
+                                    }
+                                }
+                            }) {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(.system(size: 24))
                                             .foregroundColor(.white)
@@ -123,7 +155,12 @@ struct SessionCompleteView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
+                            if routeImage == nil {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
                                 Text("Spara pass")
+                            }
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -132,7 +169,7 @@ struct SessionCompleteView: View {
                         .foregroundColor(.white)
                         .cornerRadius(25)
                         .font(.headline)
-                        .disabled(isSaving || title.isEmpty)
+                        .disabled(isSaving || title.isEmpty || routeImage == nil)
                         .padding(16)
                     }
                 }
@@ -157,7 +194,11 @@ struct SessionCompleteView: View {
                         
                         HStack(spacing: 16) {
                             Button(action: {
-                                showDeleteConfirmation = false
+                                Task {
+                                    await MainActor.run {
+                                        showDeleteConfirmation = false
+                                    }
+                                }
                             }) {
                                 Text("Avbryt")
                                     .font(.system(size: 16, weight: .medium))
@@ -169,10 +210,13 @@ struct SessionCompleteView: View {
                             }
                             
                             Button(action: {
-                                showDeleteConfirmation = false
-                                isPresented = false
-                                // Clear session and complete flow when deleting
-                                onComplete()
+                                Task {
+                                    await MainActor.run {
+                                        showDeleteConfirmation = false
+                                        isPresented = false
+                                        onDelete()
+                                    }
+                                }
                             }) {
                                 Text("Radera")
                                     .font(.system(size: 16, weight: .bold))
@@ -203,7 +247,9 @@ struct SessionCompleteView: View {
             Task {
                 if let data = try? await newValue?.loadTransferable(type: Data.self) {
                     if let uiImage = UIImage(data: data) {
-                        sessionImage = uiImage
+                        await MainActor.run {
+                            sessionImage = uiImage
+                        }
                     }
                 }
             }
@@ -211,21 +257,27 @@ struct SessionCompleteView: View {
     }
     
     func saveWorkout() {
-        isSaving = true
-        
-        let post = WorkoutPost(
-            userId: authViewModel.currentUser?.id ?? "",
-            activityType: activity.rawValue,
-            title: title,
-            description: description,
-            distance: distance,
-            duration: duration,
-            imageUrl: nil
-        )
-        
         Task {
+            await MainActor.run {
+                isSaving = true
+            }
+            
+            let post = WorkoutPost(
+                userId: authViewModel.currentUser?.id ?? "",
+                activityType: activity.rawValue,
+                title: title,
+                description: description,
+                distance: distance,
+                duration: duration,
+                imageUrl: nil,
+                userImageUrl: nil,
+                elevationGain: elevationGain,
+                maxSpeed: maxSpeed
+            )
+            
             do {
-                try await WorkoutService.shared.saveWorkoutPost(post, image: sessionImage, earnedPoints: earnedPoints)
+                // Pass both route image and user image
+                try await WorkoutService.shared.saveWorkoutPost(post, routeImage: routeImage, userImage: sessionImage, earnedPoints: earnedPoints)
                 print("✅ Workout saved successfully")
                 
                 // Reload user profile to update XP
@@ -239,15 +291,18 @@ struct SessionCompleteView: View {
                 
                 // Notify that workout was saved to refresh stats
                 NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
+                print("✅ Workout saved, closing sheet and calling onComplete")
                 
-                DispatchQueue.main.async {
+                await MainActor.run {
                     isSaving = false
                     isPresented = false
+                    print("📤 isPresented set to false")
                     onComplete()
+                    print("📤 onComplete() called")
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")
-                DispatchQueue.main.async {
+                await MainActor.run {
                     isSaving = false
                 }
             }
@@ -262,84 +317,88 @@ struct ActivitySummaryCard: View {
     let earnedPoints: Int
     let proPoints: Int
     let isPro: Bool
+    let elevationGain: Double?
+    let maxSpeed: Double?
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: activity.icon)
-                    .font(.system(size: 24))
-                    .foregroundColor(AppColors.brandBlue)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(activity.rawValue)
-                        .font(.headline)
-                    Text(String(format: "%.2f km • %@", distance, formattedDuration(duration)))
-                        .font(.caption)
-                        .foregroundColor(.gray)
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: activity.icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(AppColors.brandBlue)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(activity.rawValue)
+                            .font(.headline)
+                        Text(String(format: "%.2f km", distance))
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
                 }
                 
-                Spacer()
-            }
-            
-            // Points section
-            VStack(spacing: 8) {
-                if isPro {
-                    // PRO user - show both regular and PRO points
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Du fick")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("\(earnedPoints) poäng")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(AppColors.brandGreen)
+                // Points section
+                VStack(spacing: 8) {
+                    if isPro {
+                        // PRO user - show both regular and PRO points
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Du fick")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("\(earnedPoints) poäng")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Med PRO")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("\(proPoints) poäng")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
                         }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Med PRO")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("\(proPoints) poäng")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.orange)
-                        }
-                    }
-                } else {
-                    // Non-PRO user - show regular points and PRO boost info
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Du fick")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("\(earnedPoints) poäng")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(AppColors.brandGreen)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Såhär mycket skulle du fått med PRO")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.trailing)
-                            Text("\(proPoints) poäng")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.orange)
+                    } else {
+                        // Non-PRO user - show regular points and PRO boost info
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Du fick")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("\(earnedPoints) poäng")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Såhär mycket skulle du fått med PRO")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.trailing)
+                                Text("\(proPoints) poäng")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
                         }
                     }
                 }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
             }
             .padding(12)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
+            .background(Color.white)
+            .cornerRadius(12)
+            
         }
-        .padding(16)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .padding(.horizontal, 16)
     }
     
     func formattedDuration(_ seconds: Int) -> String {
@@ -359,8 +418,12 @@ struct ActivitySummaryCard: View {
         distance: 5.2, 
         duration: 1800, 
         earnedPoints: 78,
+        routeImage: nil,
+        elevationGain: nil,
+        maxSpeed: nil,
         isPresented: .constant(true),
-        onComplete: {}
+        onComplete: {},
+        onDelete: {}
     )
     .environmentObject(AuthViewModel())
 }

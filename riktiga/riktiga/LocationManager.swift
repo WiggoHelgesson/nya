@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
+import UIKit
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let shared = LocationManager()
@@ -11,11 +12,28 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: String?
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var showLocationDeniedAlert = false
+    
+    // Skiing-specific metrics
+    @Published var elevationGain: Double = 0.0 // meters
+    @Published var maxSpeed: Double = 0.0 // m/s
     
     private let locationManager = CLLocationManager()
     private var startLocation: CLLocation?
     private var totalDistance: Double = 0.0
     private var lastLocation: CLLocation?
+    
+    // For lift detection (skiing)
+    private var speedHistory: [Double] = [] // Last 10 speed readings
+    private var isOnLift: Bool = false
+    private var lastValidAltitude: Double? // Last altitude not on lift
+    private var currentActivityType: String? // Track current activity type
+
+    // Vehicle detection
+    @Published var vehicleDetected: Bool = false
+    private var speedThresholdForVehicle: Double = 15.0 // m/s (54 km/h) - speeds above this likely indicate vehicle
+    private var recentSpeeds: [Double] = [] // Track last 5 speed readings
+    private let maxRecentSpeeds = 5
     
     override init() {
         super.init()
@@ -33,10 +51,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         authorizationStatus = locationManager.authorizationStatus
     }
     
+    func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
     // Helper to safely enable background location
     private func enableBackgroundLocationIfAuthorized() {
-        guard authorizationStatus == .authorizedAlways else { return }
+        guard authorizationStatus == .authorizedAlways else { 
+            print("⚠️ Cannot enable background location - not authorized")
+            return 
+        }
         
+        // Enable background location updates only when we have Always permission
         if #available(iOS 9.0, *) {
             locationManager.allowsBackgroundLocationUpdates = true
             print("✅ Background location updates enabled")
@@ -44,20 +72,29 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func requestLocationPermission() {
-        // Request always authorization for background tracking
+        // Request Always authorization directly for background tracking
         locationManager.requestAlwaysAuthorization()
     }
     
     func requestBackgroundLocationPermission() {
-        // Request always authorization
+        // Request Always authorization for background tracking
         locationManager.requestAlwaysAuthorization()
     }
     
-    func startTracking(preserveData: Bool = false) {
+    func setActivityType(_ activityType: String?) {
+        currentActivityType = activityType
+    }
+    
+    func startTracking(preserveData: Bool = false, activityType: String? = nil) {
+        if let activityType = activityType {
+            currentActivityType = activityType
+        }
         // Kontrollera permissions först
         guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
             print("❌ Location permission not granted. Current status: \(authorizationStatus.rawValue)")
-            locationError = "Platstillstånd krävs för att spåra din aktivitet"
+            Task { @MainActor in
+                self.locationError = "Platstillstånd krävs för att spåra din aktivitet"
+            }
             return
         }
         
@@ -72,6 +109,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 distance = 0.0
                 locationError = nil
                 routeCoordinates = []
+                elevationGain = 0.0
+                maxSpeed = 0.0
+                speedHistory = []
+                isOnLift = false
+                lastValidAltitude = nil
+                recentSpeeds = []
+                Task { @MainActor in
+                    self.vehicleDetected = false
+                }
             }
         }
         
@@ -102,7 +148,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     // Function to start a fresh tracking session (resets everything)
-    func startNewTracking() {
+    func startNewTracking(activityType: String? = nil) {
         // Reset everything for a new session
         startLocation = nil
         totalDistance = 0.0
@@ -110,8 +156,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         distance = 0.0
         locationError = nil
         routeCoordinates = []
+        elevationGain = 0.0
+        maxSpeed = 0.0
+        speedHistory = []
+        isOnLift = false
+        lastValidAltitude = nil
+        recentSpeeds = []
+        Task { @MainActor in
+            self.vehicleDetected = false
+        }
+        if let activityType = activityType {
+            currentActivityType = activityType
+        }
         
-        startTracking()
+        startTracking(activityType: activityType)
     }
     
     func stopTracking() {
@@ -131,8 +189,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         print("📍 GPS Update: accuracy=\(location.horizontalAccuracy)m")
         
-        // Update user location on main thread
-        DispatchQueue.main.async {
+        // Update user location on main thread using Task for async
+        Task { @MainActor in
             self.userLocation = location.coordinate
         }
         
@@ -142,7 +200,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             lastLocation = location
             
             // Add first point to route
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.routeCoordinates.append(location.coordinate)
             }
             print("🚀 Tracking started at: \(location.coordinate)")
@@ -150,11 +208,91 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // Calculate distance from last location
             let newDistance = location.distance(from: lastLoc)
             
-            // Accept reasonable distances (up to 100m jumps)
-            if newDistance > 0 && newDistance < 100 {
+            // Calculate speed (m/s)
+            let timeDiff = location.timestamp.timeIntervalSince(lastLoc.timestamp)
+            let speed = timeDiff > 0 ? newDistance / timeDiff : 0.0
+            
+            // Track recent speeds for vehicle detection
+            recentSpeeds.append(speed)
+            if recentSpeeds.count > maxRecentSpeeds {
+                recentSpeeds.removeFirst()
+            }
+            
+            // Check if moving in vehicle (only for non-skiing activities)
+            let isInVehicle = detectVehicleMovement(speed)
+            if currentActivityType != "Skidåkning" && isInVehicle {
+                Task { @MainActor in
+                    self.vehicleDetected = true
+                }
+                print("🚗 Vehicle movement detected - speed: \(String(format: "%.1f", speed)) m/s (\(String(format: "%.1f", speed * 3.6)) km/h)")
+                // Skip this distance update
+                lastLocation = location
+                Task { @MainActor in
+                    self.userLocation = location.coordinate
+                }
+                return
+            } else {
+                Task { @MainActor in
+                    self.vehicleDetected = false
+                }
+            }
+            
+            // Accept reasonable distances (up to 100m jumps) and add to route if distance or time moved
+            if timeDiff > 0 {
                 totalDistance += newDistance
                 
-                DispatchQueue.main.async {
+                // Handle skiing-specific metrics
+                if currentActivityType == "Skidåkning" {
+                    // Detect if on lift: speed > 10 m/s (36 km/h) and relatively constant
+                    updateSpeedHistory(speed)
+                    let avgSpeed = speedHistory.isEmpty ? 0 : speedHistory.reduce(0, +) / Double(speedHistory.count)
+                    let speedVariance = speedHistory.isEmpty ? 0 : speedHistory.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(speedHistory.count)
+                    
+                    // On lift if: average speed > 10 m/s and variance is low (< 5 m²/s² means fairly constant speed)
+                    let wasOnLift = isOnLift
+                    isOnLift = avgSpeed > 10.0 && speedVariance < 5.0 && speedHistory.count >= 5
+                    
+                    if !isOnLift {
+                        // Not on lift - count elevation gain
+                        if let lastAlt = lastValidAltitude, location.altitude > 0 {
+                            let altitudeDiff = location.altitude - lastAlt
+                            if altitudeDiff > 0 {
+                                // Only count positive elevation gain (going uphill while not on lift)
+                                Task { @MainActor in
+                                    self.elevationGain += altitudeDiff
+                                }
+                                print("⛰️ Elevation gain: +\(altitudeDiff)m (Total: \(self.elevationGain)m)")
+                            }
+                            lastValidAltitude = location.altitude
+                        } else if location.altitude > 0 {
+                            lastValidAltitude = location.altitude
+                        }
+                        
+                        // Update max speed (only when not on lift)
+                        if speed > 0 {
+                            Task { @MainActor in
+                                if speed > self.maxSpeed {
+                                    self.maxSpeed = speed
+                                    print("🏔️ New max speed: \(String(format: "%.1f", speed)) m/s (\(String(format: "%.1f", speed * 3.6)) km/h)")
+                                }
+                            }
+                        }
+                    } else if !wasOnLift {
+                        // Just entered lift
+                        print("🚡 Entered lift (speed: \(String(format: "%.1f", avgSpeed)) m/s)")
+                    }
+                } else {
+                    // For other activities, track max speed
+                    if speed > 0 {
+                        Task { @MainActor in
+                            if speed > self.maxSpeed {
+                                self.maxSpeed = speed
+                            }
+                        }
+                    }
+                }
+                
+                Task { @MainActor in
                     self.distance = self.totalDistance / 1000.0
                     // Add point to route for visualization
                     self.routeCoordinates.append(location.coordinate)
@@ -165,6 +303,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             } else {
                 print("⚠️ Skipped GPS jump: \(newDistance)m")
             }
+        }
+    }
+    
+    private func updateSpeedHistory(_ speed: Double) {
+        speedHistory.append(speed)
+        // Keep only last 10 readings (about 10 seconds if GPS updates every second)
+        if speedHistory.count > 10 {
+            speedHistory.removeFirst()
         }
     }
     
@@ -179,7 +325,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 print("⚠️ Location unknown - common in simulator")
                 // Simulera en position för simulator
                 #if targetEnvironment(simulator)
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.userLocation = CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686) // Stockholm
                 }
                 #endif
@@ -193,8 +339,30 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    private func detectVehicleMovement(_ currentSpeed: Double) -> Bool {
+        // If speed is above 15 m/s (54 km/h), likely in vehicle
+        if currentSpeed > speedThresholdForVehicle {
+            return true
+        }
+        
+        // Check if recent speeds show consistent high velocity (moving in vehicle)
+        if recentSpeeds.count >= 3 {
+            let avgSpeed = recentSpeeds.reduce(0, +) / Double(recentSpeeds.count)
+            // If average of recent speeds is high, likely in vehicle
+            if avgSpeed > 10.0 { // 36 km/h average
+                // Check for low variance (consistent speed = vehicle)
+                let variance = recentSpeeds.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(recentSpeeds.count)
+                if variance < 5.0 {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.authorizationStatus = status
         }
         
@@ -202,23 +370,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         case .notDetermined:
             print("📍 Location permission not determined, requesting...")
             requestLocationPermission()
-        case .restricted, .denied:
-            print("❌ Location access denied")
-            DispatchQueue.main.async {
-                self.locationError = "Platstillstånd nekades. Gå till Inställningar för att aktivera platsåtkomst."
-            }
-        case .authorizedWhenInUse:
-            print("✅ Location access granted (when in use)")
-            DispatchQueue.main.async {
-                self.locationError = nil
-            }
+            
         case .authorizedAlways:
             print("✅ Location access granted (always)")
-            // Enable background location updates now that we have permission
+            // Only this status is OK - enable background location updates and clear error
             enableBackgroundLocationIfAuthorized()
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.locationError = nil
             }
+            
+        case .authorizedWhenInUse, .restricted, .denied:
+            // All other cases show the same warning
+            print("⚠️ Location permission insufficient - showing warning")
+            Task { @MainActor in
+                self.locationError = "Platsåtkomst i bakgrunden krävs för att spåra din rutt när appen är stängd. Välj 'Tillåt alltid' i Inställningar."
+                self.showLocationDeniedAlert = true
+            }
+            
         @unknown default:
             print("⚠️ Unknown location authorization status")
             break

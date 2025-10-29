@@ -739,7 +739,7 @@ struct CheckoutView: View {
     @Binding var showConfirmation: Bool
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var purchaseService = PurchaseService.shared
+    @ObservedObject private var purchaseService = PurchaseService.shared
     
     @State private var firstName = ""
     @State private var lastName = ""
@@ -933,7 +933,7 @@ struct ConfirmationView: View {
     let reward: RewardCard
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var purchaseService = PurchaseService.shared
+    @ObservedObject private var purchaseService = PurchaseService.shared
     
     var body: some View {
         NavigationStack {

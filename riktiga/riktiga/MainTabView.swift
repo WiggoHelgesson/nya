@@ -3,34 +3,39 @@ import Combine
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var sessionManager = SessionManager.shared
     @State private var showStartSession = false
     @State private var showResumeSession = false
+    @State private var selectedTab = 0  // Track selected tab (0=Hem, 1=Socialt, 2=Belöningar, 3=Profil)
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // Standard TabView with automatic Liquid Glass
-                TabView {
+                TabView(selection: $selectedTab) {
                     HomeView()
+                        .tag(0)
                         .tabItem {
                             Image(systemName: "house.fill")
                             Text("Hem")
                         }
                     
                     SocialView()
+                        .tag(1)
                         .tabItem {
                             Image(systemName: "person.2.fill")
                             Text("Socialt")
                         }
                     
                     RewardsView()
+                        .tag(2)
                         .tabItem {
                             Image(systemName: "gift.fill")
                             Text("Belöningar")
                         }
                     
                     ProfileView()
+                        .tag(3)
                         .tabItem {
                             Image(systemName: "person.fill")
                             Text("Profil")
@@ -42,7 +47,9 @@ struct MainTabView: View {
                     Spacer()
                     
                     // Only show button if there's an active session
+                    let _ = print("🔍 MainTabView - hasActiveSession: \(sessionManager.hasActiveSession)")
                     if sessionManager.hasActiveSession {
+                        let _ = print("▶️ Showing ÅTERVÄND TILL PASS button")
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showResumeSession = true
@@ -51,7 +58,7 @@ struct MainTabView: View {
                             HStack {
                                 Image(systemName: "play.circle.fill")
                                     .font(.system(size: 18))
-                                Text("ÅTERUPPTA SESSION")
+                                Text("ÅTERVÄND TILL PASS")
                                     .font(.headline)
                                     .fontWeight(.bold)
                             }
@@ -71,6 +78,7 @@ struct MainTabView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 90)
                     } else {
+                        let _ = print("▶️ Showing STARTA PASS button")
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                                 showStartSession = true
@@ -112,8 +120,29 @@ struct MainTabView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActivities"))) { _ in
-            // TabView will handle navigation automatically
+        .onChange(of: showStartSession) { oldValue, newValue in
+            // Reset showResumeSession when start session is shown
+            if newValue {
+                showResumeSession = false
+            }
+        }
+        .onChange(of: showResumeSession) { oldValue, newValue in
+            // Reset showStartSession when resume session is shown
+            if newValue {
+                showStartSession = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
+            print("📥 NavigateToSocial notification received")
+            // Navigate to Social tab after saving workout
+            selectedTab = 1
+            // Wait a bit for onChange in StartSessionView to clear session first
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Close any open session sheets
+                showStartSession = false
+                showResumeSession = false
+                print("✅ Closed session sheets")
+            }
         }
         .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
             UsernameRequiredView()

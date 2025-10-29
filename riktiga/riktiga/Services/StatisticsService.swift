@@ -2,13 +2,13 @@ import Foundation
 import Supabase
 import Combine
 
-struct WeeklyStats {
+struct WeeklyStats: Codable {
     let totalDistance: Double
     let dailyStats: [DailyStat]
     let goalProgress: Double
 }
 
-struct DailyStat {
+struct DailyStat: Codable {
     let day: String
     let distance: Double
     let isToday: Bool
@@ -28,6 +28,15 @@ class StatisticsService: ObservableObject {
         DispatchQueue.main.async {
             self.isLoading = true
             self.errorMessage = nil
+        }
+        
+        // Try to load from cache first
+        if let cachedStats = AppCacheManager.shared.getCachedWeeklyStats(userId: userId) {
+            await MainActor.run {
+                self.weeklyStats = cachedStats
+                self.isLoading = false
+            }
+            print("✅ Loaded weekly stats from cache")
         }
         
         do {
@@ -86,6 +95,9 @@ class StatisticsService: ObservableObject {
                 dailyStats: dailyStats,
                 goalProgress: goalProgress
             )
+            
+            // Save to cache
+            AppCacheManager.shared.saveWeeklyStats(stats, userId: userId)
             
             DispatchQueue.main.async {
                 self.weeklyStats = stats

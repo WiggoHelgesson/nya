@@ -109,7 +109,7 @@
 			fileSystemSynchronizedGroups = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 			);
-			name = riktiga;
+			name = "Up&Down";
 			packageProductDependencies = (
 				86B269AE2EAA5E2D00A4EC93 /* Auth */,
 				86B269B02EAA5E2D00A4EC93 /* Functions */,
@@ -237,7 +237,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -295,7 +295,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -345,7 +345,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 52.0;
+				MARKETING_VERSION = 53.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -415,7 +415,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 52.0;
+				MARKETING_VERSION = 53.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";

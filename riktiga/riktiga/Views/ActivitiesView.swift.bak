@@ -179,8 +179,10 @@ struct WorkoutPostCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Swipeable images (route and user image)
-            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+            // Large image
+            if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
+                LocalAsyncImage(path: imageUrl)
+            }
             
             // Content below image
             VStack(alignment: .leading, spacing: 12) {
@@ -223,25 +225,7 @@ struct WorkoutPostCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
-                    // Show elevation for skiing and hiking
-                    if (post.activityType == "Skidåkning" || post.activityType == "Bestiga berg"),
-                       let elevationGain = post.elevationGain, elevationGain > 0 {
-                        if post.distance != nil || post.duration != nil {
-                            Divider()
-                                .frame(height: 40)
-                        }
-                        
-                        VStack(spacing: 6) {
-                            Text("Höjdmeter")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.0f m", elevationGain))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }                }
+                }
                 .background(Color.white)
                 .cornerRadius(12)
                 .padding(.horizontal, 16)
@@ -350,31 +334,25 @@ class WorkoutPostsViewModel: ObservableObject {
     
     func fetchUserPostsAsync(userId: String) async {
         do {
-            // Use retry helper for better network resilience
-            let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
-                return try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
-            }
+            let fetchedPosts = try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
             await MainActor.run {
                 self.posts = fetchedPosts
             }
         } catch is CancellationError {
             print("⚠️ Fetch was cancelled")
         } catch {
-            print("❌ Error fetching user posts after retries: \(error)")
+            print("Error fetching user posts: \(error)")
         }
     }
     
     func refreshUserPosts(userId: String) async {
         do {
-            // Use retry helper for better network resilience
-            let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
-                return try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
-            }
+            let fetchedPosts = try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
             DispatchQueue.main.async {
                 self.posts = fetchedPosts
             }
         } catch {
-            print("❌ Error refreshing user posts after retries: \(error)")
+            print("Error refreshing user posts: \(error)")
         }
     }
 }

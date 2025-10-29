@@ -3,7 +3,7 @@ import RevenueCat
 
 struct SubscriptionView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var revenueCatManager = RevenueCatManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var selectedPackage: Package?
     @State private var isProcessingPurchase = false
     @State private var showError = false

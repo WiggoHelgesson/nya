@@ -6,21 +6,36 @@ import Combine
 struct StartSessionView: View {
     @State private var showActivitySelection = true
     @State private var selectedActivityType: ActivityType?
-    @StateObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var sessionManager = SessionManager.shared
     
     var body: some View {
-        if sessionManager.hasActiveSession, let session = sessionManager.activeSession {
-            // Resume active session
-            if let activity = ActivityType(rawValue: session.activityType) {
-                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true)
-            } else {
-                // If activity type not found, show selection
+        Group {
+            if sessionManager.hasActiveSession, let session = sessionManager.activeSession {
+                // Resume active session
+                if let activity = ActivityType(rawValue: session.activityType) {
+                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true)
+                } else {
+                    // If activity type not found, show selection
+                    SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+                }
+            } else if showActivitySelection {
                 SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+            } else if let activity = selectedActivityType {
+                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false)
+            } else {
+                // Empty view as fallback
+                EmptyView()
             }
-        } else if showActivitySelection {
-            SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
-        } else if let activity = selectedActivityType {
-            SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false)
+        }
+        .task {
+            // Ensure session manager is loaded
+            print("🔍 StartSessionView.task - activeSession: \(sessionManager.activeSession != nil), hasActiveSession: \(sessionManager.hasActiveSession)")
+            if sessionManager.activeSession == nil && sessionManager.hasActiveSession {
+                print("⚠️ Reloading session from UserDefaults!")
+                await sessionManager.loadActiveSession()
+            } else {
+                print("✅ No need to reload session")
+            }
         }
     }
 }
@@ -30,6 +45,7 @@ enum ActivityType: String, CaseIterable {
     case golf = "Golfrunda"
     case walking = "Promenad"
     case hiking = "Bestiga berg"
+    case skiing = "Skidåkning"
     
     var icon: String {
         switch self {
@@ -41,6 +57,8 @@ enum ActivityType: String, CaseIterable {
             return "figure.walk"
         case .hiking:
             return "mountain.2.fill"
+        case .skiing:
+            return "snowflake"
         }
     }
 }
@@ -50,7 +68,7 @@ struct SelectActivityView: View {
     @Binding var selectedActivity: ActivityType?
     @Environment(\.dismiss) var dismiss
     
-    let activities: [ActivityType] = [.running, .golf, .walking, .hiking]
+    let activities: [ActivityType] = [.running, .golf, .walking, .hiking, .skiing]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -142,8 +160,8 @@ struct SessionMapView: View {
     @Binding var isPresented: Bool
     let resumeSession: Bool
     @ObservedObject private var locationManager = LocationManager.shared
-    @StateObject private var revenueCatManager = RevenueCatManager.shared
-    @StateObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @ObservedObject private var sessionManager = SessionManager.shared
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -156,7 +174,9 @@ struct SessionMapView: View {
     @State private var timer: Timer?
     @State private var showCompletionPopup = false
     @State private var showSessionComplete = false
+    @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
+    @State private var routeImage: UIImage?
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -199,12 +219,23 @@ struct SessionMapView: View {
                         // Set distance from saved session
                         locationManager.distance = session.accumulatedDistance
                         
+                        // Restore skiing metrics if available
+                        if let elevationGain = session.elevationGain {
+                            locationManager.elevationGain = elevationGain
+                        }
+                        if let maxSpeed = session.maxSpeed {
+                            locationManager.maxSpeed = maxSpeed
+                        }
+                        
+                        // Set activity type for location manager
+                        locationManager.setActivityType(session.activityType)
+                        
                         // Calculate earned points for the current distance
                         updateEarnedPoints()
                         
                         // Resume tracking if session was running (preserve existing data)
                         if !session.isPaused {
-                            locationManager.startTracking(preserveData: true)
+                            locationManager.startTracking(preserveData: true, activityType: session.activityType)
                             startTimer()
                         }
                         
@@ -255,18 +286,32 @@ struct SessionMapView: View {
                         Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
                             .font(.system(size: 14))
                             .foregroundColor(locationManager.userLocation != nil ? AppColors.brandBlue : .red)
-                        Text(locationManager.userLocation != nil ? "GPS" : "GPS Ej tillgänglig")
+                        Text(locationManager.userLocation != nil ? "GPS" : (locationManager.authorizationStatus == .authorizedAlways ? "GPS" : "GPS Ej tillgänglig"))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(locationManager.userLocation != nil ? .black : .red)
+                            .foregroundColor(locationManager.userLocation != nil ? .black : (locationManager.authorizationStatus == .authorizedAlways ? .black : .red))
                     }
                     
                     // Location Error Display
                     if let error = locationManager.locationError {
-                        Text(error)
-                            .font(.system(size: 12))
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 16)
+                        VStack(spacing: 12) {
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+                            
+                            Button(action: {
+                                locationManager.openSettings()
+                            }) {
+                                Text("Öppna Inställningar")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 8)
+                                    .background(AppColors.brandBlue)
+                                    .cornerRadius(8)
+                            }
+                        }
                     }
 
                     // Main Distance Display (Längst upp i fetstil)
@@ -304,13 +349,25 @@ struct SessionMapView: View {
                                 .foregroundColor(.gray)
                         }
                         
-                        VStack(spacing: 4) {
-                            Text(currentPace)
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(currentPace == "0:00" ? .gray : .black)
-                            Text("Tempo")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.gray)
+                        // Show elevation for skiing, pace for others
+                        if activity == .skiing || activity == .hiking {
+                            VStack(spacing: 4) {
+                                Text(String(format: "%.0f m", locationManager.elevationGain))
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(.black)
+                                Text("Höjdmeter")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.gray)
+                            }
+                        } else {
+                            VStack(spacing: 4) {
+                                Text(currentPace)
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(.black)
+                                Text("Tempo")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.gray)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -321,7 +378,9 @@ struct SessionMapView: View {
                         VStack(spacing: 12) {
                             Button(action: {
                                 // Resume tracking (preserve existing data)
-                                locationManager.startTracking(preserveData: true)
+                                isSessionEnding = false  // Reset flag when resuming
+                                print("✅ Resuming session - isSessionEnding = false")
+                                locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
                                 startTimer()
                                 isPaused = false
                                 isRunning = true
@@ -359,7 +418,10 @@ struct SessionMapView: View {
                             } else {
                                 // Start tracking when user presses button for new session
                                 if !isRunning {
-                                    locationManager.startNewTracking()
+                                    // Reset the ending flag for new session
+                                    isSessionEnding = false
+                                    print("✅ Starting new session - isSessionEnding = false")
+                                    locationManager.startNewTracking(activityType: activity.rawValue)
                                 }
                                 startTimer()
                                 isRunning = true
@@ -426,25 +488,52 @@ struct SessionMapView: View {
             
         }
         .navigationBarHidden(true)
+        .alert("Platsåtkomst i bakgrunden krävs", isPresented: $locationManager.showLocationDeniedAlert) {
+            Button("Avbryt", role: .cancel) {}
+            Button("Öppna Inställningar") {
+                locationManager.openSettings()
+            }
+        } message: {
+            Text("För att spåra din rutt när appen är stängd måste du välja 'Tillåt alltid' för platsåtkomst i Inställningar.")
+        }
+        .onDisappear {
+            // Save session state when view disappears, but DON'T stop timer
+            // Timer continues in background
+            saveSessionState()
+        }
         .sheet(isPresented: $showSessionComplete) {
             SessionCompleteView(
                 activity: activity,
                 distance: locationManager.distance,
                 duration: sessionDuration,
                 earnedPoints: earnedPoints,
+                routeImage: routeImage,
+                elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
+                maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
                 isPresented: $showSessionComplete,
                 onComplete: {
-                    // Navigate to Activities tab after saving
-                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToActivities"), object: nil)
-                    dismiss()
+                    // Navigate to Social tab after saving (MainTabView will close this sheet)
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+                },
+                onDelete: {
+                    // Don't dismiss - let isPresented = false close the sheet and trigger onChange
                 }
             )
         }
         .onChange(of: showSessionComplete) { oldValue, newValue in
-            // When session complete sheet is dismissed, clear session
+            print("🔄 showSessionComplete changed: \(oldValue) -> \(newValue)")
+            // When session complete sheet is dismissed, ALWAYS clear session
             if !newValue && oldValue {
-                print("🗑️ SessionCompleteView dismissed, clearing session")
+                print("🗑️ Sheet dismissed - stopping everything")
+                // Stop timer immediately
+                isSessionEnding = true
+                stopTimer()
+                locationManager.stopTracking()
+                // Clear session
                 sessionManager.clearActiveSession()
+                print("✅ Session cleared, button should now show STARTA PASS")
+            } else {
+                print("⚠️ onChange triggered but not clearing (oldValue: \(oldValue), newValue: \(newValue))")
             }
         }
     }
@@ -455,16 +544,24 @@ struct SessionMapView: View {
             sessionStartTime = Date()
         }
         
+        // Don't create a new timer if one already exists (to prevent duplicates)
+        if timer != nil {
+            return
+        }
+        
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             sessionDuration += 1
             updatePace()
             updateEarnedPoints()
             
-            // Save session state every 10 seconds
-            if sessionDuration % 10 == 0 {
+            // Save session state every 2 seconds to ensure no data loss
+            if sessionDuration % 2 == 0 {
                 saveSessionState()
             }
         }
+        
+        // Save immediately when timer starts
+        saveSessionState()
     }
     
     func updateEarnedPoints() {
@@ -480,11 +577,23 @@ struct SessionMapView: View {
     }
     
     func saveSessionState() {
-        guard let startTime = sessionStartTime else { return }
+        guard let startTime = sessionStartTime else {
+            print("⚠️ No startTime, not saving")
+            return
+        }
+        
+        print("🔍 saveSessionState - isSessionEnding: \(isSessionEnding)")
+        
+        // Don't save if we're in the process of ending the session
+        if isSessionEnding {
+            print("🛑 Not saving session state - session is ending (isSessionEnding = true)")
+            return
+        }
         
         // Get route coordinates from location manager
         let coords = locationManager.routeCoordinates
         
+        print("💾 Saving session state... (isSessionEnding is FALSE)")
         // Save to SessionManager
         sessionManager.saveActiveSession(
             activityType: activity.rawValue,
@@ -492,7 +601,9 @@ struct SessionMapView: View {
             isPaused: isPaused,
             duration: sessionDuration,
             distance: locationManager.distance,
-            routeCoordinates: coords
+            routeCoordinates: coords,
+            elevationGain: locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
+            maxSpeed: locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil
         )
     }
 
@@ -505,6 +616,10 @@ struct SessionMapView: View {
     func endSession() {
         print("🏁 Ending session...")
         
+        // Set flag to prevent any more saves
+        isSessionEnding = true
+        print("🛑 isSessionEnding = true - no more saves allowed")
+        
         // Stop timer and tracking
         stopTimer()
         locationManager.stopTracking()
@@ -513,6 +628,26 @@ struct SessionMapView: View {
         print("💾 Distance: \(locationManager.distance) km")
         print("💾 Duration: \(sessionDuration) seconds")
         print("💾 Route points: \(locationManager.routeCoordinates.count)")
+        print("📍 Route coordinates: \(locationManager.routeCoordinates)")
+        
+        // Generate route snapshot and wait for it
+        MapSnapshotService.shared.generateRouteSnapshot(routeCoordinates: locationManager.routeCoordinates) { snapshotImage in
+            print("🗺️ Route snapshot generation completed")
+            if let snapshotImage = snapshotImage {
+                print("✅ Route snapshot generated successfully")
+                // Save route image to SessionManager for use in SessionCompleteView
+                DispatchQueue.main.async {
+                    // Store route image temporarily
+                    self.routeImage = snapshotImage
+                    print("📸 Route image stored in view")
+                }
+            } else {
+                print("⚠️ Could not generate route snapshot - using nil")
+                DispatchQueue.main.async {
+                    self.routeImage = nil
+                }
+            }
+        }
         
         // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
         let basePoints = Int(locationManager.distance * 15)
@@ -526,28 +661,25 @@ struct SessionMapView: View {
         
         print("💾 Earned points: \(earnedPoints)")
         
-        print("✅ Showing completion popup...")
-        showCompletionPopup = true
+        // Add small delay to ensure route image is generated before showing completion
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            print("✅ Showing completion popup...")
+            self.showCompletionPopup = true
+        }
     }
 
     func updatePace() {
-        // Om vi inte har kört tillräckligt länge eller distans, visa "0:00"
-        if sessionDuration < 10 || locationManager.distance < 0.01 {
+        // Om vi inte har kört tillräckligt långt eller om distans är 0, visa "0:00"
+        if locationManager.distance < 0.05 {
             currentPace = "0:00"
             return
         }
         
         // Beräkna tempo (sekunder per km)
-        let paceSeconds = (Double(sessionDuration) / locationManager.distance) * 1000
+        let paceSeconds = (Double(sessionDuration) / locationManager.distance)
         
-        // Om tempot är för långsamt (över 20 min/km), visa "0:00"
-        if paceSeconds > 1200 {
-            currentPace = "0:00"
-            return
-        }
-        
-        // Om tempot är för snabbt (under 2 min/km), visa "0:00"
-        if paceSeconds < 120 {
+        // Om tempot är för långsamt (över 25 min/km - står still), visa "0:00"
+        if paceSeconds > 1500 {
             currentPace = "0:00"
             return
         }

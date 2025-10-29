@@ -3,11 +3,15 @@ import Combine
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @StateObject private var statisticsService = StatisticsService.shared
+    @ObservedObject private var statisticsService = StatisticsService.shared
     private let healthKitManager = HealthKitManager.shared
     @State private var showMonthlyPrize = false
     @State private var weeklySteps: [DailySteps] = []
     @State private var isLoadingSteps = false
+    @State private var observers: [NSObjectProtocol] = []
+    @State private var recommendedUsers: [UserSearchResult] = []
+    @State private var isLoadingRecommended = false
+    @State private var followingStatus: [String: Bool] = [:]
     
     var body: some View {
         NavigationStack {
@@ -18,6 +22,9 @@ struct HomeView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        // MARK: - Top Header with Notifications and Search
+                        HomeHeaderView()
+                        
                         // MARK: - Welcome Section
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 16) {
@@ -180,6 +187,43 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 20)
                         
+                        // MARK: - Recommended Friends Section
+                        if !recommendedUsers.isEmpty || isLoadingRecommended {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Rekommenderade vänner")
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 20)
+                                
+                                if isLoadingRecommended {
+                                    HStack {
+                                        ProgressView()
+                                        Spacer()
+                                    }
+                                    .padding(20)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                                    .padding(.horizontal, 20)
+                                } else {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 12) {
+                                            ForEach(recommendedUsers) { user in
+                                                RecommendedFriendCard(
+                                                    user: user,
+                                                    isFollowing: followingStatus[user.id] ?? false,
+                                                    onFollowToggle: {
+                                                        toggleFollow(userId: user.id)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        .padding(.horizontal, 20)
+                                    }
+                                }
+                            }
+                        }
+                        
                         // MARK: - Weekly Steps Section
                         VStack(alignment: .leading, spacing: 16) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -246,7 +290,7 @@ struct HomeView: View {
             }
             
             // Lyssna på profilbild uppdateringar
-            NotificationCenter.default.addObserver(
+            let profileObserver = NotificationCenter.default.addObserver(
                 forName: .profileImageUpdated,
                 object: nil,
                 queue: .main
@@ -258,7 +302,7 @@ struct HomeView: View {
             }
             
             // Lyssna på uppdateringar efter att en workout har sparats
-            NotificationCenter.default.addObserver(
+            let workoutObserver = NotificationCenter.default.addObserver(
                 forName: NSNotification.Name("WorkoutSaved"),
                 object: nil,
                 queue: .main
@@ -270,10 +314,72 @@ struct HomeView: View {
                     }
                 }
             }
+            
+            observers.append(contentsOf: [profileObserver, workoutObserver])
+            
+            // Load recommended users
+            loadRecommendedUsers()
         }
         .onDisappear {
-            NotificationCenter.default.removeObserver(self, name: .profileImageUpdated, object: nil)
-            NotificationCenter.default.removeObserver(self, name: NSNotification.Name("WorkoutSaved"), object: nil)
+            // Remove all observers
+            for observer in observers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            observers.removeAll()
+        }
+    }
+    
+    private func loadRecommendedUsers() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isLoadingRecommended = true
+        Task {
+            do {
+                // Use retry helper for better network resilience
+                let recommended = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
+                    return try await SocialService.shared.getRecommendedUsers(userId: userId, limit: 10)
+                }
+                
+                // Check follow status for each recommended user
+                var followStatus: [String: Bool] = [:]
+                for user in recommended {
+                    let isFollowing = try await SocialService.shared.isFollowing(followerId: userId, followingId: user.id)
+                    followStatus[user.id] = isFollowing
+                }
+                
+                await MainActor.run {
+                    self.recommendedUsers = recommended
+                    self.followingStatus = followStatus
+                    self.isLoadingRecommended = false
+                }
+            } catch {
+                print("❌ Error loading recommended users after retries: \(error)")
+                await MainActor.run {
+                    self.isLoadingRecommended = false
+                }
+            }
+        }
+    }
+    
+    private func toggleFollow(userId: String) {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        let isCurrentlyFollowing = followingStatus[userId] ?? false
+        
+        Task {
+            do {
+                if isCurrentlyFollowing {
+                    try await SocialService.shared.unfollowUser(followerId: currentUserId, followingId: userId)
+                } else {
+                    try await SocialService.shared.followUser(followerId: currentUserId, followingId: userId)
+                }
+                
+                await MainActor.run {
+                    followingStatus[userId] = !isCurrentlyFollowing
+                }
+            } catch {
+                print("❌ Error toggling follow: \(error)")
+            }
         }
     }
     
@@ -405,6 +511,49 @@ struct WeeklyStepsRow: View {
                 .frame(width: 55, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct RecommendedFriendCard: View {
+    let user: UserSearchResult
+    let isFollowing: Bool
+    let onFollowToggle: () -> Void
+    @State private var isProcessing = false
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            NavigationLink(destination: UserProfileView(userId: user.id)) {
+                ProfileImage(url: user.avatarUrl, size: 60)
+            }
+            
+            Text(user.name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.black)
+                .lineLimit(1)
+            
+            Button(action: {
+                guard !isProcessing else { return }
+                isProcessing = true
+                onFollowToggle()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isProcessing = false
+                }
+            }) {
+                Text(isFollowing ? "Följer" : "Följ")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isFollowing ? .gray : .white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(isFollowing ? Color(.systemGray5) : Color.black)
+                    .cornerRadius(8)
+            }
+            .disabled(isProcessing)
+        }
+        .frame(width: 100)
+        .padding(12)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
