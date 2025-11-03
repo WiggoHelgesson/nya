@@ -133,16 +133,20 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            print("📥 NavigateToSocial notification received")
-            // Navigate to Social tab after saving workout
+            print("📥 NavigateToSocial - navigating to Social and closing sheets")
             selectedTab = 1
-            // Wait a bit for onChange in StartSessionView to clear session first
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                // Close any open session sheets
-                showStartSession = false
-                showResumeSession = false
-                print("✅ Closed session sheets")
-            }
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseStartSession"))) { _ in
+            print("📥 CloseStartSession - closing session sheets")
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
+            print("📥 SessionFinalized - ensure resume button hidden and sheets closed")
+            showStartSession = false
+            showResumeSession = false
         }
         .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
             UsernameRequiredView()

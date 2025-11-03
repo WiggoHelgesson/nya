@@ -1,5 +1,6 @@
 import SwiftUI
 import Supabase
+import UIKit
 
 struct AuthenticationView: View {
     @State private var isLoginMode = true

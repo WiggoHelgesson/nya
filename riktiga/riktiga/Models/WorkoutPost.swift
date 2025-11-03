@@ -13,6 +13,7 @@ struct WorkoutPost: Codable, Identifiable {
     let elevationGain: Double?
     let maxSpeed: Double?
     let createdAt: String
+    let splits: [WorkoutSplit]?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,9 +28,21 @@ struct WorkoutPost: Codable, Identifiable {
         case elevationGain = "elevation_gain"
         case maxSpeed = "max_speed"
         case createdAt = "created_at"
+        case splits = "split_data"
     }
     
-    init(id: String = UUID().uuidString, userId: String, activityType: String, title: String, description: String? = nil, distance: Double? = nil, duration: Int? = nil, imageUrl: String? = nil, userImageUrl: String? = nil, elevationGain: Double? = nil, maxSpeed: Double? = nil) {
+    init(id: String = UUID().uuidString,
+         userId: String,
+         activityType: String,
+         title: String,
+         description: String? = nil,
+         distance: Double? = nil,
+         duration: Int? = nil,
+         imageUrl: String? = nil,
+         userImageUrl: String? = nil,
+         elevationGain: Double? = nil,
+         maxSpeed: Double? = nil,
+         splits: [WorkoutSplit]? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -42,5 +55,6 @@ struct WorkoutPost: Codable, Identifiable {
         self.elevationGain = elevationGain
         self.maxSpeed = maxSpeed
         self.createdAt = ISO8601DateFormatter().string(from: Date())
+        self.splits = splits
     }
 }

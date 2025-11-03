@@ -1,6 +1,7 @@
 import SwiftUI
 import RevenueCat
 import RevenueCatUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -8,7 +9,6 @@ struct SettingsView: View {
     @ObservedObject private var purchaseService = PurchaseService.shared
     @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var showSubscriptionView = false
-    @State private var showProManagementView = false
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
     
@@ -94,9 +94,7 @@ struct SettingsView: View {
                             SettingsRow(
                                 title: "Hantera prenumeration",
                                 icon: "chevron.right",
-                                action: {
-                                    showProManagementView = true
-                                }
+                                action: openSubscriptionManagement
                             )
                         }
                         .background(Color.white)
@@ -110,6 +108,15 @@ struct SettingsView: View {
                             .foregroundColor(.gray)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 8)
+                        
+                        HealthDataDisclosureView(
+                            title: "Så använder vi Apple Health",
+                            description: "Up&Down läser dina steg- och distansdata från Apple Health för att visa statistik och topplistor. Du kan när som helst ändra behörigheten i Hälsa-appen.",
+                            showsManageButton: true,
+                            manageAction: openHealthSettings
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
                         
                         VStack(spacing: 0) {
                             SettingsRow(
@@ -215,14 +222,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showSubscriptionView) {
                 PresentPaywallView()
             }
-            .sheet(isPresented: $showProManagementView) {
-                ProManagementView()
-            }
             .task {
                 // Only load if not already loaded or loading
-                if !revenueCatManager.isLoading && revenueCatManager.customerInfo == nil {
-                    await revenueCatManager.loadCustomerInfo()
-                }
+                await revenueCatManager.syncAndRefresh()
             }
             .confirmationDialog("Radera konto", isPresented: $showDeleteAccountConfirmation, titleVisibility: .visible) {
                 Button("Radera konto", role: .destructive) {
@@ -264,6 +266,16 @@ struct SettingsView: View {
         if let url = URL(string: urlString) {
             UIApplication.shared.open(url)
         }
+    }
+    
+    private func openHealthSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+    
+    private func openSubscriptionManagement() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        UIApplication.shared.open(url)
     }
 }
 

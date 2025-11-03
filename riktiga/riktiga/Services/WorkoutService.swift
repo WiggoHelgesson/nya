@@ -12,13 +12,31 @@ struct AnyEncodable: Encodable {
     }
     
     func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        
         if value is NSNull {
+            var container = encoder.singleValueContainer()
             try container.encodeNil()
             return
         }
         
+        if let dict = value as? [String: Any] {
+            var container = encoder.container(keyedBy: DynamicCodingKeys.self)
+            for (key, nestedValue) in dict {
+                if let codingKey = DynamicCodingKeys(stringValue: key) {
+                    try container.encode(AnyEncodable(nestedValue), forKey: codingKey)
+                }
+            }
+            return
+        }
+        
+        if let array = value as? [Any] {
+            var container = encoder.unkeyedContainer()
+            for element in array {
+                try container.encode(AnyEncodable(element))
+            }
+            return
+        }
+        
+        var container = encoder.singleValueContainer()
         switch value {
         case let string as String:
             try container.encode(string)
@@ -28,10 +46,26 @@ struct AnyEncodable: Encodable {
             try container.encode(double)
         case let bool as Bool:
             try container.encode(bool)
+        case let date as Date:
+            try container.encode(date.iso8601String)
+        case let encodable as Encodable:
+            try encodable.encode(to: encoder)
         default:
-            // For any other type, encode as string description
             try container.encode(String(describing: value))
         }
+    }
+    
+    private struct DynamicCodingKeys: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+        init?(stringValue: String) { self.stringValue = stringValue; self.intValue = nil }
+        init?(intValue: Int) { self.stringValue = "\(intValue)"; self.intValue = intValue }
+    }
+}
+
+private extension Date {
+    var iso8601String: String {
+        ISO8601DateFormatter().string(from: self)
     }
 }
 
@@ -129,6 +163,7 @@ class WorkoutService {
     }
     
     func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, earnedPoints: Int = 0) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
         var postToSave = post
         var uploadedRouteImageUrl: String? = nil
         var uploadedUserImageUrl: String? = nil
@@ -189,7 +224,8 @@ class WorkoutService {
             imageUrl: uploadedRouteImageUrl,
             userImageUrl: uploadedUserImageUrl,
             elevationGain: post.elevationGain,
-            maxSpeed: post.maxSpeed
+            maxSpeed: post.maxSpeed,
+            splits: post.splits
         )
         
         do {
@@ -230,6 +266,9 @@ class WorkoutService {
             if let maxSpeed = postToSave.maxSpeed {
                 minimalPost["max_speed"] = AnyEncodable(maxSpeed)
             }
+            if let splits = postToSave.splits, let splitPayload = encodeSplits(splits) {
+                minimalPost["split_data"] = AnyEncodable(splitPayload)
+            }
             
             try await supabase
                 .from("workout_posts")
@@ -253,24 +292,20 @@ class WorkoutService {
     }
     
     func fetchUserWorkoutPosts(userId: String) async throws -> [WorkoutPost] {
-        do {
-            let posts: [WorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select()
-                .eq("user_id", value: userId)
-                .order("created_at", ascending: false)
-                .execute()
-                .value
-            
-            print("✅ Fetched \(posts.count) workout posts")
-            return posts
-        } catch {
-            print("❌ Error fetching workout posts: \(error)")
-            return []
-        }
+        try await AuthSessionManager.shared.ensureValidSession()
+        let posts: [WorkoutPost] = try await supabase
+            .from("workout_posts")
+            .select()
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        print("✅ Fetched \(posts.count) workout posts")
+        return posts
     }
     
     func fetchAllWorkoutPosts() async throws -> [WorkoutPost] {
+        try await AuthSessionManager.shared.ensureValidSession()
         do {
             let posts: [WorkoutPost] = try await supabase
                 .from("workout_posts")
@@ -286,4 +321,88 @@ class WorkoutService {
             return []
         }
     }
+    
+    func deleteWorkoutPost(postId: String, userId: String) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        print("🗑️ Deleting workout post: \(postId)")
+        
+        // First, get the post to find image URLs
+        let response: [WorkoutPost] = try await supabase
+            .from("workout_posts")
+            .select()
+            .eq("id", value: postId)
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+        
+        guard let post = response.first else {
+            print("⚠️ Post not found or user doesn't own it")
+            return
+        }
+        
+        // Delete images from storage if they exist
+        if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
+            // Extract filename from URL
+            if let filename = imageUrl.components(separatedBy: "/").last {
+                do {
+                    try await supabase.storage
+                        .from("workout-images")
+                        .remove(paths: [filename])
+                    print("✅ Deleted route image: \(filename)")
+                } catch {
+                    print("⚠️ Could not delete route image: \(error)")
+                }
+            }
+        }
+        
+        if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
+            // Extract filename from URL
+            if let filename = userImageUrl.components(separatedBy: "/").last {
+                do {
+                    try await supabase.storage
+                        .from("workout-images")
+                        .remove(paths: [filename])
+                    print("✅ Deleted user image: \(filename)")
+                } catch {
+                    print("⚠️ Could not delete user image: \(error)")
+                }
+            }
+        }
+        
+        // Delete all likes for this post
+        try await supabase
+            .from("workout_post_likes")
+            .delete()
+            .eq("workout_post_id", value: postId)
+            .execute()
+        print("✅ Deleted all likes for post")
+        
+        // Delete all comments for this post
+        try await supabase
+            .from("workout_post_comments")
+            .delete()
+            .eq("workout_post_id", value: postId)
+            .execute()
+        print("✅ Deleted all comments for post")
+        
+        // Delete the post itself
+        try await supabase
+            .from("workout_posts")
+            .delete()
+            .eq("id", value: postId)
+            .eq("user_id", value: userId)
+            .execute()
+        print("✅ Deleted workout post from database")
+        
+        // TODO: Should also subtract points from user's XP
+    }
+}
+
+private func encodeSplits(_ splits: [WorkoutSplit]) -> [[String: Any]]? {
+    let encoder = JSONEncoder()
+    guard let data = try? encoder.encode(splits),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+        return nil
+    }
+    return json
 }

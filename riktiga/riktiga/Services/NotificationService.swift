@@ -40,9 +40,10 @@ class NotificationService {
             "triggered_by_user_id": AnyEncodable(likedByUserId),
             "triggered_by_user_name": AnyEncodable(likedByUserName),
             "triggered_by_user_avatar": AnyEncodable(likedByUserAvatar),
+            "actor_id": AnyEncodable(likedByUserId),
+            "actor_username": AnyEncodable(likedByUserName),
             "type": AnyEncodable("like"),
             "post_id": AnyEncodable(postId),
-            "description": AnyEncodable("gillade din post '\(postTitle)'"),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
             "is_read": AnyEncodable(false)
         ]
@@ -77,9 +78,10 @@ class NotificationService {
             "triggered_by_user_id": AnyEncodable(commentedByUserId),
             "triggered_by_user_name": AnyEncodable(commentedByUserName),
             "triggered_by_user_avatar": AnyEncodable(commentedByUserAvatar),
+            "actor_id": AnyEncodable(commentedByUserId),
+            "actor_username": AnyEncodable(commentedByUserName),
             "type": AnyEncodable("comment"),
             "post_id": AnyEncodable(postId),
-            "description": AnyEncodable("kommenterade: \"\(String(commentText.prefix(30)))...\""),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
             "is_read": AnyEncodable(false)
         ]
@@ -106,14 +108,28 @@ class NotificationService {
         followedByUserName: String,
         followedByUserAvatar: String?
     ) async throws {
+        // Remove any existing follow notification from the same actor to prevent duplicates
+        do {
+            try await supabase
+                .from("notifications")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("actor_id", value: followedByUserId)
+                .eq("type", value: "follow")
+                .execute()
+        } catch {
+            print("⚠️ Failed to clear existing follow notification: \(error)")
+        }
+        
         let notification = [
             "user_id": AnyEncodable(userId),
             "triggered_by_user_id": AnyEncodable(followedByUserId),
             "triggered_by_user_name": AnyEncodable(followedByUserName),
             "triggered_by_user_avatar": AnyEncodable(followedByUserAvatar),
+            "actor_id": AnyEncodable(followedByUserId),
+            "actor_username": AnyEncodable(followedByUserName),
             "type": AnyEncodable("follow"),
             "post_id": AnyEncodable(NSNull()),
-            "description": AnyEncodable("började följa dig"),
             "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
             "is_read": AnyEncodable(false)
         ]
@@ -159,6 +175,37 @@ class NotificationService {
             print("✅ Notification deleted")
         } catch {
             print("❌ Error deleting notification: \(error)")
+            throw error
+        }
+    }
+    
+    // MARK: - Unread Count
+    func getUnreadCount(userId: String) async throws -> Int {
+        do {
+            let response = try await supabase
+                .from("notifications")
+                .select("id", count: .exact)
+                .eq("user_id", value: userId)
+                .eq("is_read", value: false)
+                .execute()
+            return response.count ?? 0
+        } catch {
+            print("❌ Error fetching unread notification count: \(error)")
+            throw error
+        }
+    }
+    
+    func markAllAsRead(userId: String) async throws {
+        do {
+            try await supabase
+                .from("notifications")
+                .update(["is_read": AnyEncodable(true)])
+                .eq("user_id", value: userId)
+                .eq("is_read", value: false)
+                .execute()
+            print("✅ Marked all notifications as read for user \(userId)")
+        } catch {
+            print("❌ Error marking all notifications as read: \(error)")
             throw error
         }
     }

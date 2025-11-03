@@ -12,6 +12,7 @@ struct SocialWorkoutPostRaw: Codable {
     let imageUrl: String?
     let userImageUrl: String?
     let createdAt: String
+    let splits: [WorkoutSplit]?
     
     // JOIN data
     let profiles: ProfileData?
@@ -29,6 +30,7 @@ struct SocialWorkoutPostRaw: Codable {
         case imageUrl = "image_url"
         case userImageUrl = "user_image_url"
         case createdAt = "created_at"
+        case splits = "split_data"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -74,6 +76,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let likeCount: Int?
     let commentCount: Int?
     let isLikedByCurrentUser: Bool?
+    let splits: [WorkoutSplit]?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -94,6 +97,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case likeCount = "like_count"
         case commentCount = "comment_count"
         case isLikedByCurrentUser = "is_liked_by_current_user"
+        case splits = "split_data"
     }
     
     // Custom decoder to handle JOIN results
@@ -124,6 +128,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         commentCount = raw.workoutPostComments?.first?.count ?? 0
         
         isLikedByCurrentUser = false // Will be set separately
+        splits = raw.splits
     }
     
     init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
@@ -145,5 +150,58 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser
+        self.splits = post.splits
+    }
+
+    // Memberwise convenience initializer to allow updating selective fields
+    init(
+        id: String,
+        userId: String,
+        activityType: String,
+        title: String,
+        description: String?,
+        distance: Double?,
+        duration: Int?,
+        imageUrl: String?,
+        userImageUrl: String?,
+        createdAt: String,
+        userName: String?,
+        userAvatarUrl: String?,
+        userIsPro: Bool?,
+        location: String?,
+        strokes: Int?,
+        likeCount: Int?,
+        commentCount: Int?,
+        isLikedByCurrentUser: Bool?,
+        splits: [WorkoutSplit]?
+    ) {
+        self.id = id
+        self.userId = userId
+        self.activityType = activityType
+        self.title = title
+        self.description = description
+        self.distance = distance
+        self.duration = duration
+        self.imageUrl = imageUrl
+        self.userImageUrl = userImageUrl
+        self.createdAt = createdAt
+        self.userName = userName
+        self.userAvatarUrl = userAvatarUrl
+        self.userIsPro = userIsPro
+        self.location = location
+        self.strokes = strokes
+        self.likeCount = likeCount
+        self.commentCount = commentCount
+        self.isLikedByCurrentUser = isLikedByCurrentUser
+        self.splits = splits
+    }
+}
+
+extension SocialWorkoutPost: Hashable {
+    static func == (lhs: SocialWorkoutPost, rhs: SocialWorkoutPost) -> Bool {
+        lhs.id == rhs.id
+    }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }

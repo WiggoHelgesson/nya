@@ -7,15 +7,18 @@ struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var username: String = ""
-    @State private var pb5km: String = ""
-    @State private var pb10km: String = ""
-    @State private var pbMarathon: String = ""
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var photosPickerItem: PhotosPickerItem?
+    @State private var supportsPersonalBests = ProfileService.shared.hasPersonalBestColumns()
+    @State private var pb5kmMinutesText: String = ""
+    @State private var pb10kmHoursText: String = ""
+    @State private var pb10kmMinutesText: String = ""
+    @State private var pbMarathonHoursText: String = ""
+    @State private var pbMarathonMinutesText: String = ""
     
     var body: some View {
         NavigationStack {
@@ -42,7 +45,7 @@ struct EditProfileView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.white)
                                         .frame(width: 40, height: 40)
-                                        .background(AppColors.brandBlue)
+                                        .background(Color.black)
                                         .clipShape(Circle())
                                 }
                             }
@@ -64,75 +67,53 @@ struct EditProfileView: View {
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .padding(.horizontal, 16)
                         }
-                        
-                        // Personal Bests Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Personliga rekord")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 16)
-                            
-                            // 5K PB
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("5 km", systemImage: "figure.run")
-                                    .font(.system(size: 14, weight: .medium))
+
+                        // Personal Best Section
+                        if supportsPersonalBests {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Personliga rekord")
+                                    .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.black)
                                     .padding(.horizontal, 16)
                                 
-                                HStack {
-                                    TextField("mm:ss", text: $pb5km, prompt: Text("mm:ss").foregroundColor(.gray))
-                                        .keyboardType(.numbersAndPunctuation)
+                                VStack(alignment: .leading, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("5 km")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.gray)
+                                            .padding(.horizontal, 16)
+                                        pbTextField("Minuter", text: $pb5kmMinutesText, maxLength: 2, maxValue: 59)
+                                            .padding(.horizontal, 16)
+                                    }
                                     
-                                    Text("minuter")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 14))
-                                }
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .padding(.horizontal, 16)
-                            }
-                            
-                            // 10K PB
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("10 km", systemImage: "figure.run")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 16)
-                                
-                                HStack {
-                                    TextField("mm:ss", text: $pb10km, prompt: Text("mm:ss").foregroundColor(.gray))
-                                        .keyboardType(.numbersAndPunctuation)
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("10 km")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.gray)
+                                            .padding(.horizontal, 16)
+                                        HStack(spacing: 12) {
+                                            pbTextField("Timmar", text: $pb10kmHoursText, maxLength: 1, maxValue: 9)
+                                                .frame(maxWidth: .infinity)
+                                            pbTextField("Minuter", text: $pb10kmMinutesText, maxLength: 2, maxValue: 59)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .padding(.horizontal, 16)
+                                    }
                                     
-                                    Text("minuter")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 14))
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("42.2 km")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.gray)
+                                            .padding(.horizontal, 16)
+                                        HStack(spacing: 12) {
+                                            pbTextField("Timmar", text: $pbMarathonHoursText, maxLength: 1, maxValue: 9)
+                                                .frame(maxWidth: .infinity)
+                                            pbTextField("Minuter", text: $pbMarathonMinutesText, maxLength: 2, maxValue: 59)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .padding(.horizontal, 16)
+                                    }
                                 }
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .padding(.horizontal, 16)
-                            }
-                            
-                            // Marathon PB
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Maraton (42.2 km)", systemImage: "figure.run")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 16)
-                                
-                                HStack {
-                                    TextField("hh:mm:ss", text: $pbMarathon, prompt: Text("hh:mm:ss").foregroundColor(.gray))
-                                        .keyboardType(.numbersAndPunctuation)
-                                    
-                                    Text("timmar")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 14))
-                                }
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .padding(.horizontal, 16)
                             }
                         }
                         
@@ -151,11 +132,12 @@ struct EditProfileView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(16)
-                        .background(AppColors.brandBlue)
+                        .background(Color.black)
                         .cornerRadius(8)
                         .disabled(isSaving)
                         .padding(16)
                     }
+                    .padding(.horizontal, 16)
                 }
             }
             .navigationTitle("Redigera profil")
@@ -191,13 +173,118 @@ struct EditProfileView: View {
         }
     }
     
+    private func pbTextField(_ placeholder: String, text: Binding<String>, maxLength: Int = 2, maxValue: Int? = nil) -> some View {
+        TextField(placeholder, text: text)
+            .keyboardType(.numberPad)
+            .onChange(of: text.wrappedValue) { newValue in
+                var filtered = newValue.filter { $0.isNumber }
+                
+                // Limit length
+                if filtered.count > maxLength {
+                    filtered = String(filtered.prefix(maxLength))
+                }
+                
+                // Limit value
+                if let maxValue = maxValue, let intValue = Int(filtered), intValue > maxValue {
+                    filtered = String(maxValue)
+                }
+                
+                if filtered != newValue {
+                    text.wrappedValue = filtered
+                }
+            }
+            .padding(12)
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+    }
+
     private func loadCurrentProfile() {
         username = authViewModel.currentUser?.name ?? ""
+        pb5kmMinutesText = authViewModel.currentUser?.pb5kmMinutes.map { String($0) } ?? ""
+        pb10kmHoursText = authViewModel.currentUser?.pb10kmHours.map { String($0) } ?? ""
+        pb10kmMinutesText = authViewModel.currentUser?.pb10kmMinutes.map { String($0) } ?? ""
+        pbMarathonHoursText = authViewModel.currentUser?.pbMarathonHours.map { String($0) } ?? ""
+        pbMarathonMinutesText = authViewModel.currentUser?.pbMarathonMinutes.map { String($0) } ?? ""
+        supportsPersonalBests = ProfileService.shared.hasPersonalBestColumns()
     }
     
     private func saveProfile() {
         isSaving = true
         
+        let trimmed5km = pb5kmMinutesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pb5kmValue: Int? = nil
+        if !trimmed5km.isEmpty {
+            guard let value = Int(trimmed5km), value >= 0 else {
+                isSaving = false
+                alertMessage = "Ange en giltig tid i minuter för 5 km."
+                showAlert = true
+                return
+            }
+            pb5kmValue = value
+        }
+
+        let trimmed10kHours = pb10kmHoursText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pb10kHoursValue: Int? = nil
+        if !trimmed10kHours.isEmpty {
+            guard let value = Int(trimmed10kHours), value >= 0 else {
+                isSaving = false
+                alertMessage = "Ange ett giltigt antal timmar för 10 km."
+                showAlert = true
+                return
+            }
+            pb10kHoursValue = value
+        }
+
+        let trimmed10kMinutes = pb10kmMinutesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pb10kMinutesValue: Int? = nil
+        if !trimmed10kMinutes.isEmpty {
+            guard let value = Int(trimmed10kMinutes), (0..<60).contains(value) else {
+                isSaving = false
+                alertMessage = "10 km minuter måste vara mellan 0 och 59."
+                showAlert = true
+                return
+            }
+            pb10kMinutesValue = value
+        }
+
+        if pb10kMinutesValue != nil && pb10kHoursValue == nil {
+            pb10kHoursValue = 0
+        }
+        if pb10kHoursValue != nil && pb10kMinutesValue == nil {
+            pb10kMinutesValue = 0
+        }
+
+        let trimmedMarathonHours = pbMarathonHoursText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pbMarathonHoursValue: Int? = nil
+        if !trimmedMarathonHours.isEmpty {
+            guard let value = Int(trimmedMarathonHours), value >= 0 else {
+                isSaving = false
+                alertMessage = "Ange ett giltigt antal timmar för 42.2 km."
+                showAlert = true
+                return
+            }
+            pbMarathonHoursValue = value
+        }
+
+        let trimmedMarathonMinutes = pbMarathonMinutesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var pbMarathonMinutesValue: Int? = nil
+        if !trimmedMarathonMinutes.isEmpty {
+            guard let value = Int(trimmedMarathonMinutes), (0..<60).contains(value) else {
+                isSaving = false
+                alertMessage = "42.2 km minuter måste vara mellan 0 och 59."
+                showAlert = true
+                return
+            }
+            pbMarathonMinutesValue = value
+        }
+
+        if pbMarathonMinutesValue != nil && pbMarathonHoursValue == nil {
+            pbMarathonHoursValue = 0
+        }
+        if pbMarathonHoursValue != nil && pbMarathonMinutesValue == nil {
+            pbMarathonMinutesValue = 0
+        }
+
         Task {
             do {
                 // Upload image if selected
@@ -210,10 +297,13 @@ struct EditProfileView: View {
                 try await updateUserProfile(
                     username: username,
                     avatarUrl: imageUrl,
-                    pb5km: pb5km,
-                    pb10km: pb10km,
-                    pbMarathon: pbMarathon
+                    pb5kmMinutes: pb5kmValue,
+                    pb10kmHours: pb10kHoursValue,
+                    pb10kmMinutes: pb10kMinutesValue,
+                    pbMarathonHours: pbMarathonHoursValue,
+                    pbMarathonMinutes: pbMarathonMinutesValue
                 )
+                supportsPersonalBests = ProfileService.shared.hasPersonalBestColumns()
                 
                 await MainActor.run {
                     isSaving = false
@@ -252,41 +342,79 @@ struct EditProfileView: View {
     private func updateUserProfile(
         username: String,
         avatarUrl: String?,
-        pb5km: String,
-        pb10km: String,
-        pbMarathon: String
+        pb5kmMinutes: Int?,
+        pb10kmHours: Int?,
+        pb10kmMinutes: Int?,
+        pbMarathonHours: Int?,
+        pbMarathonMinutes: Int?
     ) async throws {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         let supabase = SupabaseConfig.supabase
         
-        // Build update dictionary directly
-        var updateDict: [String: String?] = [
-            "username": username,
-            "pb_5km": pb5km.isEmpty ? nil : pb5km,
-            "pb_10km": pb10km.isEmpty ? nil : pb10km,
-            "pb_marathon": pbMarathon.isEmpty ? nil : pbMarathon
+        var updateData: [String: AnyEncodable] = [
+            "username": AnyEncodable(username),
+            "pb_5km_minutes": AnyEncodable(pb5kmMinutes),
+            "pb_10km_hours": AnyEncodable(pb10kmHours),
+            "pb_10km_minutes": AnyEncodable(pb10kmMinutes),
+            "pb_marathon_hours": AnyEncodable(pbMarathonHours),
+            "pb_marathon_minutes": AnyEncodable(pbMarathonMinutes)
         ]
         
         if let avatarUrl = avatarUrl {
-            updateDict["avatar_url"] = avatarUrl
+            updateData["avatar_url"] = AnyEncodable(avatarUrl)
         }
         
-        _ = try await supabase
-            .from("profiles")
-            .update(updateDict)
-            .eq("id", value: userId)
-            .execute()
-        
-        // Update auth view model
-        await MainActor.run {
-            authViewModel.currentUser?.name = username
-            if let avatarUrl = avatarUrl {
-                authViewModel.currentUser?.avatarUrl = avatarUrl
+        do {
+            _ = try await supabase
+                .from("profiles")
+                .update(updateData)
+                .eq("id", value: userId)
+                .execute()
+            
+            await MainActor.run {
+                authViewModel.currentUser?.name = username
+                if let avatarUrl = avatarUrl {
+                    authViewModel.currentUser?.avatarUrl = avatarUrl
+                }
+                authViewModel.currentUser?.pb5kmMinutes = pb5kmMinutes
+                authViewModel.currentUser?.pb10kmHours = pb10kmHours
+                authViewModel.currentUser?.pb10kmMinutes = pb10kmMinutes
+                authViewModel.currentUser?.pbMarathonHours = pbMarathonHours
+                authViewModel.currentUser?.pbMarathonMinutes = pbMarathonMinutes
+            }
+            print("✅ Profile updated successfully")
+        } catch {
+            if ProfileService.shared.isMissingPersonalBestColumnsError(error) {
+                print("ℹ️ Personal best columns missing during update. Falling back to username/avatar only.")
+                var fallbackData: [String: AnyEncodable] = [
+                    "username": AnyEncodable(username)
+                ]
+                if let avatarUrl = avatarUrl {
+                    fallbackData["avatar_url"] = AnyEncodable(avatarUrl)
+                }
+                _ = try await supabase
+                    .from("profiles")
+                    .update(fallbackData)
+                    .eq("id", value: userId)
+                    .execute()
+                
+                await MainActor.run {
+                    authViewModel.currentUser?.name = username
+                    if let avatarUrl = avatarUrl {
+                        authViewModel.currentUser?.avatarUrl = avatarUrl
+                    }
+                    authViewModel.currentUser?.pb5kmMinutes = nil
+                    authViewModel.currentUser?.pb10kmHours = nil
+                    authViewModel.currentUser?.pb10kmMinutes = nil
+                    authViewModel.currentUser?.pbMarathonHours = nil
+                    authViewModel.currentUser?.pbMarathonMinutes = nil
+                }
+                print("✅ Profile updated successfully (without personal bests)")
+            } else {
+                throw error
             }
         }
-        
-        print("✅ Profile updated successfully")
     }
 }
 

@@ -9,6 +9,8 @@ class RevenueCatManager: NSObject, ObservableObject {
     @Published var customerInfo: CustomerInfo?
     @Published var offerings: Offerings?
     @Published var isPremium: Bool = false
+    @Published var activeEntitlementId: String? = nil
+    @Published var activeExpirationDate: Date? = nil
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
     
@@ -46,9 +48,17 @@ class RevenueCatManager: NSObject, ObservableObject {
             let customerInfo = try await Purchases.shared.customerInfo()
             await MainActor.run {
                 self.customerInfo = customerInfo
-                self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
+                if let firstActive = customerInfo.entitlements.active.values.first {
+                    self.isPremium = true
+                    self.activeEntitlementId = firstActive.identifier
+                    self.activeExpirationDate = firstActive.expirationDate
+                } else {
+                    self.isPremium = false
+                    self.activeEntitlementId = nil
+                    self.activeExpirationDate = nil
+                }
                 self.isLoading = false
-                print("✅ Customer info loaded. Premium: \(self.isPremium)")
+                print("✅ Customer info loaded. Premium: \(self.isPremium) id: \(self.activeEntitlementId ?? "-")")
             }
         } catch {
             await MainActor.run {
@@ -86,10 +96,7 @@ class RevenueCatManager: NSObject, ObservableObject {
             let result = try await Purchases.shared.purchase(package: package)
             
             if !result.userCancelled {
-                await MainActor.run {
-                    self.customerInfo = result.customerInfo
-                    self.isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
-                }
+                await self.applyCustomerInfo(result.customerInfo)
                 
                 // Update Pro status in database
                 if self.isPremium {
@@ -172,11 +179,8 @@ class RevenueCatManager: NSObject, ObservableObject {
         
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
-            await MainActor.run {
-                self.customerInfo = customerInfo
-                self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
-                self.isLoading = false
-            }
+            await self.applyCustomerInfo(customerInfo)
+            await MainActor.run { self.isLoading = false }
             print("✅ Purchases restored successfully")
             return true
         } catch {
@@ -191,7 +195,7 @@ class RevenueCatManager: NSObject, ObservableObject {
     
     // MARK: - Check Purchase Status
     func checkPurchaseStatus() -> Bool {
-        return customerInfo?.entitlements["premium"]?.isActive == true
+        return !(customerInfo?.entitlements.active.isEmpty ?? true)
     }
     
     // MARK: - Get Product Price
@@ -238,6 +242,55 @@ class RevenueCatManager: NSObject, ObservableObject {
             print("❌ Error updating Pro status in database: \(error)")
         }
     }
+
+    // MARK: - Helpers
+    @MainActor
+    private func applyCustomerInfo(_ info: CustomerInfo) async {
+        self.customerInfo = info
+        if let firstActive = info.entitlements.active.values.first {
+            self.isPremium = true
+            self.activeEntitlementId = firstActive.identifier
+            self.activeExpirationDate = firstActive.expirationDate
+        } else {
+            self.isPremium = false
+            self.activeEntitlementId = nil
+            self.activeExpirationDate = nil
+        }
+    }
+
+    func syncAndRefresh() async {
+        await MainActor.run { self.isLoading = true }
+        do {
+            try await Purchases.shared.syncPurchases()
+            let info = try await Purchases.shared.customerInfo()
+            await self.applyCustomerInfo(info)
+        } catch {
+            await MainActor.run { self.errorMessage = error.localizedDescription }
+        }
+        await MainActor.run { self.isLoading = false }
+    }
+
+    // Bind RevenueCat purchases to our Supabase user id
+    func logInFor(appUserId: String) async {
+        do {
+            let result = try await Purchases.shared.logIn(appUserId)
+            await self.applyCustomerInfo(result.customerInfo)
+            print("✅ RevenueCat logged in as appUserId=\(appUserId)")
+        } catch {
+            print("❌ RevenueCat logIn failed: \(error)")
+        }
+    }
+
+    func logOutRevenueCat() async {
+        do {
+            _ = try await Purchases.shared.logOut()
+            let info = try await Purchases.shared.customerInfo()
+            await self.applyCustomerInfo(info)
+            print("✅ RevenueCat logged out")
+        } catch {
+            print("❌ RevenueCat logOut failed: \(error)")
+        }
+    }
 }
 
 // MARK: - PurchasesDelegate
@@ -245,8 +298,16 @@ extension RevenueCatManager: PurchasesDelegate {
     func purchases(_ purchases: Purchases, receivedUpdated customerInfo: CustomerInfo) {
         DispatchQueue.main.async {
             self.customerInfo = customerInfo
-            self.isPremium = customerInfo.entitlements["premium"]?.isActive == true
-            print("🔄 Customer info updated. Premium: \(self.isPremium)")
+            if let firstActive = customerInfo.entitlements.active.values.first {
+                self.isPremium = true
+                self.activeEntitlementId = firstActive.identifier
+                self.activeExpirationDate = firstActive.expirationDate
+            } else {
+                self.isPremium = false
+                self.activeEntitlementId = nil
+                self.activeExpirationDate = nil
+            }
+            print("🔄 Customer info updated. Premium: \(self.isPremium) id: \(self.activeEntitlementId ?? "-")")
             
             // Update Pro status in database when subscription changes
             Task {

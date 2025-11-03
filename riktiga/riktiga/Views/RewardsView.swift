@@ -14,6 +14,9 @@ struct RewardsView: View {
     
     let categories = ["Golf", "Löpning", "Gym", "Skidåkning"]
     
+    private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
+    private let sectionShadowColor = Color.black.opacity(0.05)
+    
     let heroImages = [
         "2",
         "3"
@@ -156,7 +159,7 @@ struct RewardsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemBackground)
+                Color.white
                 
                 VStack(spacing: 0) {
                     // MARK: - Header with Search, Favorites, and Points
@@ -281,60 +284,80 @@ struct RewardsView: View {
                         }
                         
                         // MARK: - Rewards Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Belöningar")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 16)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .fill(sectionBackgroundColor)
+                                .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
                             
-                            ScrollViewReader { proxy in
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 16) {
-                                        ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
-                                            NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                                FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                            VStack(alignment: .leading, spacing: 20) {
+                                Text("Belöningar")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 4)
+                                
+                                ScrollViewReader { proxy in
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 20) {
+                                            ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
+                                                NavigationLink(destination: RewardDetailView(reward: reward)) {
+                                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .id(index)
                                             }
-                                            .buttonStyle(PlainButtonStyle())
-                                            .id(index)
                                         }
+                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, 4)
+                                        .scrollTargetLayout()
                                     }
-                                    .padding(.horizontal, 24)
-                                    .scrollTargetLayout()
-                                }
-                                .scrollTargetBehavior(.viewAligned)
-                                .onAppear {
-                                    proxy.scrollTo(currentRewardIndex, anchor: .center)
+                                    .scrollTargetBehavior(.viewAligned)
+                                    .onAppear {
+                                        proxy.scrollTo(currentRewardIndex, anchor: .center)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 28)
+                            .padding(.horizontal, 22)
                         }
+                        .padding(.horizontal, 16)
                         
                         // MARK: - Alla belöningar Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Alla belöningar")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 16)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .fill(sectionBackgroundColor)
+                                .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
                             
-                            ScrollViewReader { proxy in
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 16) {
-                                        ForEach(Array(sortedAllRewards.enumerated()), id: \.element.id) { index, reward in
-                                            NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                                FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                            VStack(alignment: .leading, spacing: 20) {
+                                Text("Alla belöningar")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 4)
+                                
+                                ScrollViewReader { proxy in
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 20) {
+                                            ForEach(Array(sortedAllRewards.enumerated()), id: \.element.id) { index, reward in
+                                                NavigationLink(destination: RewardDetailView(reward: reward)) {
+                                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                                                }
+                                                .buttonStyle(PlainButtonStyle())
+                                                .id(index)
                                             }
-                                            .buttonStyle(PlainButtonStyle())
-                                            .id(index)
                                         }
+                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, 4)
+                                        .scrollTargetLayout()
                                     }
-                                    .padding(.horizontal, 24)
-                                    .scrollTargetLayout()
-                                }
-                                .scrollTargetBehavior(.viewAligned)
-                                .onAppear {
-                                    proxy.scrollTo(0, anchor: .center)
+                                    .scrollTargetBehavior(.viewAligned)
+                                    .onAppear {
+                                        proxy.scrollTo(0, anchor: .center)
+                                    }
                                 }
                             }
+                            .padding(.vertical, 28)
+                            .padding(.horizontal, 22)
                         }
+                        .padding(.horizontal, 16)
                         
                         Spacer(minLength: 100)
                     }
@@ -426,57 +449,58 @@ struct FullScreenRewardCard: View {
     let reward: RewardCard
     @Binding var favoritedRewards: Set<Int>
     
+    private let cornerRadius: CGFloat = 24
+    private let cardBackground = Color.white
+    private let infoBackground = Color(red: 247/255, green: 247/255, blue: 255/255)
+    private let accentColor = Color(red: 78/255, green: 77/255, blue: 255/255)
+    
     private var isBookmarked: Bool {
         favoritedRewards.contains(reward.id)
     }
     
     var body: some View {
         VStack(spacing: 0) {
-            // Image Section - Clean brand image only
-            ZStack {
+            ZStack(alignment: .topTrailing) {
                 Image(reward.imageName)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 240) // Increased height for longer cards
+                    .frame(height: 210)
+                    .frame(maxWidth: .infinity)
                     .clipped()
                 
-                // Points overlay
-                VStack {
-                    HStack {
-                        Spacer()
-                        Text("200 poäng")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black)
-                            .cornerRadius(8)
-                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-                            .padding(.trailing, 96)
-                    }
-                    Spacer()
+                HStack(spacing: 6) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(accentColor)
+                    
+                    Text(reward.points)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accentColor)
                 }
-                .padding(.top, 8)
-                .padding(.leading, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.white)
+                .clipShape(Capsule())
+                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 4)
+                .padding(18)
             }
             
-            // Info Section - Clean like in the image
-            HStack(spacing: 12) {
-                // Brand logo based on imageName
+            HStack(spacing: 16) {
                 Image(getBrandLogo(for: reward.imageName))
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
+                    .frame(width: 48, height: 48)
                     .clipShape(Circle())
+                    .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 3)
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(reward.discount)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.black)
                     
                     Text(reward.brandName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color.gray)
                 }
                 
                 Spacer()
@@ -489,15 +513,18 @@ struct FullScreenRewardCard: View {
                     }
                 }) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 18))
-                        .foregroundColor(isBookmarked ? .black : .gray)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(isBookmarked ? accentColor : .gray)
                 }
             }
-            .padding(20)
-            .background(Color.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 24)
+            .background(infoBackground)
         }
-        .frame(width: UIScreen.main.bounds.width * 0.8, height: 320)
-        .cornerRadius(16)
+        .frame(width: UIScreen.main.bounds.width - 64)
+        .background(cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .shadow(color: Color.black.opacity(0.08), radius: 14, x: 0, y: 9)
     }
     
     private func getBrandLogo(for imageName: String) -> String {

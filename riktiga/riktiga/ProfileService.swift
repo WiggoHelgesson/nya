@@ -4,20 +4,52 @@ import Supabase
 class ProfileService {
     static let shared = ProfileService()
     private let supabase = SupabaseConfig.supabase
+    private var personalBestColumnsAvailable: Bool?
     
     func fetchUserProfile(userId: String) async throws -> User? {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             print("🔍 Fetching profile for userId: \(userId)")
             
             // Försök att dekoda - Email finns INTE i profiles tabellen
             do {
-                var profiles: [User] = try await supabase
-                    .from("profiles")
-                    .select("id, username, current_xp, current_level, is_pro_member, avatar_url")  // Added avatar_url
-                    .eq("id", value: userId)
-                    .execute()
-                    .value
-                
+                let baseColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url"
+                let personalBestColumns = ", pb_5km_minutes, pb_10km_hours, pb_10km_minutes, pb_marathon_hours, pb_marathon_minutes"
+                var profiles: [User]
+                let shouldAttemptPBColumns = personalBestColumnsAvailable ?? true
+
+                if shouldAttemptPBColumns {
+                    do {
+                        profiles = try await supabase
+                            .from("profiles")
+                            .select(baseColumns + personalBestColumns)
+                            .eq("id", value: userId)
+                            .execute()
+                            .value
+                        personalBestColumnsAvailable = true
+                    } catch {
+                        if isMissingPersonalBestColumnsError(error) {
+                            personalBestColumnsAvailable = false
+                            print("ℹ️ Personal best columns missing. Falling back to basic profile select.")
+                            profiles = try await supabase
+                                .from("profiles")
+                                .select(baseColumns)
+                                .eq("id", value: userId)
+                                .execute()
+                                .value
+                        } else {
+                            throw error
+                        }
+                    }
+                } else {
+                    profiles = try await supabase
+                        .from("profiles")
+                        .select(baseColumns)
+                        .eq("id", value: userId)
+                        .execute()
+                        .value
+                }
+
                 print("✅ Decoded profiles: \(profiles)")
                 
                 if var profile = profiles.first {
@@ -134,20 +166,106 @@ class ProfileService {
         do {
             print("🗑️ Deleting user account for userId: \(userId)")
             
-            // Ta bort användarens profil från databasen
+            // 1) Ta bort relationer (likes, comments, follows, notifications, monthly steps)
+            _ = try await supabase
+                .from("workout_post_likes")
+                .delete()
+                .eq("user_id", value: userId)
+                .execute()
+
+            _ = try await supabase
+                .from("workout_post_comments")
+                .delete()
+                .eq("user_id", value: userId)
+                .execute()
+
+            _ = try await supabase
+                .from("user_follows")
+                .delete()
+                .or("follower_id.eq.\(userId),following_id.eq.\(userId)")
+                .execute()
+
+            _ = try await supabase
+                .from("notifications")
+                .delete()
+                .or("user_id.eq.\(userId),triggered_by_user_id.eq.\(userId)")
+                .execute()
+
+            _ = try await supabase
+                .from("monthly_steps")
+                .delete()
+                .eq("user_id", value: userId)
+                .execute()
+
+            // 2) Ta bort användarens inlägg
+            _ = try await supabase
+                .from("workout_posts")
+                .delete()
+                .eq("user_id", value: userId)
+                .execute()
+
+            // 3) Ta bort användarens profil från databasen
             try await supabase
                 .from("profiles")
                 .delete()
                 .eq("id", value: userId)
                 .execute()
             
-            // Ta bort användaren från auth (Supabase hanterar detta automatiskt)
-            // Du kan behöva lägga till mer cleanup-hantering här beroende på dina behov
+            // 4) Försök även radera auth-användaren via Edge Function (om konfigurerad)
+            do {
+                let session = try await supabase.auth.session
+                try await deleteAuthUserViaEdgeFunction(userId: userId, accessToken: session.accessToken)
+            } catch {
+                print("ℹ️ Could not call delete-user edge function: \(error)")
+            }
+            
+            // Logga ut lokalt
+            try? await supabase.auth.signOut()
             
             print("✅ User account deleted successfully")
         } catch {
             print("❌ Error deleting user account: \(error)")
             throw error
         }
+    }
+
+    // MARK: - Edge Function call to delete auth user
+    private func deleteAuthUserViaEdgeFunction(userId: String, accessToken: String) async throws {
+        // Build function URL: https://<project>.functions.supabase.co/delete-user
+        guard let host = SupabaseConfig.projectURL.host,
+              let scheme = SupabaseConfig.projectURL.scheme else {
+            throw NSError(domain: "EdgeFunction", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid Supabase URL"])
+        }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.path = "/functions/v1/delete-user"
+        guard let url = components.url else {
+            throw NSError(domain: "EdgeFunction", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid delete-user URL"])
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: String] = ["userId": userId]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
+            throw NSError(domain: "EdgeFunction", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "delete-user failed with status \(http.statusCode)"])
+        }
+        print("✅ Edge function delete-user invoked successfully")
+    }
+
+    func hasPersonalBestColumns() -> Bool {
+        personalBestColumnsAvailable ?? true
+    }
+
+    func isMissingPersonalBestColumnsError(_ error: Error) -> Bool {
+        guard let postgrestError = error as? PostgrestError else { return false }
+        let missingColumnCodes: Set<String> = ["42703", "PGRST204"]
+        if let code = postgrestError.code, missingColumnCodes.contains(code) {
+            return true
+        }
+        return false
     }
 }

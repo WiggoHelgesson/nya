@@ -7,6 +7,7 @@ struct SocialView: View {
     @State private var visiblePostCount = 5 // Start with 5 posts
     @State private var isLoadingMore = false
     @State private var task: Task<Void, Never>?
+    @State private var selectedPost: SocialWorkoutPost?
     
     var body: some View {
             NavigationStack {
@@ -50,6 +51,22 @@ struct SocialView: View {
                         .padding(12)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
+
+                        Button {
+                            guard let userId = authViewModel.currentUser?.id else { return }
+                            visiblePostCount = 5
+                            Task {
+                                await socialViewModel.fetchSocialFeedAsync(userId: userId)
+                            }
+                        } label: {
+                            Text("Hämta inlägg")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(AppColors.brandBlue)
+                                .cornerRadius(12)
+                        }
                     }
                 } else {
                     ScrollView {
@@ -59,8 +76,12 @@ struct SocialView: View {
                         
                         LazyVStack(spacing: 16) {
                             // Show posts dynamically based on visiblePostCount
-                            ForEach(Array(socialViewModel.posts.prefix(visiblePostCount))) { post in
-                                SocialPostCard(post: post, viewModel: socialViewModel)
+                            ForEach(postsToDisplay) { post in
+                                SocialPostCard(
+                                    post: post,
+                                    onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                    viewModel: socialViewModel
+                                )
                                     .onAppear {
                                         // Load more posts when user scrolls near the end
                                         if let index = socialViewModel.posts.firstIndex(where: { $0.id == post.id }),
@@ -97,6 +118,9 @@ struct SocialView: View {
             .navigationTitle("")
             .navigationBarHidden(true)
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedPost) { post in
+                WorkoutDetailView(post: post)
+            }
             .task {
                 // Cancel any previous task
                 task?.cancel()
@@ -133,14 +157,20 @@ struct SocialView: View {
             isLoadingMore = false
         }
     }
+    
+    private var postsToDisplay: [SocialWorkoutPost] {
+        Array(socialViewModel.posts.prefix(visiblePostCount))
+    }
 }
 
 struct SocialPostCard: View {
     let post: SocialWorkoutPost
+    let onOpenDetail: (SocialWorkoutPost) -> Void
     @State private var showComments = false
-    @State private var isLiked = false
-    @State private var likeCount = 0
-    @State private var commentCount = 0
+    @State private var isLiked: Bool
+    @State private var likeCount: Int
+    @State private var commentCount: Int
+    @State private var topLikers: [UserSearchResult] = []
     @State private var showMenu = false
     @State private var showDeleteAlert = false
     @State private var likeInProgress = false
@@ -148,192 +178,103 @@ struct SocialPostCard: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject var viewModel: SocialViewModel
     
+    init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, viewModel: SocialViewModel) {
+        self.post = post
+        self.onOpenDetail = onOpenDetail
+        self.viewModel = viewModel
+        _isLiked = State(initialValue: post.isLikedByCurrentUser ?? false)
+        _likeCount = State(initialValue: post.likeCount ?? 0)
+        _commentCount = State(initialValue: post.commentCount ?? 0)
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header with user info
-            HStack(spacing: 12) {
-                // User avatar -> navigate to profile
-                NavigationLink(destination: UserProfileView(userId: post.userId)) {
-                    AsyncImage(url: URL(string: post.userAvatarUrl ?? "")) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.circle.fill")
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    // Username with Activity Icon -> navigate to profile
-                    NavigationLink(destination: UserProfileView(userId: post.userId)) {
-                        HStack(spacing: 6) {
-                            Text(post.userName ?? "Okänd användare")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.black)
-                            
-                            Image(systemName: getActivityIcon(post.activityType))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(AppColors.brandBlue)
-                        }
-                    }
-                    
-                    Text(formatDate(post.createdAt))
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                    
-                    if let location = post.location {
-                        Text(location)
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                Spacer()
-                
-                // Only show menu button for posts by current user
-                if post.userId == authViewModel.currentUser?.id {
-                    Button(action: {
-                        showMenu = true
-                    }) {
-                        Image(systemName: "ellipsis")
-                            .foregroundColor(.black)
-                            .font(.system(size: 16))
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            headerSection
+            statsSection
             
             // Swipeable images (route and user image)
             SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+                .onTapGesture {
+                    onOpenDetail(post)
+                }
             
-            // Content below image
-            VStack(alignment: .leading, spacing: 12) {
-                // Title with PRO badge
-                HStack(spacing: 8) {
-                    Text(post.title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.black)
-                    
-                    if let isPro = post.userIsPro, isPro {
-                        Text("PRO")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.yellow)
-                            .cornerRadius(4)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                
-                // Stats row with white background
-                HStack(spacing: 0) {
-                    if let distance = post.distance {
-                        VStack(spacing: 6) {
-                            Text("Distans")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
+            // Likes preview row
+            HStack(alignment: .center, spacing: 12) {
+                if likeCount > 0 {
+                    ZStack {
+                        ForEach(Array(topLikers.prefix(3).enumerated()), id: \.offset) { item in
+                            let index = item.offset
+                            let liker = item.element
+                            ProfileImage(url: liker.avatarUrl ?? "", size: 36)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .offset(x: CGFloat(index) * -10)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
                     }
-                    
-                    if let duration = post.duration {
-                        if post.distance != nil {
-                            Divider()
-                                .frame(height: 40)
-                        }
-                        
-                        VStack(spacing: 6) {
-                            Text("Tid")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(formatDuration(duration))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    
-                    if let strokes = post.strokes {
-                        if post.distance != nil || post.duration != nil {
-                            Divider()
-                                .frame(height: 40)
-                        }
-                        
-                        VStack(spacing: 6) {
-                            Text("Slag")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text("\(strokes)")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                }
-                .background(Color.white)
-                .cornerRadius(12)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-            }
-            
-            // Like, Comment, Share buttons
-            HStack(spacing: 16) {
-                Button(action: toggleLike) {
-                    HStack(spacing: 6) {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .foregroundColor(isLiked ? .red : .gray)
-                            .scaleEffect(isLiked ? 1.2 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
-                        Text("\(likeCount)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                            .animation(.easeInOut(duration: 0.2), value: likeCount)
-                    }
-                }
-                .disabled(likeInProgress)
-                
-                Button(action: { showComments = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.right")
-                            .foregroundColor(.gray)
-                        Text("\(commentCount)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
+                    .frame(width: 56, height: 36, alignment: .leading)
+                    .clipped()
                 }
                 
-                Button(action: { showShareSheet = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundColor(.gray)
-                    }
-                }
+                Text("\(likeCount) likes")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.black)
                 
                 Spacer()
+                
+                Text("\(commentCount) kommentarer")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 4)
+            
+            // Like, Comment, Share buttons - large, evenly spaced
+            HStack(spacing: 0) {
+                Button(action: toggleLike) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(isLiked ? .red : .gray)
+                        .animation(.none, value: isLiked)
+                }
+                .disabled(likeInProgress)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+
+                Button(action: { showComments = true }) {
+                    Image(systemName: "bubble.right")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+
+                Button(action: { showShareSheet = true }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
         }
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
         .onAppear {
-            isLiked = post.isLikedByCurrentUser ?? false
-            likeCount = post.likeCount ?? 0
-            commentCount = post.commentCount ?? 0
+            Task {
+                await loadTopLikers()
+            }
+        }
+        .onChange(of: post.likeCount) { newValue in
+            likeCount = newValue ?? likeCount
+        }
+        .onChange(of: post.commentCount) { newValue in
+            commentCount = newValue ?? commentCount
+        }
+        .onChange(of: post.isLikedByCurrentUser) { newValue in
+            isLiked = newValue ?? isLiked
         }
         .sheet(isPresented: $showComments) {
             CommentsView(postId: post.id) {
@@ -360,6 +301,141 @@ struct SocialPostCard: View {
         }
     }
     
+    private var headerSection: some View {
+        HStack(spacing: 12) {
+            NavigationLink(destination: UserProfileView(userId: post.userId)) {
+                AsyncImage(url: URL(string: post.userAvatarUrl ?? "")) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Image(systemName: "person.circle.fill")
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                NavigationLink(destination: UserProfileView(userId: post.userId)) {
+                    HStack(spacing: 6) {
+                        Text(post.userName ?? "Okänd användare")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                        
+                        Image(systemName: getActivityIcon(post.activityType))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.brandBlue)
+                    }
+                }
+                
+                Text(formatDate(post.createdAt))
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                
+                if let location = post.location {
+                    Text(location)
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            if post.userId == authViewModel.currentUser?.id {
+                Button(action: {
+                    showMenu = true
+                }) {
+                    Image(systemName: "ellipsis")
+                        .foregroundColor(.black)
+                        .font(.system(size: 16))
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
+    
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(post.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.black)
+                
+                if let isPro = post.userIsPro, isPro {
+                    Text("PRO")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.yellow)
+                        .cornerRadius(4)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            
+            HStack(spacing: 0) {
+                if let distance = post.distance {
+                    statColumn(title: "Distans", value: String(format: "%.2f km", distance))
+                }
+                
+                if let duration = post.duration {
+                    if post.distance != nil {
+                        Divider()
+                            .frame(height: 40)
+                    }
+                    statColumn(title: "Tid", value: formatDuration(duration))
+                }
+                
+                if let pace = averagePaceText {
+                    if post.distance != nil || post.duration != nil {
+                        Divider()
+                            .frame(height: 40)
+                    }
+                    statColumn(title: "Tempo", value: pace)
+                }
+                
+                if let strokes = post.strokes {
+                    if (post.distance != nil || post.duration != nil || averagePaceText != nil) {
+                        Divider()
+                            .frame(height: 40)
+                    }
+                    statColumn(title: "Slag", value: "\(strokes)")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+        .onTapGesture {
+            onOpenDetail(post)
+        }
+    }
+    
+    private var averagePaceText: String? {
+        guard let distance = post.distance, distance > 0,
+              let duration = post.duration else { return nil }
+        let paceSeconds = Double(duration) / distance
+        let minutes = Int(paceSeconds) / 60
+        let seconds = Int(paceSeconds) % 60
+        return String(format: "%d:%02d /km", minutes, seconds)
+    }
+    
+    private func statColumn(title: String, value: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.black)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+    
     private func deletePost() {
         Task {
             do {
@@ -382,11 +458,23 @@ struct SocialPostCard: View {
         // Store previous state for rollback
         let previousLiked = isLiked
         let previousCount = likeCount
+        let previousTopLikers = topLikers
         
         // Update UI immediately (optimistic update)
         likeInProgress = true
         isLiked.toggle()
         likeCount += isLiked ? 1 : -1
+        if isLiked {
+            if let currentUser = authViewModel.currentUser {
+                let liker = UserSearchResult(id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl)
+                if !topLikers.contains(where: { $0.id == liker.id }) {
+                    topLikers.insert(liker, at: 0)
+                }
+            }
+        } else {
+            topLikers.removeAll { $0.id == userId }
+        }
+        topLikers = Array(topLikers.prefix(3))
         
         Task {
             do {
@@ -416,9 +504,11 @@ struct SocialPostCard: View {
                 await MainActor.run {
                     isLiked = previousLiked
                     likeCount = previousCount
+                    topLikers = previousTopLikers
                     likeInProgress = false
                 }
             }
+            await loadTopLikers()
         }
     }
     
@@ -466,6 +556,23 @@ struct SocialPostCard: View {
             return String(format: "%d:%02d:%02d", hours, minutes, secs)
         } else {
             return String(format: "%02d:%02d", minutes, secs)
+        }
+    }
+
+    private func loadTopLikers() async {
+        guard likeCount > 0 else {
+            await MainActor.run {
+                self.topLikers = []
+            }
+            return
+        }
+        do {
+            let likers = try await SocialService.shared.getTopPostLikers(postId: post.id, limit: 3)
+            await MainActor.run {
+                self.topLikers = likers
+            }
+        } catch {
+            print("⚠️ Could not fetch top likers: \(error)")
         }
     }
 }
@@ -639,6 +746,33 @@ class SocialViewModel: ObservableObject {
     @Published var posts: [SocialWorkoutPost] = []
     @Published var isLoading: Bool = false
     private var isFetching = false
+    private var currentUserId: String?
+    private var hasLoggedFetchCancelled = false
+
+    private let isoFormatterWithMs: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private let isoFormatterNoMs: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private func parseDate(_ s: String) -> Date {
+        if let d = isoFormatterWithMs.date(from: s) { return d }
+        if let d = isoFormatterNoMs.date(from: s) { return d }
+        return Date.distantPast
+    }
+
+    private func sortedByDateDesc(_ items: [SocialWorkoutPost]) -> [SocialWorkoutPost] {
+        return items.sorted { lhs, rhs in
+            let ld = parseDate(lhs.createdAt)
+            let rd = parseDate(rhs.createdAt)
+            return ld > rd
+        }
+    }
     
     func fetchSocialFeed(userId: String) {
         isLoading = true
@@ -659,34 +793,40 @@ class SocialViewModel: ObservableObject {
     }
     
     func fetchSocialFeedAsync(userId: String) async {
+        self.currentUserId = userId
         // Prevent duplicate fetches
         if isFetching { return }
         
         isFetching = true
         isLoading = true
         
-        // Try to load from cache first
-        if let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId) {
+        // Try to load from cache first (ensure stable order); keep loading state until network finishes
+        if let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
             await MainActor.run {
-                self.posts = cachedPosts
-                self.isLoading = false
+                self.posts = self.sortedByDateDesc(cachedPosts)
             }
-                    }
+        }
         
         do {
-            let fetchedPosts = try await SocialService.shared.getSocialFeed(userId: userId)
-            
-            // Save to cache
-            AppCacheManager.shared.saveSocialFeed(fetchedPosts, userId: userId)
+            let fetchedPosts = try await SocialService.shared.getReliableSocialFeed(userId: userId)
             
             await MainActor.run {
-                self.posts = fetchedPosts
+                self.posts = self.sortedByDateDesc(fetchedPosts)
                 self.isLoading = false
                 self.isFetching = false
             }
+            // Persist to cache for offline use (sorted to keep order consistent)
+            AppCacheManager.shared.saveSocialFeed(self.sortedByDateDesc(fetchedPosts), userId: userId)
         } catch is CancellationError {
-            print("⚠️ Fetch was cancelled")
+            if !hasLoggedFetchCancelled {
+                print("⚠️ Fetch was cancelled")
+                hasLoggedFetchCancelled = true
+            }
             await MainActor.run {
+                if self.posts.isEmpty,
+                   let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
+                    self.posts = self.sortedByDateDesc(cached)
+                }
                 self.isLoading = false
                 self.isFetching = false
             }
@@ -694,6 +834,7 @@ class SocialViewModel: ObservableObject {
             print("Error fetching social feed: \(error)")
             await MainActor.run {
                 self.isLoading = false
+                self.isFetching = false
             }
         }
     }
@@ -702,14 +843,16 @@ class SocialViewModel: ObservableObject {
         do {
             // Use retry helper for better network resilience
             let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
-                return try await SocialService.shared.getSocialFeed(userId: userId)
+                return try await SocialService.shared.getReliableSocialFeed(userId: userId)
             }
             
             // Only update posts if we got new data, don't replace with empty array
             if !fetchedPosts.isEmpty {
+                let sorted = self.sortedByDateDesc(fetchedPosts)
                 await MainActor.run {
-                    self.posts = fetchedPosts
+                    self.posts = sorted
                 }
+                AppCacheManager.shared.saveSocialFeed(sorted, userId: userId)
             } else {
                 print("⚠️ Refresh returned empty array, keeping existing posts")
             }
@@ -718,35 +861,45 @@ class SocialViewModel: ObservableObject {
             print("⚠️ Refresh was cancelled")
         } catch {
             print("❌ Error refreshing social feed after retries: \(error)")
+            if let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
+                await MainActor.run {
+                    if self.posts.isEmpty {
+                        self.posts = self.sortedByDateDesc(cached)
+                    }
+                }
+            }
         }
     }
     
     func updatePostLikeStatus(postId: String, isLiked: Bool, likeCount: Int) {
         if let index = posts.firstIndex(where: { $0.id == postId }) {
             var updatedPost = posts[index]
+            // Only change like-related fields; keep all media fields intact
             updatedPost = SocialWorkoutPost(
-                from: WorkoutPost(
-                    id: updatedPost.id,
-                    userId: updatedPost.userId,
-                    activityType: updatedPost.activityType,
-                    title: updatedPost.title,
-                    description: updatedPost.description,
-                    distance: updatedPost.distance,
-                    duration: updatedPost.duration,
-                    imageUrl: updatedPost.imageUrl,
-                    elevationGain: nil,
-                    maxSpeed: nil
-                ),
+                id: updatedPost.id,
+                userId: updatedPost.userId,
+                activityType: updatedPost.activityType,
+                title: updatedPost.title,
+                description: updatedPost.description,
+                distance: updatedPost.distance,
+                duration: updatedPost.duration,
+                imageUrl: updatedPost.imageUrl,
+                userImageUrl: updatedPost.userImageUrl,
+                createdAt: updatedPost.createdAt,
                 userName: updatedPost.userName,
                 userAvatarUrl: updatedPost.userAvatarUrl,
                 userIsPro: updatedPost.userIsPro,
                 location: updatedPost.location,
                 strokes: updatedPost.strokes,
                 likeCount: likeCount,
-                commentCount: updatedPost.commentCount ?? 0,
-                isLikedByCurrentUser: isLiked
+                commentCount: updatedPost.commentCount,
+                isLikedByCurrentUser: isLiked,
+                splits: updatedPost.splits
             )
             posts[index] = updatedPost
+            if let uid = currentUserId {
+                AppCacheManager.shared.saveSocialFeed(posts, userId: uid)
+            }
         }
     }
     
@@ -754,28 +907,30 @@ class SocialViewModel: ObservableObject {
         if let index = posts.firstIndex(where: { $0.id == postId }) {
             var updatedPost = posts[index]
             updatedPost = SocialWorkoutPost(
-                from: WorkoutPost(
-                    id: updatedPost.id,
-                    userId: updatedPost.userId,
-                    activityType: updatedPost.activityType,
-                    title: updatedPost.title,
-                    description: updatedPost.description,
-                    distance: updatedPost.distance,
-                    duration: updatedPost.duration,
-                    imageUrl: updatedPost.imageUrl,
-                    elevationGain: nil,
-                    maxSpeed: nil
-                ),
+                id: updatedPost.id,
+                userId: updatedPost.userId,
+                activityType: updatedPost.activityType,
+                title: updatedPost.title,
+                description: updatedPost.description,
+                distance: updatedPost.distance,
+                duration: updatedPost.duration,
+                imageUrl: updatedPost.imageUrl,
+                userImageUrl: updatedPost.userImageUrl,
+                createdAt: updatedPost.createdAt,
                 userName: updatedPost.userName,
                 userAvatarUrl: updatedPost.userAvatarUrl,
                 userIsPro: updatedPost.userIsPro,
                 location: updatedPost.location,
                 strokes: updatedPost.strokes,
-                likeCount: updatedPost.likeCount ?? 0,
+                likeCount: updatedPost.likeCount,
                 commentCount: commentCount,
-                isLikedByCurrentUser: updatedPost.isLikedByCurrentUser ?? false
+                isLikedByCurrentUser: updatedPost.isLikedByCurrentUser,
+                splits: updatedPost.splits
             )
             posts[index] = updatedPost
+            if let uid = currentUserId {
+                AppCacheManager.shared.saveSocialFeed(posts, userId: uid)
+            }
         }
     }
 }

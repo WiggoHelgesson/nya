@@ -71,12 +71,16 @@ struct LoginFormView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
                 .autocapitalization(.none)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             SecureField("Lösenord", text: $password)
                 .textContentType(.password)
                 .padding(12)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
@@ -89,7 +93,7 @@ struct LoginFormView: View {
             }) {
                 Text("Logga in")
                     .frame(maxWidth: .infinity)
-                    .padding(12)
+                    .padding(.vertical, 14)
                     .background(
                         LinearGradient(
                             gradient: Gradient(colors: [
@@ -104,6 +108,7 @@ struct LoginFormView: View {
                     .cornerRadius(8)
                     .font(.headline)
             }
+            .contentShape(Rectangle())
         }
     }
 }
@@ -121,6 +126,8 @@ struct SignupFormView: View {
                 .padding(12)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             TextField("Email", text: $email)
                 .textContentType(.emailAddress)
@@ -129,18 +136,24 @@ struct SignupFormView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
                 .autocapitalization(.none)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             SecureField("Lösenord", text: $password)
                 .textContentType(.newPassword)
                 .padding(12)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             SecureField("Bekräfta lösenord", text: $confirmPassword)
                 .textContentType(.newPassword)
                 .padding(12)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
@@ -153,7 +166,7 @@ struct SignupFormView: View {
             }) {
                 Text("Skapa konto")
                     .frame(maxWidth: .infinity)
-                    .padding(12)
+                    .padding(.vertical, 14)
                     .background(
                         LinearGradient(
                             gradient: Gradient(colors: [
@@ -168,6 +181,7 @@ struct SignupFormView: View {
                     .cornerRadius(8)
                     .font(.headline)
             }
+            .contentShape(Rectangle())
         }
     }
 }

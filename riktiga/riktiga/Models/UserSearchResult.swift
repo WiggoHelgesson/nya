@@ -37,4 +37,10 @@ struct UserSearchResult: Codable, Identifiable {
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(avatarUrl, forKey: .avatarUrl)
     }
+    
+    init(id: String, name: String, avatarUrl: String?) {
+        self.id = id
+        self.name = name
+        self.avatarUrl = avatarUrl
+    }
 }

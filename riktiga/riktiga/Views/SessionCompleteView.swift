@@ -9,6 +9,7 @@ struct SessionCompleteView: View {
     let routeImage: UIImage?
     let elevationGain: Double?
     let maxSpeed: Double?
+    let completedSplits: [WorkoutSplit]
     @Binding var isPresented: Bool
     let onComplete: () -> Void
     let onDelete: () -> Void
@@ -236,13 +237,7 @@ struct SessionCompleteView: View {
                 }
             }
         }
-        .onChange(of: isPresented) { oldValue, newValue in
-            // Clear session when the view is dismissed
-            if !newValue && oldValue {
-                print("🗑️ SessionCompleteView dismissed, clearing session")
-                // onComplete will be called by the dismiss, but we add extra safety here
-            }
-        }
+        // Session finalization is handled explicitly by onComplete/onDelete callbacks
         .onChange(of: selectedItem) { oldValue, newValue in
             Task {
                 if let data = try? await newValue?.loadTransferable(type: Data.self) {
@@ -262,6 +257,7 @@ struct SessionCompleteView: View {
                 isSaving = true
             }
             
+            let splits = computeSplits()
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
                 activityType: activity.rawValue,
@@ -272,7 +268,8 @@ struct SessionCompleteView: View {
                 imageUrl: nil,
                 userImageUrl: nil,
                 elevationGain: elevationGain,
-                maxSpeed: maxSpeed
+                maxSpeed: maxSpeed,
+                splits: splits.isEmpty ? nil : splits
             )
             
             do {
@@ -307,6 +304,24 @@ struct SessionCompleteView: View {
                 }
             }
         }
+    }
+    
+    private func computeSplits() -> [WorkoutSplit] {
+        var splits = completedSplits
+        guard distance > 0, duration > 0 else { return splits }
+        let totalDistanceKm = distance
+        let totalDurationSeconds = Double(duration)
+        let recordedDistance = splits.reduce(0) { $0 + $1.distanceKm }
+        let recordedDuration = splits.reduce(0) { $0 + $1.durationSeconds }
+        let remainingDistance = totalDistanceKm - recordedDistance
+        let remainingDuration = totalDurationSeconds - recordedDuration
+        if remainingDistance > 0.05, remainingDuration > 1 {
+            let nextIndex = splits.count + 1
+            splits.append(WorkoutSplit(kilometerIndex: nextIndex,
+                                       distanceKm: remainingDistance,
+                                       durationSeconds: remainingDuration))
+        }
+        return splits
     }
 }
 
@@ -421,6 +436,7 @@ struct ActivitySummaryCard: View {
         routeImage: nil,
         elevationGain: nil,
         maxSpeed: nil,
+        completedSplits: [],
         isPresented: .constant(true),
         onComplete: {},
         onDelete: {}

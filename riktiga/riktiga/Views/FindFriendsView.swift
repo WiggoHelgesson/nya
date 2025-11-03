@@ -158,6 +158,10 @@ struct FindFriendsView: View {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         isLoadingRecommended = true
+        if let cached = AppCacheManager.shared.getCachedRecommendedUsers(userId: userId) {
+            self.recommendedUsers = cached
+            self.isLoadingRecommended = false
+        }
         Task {
             do {
                 let recommended = try await SocialService.shared.getRecommendedUsers(userId: userId, limit: 8)
@@ -174,6 +178,7 @@ struct FindFriendsView: View {
                     self.recommendedFollowingStatus = followStatus
                     self.isLoadingRecommended = false
                 }
+                AppCacheManager.shared.saveRecommendedUsers(recommended, userId: userId)
             } catch {
                 print("❌ Error loading recommended users: \(error)")
                 await MainActor.run {

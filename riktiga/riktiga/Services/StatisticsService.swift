@@ -140,9 +140,9 @@ class StatisticsService: ObservableObject {
             
             // Dela upp i veckor
             var weeklyStats: [WeeklyStat] = []
-            let weekNumbers = calendar.component(.weekOfMonth, from: now)
+            let weekRange = calendar.range(of: .weekOfMonth, in: .month, for: now) ?? (1..<2)
             
-            for weekNum in 1...weekNumbers {
+            for weekNum in weekRange {
                 let weekStart = calendar.date(byAdding: .weekOfMonth, value: weekNum - 1, to: startOfMonth) ?? startOfMonth
                 let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
                 

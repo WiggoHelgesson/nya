@@ -1,53 +1,99 @@
 import SwiftUI
 import Photos
+import UIKit
 
 struct ShareActivityView: View {
     let post: SocialWorkoutPost
     @Environment(\.dismiss) private var dismiss
-    @State private var shareImage: UIImage?
     @State private var showingSaveAlert = false
     @State private var saveMessage = ""
+    @State private var userImage: UIImage?
+    @State private var isLoadingUserImage = false
+    @State private var userImageLoadError = false
+    @State private var selectedBackgrounds: [ShareCardBackground] = [.transparent]
+    @State private var currentBackgroundIndex: Int = 0
     
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemBackground).ignoresSafeArea()
-                
-                VStack(spacing: 20) {
-                    // Preview of the shareable card
-                    ActivityCardPreview(post: post)
-                        .padding()
-                    
-                    // Action buttons
-                    VStack(spacing: 12) {
-                        Button(action: saveToPhotoLibrary) {
-                            HStack {
-                                Image(systemName: "photo.badge.plus")
-                                Text("Spara till kamerarull")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(AppColors.brandBlue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                        }
-                        
-                        Button(action: shareViaActivityViewController) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Dela")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGray5))
-                            .foregroundColor(.black)
-                            .cornerRadius(8)
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    TabView(selection: $currentBackgroundIndex) {
+                        ForEach(Array(selectedBackgrounds.enumerated()), id: \.offset) { index, background in
+                            ActivityCardPreview(
+                                post: post,
+                                background: previewBackground(for: background)
+                            )
+                            .tag(index)
+                            .padding(.horizontal, 16)
                         }
                     }
-                    .padding()
-                    
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: 560)
+                    .animation(.easeInOut, value: selectedBackgrounds.count)
+                    .animation(.easeInOut, value: currentBackgroundIndex)
+
+                    if selectedBackgrounds.count > 1 {
+                        Picker("Bakgrund", selection: $currentBackgroundIndex) {
+                            ForEach(Array(selectedBackgrounds.enumerated()), id: \.offset) { index, background in
+                                Text(background.displayName)
+                                    .tag(index)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 16)
+                    }
+
+                    if selectedBackgrounds.count > 1 {
+                        HStack(spacing: 8) {
+                            ForEach(0..<selectedBackgrounds.count, id: \.self) { index in
+                                Circle()
+                                    .fill(index == currentBackgroundIndex ? Color.black : Color.gray.opacity(0.3))
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+                    }
+
+                    if selectedBackgrounds.indices.contains(currentBackgroundIndex) && selectedBackgrounds[currentBackgroundIndex] == .userPhoto {
+                        if isLoadingUserImage {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("Laddar din bild...")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.gray)
+                            }
+                        } else if userImageLoadError {
+                            VStack(spacing: 6) {
+                                Text("Kunde inte hämta din bild.")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Button("Försök igen") {
+                                    if let url = post.userImageUrl {
+                                        loadUserImage(from: url, force: true)
+                                    }
+                                }
+                                .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.black)
+                        }
+                    }
+
+                    Button(action: saveCurrentPreview) {
+                        Text("Spara bild")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 16)
+
                     Spacer()
                 }
+                .padding(.top, 24)
+                .padding(.bottom, 16)
             }
             .navigationTitle("Dela aktivitet")
             .navigationBarTitleDisplayMode(.inline)
@@ -64,99 +110,133 @@ struct ShareActivityView: View {
                 Text(saveMessage)
             }
         }
+        .onAppear {
+            setupBackgrounds()
+        }
+        .onChange(of: selectedBackgrounds) { _ in
+            if currentBackgroundIndex >= selectedBackgrounds.count {
+                currentBackgroundIndex = max(0, selectedBackgrounds.count - 1)
+            }
+        }
     }
-    
-    private func generateCardImage() -> UIImage? {
+
+    private func generateCardImage(backgroundImage: UIImage?) -> UIImage? {
         let cardSize = CGSize(width: 340, height: 550)
-        
-        let renderer = UIGraphicsImageRenderer(size: cardSize)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: cardSize, format: format)
         let image = renderer.image { context in
-            // Draw background - use map image if available
-            if let imageUrl = post.imageUrl, let url = URL(string: imageUrl) {
-                // Try to load the image from URL
-                if let data = try? Data(contentsOf: url), let backgroundImage = UIImage(data: data) {
-                    backgroundImage.draw(in: CGRect(origin: .zero, size: cardSize))
-                } else {
-                    // Fallback to gradient if URL loading fails
-                    UIColor.darkGray.setFill()
-                    context.cgContext.fill(CGRect(origin: .zero, size: cardSize))
+            let cg = context.cgContext
+            cg.setFillColor(UIColor.clear.cgColor)
+            cg.fill(CGRect(origin: .zero, size: cardSize))
+
+            if let backgroundImage {
+                cg.saveGState()
+                cg.interpolationQuality = .high
+                backgroundImage.draw(in: CGRect(origin: .zero, size: cardSize))
+                if let gradient = CGGradient(
+                    colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                    colors: [UIColor.black.withAlphaComponent(0.15).cgColor, UIColor.black.withAlphaComponent(0.75).cgColor] as CFArray,
+                    locations: [0.0, 1.0]
+                ) {
+                    cg.drawLinearGradient(
+                        gradient,
+                        start: CGPoint(x: cardSize.width / 2, y: 0),
+                        end: CGPoint(x: cardSize.width / 2, y: cardSize.height),
+                        options: []
+                    )
                 }
-            } else {
-                // Fallback to gradient
-                UIColor.darkGray.setFill()
-                context.cgContext.fill(CGRect(origin: .zero, size: cardSize))
+                cg.restoreGState()
+            }
+
+            let padding: CGFloat = 36
+            let topOffset: CGFloat = 80
+            let iconDiameter: CGFloat = 72
+            let iconRect = CGRect(x: padding, y: topOffset, width: iconDiameter, height: iconDiameter)
+            
+            cg.setFillColor(UIColor.white.cgColor)
+            cg.fillEllipse(in: iconRect)
+            
+            if let icon = UIImage(systemName: shareActivityIconName)?
+                .applyingSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .semibold))?
+                .withTintColor(.black, renderingMode: .alwaysOriginal) {
+                let inset: CGFloat = (iconDiameter - 32) / 2
+                icon.draw(in: iconRect.insetBy(dx: inset, dy: inset))
             }
             
-            // Draw gradient overlay
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let colors = [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.7).cgColor] as CFArray
-            let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: nil)
-            
-            if let gradient = gradient {
-                let startPoint = CGPoint(x: cardSize.width, y: 0)
-                let endPoint = CGPoint(x: 0, y: cardSize.height)
-                context.cgContext.drawLinearGradient(gradient, start: startPoint, end: endPoint, options: [])
-            }
-            
-            // Draw content at bottom
-            let bottomPadding: CGFloat = 30
-            var currentY = cardSize.height - bottomPadding
-            
-            // Title
-            let titleFont = UIFont.systemFont(ofSize: 24, weight: .bold)
+            let titleFont = UIFont.systemFont(ofSize: 34, weight: .heavy)
             let titleAttributes: [NSAttributedString.Key: Any] = [
                 .font: titleFont,
                 .foregroundColor: UIColor.white
             ]
-            let titleSize = (post.title as NSString).size(withAttributes: titleAttributes)
-            (post.title as NSString).draw(at: CGPoint(x: 16, y: currentY - titleSize.height), withAttributes: titleAttributes)
-            currentY -= titleSize.height + 20
+            let activityTitle = (post.title.isEmpty ? (post.activityType ?? "Aktivitet") : post.title) as NSString
+            let titlePoint = CGPoint(x: iconRect.maxX + 18, y: iconRect.midY - titleFont.lineHeight / 2)
+            activityTitle.draw(at: titlePoint, withAttributes: titleAttributes)
             
-            // Distance
-            let labelFont = UIFont.systemFont(ofSize: 12, weight: .regular)
+            let labelFont = UIFont.systemFont(ofSize: 14, weight: .semibold)
+            let valueFont = UIFont.systemFont(ofSize: 28, weight: .bold)
             let labelAttributes: [NSAttributedString.Key: Any] = [
                 .font: labelFont,
+                .kern: 0.6,
                 .foregroundColor: UIColor.white.withAlphaComponent(0.7)
             ]
-            ("Distans" as NSString).draw(at: CGPoint(x: 16, y: currentY), withAttributes: labelAttributes)
-            
-            let valueFont = UIFont.systemFont(ofSize: 18, weight: .bold)
             let valueAttributes: [NSAttributedString.Key: Any] = [
                 .font: valueFont,
                 .foregroundColor: UIColor.white
             ]
-            let distanceText = String(format: "%.2f km", post.distance ?? 0)
-            (distanceText as NSString).draw(at: CGPoint(x: 16, y: currentY + 16), withAttributes: valueAttributes)
             
-            // Time
-            ("Tid" as NSString).draw(at: CGPoint(x: 180, y: currentY), withAttributes: labelAttributes)
+            let statsTop = iconRect.maxY + 44
+            let secondColumnWidth: CGFloat = 140
+            let secondColumnX = cardSize.width - padding - secondColumnWidth
             
-            let durationText = formatDuration(post.duration ?? 0)
-            (durationText as NSString).draw(at: CGPoint(x: 180, y: currentY + 16), withAttributes: valueAttributes)
+            ("DISTANCE" as NSString).draw(at: CGPoint(x: padding, y: statsTop), withAttributes: labelAttributes)
+            (String(format: "%.2f km", post.distance ?? 0) as NSString).draw(at: CGPoint(x: padding, y: statsTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
+            ("TIME" as NSString).draw(at: CGPoint(x: secondColumnX, y: statsTop), withAttributes: labelAttributes)
+            (formatDuration(post.duration ?? 0) as NSString).draw(at: CGPoint(x: secondColumnX, y: statsTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
             
-            // Draw Up&Down logo at top
-            let logoX: CGFloat = 16
-            let logoY: CGFloat = 16
-            let logoSize: CGFloat = 40
+            if let pace = paceString(distance: post.distance, duration: post.duration) {
+                let paceTop = statsTop + labelFont.lineHeight + valueFont.lineHeight + 34
+                ("PACE" as NSString).draw(at: CGPoint(x: padding, y: paceTop), withAttributes: labelAttributes)
+                (pace as NSString).draw(at: CGPoint(x: padding, y: paceTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
+            }
             
-            // Draw a simple rounded rectangle as logo placeholder
-            let logoRect = CGRect(x: logoX, y: logoY, width: logoSize, height: logoSize)
-            let logoPath = UIBezierPath(roundedRect: logoRect, cornerRadius: 6)
-            UIColor.white.withAlphaComponent(0.2).setFill()
-            logoPath.fill()
-            
-            let logoText = "U&D"
-            let logoTextFont = UIFont.systemFont(ofSize: 14, weight: .bold)
-            let logoTextAttributes: [NSAttributedString.Key: Any] = [
-                .font: logoTextFont,
+            let brandSize: CGFloat = 60
+            let brandRect = CGRect(x: padding, y: cardSize.height - brandSize - 72, width: brandSize, height: brandSize)
+            let brandCornerRadius: CGFloat = 16
+            let brandPath = UIBezierPath(roundedRect: brandRect, cornerRadius: brandCornerRadius)
+
+            cg.saveGState()
+            cg.addPath(brandPath.cgPath)
+            cg.setFillColor(UIColor.white.cgColor)
+            cg.fillPath()
+            cg.restoreGState()
+
+            cg.saveGState()
+            brandPath.addClip()
+            if let logo = UIImage(named: "23") {
+                logo.draw(in: brandRect)
+            } else {
+                cg.setFillColor(UIColor.black.cgColor)
+                cg.fill(brandRect)
+            }
+            cg.restoreGState()
+
+            cg.saveGState()
+            cg.addPath(brandPath.cgPath)
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.6).cgColor)
+            cg.setLineWidth(2)
+            cg.strokePath()
+            cg.restoreGState()
+
+            let brandFont = UIFont.systemFont(ofSize: 22, weight: .semibold)
+            let brandAttributes: [NSAttributedString.Key: Any] = [
+                .font: brandFont,
                 .foregroundColor: UIColor.white
             ]
-            let logoTextSize = (logoText as NSString).size(withAttributes: logoTextAttributes)
-            let logoTextX = logoX + (logoSize - logoTextSize.width) / 2
-            let logoTextY = logoY + (logoSize - logoTextSize.height) / 2
-            (logoText as NSString).draw(at: CGPoint(x: logoTextX, y: logoTextY), withAttributes: logoTextAttributes)
+            let brandPoint = CGPoint(x: brandRect.maxX + 16, y: brandRect.midY - brandFont.lineHeight / 2)
+            ("Up&Down" as NSString).draw(at: brandPoint, withAttributes: brandAttributes)
         }
-        
         return image
     }
     
@@ -171,13 +251,28 @@ struct ShareActivityView: View {
         }
     }
     
-    private func saveToPhotoLibrary() {
-        guard let image = generateCardImage() else {
+    private func paceString(distance: Double?, duration: Int?) -> String? {
+        guard let distance = distance, distance > 0,
+              let duration = duration else { return nil }
+        let paceSeconds = Double(duration) / distance
+        let minutes = Int(paceSeconds) / 60
+        let seconds = Int(paceSeconds) % 60
+        return String(format: "%d:%02d /km", minutes, seconds)
+    }
+    
+    private func saveToPhotoLibrary(background: ShareCardBackground) {
+        if background == .userPhoto && userImage == nil {
+            saveMessage = userImageLoadError ? "Bilden kunde inte laddas. Försök igen." : "Bilden laddas fortfarande. Vänta ett ögonblick och försök igen."
+            showingSaveAlert = true
+            return
+        }
+        let backgroundImage = background == .userPhoto ? userImage : nil
+        guard let image = generateCardImage(backgroundImage: backgroundImage) else {
             saveMessage = "Det uppstod ett fel när bilden skulle skapas"
             showingSaveAlert = true
             return
         }
-        
+ 
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
                 PHPhotoLibrary.shared().performChanges({
@@ -185,7 +280,7 @@ struct ShareActivityView: View {
                 }) { success, error in
                     DispatchQueue.main.async {
                         if success {
-                            saveMessage = "Bilden har sparats till kamerarullen!"
+                            saveMessage = background == .userPhoto ? "Bilden med din bakgrund har sparats till kamerarullen!" : "Den transparenta bilden har sparats till kamerarullen!"
                             showingSaveAlert = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                                 dismiss()
@@ -205,104 +300,242 @@ struct ShareActivityView: View {
         }
     }
     
-    private func shareViaActivityViewController() {
-        guard let image = generateCardImage() else {
-            saveMessage = "Det uppstod ett fel när bilden skulle skapas"
-            showingSaveAlert = true
-            return
+    private func saveCurrentPreview() {
+        let currentBackground = selectedBackgrounds[currentBackgroundIndex]
+        saveToPhotoLibrary(background: currentBackground)
+    }
+
+    private var shareActivityIconName: String {
+        switch post.activityType {
+        case "Löppass": return "figure.run.circle.fill"
+        case "Golfrunda": return "flag.circle.fill"
+        case "Promenad": return "figure.walk.circle.fill"
+        case "Bestiga berg": return "mountain.2.circle.fill"
+        case "Skidåkning": return "snowflake.circle.fill"
+        default: return "figure.run.circle.fill"
         }
-        
-        let activityViewController = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootViewController = window.rootViewController {
-            rootViewController.present(activityViewController, animated: true)
+    }
+    
+    private func previewBackground(for background: ShareCardBackground) -> ActivityCardPreview.Background {
+        switch background {
+        case .transparent:
+            return .gradient
+        case .userPhoto:
+            if let userImage {
+                return .map(userImage)
+            } else {
+                return .loading
+            }
+        }
+    }
+    
+    private func setupBackgrounds() {
+        selectedBackgrounds = [.transparent]
+        if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
+            selectedBackgrounds.append(.userPhoto)
+            loadUserImage(from: userImageUrl)
+        }
+        currentBackgroundIndex = 0
+    }
+    
+    private func loadUserImage(from urlString: String, force: Bool = false) {
+        if userImage != nil && !force { return }
+        guard let url = URL(string: urlString) else { return }
+        isLoadingUserImage = true
+        userImageLoadError = false
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    await MainActor.run {
+                        self.userImage = image
+                    }
+                } else {
+                    await MainActor.run {
+                        self.userImageLoadError = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.userImageLoadError = true
+                }
+            }
+            await MainActor.run {
+                self.isLoadingUserImage = false
+            }
+        }
+    }
+}
+
+private enum ShareCardBackground: Hashable {
+    case transparent
+    case userPhoto
+}
+
+private extension ShareCardBackground {
+    var displayName: String {
+        switch self {
+        case .transparent:
+            return "Transparent"
+        case .userPhoto:
+            return "Din bild"
         }
     }
 }
 
 struct ActivityCardPreview: View {
-    let post: SocialWorkoutPost
-    
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Background - show map image if available
-            if let imageUrl = post.imageUrl {
-                AsyncImage(url: URL(string: imageUrl)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Color.gray
-                }
-                .ignoresSafeArea()
-            } else {
-                // Fallback gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.gray, Color(.systemGray3)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-            
-            // Gradient overlay
-            LinearGradient(
-                gradient: Gradient(colors: [Color.clear, Color.black.opacity(0.8)]),
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
-            
-            // Content at bottom
-            VStack(alignment: .leading, spacing: 8) {
-                // Logo
-                HStack {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 40, height: 40)
-                        
-                        Text("U&D")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    Spacer()
-                }
-                
-                // Title
-                Text(post.title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-                
-                // Stats
-                HStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Distans")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(.white.opacity(0.7))
-                        Text(String(format: "%.2f km", post.distance ?? 0))
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Tid")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(.white.opacity(0.7))
-                        Text(formatDuration(post.duration ?? 0))
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                }
-            }
-            .padding(16)
-        }
-        .frame(height: 450)
-        .cornerRadius(12)
+    enum Background {
+        case gradient
+        case map(UIImage)
+        case loading
     }
     
+    let post: SocialWorkoutPost
+    var background: Background = .gradient
+    
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            backgroundView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.black.opacity(0.0001))
+                )
+            
+            VStack(alignment: .leading, spacing: 32) {
+                header
+                statsSection
+                Spacer()
+                brandRow
+            }
+            .padding(.top, 80)
+            .padding(.horizontal, 36)
+            .padding(.bottom, 72)
+        }
+        .frame(width: 340, height: 550)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var backgroundView: some View {
+        switch background {
+        case .gradient:
+            LinearGradient(
+                colors: [Color.black.opacity(0.95), Color.black.opacity(0.65)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        case .map(let image):
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .overlay(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.15), Color.black.opacity(0.75)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        case .loading:
+            LinearGradient(
+                colors: [Color.black.opacity(0.95), Color.black.opacity(0.65)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .overlay(
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                    Text("Laddar bild...")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            )
+        }
+    }
+    
+    private var header: some View {
+        HStack(alignment: .center, spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(Color.white)
+                Image(systemName: activityIconName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .foregroundColor(.black)
+            }
+            .frame(width: 72, height: 72)
+            
+            Text(post.title.isEmpty ? (post.activityType ?? "Aktivitet") : post.title)
+                .font(.system(size: 34, weight: .heavy))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+    
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            HStack(alignment: .top, spacing: 32) {
+                statBlock(title: "DISTANCE", value: String(format: "%.2f km", post.distance ?? 0))
+                Spacer()
+                statBlock(title: "TIME", value: formatDuration(post.duration ?? 0))
+            }
+            statBlock(title: "PACE", value: paceString(distance: post.distance, duration: post.duration) ?? "-")
+        }
+    }
+    
+    private func statBlock(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .kerning(0.6)
+                .foregroundColor(.white.opacity(0.7))
+            Text(value)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
+    
+    private var brandRow: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white)
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(10)
+            }
+            .frame(width: 60, height: 60)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.6), lineWidth: 2)
+            )
+            Text("Up&Down")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white)
+        }
+    }
+    
+    private var activityIconName: String {
+        switch post.activityType {
+        case "Löppass": return "figure.run.circle.fill"
+        case "Golfrunda": return "flag.circle.fill"
+        case "Promenad": return "figure.walk.circle.fill"
+        case "Bestiga berg": return "mountain.2.circle.fill"
+        case "Skidåkning": return "snowflake.circle.fill"
+        default: return "figure.run.circle.fill"
+        }
+    }
+
     private func formatDuration(_ seconds: Int) -> String {
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
@@ -312,6 +545,15 @@ struct ActivityCardPreview: View {
         } else {
             return String(format: "%02d:%02d", minutes, secs)
         }
+    }
+    
+    private func paceString(distance: Double?, duration: Int?) -> String? {
+        guard let distance = distance, distance > 0,
+              let duration = duration else { return nil }
+        let paceSeconds = Double(duration) / distance
+        let minutes = Int(paceSeconds) / 60
+        let seconds = Int(paceSeconds) % 60
+        return String(format: "%d:%02d /km", minutes, seconds)
     }
 }
 

@@ -179,19 +179,16 @@ struct WorkoutPostCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Swipeable images (route and user image)
-            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
-            
-            // Content below image
+            // Content header ABOVE image
             VStack(alignment: .leading, spacing: 12) {
                 // Title
                 Text(post.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.black)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 
-                // Stats row with white background
+                // Stats row
                 HStack(spacing: 0) {
                     if let distance = post.distance {
                         VStack(spacing: 6) {
@@ -199,7 +196,7 @@ struct WorkoutPostCard: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.gray)
                             Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.black)
                         }
                         .frame(maxWidth: .infinity)
@@ -217,7 +214,7 @@ struct WorkoutPostCard: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.gray)
                             Text(formatDuration(duration))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.black)
                         }
                         .frame(maxWidth: .infinity)
@@ -236,55 +233,51 @@ struct WorkoutPostCard: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(.gray)
                             Text(String(format: "%.0f m", elevationGain))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.black)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }                }
-                .background(Color.white)
-                .cornerRadius(12)
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .padding(.bottom, 8)
             }
             
-            // Like, Comment, Share buttons
-            HStack(spacing: 16) {
+            // Swipeable images (route and user image)
+            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+            
+            // Like, Comment, Share buttons - large, evenly spaced
+            HStack(spacing: 0) {
                 Button(action: {}) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "heart")
-                            .foregroundColor(.gray)
-                        Text("0")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
+                    Image(systemName: "heart")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
                 }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
                 
                 Button(action: {}) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.right")
-                            .foregroundColor(.gray)
-                        Text("0")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
+                    Image(systemName: "bubble.right")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
                 }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
                 
                 Button(action: {}) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundColor(.gray)
-                    }
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.gray)
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
         }
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
     }
     
     func getActivityIcon(_ activity: String) -> String {
@@ -334,6 +327,27 @@ struct WorkoutPostCard: View {
 
 class WorkoutPostsViewModel: ObservableObject {
     @Published var posts: [WorkoutPost] = []
+    private let cacheManager = AppCacheManager.shared
+    private let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private let isoFormatterNoMs: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    private func parseDate(_ s: String) -> Date {
+        if let d = isoFormatter.date(from: s) { return d }
+        if let d = isoFormatterNoMs.date(from: s) { return d }
+        return Date.distantPast
+    }
+    private func sorted(_ items: [WorkoutPost]) -> [WorkoutPost] {
+        items.sorted { lhs, rhs in
+            parseDate(lhs.createdAt) > parseDate(rhs.createdAt)
+        }
+    }
     
     func fetchUserPosts(userId: String) {
         Task {
@@ -349,18 +363,41 @@ class WorkoutPostsViewModel: ObservableObject {
     }
     
     func fetchUserPostsAsync(userId: String) async {
+        // Show cached posts immediately if available
+        if let cached = cacheManager.getCachedUserWorkouts(userId: userId, allowExpired: true) {
+            await MainActor.run {
+                self.posts = sorted(cached)
+            }
+        }
         do {
-            // Use retry helper for better network resilience
             let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
                 return try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
             }
+            let ordered = sorted(fetchedPosts)
+            var shouldCache = false
             await MainActor.run {
-                self.posts = fetchedPosts
+                let hadPostsAlready = !self.posts.isEmpty
+                if !ordered.isEmpty || !hadPostsAlready {
+                    self.posts = ordered
+                    shouldCache = true
+                } else {
+                    print("⚠️ Received empty workout list, keeping existing posts")
+                }
+            }
+            if shouldCache {
+                cacheManager.saveUserWorkouts(ordered, userId: userId)
             }
         } catch is CancellationError {
             print("⚠️ Fetch was cancelled")
         } catch {
             print("❌ Error fetching user posts after retries: \(error)")
+            if let cached = cacheManager.getCachedUserWorkouts(userId: userId, allowExpired: true) {
+                await MainActor.run {
+                    if self.posts.isEmpty {
+                        self.posts = sorted(cached)
+                    }
+                }
+            }
         }
     }
     
@@ -370,11 +407,29 @@ class WorkoutPostsViewModel: ObservableObject {
             let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
                 return try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
             }
-            DispatchQueue.main.async {
-                self.posts = fetchedPosts
+            let ordered = sorted(fetchedPosts)
+            var shouldCache = false
+            await MainActor.run {
+                let hadPostsAlready = !self.posts.isEmpty
+                if !ordered.isEmpty || !hadPostsAlready {
+                    self.posts = ordered
+                    shouldCache = true
+                } else {
+                    print("⚠️ Refresh returned empty workout list, keeping existing posts")
+                }
+            }
+            if shouldCache {
+                cacheManager.saveUserWorkouts(ordered, userId: userId)
             }
         } catch {
             print("❌ Error refreshing user posts after retries: \(error)")
+            if let cached = cacheManager.getCachedUserWorkouts(userId: userId, allowExpired: true) {
+                await MainActor.run {
+                    if self.posts.isEmpty {
+                        self.posts = sorted(cached)
+                    }
+                }
+            }
         }
     }
 }

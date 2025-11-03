@@ -4,149 +4,69 @@ import Supabase
 class MonthlyStatsService {
     static let shared = MonthlyStatsService()
     private let supabase = SupabaseConfig.supabase
+    private let cache = AppCacheManager.shared
     
     private init() {}
     
+    // Upload this device's current month steps to Supabase so it can appear in the leaderboard
+    func syncCurrentUserMonthlySteps() async {
+        await withCheckedContinuation { continuation in
+            HealthKitManager.shared.getCurrentMonthStepsTotal { steps in
+                Task {
+                    do {
+                        let session = try await SupabaseConfig.supabase.auth.session
+                        let userId = session.user.id.uuidString
+                        let monthKey = Self.currentMonthKey()
+                        struct Row: Encodable { let user_id: String; let month: String; let steps: Int }
+                        try await self.supabase
+                            .from("monthly_steps")
+                            .upsert(Row(user_id: userId, month: monthKey, steps: steps), onConflict: "user_id,month")
+                            .execute()
+                        print("✅ Synced monthly steps: \(steps) for \(userId) month=\(monthKey)")
+                    } catch {
+                        print("❌ Failed to sync monthly steps: \(error)")
+                    }
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
     func fetchTopMonthlyUsers(limit: Int = 20) async throws -> [MonthlyUser] {
         do {
-            print("🔄 Fetching top monthly users")
-            
-            // Get first and last day of current month
-            let calendar = Calendar.current
-            let now = Date()
-            let components = calendar.dateComponents([.year, .month], from: now)
-            
-            guard let startOfMonth = calendar.date(from: components),
-                  let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) else {
-                throw NSError(domain: "MonthlyStatsService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to calculate month boundaries"])
+            print("🔄 Fetching top monthly users by steps")
+            let monthKey = Self.currentMonthKey()
+            if let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
+                print("✅ Using cached monthly leaderboard (\(cached.count) entries)")
+                return Array(cached.prefix(limit))
             }
-            
-            let startOfMonthStr = startOfMonth.ISO8601Format()
-            let endOfMonthStr = endOfMonth.ISO8601Format()
-            
-            print("📅 Current month is: \(calendar.component(.month, from: now)), year: \(calendar.component(.year, from: now))")
-            print("📅 Fetching stats from \(startOfMonthStr) to \(endOfMonthStr)")
-            
-            // Get data from golf_rounds
-            struct GolfRound: Decodable {
-                let userId: String
-                let distanceWalkedMeters: Double?
-                
-                enum CodingKeys: String, CodingKey {
-                    case userId = "user_id"
-                    case distanceWalkedMeters = "distance_walked_meters"
-                }
-            }
-            
-            let golfRounds: [GolfRound] = try await supabase
-                .from("golf_rounds")
-                .select("user_id, distance_walked_meters")
-                .gte("created_at", value: startOfMonth.ISO8601Format())
-                .lte("created_at", value: endOfMonth.ISO8601Format())
+            struct StepRow: Decodable { let userId: String; let steps: Int; enum CodingKeys: String, CodingKey { case userId = "user_id"; case steps } }
+            let rows: [StepRow] = try await supabase
+                .from("monthly_steps")
+                .select("user_id, steps")
+                .eq("month", value: monthKey)
+                .order("steps", ascending: false)
+                .limit(limit)
                 .execute()
                 .value
-            
-            print("📊 Found \(golfRounds.count) golf rounds this month")
-            
-            // Also fetch all users' data from workout_posts as fallback
-            let workoutPosts: [WorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select("id, user_id, activity_type, title, distance, created_at")
-                .gte("created_at", value: startOfMonthStr)
-                .lte("created_at", value: endOfMonthStr)
-                .execute()
-                .value
-            
-            print("📊 Found \(workoutPosts.count) workout posts this month")
-            
-            // Group by user and sum distances (convert meters to km)
-            var userDistances: [String: Double] = [:]
-            
-            // Add workout posts data to user distances
-            for post in workoutPosts {
-                let userId = post.userId
-                let distance = post.distance ?? 0.0
-                userDistances[userId, default: 0.0] += distance
-            }
-            
-            // Get data from completed_training_sessions
-            struct TrainingSession: Decodable {
-                let userId: String
-                let distanceWalkedMeters: Double?
-                
-                enum CodingKeys: String, CodingKey {
-                    case userId = "user_id"
-                    case distanceWalkedMeters = "distance_walked_meters"
-                }
-            }
-            
-            let trainingSessions: [TrainingSession] = try await supabase
-                .from("completed_training_sessions")
-                .select("user_id, distance_walked_meters")
-                .gte("created_at", value: startOfMonth.ISO8601Format())
-                .lte("created_at", value: endOfMonth.ISO8601Format())
-                .execute()
-                .value
-            
-            print("📊 Found \(trainingSessions.count) training sessions this month")
-            
-            for round in golfRounds {
-                let userId = round.userId
-                let distance = round.distanceWalkedMeters ?? 0.0
-                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
-            }
-            
-            for session in trainingSessions {
-                let userId = session.userId
-                let distance = session.distanceWalkedMeters ?? 0.0
-                userDistances[userId, default: 0.0] += distance / 1000.0 // Convert meters to km
-            }
-            
-            // Fetch user profiles and create MonthlyUser objects
+
             var users: [MonthlyUser] = []
-            
-            print("📊 Processing \(userDistances.count) unique users...")
-            
-            for (index, (userId, distance)) in userDistances.enumerated() {
-                print("📊 Processing user \(index + 1)/\(userDistances.count): userId=\(userId), distance=\(distance) km")
-                
-                // Only include users who walked at least 0.1 km (100 meters)
-                if distance >= 0.1 {
-                    print("📊 Fetching profile \(index + 1)/\(userDistances.count) for userId: \(userId)")
-                    if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
-                        let user = MonthlyUser(
-                            id: userId,
-                            username: profile.name,
-                            avatarUrl: profile.avatarUrl,
-                            distance: distance,
-                            isPro: profile.isProMember
-                        )
-                        users.append(user)
-                        print("✅ Added user: \(profile.name) with \(distance) km")
-                    } else {
-                        print("❌ Failed to fetch profile for userId: \(userId)")
-                    }
-                } else {
-                    print("⏭️ Skipping user \(userId) - distance too low: \(distance) km < 0.1 km")
+            for row in rows {
+                if let profile = try? await ProfileService.shared.fetchUserProfile(userId: row.userId) {
+                    users.append(MonthlyUser(id: row.userId, username: profile.name, avatarUrl: profile.avatarUrl, steps: row.steps, isPro: profile.isProMember))
                 }
             }
-            
-            // Sort by distance descending and take top limit
-            users.sort { $0.distance > $1.distance }
-            let topUsers = Array(users.prefix(limit))
-            
-            print("✅ Fetched \(topUsers.count) top users")
-            print("📊 Total unique users with distance data: \(userDistances.count)")
-            
-            // Debug print top 20
-            for (index, user) in topUsers.enumerated() {
-                print("\(index + 1). \(user.username): \(user.distance) km")
-            }
-            
-            return topUsers
+            cache.saveMonthlyLeaderboard(users, monthKey: monthKey)
+            return users
             
         } catch {
             print("❌ Error fetching top monthly users: \(error)")
+            // fallback to cache if available
+            let monthKey = Self.currentMonthKey()
+            if let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
+                print("⚠️ Returning cached leaderboard due to error")
+                return Array(cached.prefix(limit))
+            }
             throw error
         }
     }
@@ -229,17 +149,18 @@ class MonthlyStatsService {
             // Find the user with the highest distance
             if let winnerEntry = userDistances.max(by: { $0.value < $1.value }) {
                 let userId = winnerEntry.key
-                let distance = winnerEntry.value
+                let distanceKm = winnerEntry.value
+                let stepsEstimate = Int(distanceKm * 1300.0) // approx 1300 steps per km
                 
                 if let profile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
                     let winner = MonthlyUser(
                         id: userId,
                         username: profile.name,
                         avatarUrl: profile.avatarUrl,
-                        distance: distance,
+                        steps: stepsEstimate,
                         isPro: profile.isProMember
                     )
-                    print("✅ Found last month winner: \(profile.name) with \(winner.distance) km")
+                    print("✅ Found last month winner: \(profile.name) with ~\(stepsEstimate) steps")
                     return winner
                 }
             }
@@ -251,6 +172,16 @@ class MonthlyStatsService {
             print("❌ Error fetching last month winner: \(error)")
             return nil
         }
+    }
+}
+
+extension MonthlyStatsService {
+    static func currentMonthKey() -> String {
+        let now = Date()
+        let comps = Calendar.current.dateComponents([.year, .month], from: now)
+        let y = comps.year ?? 0
+        let m = comps.month ?? 0
+        return String(format: "%04d-%02d", y, m)
     }
 }
 

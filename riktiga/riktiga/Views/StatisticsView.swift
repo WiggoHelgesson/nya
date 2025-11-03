@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct StatisticsView: View {
     @Environment(\.dismiss) var dismiss
@@ -15,6 +16,13 @@ struct StatisticsView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
+                        HealthDataDisclosureView(
+                            title: "Statistiken hämtas från Apple Health",
+                            description: "Vecko- och månadsdatan hämtas från dina aktiviteter i Apple Health. Justera vilka data som delas genom att uppdatera behörigheterna i Hälsa-appen.",
+                            showsManageButton: true,
+                            manageAction: openHealthSettings
+                        )
+
                         // MARK: - Header Stats
                         VStack(spacing: 16) {
                             Text("STATISTIK")
@@ -199,6 +207,11 @@ struct StatisticsView: View {
                 }
             }
         }
+    }
+    
+    private func openHealthSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 }
 

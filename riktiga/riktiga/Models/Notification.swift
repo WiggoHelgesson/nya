@@ -12,6 +12,20 @@ struct AppNotification: Codable, Identifiable {
     let createdAt: String
     let isRead: Bool
     
+    var displayText: String {
+        if !description.isEmpty {
+            return description
+        }
+        switch type {
+        case .like:
+            return "gillade din post"
+        case .comment:
+            return "kommenterade på din post"
+        case .follow:
+            return "började följa dig"
+        }
+    }
+    
     enum NotificationType: String, Codable {
         case like = "like"
         case comment = "comment"
@@ -24,6 +38,8 @@ struct AppNotification: Codable, Identifiable {
         case triggeredByUserId = "triggered_by_user_id"
         case triggeredByUserName = "triggered_by_user_name"
         case triggeredByUserAvatar = "triggered_by_user_avatar"
+        case actorId = "actor_id"
+        case actorUsername = "actor_username"
         case type
         case postId = "post_id"
         case description
@@ -37,8 +53,12 @@ struct AppNotification: Codable, Identifiable {
         
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         userId = try container.decodeIfPresent(String.self, forKey: .userId) ?? ""
-        triggeredByUserId = try container.decodeIfPresent(String.self, forKey: .triggeredByUserId) ?? ""
-        triggeredByUserName = try container.decodeIfPresent(String.self, forKey: .triggeredByUserName) ?? "Unknown User"
+        triggeredByUserId = try container.decodeIfPresent(String.self, forKey: .actorId)
+            ?? container.decodeIfPresent(String.self, forKey: .triggeredByUserId)
+            ?? ""
+        triggeredByUserName = try container.decodeIfPresent(String.self, forKey: .actorUsername)
+            ?? container.decodeIfPresent(String.self, forKey: .triggeredByUserName)
+            ?? "Unknown User"
         triggeredByUserAvatar = try container.decodeIfPresent(String.self, forKey: .triggeredByUserAvatar)
         type = try container.decodeIfPresent(NotificationType.self, forKey: .type) ?? .like
         postId = try container.decodeIfPresent(String.self, forKey: .postId)
@@ -54,6 +74,8 @@ struct AppNotification: Codable, Identifiable {
         try container.encode(triggeredByUserId, forKey: .triggeredByUserId)
         try container.encode(triggeredByUserName, forKey: .triggeredByUserName)
         try container.encodeIfPresent(triggeredByUserAvatar, forKey: .triggeredByUserAvatar)
+        try container.encode(triggeredByUserId, forKey: .actorId)
+        try container.encode(triggeredByUserName, forKey: .actorUsername)
         try container.encode(type, forKey: .type)
         try container.encodeIfPresent(postId, forKey: .postId)
         try container.encode(description, forKey: .description)

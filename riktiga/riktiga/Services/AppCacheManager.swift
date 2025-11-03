@@ -6,7 +6,10 @@ class AppCacheManager: ObservableObject {
     static let shared = AppCacheManager()
     
     private let userDefaults = UserDefaults.standard
-    private let cacheExpirationTime: TimeInterval = 300 // 5 minutes
+    // Default cache time (used for most caches)
+    private let cacheExpirationTime: TimeInterval = 7 * 24 * 60 * 60
+    // Social feed should refresh more often; use a much shorter TTL
+    private let socialFeedTTL: TimeInterval = 5 * 60
     
     private init() {}
     
@@ -18,6 +21,8 @@ class AppCacheManager: ObservableObject {
         static let userWorkouts = "cached_user_workouts_"
         static let socialFeed = "cached_social_feed_"
         static let weeklyStats = "cached_weekly_stats_"
+        static let recommendedUsers = "cached_recommended_users_"
+        static let monthlyLeaderboard = "cached_monthly_leaderboard_"
         static let cacheTimestamp = "cache_timestamp_"
     }
     
@@ -111,12 +116,14 @@ class AppCacheManager: ObservableObject {
         }
     }
     
-    func getCachedUserWorkouts(userId: String) -> [WorkoutPost]? {
+    func getCachedUserWorkouts(userId: String, allowExpired: Bool = false) -> [WorkoutPost]? {
         let key = CacheKeys.userWorkouts + userId
-        guard let data = userDefaults.data(forKey: key),
-              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
-              Date().timeIntervalSince(timestamp) < cacheExpirationTime else {
-            return nil
+        guard let data = userDefaults.data(forKey: key) else { return nil }
+        if !allowExpired {
+            guard let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+                  Date().timeIntervalSince(timestamp) < cacheExpirationTime else {
+                return nil
+            }
         }
         
         do {
@@ -138,12 +145,14 @@ class AppCacheManager: ObservableObject {
         }
     }
     
-    func getCachedSocialFeed(userId: String) -> [SocialWorkoutPost]? {
+    func getCachedSocialFeed(userId: String, allowExpired: Bool = false) -> [SocialWorkoutPost]? {
         let key = CacheKeys.socialFeed + userId
-        guard let data = userDefaults.data(forKey: key),
-              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
-              Date().timeIntervalSince(timestamp) < cacheExpirationTime else {
-            return nil
+        guard let data = userDefaults.data(forKey: key) else { return nil }
+        if !allowExpired {
+            guard let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+                  Date().timeIntervalSince(timestamp) < socialFeedTTL else {
+                return nil
+            }
         }
         
         do {
@@ -179,6 +188,48 @@ class AppCacheManager: ObservableObject {
         } catch {
             return nil
         }
+    }
+    
+    // MARK: - Recommended Friends Cache
+    func saveRecommendedUsers(_ users: [UserSearchResult], userId: String) {
+        let key = CacheKeys.recommendedUsers + userId
+        do {
+            let data = try JSONEncoder().encode(users)
+            userDefaults.set(data, forKey: key)
+            userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
+        } catch { }
+    }
+    
+    func getCachedRecommendedUsers(userId: String) -> [UserSearchResult]? {
+        let key = CacheKeys.recommendedUsers + userId
+        guard let data = userDefaults.data(forKey: key),
+              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+              Date().timeIntervalSince(timestamp) < 24*60*60 else { // 24h
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode([UserSearchResult].self, from: data)
+        } catch { return nil }
+    }
+    
+    // MARK: - Monthly Leaderboard Cache
+    func saveMonthlyLeaderboard(_ users: [MonthlyUser], monthKey: String) {
+        let key = CacheKeys.monthlyLeaderboard + monthKey
+        do {
+            let data = try JSONEncoder().encode(users)
+            userDefaults.set(data, forKey: key)
+            userDefaults.set(Date(), forKey: CacheKeys.cacheTimestamp + key)
+        } catch { }
+    }
+    
+    func getCachedMonthlyLeaderboard(monthKey: String) -> [MonthlyUser]? {
+        let key = CacheKeys.monthlyLeaderboard + monthKey
+        guard let data = userDefaults.data(forKey: key),
+              let timestamp = userDefaults.object(forKey: CacheKeys.cacheTimestamp + key) as? Date,
+              Date().timeIntervalSince(timestamp) < 6*60*60 else { // 6h
+            return nil
+        }
+        do { return try JSONDecoder().decode([MonthlyUser].self, from: data) } catch { return nil }
     }
     
     // MARK: - Cache Management

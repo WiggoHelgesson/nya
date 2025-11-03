@@ -84,16 +84,14 @@ class AuthViewModel: NSObject, ObservableObject {
                         
                         print("✅ User automatically logged in: \(profile.name)")
                     }
+                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
-                    // Fallback om profil inte finns
-                    DispatchQueue.main.async {
-                        self.currentUser = User(
-                            id: session.user.id.uuidString,
-                            name: session.user.email?.prefix(while: { $0 != "@" }).capitalized ?? "Användare",
-                            email: session.user.email ?? ""
-                        )
-                        self.isLoggedIn = true
-                        print("✅ User automatically logged in (fallback): \(self.currentUser?.name ?? "Unknown")")
+                    // Ingen profil hittades – behandla som raderat/disabled konto
+                    try? await supabase.auth.signOut()
+                    await MainActor.run {
+                        self.isLoggedIn = false
+                        self.currentUser = nil
+                        self.errorMessage = "Kontot är raderat eller saknas."
                     }
                 }
             } catch {
@@ -124,19 +122,15 @@ class AuthViewModel: NSObject, ObservableObject {
                         // Visa review popup efter lyckad inloggning
                         ReviewManager.shared.requestReviewIfNeeded()
                     }
+                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
-                    // Fallback om profil inte finns
-                    DispatchQueue.main.async {
-                        self.currentUser = User(
-                            id: session.user.id.uuidString,
-                            name: email.prefix(while: { $0 != "@" }).capitalized,
-                            email: email
-                        )
-                        self.isLoggedIn = true
+                    // Ingen profil hittades – behandla som raderat/disabled konto
+                    try? await supabase.auth.signOut()
+                    await MainActor.run {
+                        self.isLoggedIn = false
+                        self.currentUser = nil
                         self.isLoading = false
-                        
-                        // Visa review popup efter lyckad inloggning
-                        ReviewManager.shared.requestReviewIfNeeded()
+                        self.errorMessage = "Kontot är raderat eller saknas."
                     }
                 }
             } catch {
@@ -192,6 +186,7 @@ class AuthViewModel: NSObject, ObservableObject {
                         // Visa paywall efter lyckad registrering
                         self.showPaywallAfterSignup = true
                     }
+                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
                     // Fallback om profil inte finns
                     DispatchQueue.main.async {
@@ -218,17 +213,32 @@ class AuthViewModel: NSObject, ObservableObject {
     func logout() {
         Task {
             do {
-                try await supabase.auth.signOut()
-                
-                DispatchQueue.main.async {
+                do {
+                    try await supabase.auth.signOut()
+                } catch {
+                    // If there's no active session, treat as logged out
+                    if (error as NSError).localizedDescription.contains("sessionMissing") {
+                        print("ℹ️ signOut: sessionMissing – treating as already logged out")
+                    } else {
+                        throw error
+                    }
+                }
+                await RevenueCatManager.shared.logOutRevenueCat()
+                await MainActor.run {
+                    // Clear local state and caches regardless
+                    AppCacheManager.shared.clearAllCache()
                     self.isLoggedIn = false
                     self.currentUser = nil
-                    print("✅ User logged out successfully")
+                    print("✅ User logged out successfully (graceful)")
                 }
             } catch {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Logout misslyckades: \(error.localizedDescription)"
-                    print("❌ Logout error: \(error)")
+                await MainActor.run {
+                    // Even if network signOut fails, force local logout so user isn't stuck
+                    AppCacheManager.shared.clearAllCache()
+                    self.isLoggedIn = false
+                    self.currentUser = nil
+                    self.errorMessage = "Logout: \(error.localizedDescription) – fortsätter lokalt"
+                    print("❌ Logout error (forced local logout): \(error)")
                 }
             }
         }
@@ -400,6 +410,7 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         // Visa review popup efter lyckad inloggning
                         ReviewManager.shared.requestReviewIfNeeded()
                     }
+                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
                     // Skapa profil för ny Apple-användare
                     let fullName = appleIDCredential.fullName

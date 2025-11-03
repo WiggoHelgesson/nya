@@ -7,6 +7,24 @@ class SocialService {
     
     // In-memory cache for post counts (likes and comments)
     private var postCountsCache: [String: (likeCount: Int, commentCount: Int)] = [:]
+    private let cacheManager = AppCacheManager.shared
+    private var hasLoggedFollowingCancelled = false
+    private var hasLoggedSocialFeedCancelled = false
+    private let isoFormatterWithMs: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private let isoFormatterNoMs: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    private func parseDate(_ s: String) -> Date {
+        if let d = isoFormatterWithMs.date(from: s) { return d }
+        if let d = isoFormatterNoMs.date(from: s) { return d }
+        return Date.distantPast
+    }
     
     // MARK: - Follow Functions
     
@@ -29,13 +47,14 @@ class SocialService {
                     .insert(follow)
                     .execute()
                 print("✅ User followed successfully")
+                hasLoggedFollowingCancelled = false
                 
                 // Create follow notification
                 do {
                     let currentUser = try await supabase.auth.user()
                     let userProfile: [UserSearchResult] = try await supabase
                         .from("profiles")
-                        .select("username, avatar_url")
+                        .select("id, username, avatar_url")
                         .eq("id", value: currentUser.id.uuidString)
                         .execute()
                         .value
@@ -80,6 +99,7 @@ class SocialService {
     /// Get all users that the current user follows
     func getFollowing(userId: String) async throws -> [String] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let follows: [Follow] = try await supabase
                 .from("user_follows")
                 .select()
@@ -94,7 +114,10 @@ class SocialService {
         } catch {
             // Don't log cancelled requests as errors
             if let urlError = error as? URLError, urlError.code == .cancelled {
-                print("⚠️ Following request was cancelled")
+                if !hasLoggedFollowingCancelled {
+                    print("⚠️ Following request was cancelled")
+                    hasLoggedFollowingCancelled = true
+                }
                 return []
             }
             print("❌ Error fetching following: \(error)")
@@ -105,6 +128,7 @@ class SocialService {
     /// Get detailed user information for users that the current user follows
     func getFollowingUsers(userId: String) async throws -> [UserSearchResult] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             print("🔍 Getting following users for user: \(userId)")
             
             // First get the following IDs
@@ -136,6 +160,7 @@ class SocialService {
     /// Get all users that follow the current user
     func getFollowers(userId: String) async throws -> [String] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let follows: [Follow] = try await supabase
                 .from("user_follows")
                 .select()
@@ -156,6 +181,7 @@ class SocialService {
     /// Get detailed user information for users that follow the current user
     func getFollowerUsers(userId: String) async throws -> [UserSearchResult] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             print("🔍 Getting follower users for user: \(userId)")
             
             // First get the follower IDs
@@ -187,6 +213,7 @@ class SocialService {
     /// Check if one user is following another
     func isFollowing(followerId: String, followingId: String) async throws -> Bool {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let follows: [Follow] = try await supabase
                 .from("user_follows")
                 .select()
@@ -286,6 +313,35 @@ class SocialService {
             return likes
         } catch {
             print("❌ Error fetching post likes: \(error)")
+            return []
+        }
+    }
+    
+    func getTopPostLikers(postId: String, limit: Int = 3) async throws -> [UserSearchResult] {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            // Fetch likes ordered by most recent
+            let likes: [PostLike] = try await supabase
+                .from("workout_post_likes")
+                .select()
+                .eq("workout_post_id", value: postId)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            let likerIds = likes.map { $0.userId }
+            guard !likerIds.isEmpty else { return [] }
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: likerIds)
+                .execute()
+                .value
+            // Preserve order matching likes array
+            let userMap = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
+            return likerIds.compactMap { userMap[$0] }
+        } catch {
+            print("❌ Error fetching top likers: \(error)")
             return []
         }
     }
@@ -530,29 +586,21 @@ class SocialService {
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
         do {
-            // Get the users that the current user follows
-            let following = try await getFollowing(userId: userId)
+            try await AuthSessionManager.shared.ensureValidSession()
+            // Always include the provided userId (avoid auth.user() cancellation problems)
+            var userIdsToFetch: [String] = [userId]
             
-            // Include current user's ID in the list of users to fetch posts from
-            var userIdsToFetch = following
+            // Try to add following users; if request is cancelled, just continue with current user
             do {
-                let currentUser = try await supabase.auth.user()
-                userIdsToFetch.append(currentUser.id.uuidString)
-            } catch let userError as URLError {
-                if userError.code == .cancelled {
-                    print("⚠️ Current user request was cancelled")
-                    // If cancelled, still try to fetch with just following IDs
-                } else {
-                    print("⚠️ Could not get current user: \(userError)")
+                let following = try await getFollowing(userId: userId)
+                userIdsToFetch.append(contentsOf: following)
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                if !hasLoggedFollowingCancelled {
+                    print("⚠️ Following request was cancelled - proceeding with current user's posts only")
+                    hasLoggedFollowingCancelled = true
                 }
             } catch {
-                print("⚠️ Could not get current user: \(error)")
-            }
-            
-            // If user doesn't follow anyone yet, still show their own posts
-            if userIdsToFetch.isEmpty {
-                print("⚠️ No users to fetch posts from")
-                return []
+                print("⚠️ Could not fetch following list: \(error) - proceeding with current user's posts only")
             }
             
             // Get posts from followed users AND current user with social data
@@ -574,16 +622,156 @@ class SocialService {
                 postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
             }
             
+            hasLoggedSocialFeedCancelled = false
             print("✅ Fetched \(posts.count) social feed posts from \(userIdsToFetch.count) users")
-            
-            return posts
+            let enriched = await markLikedPosts(posts, userId: userId)
+            return enriched
         } catch let urlError as URLError where urlError.code == .cancelled {
             // Don't throw error for cancelled requests
-            print("⚠️ Social feed request was cancelled (likely due to refresh)")
+            if !hasLoggedSocialFeedCancelled {
+                print("⚠️ Social feed request was cancelled (likely due to refresh)")
+                hasLoggedSocialFeedCancelled = true
+            }
             throw CancellationError()
         } catch {
             print("❌ Error fetching social feed: \(error)")
             throw error
+        }
+    }
+
+    /// Fetch social feed with guaranteed fallback so the user always sees their own and followed posts
+    func getReliableSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            let primary = try await getSocialFeed(userId: userId)
+            if !primary.isEmpty {
+                return primary
+            }
+            print("⚠️ Primary social feed returned 0 posts. Building fallback feed.")
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            print("❌ Primary social feed failed: \(error). Building fallback feed.")
+        }
+        let fallback = await buildFallbackFeed(userId: userId)
+        let enrichedFallback = await markLikedPosts(fallback, userId: userId)
+        if fallback.isEmpty {
+            print("⚠️ Fallback feed empty as well.")
+        }
+        return enrichedFallback
+    }
+    
+    private func buildFallbackFeed(userId: String) async -> [SocialWorkoutPost] {
+        var userIdSet: Set<String> = [userId]
+        if let following = try? await getFollowing(userId: userId) {
+            userIdSet.formUnion(following)
+        }
+        let ids = Array(userIdSet)
+        if ids.isEmpty {
+            return []
+        }
+        var collected: [SocialWorkoutPost] = []
+        await withTaskGroup(of: [SocialWorkoutPost].self) { group in
+            for targetId in ids {
+                group.addTask { [weak self] in
+                    guard let self else { return [] }
+                    var workouts: [WorkoutPost] = []
+                    do {
+                        workouts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.4) {
+                            return try await WorkoutService.shared.fetchUserWorkoutPosts(userId: targetId)
+                        }
+                    } catch {
+                        if let cached = self.cacheManager.getCachedUserWorkouts(userId: targetId, allowExpired: true) {
+                            workouts = cached
+                        } else {
+                            print("⚠️ Could not fetch workouts for user \(targetId): \(error)")
+                            return []
+                        }
+                    }
+                    guard !workouts.isEmpty else { return [] }
+                    let profile = try? await ProfileService.shared.fetchUserProfile(userId: targetId)
+                    let mapped = workouts.map { post -> SocialWorkoutPost in
+                        SocialWorkoutPost(
+                            id: post.id,
+                            userId: post.userId,
+                            activityType: post.activityType,
+                            title: post.title,
+                            description: post.description,
+                            distance: post.distance,
+                            duration: post.duration,
+                            imageUrl: post.imageUrl,
+                            userImageUrl: post.userImageUrl,
+                            createdAt: post.createdAt,
+                            userName: profile?.name,
+                            userAvatarUrl: profile?.avatarUrl,
+                            userIsPro: profile?.isProMember,
+                            location: nil,
+                            strokes: nil,
+                            likeCount: self.postCountsCache[post.id]?.likeCount ?? 0,
+                            commentCount: self.postCountsCache[post.id]?.commentCount ?? 0,
+                            isLikedByCurrentUser: false,
+                            splits: post.splits
+                        )
+                    }
+                    return mapped
+                }
+            }
+            for await userPosts in group {
+                collected.append(contentsOf: userPosts)
+            }
+        }
+        // Deduplicate by id and sort by createdAt desc
+        var seenIds: Set<String> = []
+        let deduped = collected.filter { post in
+            if seenIds.contains(post.id) {
+                return false
+            }
+            seenIds.insert(post.id)
+            return true
+        }
+        return deduped.sorted { parseDate($0.createdAt) > parseDate($1.createdAt) }
+    }
+    
+    private func markLikedPosts(_ posts: [SocialWorkoutPost], userId: String) async -> [SocialWorkoutPost] {
+        guard !posts.isEmpty else { return posts }
+        struct LikeRow: Decodable { let postId: String; enum CodingKeys: String, CodingKey { case postId = "workout_post_id" } }
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            let postIds = posts.map { $0.id }
+            let likes: [LikeRow] = try await supabase
+                .from("workout_post_likes")
+                .select("workout_post_id")
+                .eq("user_id", value: userId)
+                .in("workout_post_id", values: postIds)
+                .execute()
+                .value
+            let likedSet = Set(likes.map { $0.postId })
+            return posts.map { post in
+                SocialWorkoutPost(
+                    id: post.id,
+                    userId: post.userId,
+                    activityType: post.activityType,
+                    title: post.title,
+                    description: post.description,
+                    distance: post.distance,
+                    duration: post.duration,
+                    imageUrl: post.imageUrl,
+                    userImageUrl: post.userImageUrl,
+                    createdAt: post.createdAt,
+                    userName: post.userName,
+                    userAvatarUrl: post.userAvatarUrl,
+                    userIsPro: post.userIsPro,
+                    location: post.location,
+                    strokes: post.strokes,
+                    likeCount: post.likeCount,
+                    commentCount: post.commentCount,
+                    isLikedByCurrentUser: likedSet.contains(post.id),
+                    splits: post.splits
+                )
+            }
+        } catch {
+            print("⚠️ Could not mark liked posts: \(error)")
+            return posts
         }
     }
 }

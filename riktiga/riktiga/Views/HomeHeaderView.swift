@@ -1,8 +1,11 @@
 import SwiftUI
 
 struct HomeHeaderView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showNotifications = false
-    @State private var unreadNotifications = 0 // TODO: Connect to real notifications
+    @State private var unreadNotifications = 0
+    @State private var isFetchingUnread = false
+    @State private var showMonthlyPrize = false
     
     var body: some View {
         HStack(spacing: 16) {
@@ -32,7 +35,25 @@ struct HomeHeaderView: View {
             
             Spacer()
             
-            // Add Friends Button (Search) on the right
+            Button(action: {
+                showMonthlyPrize = true
+            }) {
+                Text("Månadens pris")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                    )
+            }
+            
+            Spacer()
+            
+            // Search icon on the right
             NavigationLink(destination: FindFriendsView()) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 20, weight: .semibold))
@@ -46,8 +67,35 @@ struct HomeHeaderView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .sheet(isPresented: $showNotifications) {
-            NotificationsView()
+            NotificationsView(onDismiss: {
+                Task { await refreshUnreadCount() }
+            })
+            .environmentObject(authViewModel)
         }
+        .sheet(isPresented: $showMonthlyPrize) {
+            MonthlyPrizeView()
+        }
+        .task {
+            await refreshUnreadCount()
+        }
+    }
+    
+    private func refreshUnreadCount() async {
+        guard !isFetchingUnread else { return }
+        guard let userId = authViewModel.currentUser?.id else {
+            await MainActor.run { unreadNotifications = 0 }
+            return
+        }
+        isFetchingUnread = true
+        do {
+            let count = try await NotificationService.shared.getUnreadCount(userId: userId)
+            await MainActor.run {
+                unreadNotifications = count
+            }
+        } catch {
+            print("⚠️ Failed to fetch unread notifications: \(error)")
+        }
+        isFetchingUnread = false
     }
 }
 

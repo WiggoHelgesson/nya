@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct MonthlyPrizeView: View {
     @Environment(\.dismiss) var dismiss
     @State private var topUsers: [MonthlyUser] = []
-    @State private var lastMonthWinner: MonthlyUser?
     @State private var isLoading = false
+    @State private var countdownText: String = ""
+    @State private var countdownTimer: Timer?
     
     var body: some View {
         NavigationStack {
@@ -14,21 +16,29 @@ struct MonthlyPrizeView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Last month's winner (if available)
-                        if let winner = lastMonthWinner {
-                            VStack(spacing: 12) {
-                                Text("Förra månadens vinnare")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.black)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 20)
-                                
-                                MonthlyUserRow(rank: 1, user: winner)
-                                    .background(Color.white)
-                                    .cornerRadius(12)
-                                    .padding(.horizontal, 20)
-                            }
+                        // Countdown
+                        VStack(spacing: 8) {
+                            Text("Tid kvar av månaden")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
+                            Text(countdownText)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
                         }
+                        .padding(.top, 16)
+                        .padding(.horizontal, 20)
+
+                        HealthDataDisclosureView(
+                            title: "Topplistan bygger på Apple Health",
+                            description: "Stegen som visas på Månadens pris hämtas automatiskt från Apple Health. Se till att dela stegdata med Up&Down för att kvala in och håll koll på dina behörigheter i Hälsa-appen.",
+                            showsManageButton: true,
+                            manageAction: openHealthSettings
+                        )
+                        .padding(.horizontal, 20)
                         
                         // Current month leaderboard
                         Text("Topplista denna månad")
@@ -97,37 +107,82 @@ struct MonthlyPrizeView: View {
             }
             .onAppear {
                 loadMonthlyStats()
+                startCountdown()
+            }
+            .onDisappear {
+                countdownTimer?.invalidate()
+                countdownTimer = nil
             }
         }
     }
     
     private func loadMonthlyStats() {
         isLoading = true
+        if let cached = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
+            self.topUsers = cached
+            self.isLoading = false
+        }
         Task {
             do {
+                await MonthlyStatsService.shared.syncCurrentUserMonthlySteps()
                 topUsers = try await MonthlyStatsService.shared.fetchTopMonthlyUsers(limit: 20)
-                lastMonthWinner = try await MonthlyStatsService.shared.fetchLastMonthWinner()
                 isLoading = false
             } catch {
                 print("❌ Error loading monthly stats: \(error)")
+                if topUsers.isEmpty,
+                   let fallback = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
+                    topUsers = fallback
+                }
                 isLoading = false
             }
         }
     }
+
+    private func startCountdown() {
+        func computeText() -> String {
+            let cal = Calendar.current
+            let now = Date()
+            let comps = cal.dateComponents([.year, .month], from: now)
+            guard let startOfNextMonth = cal.date(byAdding: DateComponents(month: 1), to: cal.date(from: comps) ?? now),
+                  let endDate = cal.date(from: cal.dateComponents([.year, .month, .day], from: startOfNextMonth)) else {
+                return ""
+            }
+            let remaining = max(0, Int(endDate.timeIntervalSinceNow))
+            let days = remaining / 86400
+            let hours = (remaining % 86400) / 3600
+            let minutes = (remaining % 3600) / 60
+            let seconds = remaining % 60
+            if days > 0 {
+                return "\(days)d \(hours)h \(minutes)m \(seconds)s"
+            } else {
+                return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+            }
+        }
+        countdownText = computeText()
+        countdownTimer?.invalidate()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            countdownText = computeText()
+        }
+    }
+
+    private func openHealthSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
 }
 
-struct MonthlyUser: Identifiable {
+struct MonthlyUser: Identifiable, Codable {
     let id: String
     let username: String
     let avatarUrl: String?
-    let distance: Double
+    let steps: Int
     let isPro: Bool
     
-    init(id: String, username: String, avatarUrl: String?, distance: Double, isPro: Bool = false) {
+    init(id: String, username: String, avatarUrl: String?, steps: Int, isPro: Bool = false) {
         self.id = id
         self.username = username
         self.avatarUrl = avatarUrl
-        self.distance = distance
+        self.steps = steps
         self.isPro = isPro
     }
 }
@@ -160,27 +215,29 @@ struct MonthlyUserRow: View {
             // Username with PRO badge if applicable
             HStack(spacing: 6) {
                 Text(user.username)
-                    .font(.system(size: 16))
+                    .font(.system(size: 14))
                     .foregroundColor(.black)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 
                 if user.isPro {
                     Text("PRO")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.black)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
                         .background(Color.yellow)
-                        .cornerRadius(4)
+                        .cornerRadius(3)
                 }
             }
             
             Spacer()
             
-            // Distance
-            Text(String(format: "%.1f km", user.distance))
+            // Steps
+            Text("\(user.steps) steg")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.black)
-                .frame(width: 60, alignment: .trailing)
+                .frame(width: 100, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

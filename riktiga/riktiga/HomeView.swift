@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -8,10 +9,13 @@ struct HomeView: View {
     @State private var showMonthlyPrize = false
     @State private var weeklySteps: [DailySteps] = []
     @State private var isLoadingSteps = false
+    @State private var weeklyFlights: [DailyFlights] = []
+    @State private var isLoadingFlights = false
     @State private var observers: [NSObjectProtocol] = []
     @State private var recommendedUsers: [UserSearchResult] = []
     @State private var isLoadingRecommended = false
     @State private var followingStatus: [String: Bool] = [:]
+    @State private var currentInsightIndex: Int = 0
     
     var body: some View {
         NavigationStack {
@@ -57,135 +61,31 @@ struct HomeView: View {
                             .cornerRadius(16)
                             .rotationEffect(.degrees(-2))
                             .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
-                            
-                            Text((authViewModel.currentUser?.name ?? "ANVÄNDARE").uppercased())
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
-                                .rotationEffect(.degrees(-2))
-                                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                         }
                         .padding(.top, 20)
                         
-                        // MARK: - Weekly Distance Section
-                        VStack(spacing: 16) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Denna vecka")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.gray)
-                                    
-                                    if statisticsService.isLoading {
-                                        Text("Laddar...")
-                                            .font(.system(size: 36, weight: .black))
-                                            .foregroundColor(.gray)
-                                    } else {
-                                        Text(String(format: "%.1f km", statisticsService.weeklyStats?.totalDistance ?? 0.0))
-                                            .font(.system(size: 36, weight: .black))
-                                            .foregroundColor(.black)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Mål: 20 km")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.gray)
-                                    
-                                    if statisticsService.isLoading {
-                                        Text("0%")
-                                            .font(.system(size: 20, weight: .bold))
-                                            .foregroundColor(.gray)
-                                    } else {
-                                        Text("\(Int((statisticsService.weeklyStats?.goalProgress ?? 0.0) * 100))%")
-                                            .font(.system(size: 20, weight: .bold))
-                                            .foregroundColor(.black)
-                                    }
-                                }
-                            }
-                            
-                            // Progress bar
-                            GeometryReader { geometry in
-                                ZStack(alignment: .leading) {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(.systemGray6))
-                                        .frame(height: 12)
-                                    
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.black)
-                                        .frame(width: geometry.size.width * (statisticsService.weeklyStats?.goalProgress ?? 0.0), height: 12)
-                                }
-                            }
-                            .frame(height: 12)
+                        // MARK: - Activity Insights (Steps / Sleep / Distance)
+                        TabView(selection: $currentInsightIndex) {
+                            stepsCard
+                                .tag(0)
+                            flightsCard
+                                .tag(1)
+                            weeklyDistanceCard
+                                .tag(2)
                         }
-                        .padding(20)
-                        .background(Color.white)
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
-                        .padding(.horizontal, 20)
+                        .frame(height: 320)
+                        .tabViewStyle(.page(indexDisplayMode: .automatic))
+                        .padding(.top, 8)
                         
-                        // MARK: - Action Button
-                        VStack(spacing: 12) {
-                            // Månadens Pris Button
-                            Button(action: {
-                                showMonthlyPrize = true
-                            }) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "trophy.fill")
-                                        .font(.system(size: 18, weight: .medium))
-                                    
-                                    Text("MÅNADENS PRIS")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(16)
-                                .background(Color(.systemGray5))
-                                .foregroundColor(.primary)
-                                .cornerRadius(12)
+                        HStack(spacing: 6) {
+                            ForEach(0..<3) { index in
+                                Circle()
+                                    .fill(index == currentInsightIndex ? Color.black : Color.gray.opacity(0.3))
+                                    .frame(width: 8, height: 8)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        
-                        // MARK: - Weekly Statistics Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Veckoöversikt")
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 20)
-                            
-                            VStack(spacing: 12) {
-                                if statisticsService.isLoading {
-                                    ForEach(0..<7) { _ in
-                                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
-                                    }
-                                } else {
-                                    let dailyStats = statisticsService.weeklyStats?.dailyStats ?? []
-                                    if dailyStats.isEmpty {
-                                        // Show empty week if no data
-                                        let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
-                                        ForEach(days, id: \.self) { day in
-                                            WeeklyStatRow(day: day, distance: 0.0, isToday: false)
-                                        }
-                                    } else {
-                                        ForEach(dailyStats, id: \.day) { dailyStat in
-                                            WeeklyStatRow(day: dailyStat.day, distance: dailyStat.distance, isToday: dailyStat.isToday)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(20)
-                            .background(Color.white)
-                            .cornerRadius(16)
-                            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
-                        }
-                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 8)
                         
                         // MARK: - Recommended Friends Section
                         if !recommendedUsers.isEmpty || isLoadingRecommended {
@@ -224,43 +124,14 @@ struct HomeView: View {
                             }
                         }
                         
-                        // MARK: - Weekly Steps Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Steg denna vecka")
-                                    .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.black)
-                                
-                                Text("Gå 10k steg och få 10 poäng varje dag")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.horizontal, 20)
-                            
-                            VStack(spacing: 12) {
-                                if isLoadingSteps {
-                                    ForEach(0..<7) { _ in
-                                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
-                                    }
-                                } else if weeklySteps.isEmpty {
-                                    // Show empty week for steps
-                                    let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
-                                    ForEach(Array(days.enumerated()), id: \.offset) { index, day in
-                                        WeeklyStepsRow(date: Date(), steps: 0, dayName: day) // Use dummy date and provide day name
-                                    }
-                                } else {
-                                    ForEach(weeklySteps) { dailySteps in
-                                        WeeklyStepsRow(date: dailySteps.date, steps: dailySteps.steps)
-                                    }
-                                }
-                            }
-                            .padding(20)
-                            .background(Color.white)
-                            .cornerRadius(16)
-                            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
-                        }
+                        HealthDataDisclosureView(
+                            title: "Apple Health-data",
+                            description: "Up&Down hämtar distans- och steginformation från Apple Health för att hålla dina mål och listor uppdaterade.",
+                            showsManageButton: true,
+                            manageAction: openHealthSettings
+                        )
                         .padding(.horizontal, 20)
-                        
+
                         Spacer(minLength: 50)
                     }
                     .padding(.vertical, 12)
@@ -286,7 +157,17 @@ struct HomeView: View {
                 isLoadingSteps = false
                 
                 // Kontrollera om användaren nått 10k steg idag och ge poäng
-                checkAndAwardDailyStepsReward(steps: steps)
+                awardStepsPointsIfNeeded(steps: steps.first(where: { Calendar.current.isDateInToday($0.date) })?.steps ?? 0)
+            }
+            
+            // Hämta sömndata
+            isLoadingFlights = true
+            healthKitManager.getWeeklyFlightsClimbed { flightEntries in
+                weeklyFlights = flightEntries
+                isLoadingFlights = false
+                if let todayFlights = flightEntries.first(where: { $0.isToday }) {
+                    awardFlightsPointsIfNeeded(flights: todayFlights.count)
+                }
             }
             
             // Lyssna på profilbild uppdateringar
@@ -333,6 +214,11 @@ struct HomeView: View {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         isLoadingRecommended = true
+        // Try cache first for instant UI
+        if let cached = AppCacheManager.shared.getCachedRecommendedUsers(userId: userId) {
+            self.recommendedUsers = cached
+            self.isLoadingRecommended = false
+        }
         Task {
             do {
                 // Use retry helper for better network resilience
@@ -352,6 +238,7 @@ struct HomeView: View {
                     self.followingStatus = followStatus
                     self.isLoadingRecommended = false
                 }
+                AppCacheManager.shared.saveRecommendedUsers(recommended, userId: userId)
             } catch {
                 print("❌ Error loading recommended users after retries: \(error)")
                 await MainActor.run {
@@ -420,6 +307,167 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func openHealthSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private func refreshUserProfile() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        do {
+            if let updatedProfile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                await MainActor.run {
+                    authViewModel.currentUser = updatedProfile
+                }
+            }
+        } catch {
+            print("❌ Error refreshing user profile: \(error)")
+        }
+    }
+}
+
+// MARK: - Subviews for HomeView activity insights
+extension HomeView {
+    private var stepsCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Steg denna vecka")
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundColor(.black)
+                Text("Gå 10k steg och få 10 poäng varje dag")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 20)
+            
+            VStack(spacing: 12) {
+                if isLoadingSteps {
+                    ForEach(0..<7) { _ in
+                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
+                    }
+                } else if weeklySteps.isEmpty {
+                    let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+                    ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+                        WeeklyStepsRow(date: Date(), steps: 0, dayName: day)
+                    }
+                } else {
+                    ForEach(weeklySteps) { dailySteps in
+                        WeeklyStepsRow(date: dailySteps.date, steps: dailySteps.steps)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private var flightsCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Antal trappor")
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundColor(.black)
+                Text("Sikta på minst 100 trappsteg varje dag - 5 poäng/dag")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 20)
+            
+            VStack(spacing: 12) {
+                if isLoadingFlights {
+                    ForEach(0..<7) { _ in
+                        WeeklyFlightsRow(day: "---", flights: 0, isToday: false)
+                    }
+                } else if weeklyFlights.isEmpty {
+                    let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+                    ForEach(days, id: \.self) { day in
+                        WeeklyFlightsRow(day: day, flights: 0, isToday: false)
+                    }
+                } else {
+                    ForEach(weeklyFlights) { dailyFlights in
+                        WeeklyFlightsRow(day: dailyFlights.dayName, flights: dailyFlights.count, isToday: dailyFlights.isToday)
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private func awardFlightsPointsIfNeeded(flights: Int) {
+        guard flights >= 100 else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        let lastRewardDate = UserDefaults.standard.object(forKey: "lastFlightsRewardDate") as? Date ?? Date.distantPast
+        if Calendar.current.startOfDay(for: lastRewardDate) == today { return }
+        Task {
+            guard let userId = authViewModel.currentUser?.id else { return }
+            do {
+                try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: 5)
+                UserDefaults.standard.set(Date(), forKey: "lastFlightsRewardDate")
+                await refreshUserProfile()
+            } catch {
+                print("⚠️ Could not award flights points: \(error)")
+            }
+        }
+    }
+    
+    private func awardStepsPointsIfNeeded(steps: Int) {
+        guard steps >= 10_000 else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        let lastRewardDate = UserDefaults.standard.object(forKey: "lastStepsRewardDate") as? Date ?? Date.distantPast
+        if Calendar.current.startOfDay(for: lastRewardDate) == today { return }
+        Task {
+            guard let userId = authViewModel.currentUser?.id else { return }
+            do {
+                try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: 10)
+                UserDefaults.standard.set(Date(), forKey: "lastStepsRewardDate")
+                await refreshUserProfile()
+            } catch {
+                print("⚠️ Error awarding steps points: \(error)")
+            }
+        }
+    }
+    
+    private var weeklyDistanceCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Veckoöversikt")
+                .font(.system(size: 20, weight: .black))
+                .foregroundColor(.black)
+                .padding(.horizontal, 20)
+            
+            VStack(spacing: 12) {
+                if statisticsService.isLoading {
+                    ForEach(0..<7) { _ in
+                        WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
+                    }
+                } else {
+                    let dailyStats = statisticsService.weeklyStats?.dailyStats ?? []
+                    if dailyStats.isEmpty {
+                        let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+                        ForEach(days, id: \.self) { day in
+                            WeeklyStatRow(day: day, distance: 0.0, isToday: false)
+                        }
+                    } else {
+                        ForEach(dailyStats, id: \.day) { dailyStat in
+                            WeeklyStatRow(day: dailyStat.day, distance: dailyStat.distance, isToday: dailyStat.isToday)
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        }
+        .padding(.horizontal, 20)
     }
 }
 
@@ -554,6 +602,40 @@ struct RecommendedFriendCard: View {
         .background(Color.white)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+struct WeeklyFlightsRow: View {
+    let day: String
+    let flights: Int
+    let isToday: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(day)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isToday ? .black : .gray)
+                .frame(width: 30, alignment: .leading)
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray6))
+                        .frame(height: 8)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(flights >= 100 ? Color.green : Color.orange)
+                        .frame(width: min(geometry.size.width * (CGFloat(flights) / 150.0), geometry.size.width), height: 8)
+                }
+            }
+            .frame(height: 8)
+            
+            Text("\(flights)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isToday ? .black : .gray)
+                .frame(width: 55, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

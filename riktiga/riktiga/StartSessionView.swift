@@ -2,18 +2,20 @@ import SwiftUI
 import MapKit
 import CoreLocation
 import Combine
+import UIKit
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
     @State private var selectedActivityType: ActivityType?
     @ObservedObject private var sessionManager = SessionManager.shared
+    @State private var forceNewSession = false
     
     var body: some View {
         Group {
-            if sessionManager.hasActiveSession, let session = sessionManager.activeSession {
+            if sessionManager.hasActiveSession && !forceNewSession, let session = sessionManager.activeSession {
                 // Resume active session
                 if let activity = ActivityType(rawValue: session.activityType) {
-                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true)
+                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true, forceNewSession: $forceNewSession)
                 } else {
                     // If activity type not found, show selection
                     SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
@@ -21,7 +23,7 @@ struct StartSessionView: View {
             } else if showActivitySelection {
                 SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
             } else if let activity = selectedActivityType {
-                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false)
+                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession)
             } else {
                 // Empty view as fallback
                 EmptyView()
@@ -30,12 +32,18 @@ struct StartSessionView: View {
         .task {
             // Ensure session manager is loaded
             print("🔍 StartSessionView.task - activeSession: \(sessionManager.activeSession != nil), hasActiveSession: \(sessionManager.hasActiveSession)")
-            if sessionManager.activeSession == nil && sessionManager.hasActiveSession {
+            if !forceNewSession && sessionManager.activeSession == nil && sessionManager.hasActiveSession {
                 print("⚠️ Reloading session from UserDefaults!")
                 await sessionManager.loadActiveSession()
             } else {
                 print("✅ No need to reload session")
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
+            // Reset view state when a session is finalized anywhere
+            forceNewSession = false
+            selectedActivityType = nil
+            showActivitySelection = true
         }
     }
 }
@@ -159,6 +167,7 @@ struct SessionMapView: View {
     let activity: ActivityType
     @Binding var isPresented: Bool
     let resumeSession: Bool
+    @Binding var forceNewSession: Bool
     @ObservedObject private var locationManager = LocationManager.shared
     @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @ObservedObject private var sessionManager = SessionManager.shared
@@ -177,6 +186,7 @@ struct SessionMapView: View {
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
     @State private var routeImage: UIImage?
+    @State private var completedSplits: [WorkoutSplit] = []
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -218,6 +228,7 @@ struct SessionMapView: View {
                         
                         // Set distance from saved session
                         locationManager.distance = session.accumulatedDistance
+                        completedSplits = session.completedSplits
                         
                         // Restore skiing metrics if available
                         if let elevationGain = session.elevationGain {
@@ -235,9 +246,12 @@ struct SessionMapView: View {
                         
                         // Resume tracking if session was running (preserve existing data)
                         if !session.isPaused {
+                            sessionManager.beginSession()
                             locationManager.startTracking(preserveData: true, activityType: session.activityType)
                             startTimer()
                         }
+                // Ensure we are in resume mode
+                forceNewSession = false
                         
                         // Load route coordinates if available
                         if !session.routeCoordinates.isEmpty {
@@ -253,28 +267,7 @@ struct SessionMapView: View {
                     }
                 }
 
-            // MARK: - Back Button
-            VStack {
-                HStack {
-                    Button(action: {
-                        // Save session state before going back
-                        saveSessionState()
-                        
-                        // Don't stop tracking or dismiss
-                        // Just go back to home but keep session running
-                        isPresented = false
-                    }) {
-                        Image(systemName: "chevron.left.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.white)
-                            .shadow(radius: 5)
-                    }
-                    .padding(.leading, 16)
-                    Spacer()
-                }
-                .padding(.top, 16)
-                Spacer()
-            }
+            // Back button removed
 
             // MARK: - Bottom Stats and Controls
             VStack {
@@ -285,7 +278,7 @@ struct SessionMapView: View {
                     HStack(spacing: 8) {
                         Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
                             .font(.system(size: 14))
-                            .foregroundColor(locationManager.userLocation != nil ? AppColors.brandBlue : .red)
+                            .foregroundColor(locationManager.authorizationStatus == .authorizedAlways ? .black : .red)
                         Text(locationManager.userLocation != nil ? "GPS" : (locationManager.authorizationStatus == .authorizedAlways ? "GPS" : "GPS Ej tillgänglig"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(locationManager.userLocation != nil ? .black : (locationManager.authorizationStatus == .authorizedAlways ? .black : .red))
@@ -380,6 +373,7 @@ struct SessionMapView: View {
                                 // Resume tracking (preserve existing data)
                                 isSessionEnding = false  // Reset flag when resuming
                                 print("✅ Resuming session - isSessionEnding = false")
+                                sessionManager.beginSession()
                                 locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
                                 startTimer()
                                 isPaused = false
@@ -421,7 +415,22 @@ struct SessionMapView: View {
                                     // Reset the ending flag for new session
                                     isSessionEnding = false
                                     print("✅ Starting new session - isSessionEnding = false")
+                                    sessionManager.beginSession()
+                                    // Reset all session-local state so we start fresh
+                                    sessionDuration = 0
+                                    sessionStartTime = nil
+                                    currentPace = "0:00"
+                                    completedSplits = []
+                                    earnedPoints = 0
+                                    isPaused = false
+                                    // Reset location-based metrics
+                                    locationManager.distance = 0
+                                    locationManager.elevationGain = 0
+                                    locationManager.maxSpeed = 0
+                                    locationManager.routeCoordinates = []
                                     locationManager.startNewTracking(activityType: activity.rawValue)
+                                    // Lock StartSessionView into new-session mode
+                                    forceNewSession = true
                                 }
                                 startTimer()
                                 isRunning = true
@@ -510,32 +519,25 @@ struct SessionMapView: View {
                 routeImage: routeImage,
                 elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
                 maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
+                completedSplits: completedSplits,
                 isPresented: $showSessionComplete,
                 onComplete: {
-                    // Navigate to Social tab after saving (MainTabView will close this sheet)
+                    print("💾 Workout saved - finalizing session now")
+                    // Finalize session once saving is complete
+                    sessionManager.finalizeSession()
+                    // Navigate to Social tab after saving
                     NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
                 },
                 onDelete: {
-                    // Don't dismiss - let isPresented = false close the sheet and trigger onChange
+                    print("🗑️ Workout deleted - finalizing session now")
+                    // Finalize session when deleting
+                    sessionManager.finalizeSession()
+                    // Ask MainTabView to close the StartSession sheet
+                    NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
                 }
             )
         }
-        .onChange(of: showSessionComplete) { oldValue, newValue in
-            print("🔄 showSessionComplete changed: \(oldValue) -> \(newValue)")
-            // When session complete sheet is dismissed, ALWAYS clear session
-            if !newValue && oldValue {
-                print("🗑️ Sheet dismissed - stopping everything")
-                // Stop timer immediately
-                isSessionEnding = true
-                stopTimer()
-                locationManager.stopTracking()
-                // Clear session
-                sessionManager.clearActiveSession()
-                print("✅ Session cleared, button should now show STARTA PASS")
-            } else {
-                print("⚠️ onChange triggered but not clearing (oldValue: \(oldValue), newValue: \(newValue))")
-            }
-        }
+        // No onChange needed - session is cleared in endSession()
     }
 
     func startTimer() {
@@ -553,15 +555,8 @@ struct SessionMapView: View {
             sessionDuration += 1
             updatePace()
             updateEarnedPoints()
-            
-            // Save session state every 2 seconds to ensure no data loss
-            if sessionDuration % 2 == 0 {
-                saveSessionState()
-            }
+            updateSplitsIfNeeded()
         }
-        
-        // Save immediately when timer starts
-        saveSessionState()
     }
     
     func updateEarnedPoints() {
@@ -573,6 +568,21 @@ struct SessionMapView: View {
             earnedPoints = Int(Double(basePoints) * 1.5)
         } else {
             earnedPoints = basePoints
+        }
+    }
+    
+    func updateSplitsIfNeeded() {
+        guard locationManager.distance > 0 else { return }
+        var accumulatedDuration = completedSplits.reduce(0.0) { $0 + $1.durationSeconds }
+        while locationManager.distance >= Double(completedSplits.count + 1) {
+            let nextIndex = completedSplits.count + 1
+            let splitDuration = Double(sessionDuration) - accumulatedDuration
+            guard splitDuration > 0 else { break }
+            let split = WorkoutSplit(kilometerIndex: nextIndex,
+                                     distanceKm: 1.0,
+                                     durationSeconds: splitDuration)
+            completedSplits.append(split)
+            accumulatedDuration += splitDuration
         }
     }
     
@@ -589,6 +599,16 @@ struct SessionMapView: View {
             print("🛑 Not saving session state - session is ending (isSessionEnding = true)")
             return
         }
+
+        // Auto-cancel sessions that have been running in the background for more than 2 hours
+        if UIApplication.shared.applicationState != .active {
+            let elapsed = Date().timeIntervalSince(startTime)
+            if elapsed >= 2 * 3600 {
+                print("⏰ Session auto-cancelled after 2h in background")
+                cancelBackgroundTimedOutSession()
+                return
+            }
+        }
         
         // Get route coordinates from location manager
         let coords = locationManager.routeCoordinates
@@ -602,9 +622,24 @@ struct SessionMapView: View {
             duration: sessionDuration,
             distance: locationManager.distance,
             routeCoordinates: coords,
+            completedSplits: completedSplits,
             elevationGain: locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
             maxSpeed: locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil
         )
+    }
+
+    private func cancelBackgroundTimedOutSession() {
+        isSessionEnding = true
+        stopTimer()
+        locationManager.stopTracking()
+        sessionManager.finalizeSession()
+        locationManager.routeCoordinates = []
+        locationManager.distance = 0
+        locationManager.elevationGain = 0
+        locationManager.maxSpeed = 0
+        showSessionComplete = false
+        showCompletionPopup = false
+        forceNewSession = true
     }
 
     func stopTimer() {
@@ -616,13 +651,11 @@ struct SessionMapView: View {
     func endSession() {
         print("🏁 Ending session...")
         
-        // Set flag to prevent any more saves
+        // STOP timer and tracking, but DON'T clear session yet (need data for SessionCompleteView)
         isSessionEnding = true
-        print("🛑 isSessionEnding = true - no more saves allowed")
-        
-        // Stop timer and tracking
         stopTimer()
         locationManager.stopTracking()
+        print("🛑 Timer stopped, isSessionEnding = true")
         
         // Save session data before showing completion
         print("💾 Distance: \(locationManager.distance) km")

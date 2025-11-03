@@ -6,6 +6,8 @@ struct NotificationsView: View {
     @State private var notifications: [AppNotification] = []
     @State private var isLoading = false
     @State private var task: Task<Void, Never>?
+    @State private var hasMarkedRead = false
+    var onDismiss: (() -> Void)? = nil
     
     var body: some View {
         NavigationStack {
@@ -14,7 +16,10 @@ struct NotificationsView: View {
                     Text("Notifikationer")
                         .font(.headline)
                     Spacer()
-                    Button(action: { dismiss() }) {
+                    Button(action: {
+                        markAllAsReadIfNeeded()
+                        dismiss()
+                    }) {
                         Image(systemName: "xmark")
                             .foregroundColor(.black)
                     }
@@ -63,6 +68,9 @@ struct NotificationsView: View {
             .task {
                 await loadNotifications()
             }
+            .onDisappear {
+                markAllAsReadIfNeeded()
+            }
         }
     }
     
@@ -76,6 +84,21 @@ struct NotificationsView: View {
         } catch {
             print("❌ Error loading notifications: \(error)")
             isLoading = false
+        }
+    }
+    
+    private func markAllAsReadIfNeeded() {
+        guard !hasMarkedRead, let userId = authViewModel.currentUser?.id else { return }
+        hasMarkedRead = true
+        Task {
+            do {
+                try await NotificationService.shared.markAllAsRead(userId: userId)
+            } catch {
+                print("⚠️ Failed to mark notifications as read: \(error)")
+            }
+            await MainActor.run {
+                onDismiss?()
+            }
         }
     }
 }
@@ -116,7 +139,7 @@ struct NotificationRow: View {
                 }
                 
                 // Description
-                Text(notification.description)
+                Text(notification.displayText)
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
                     .lineLimit(2)
