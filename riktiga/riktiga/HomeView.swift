@@ -87,6 +87,39 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 8)
                         
+                        NavigationLink(destination: FriendsRaceView()) {
+                            HStack(spacing: 14) {
+                                Image(systemName: "figure.run")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 52, height: 52)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [Color(red: 0.7, green: 0, blue: 0), Color(red: 0.5, green: 0, blue: 0)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .cornerRadius(14)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Tävla mot dina vänner")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.black)
+                                    Text("Se vem som sprungit längst i veckan")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(16)
+                            .background(Color.white)
+                            .cornerRadius(16)
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+                            .padding(.horizontal, 20)
+                        }
+                        
                         // MARK: - Recommended Friends Section
                         if !recommendedUsers.isEmpty || isLoadingRecommended {
                             VStack(alignment: .leading, spacing: 16) {
@@ -372,7 +405,7 @@ extension HomeView {
                 Text("Antal trappor")
                     .font(.system(size: 20, weight: .black))
                     .foregroundColor(.black)
-                Text("Sikta på minst 100 trappsteg varje dag - 5 poäng/dag")
+                Text("Sikta på minst 10 trappsteg varje dag - 5 poäng/dag")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -403,7 +436,7 @@ extension HomeView {
     }
     
     private func awardFlightsPointsIfNeeded(flights: Int) {
-        guard flights >= 100 else { return }
+        guard flights >= 10 else { return }
         let today = Calendar.current.startOfDay(for: Date())
         let lastRewardDate = UserDefaults.standard.object(forKey: "lastFlightsRewardDate") as? Date ?? Date.distantPast
         if Calendar.current.startOfDay(for: lastRewardDate) == today { return }
@@ -548,7 +581,7 @@ struct WeeklyStepsRow: View {
                     
                     RoundedRectangle(cornerRadius: 4)
                         .fill(reachedGoal ? Color.green : Color.red)
-                        .frame(width: steps > 0 ? min(geometry.size.width * (CGFloat(steps) / 20000.0), geometry.size.width) : 0, height: 8)
+                        .frame(width: steps > 0 ? min(geometry.size.width * (CGFloat(steps) / 10000.0), geometry.size.width) : 0, height: 8)
                 }
             }
             .frame(height: 8)
@@ -624,8 +657,8 @@ struct WeeklyFlightsRow: View {
                         .frame(height: 8)
                     
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(flights >= 100 ? Color.green : Color.orange)
-                        .frame(width: min(geometry.size.width * (CGFloat(flights) / 150.0), geometry.size.width), height: 8)
+                        .fill(flights >= 10 ? Color.green : Color.orange)
+                        .frame(width: min(geometry.size.width * (CGFloat(flights) / 10.0), geometry.size.width), height: 8)
                 }
             }
             .frame(height: 8)

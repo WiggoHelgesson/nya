@@ -188,63 +188,60 @@ struct WorkoutPostCard: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 
+                if let description = trimmedDescription {
+                    Text(description)
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 16)
+                }
+                
                 // Stats row
                 HStack(spacing: 0) {
-                    if let distance = post.distance {
-                        VStack(spacing: 6) {
-                            Text("Distans")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.black)
+                    if post.activityType == "Gympass" {
+                        if let duration = post.duration {
+                            statColumn(title: "Tid", value: formatDuration(duration))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    
-                    if let duration = post.duration {
-                        if post.distance != nil {
-                            Divider()
-                                .frame(height: 40)
+                        if let volume = gymVolumeText {
+                            if post.duration != nil {
+                                Divider()
+                                    .frame(height: 40)
+                            }
+                            statColumn(title: "Volym", value: volume)
+                        }
+                    } else {
+                        if let distance = post.distance {
+                            statColumn(title: "Distans", value: String(format: "%.2f km", distance))
                         }
                         
-                        VStack(spacing: 6) {
-                            Text("Tid")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(formatDuration(duration))
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.black)
+                        if let duration = post.duration {
+                            if post.distance != nil {
+                                Divider()
+                                    .frame(height: 40)
+                            }
+                            statColumn(title: "Tid", value: formatDuration(duration))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        // Show elevation for skiing and hiking
+                        if (post.activityType == "Skidåkning" || post.activityType == "Bestiga berg"),
+                           let elevationGain = post.elevationGain, elevationGain > 0 {
+                            if post.distance != nil || post.duration != nil {
+                                Divider()
+                                    .frame(height: 40)
+                            }
+                            statColumn(title: "Höjdmeter", value: String(format: "%.0f m", elevationGain))
+                        }
                     }
-                    // Show elevation for skiing and hiking
-                    if (post.activityType == "Skidåkning" || post.activityType == "Bestiga berg"),
-                       let elevationGain = post.elevationGain, elevationGain > 0 {
-                        if post.distance != nil || post.duration != nil {
-                            Divider()
-                                .frame(height: 40)
-                        }
-                        
-                        VStack(spacing: 6) {
-                            Text("Höjdmeter")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.0f m", elevationGain))
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }                }
+                }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
             
-            // Swipeable images (route and user image)
-            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+            // Show exercises list for Gympass, otherwise show swipeable images
+            if post.activityType == "Gympass", let exercises = post.exercises, !exercises.isEmpty {
+                GymExercisesListView(exercises: exercises, userImage: post.userImageUrl)
+            } else {
+                // Swipeable images (route and user image)
+                SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+            }
             
             // Like, Comment, Share buttons - large, evenly spaced
             HStack(spacing: 0) {
@@ -280,14 +277,53 @@ struct WorkoutPostCard: View {
         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
     }
     
+    private func statColumn(title: String, value: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.black)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+    
+    private var gymVolumeText: String? {
+        guard post.activityType == "Gympass", let exercises = post.exercises else { return nil }
+        let total = totalVolume(for: exercises)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        let text = formatter.string(from: NSNumber(value: Int(round(total)))) ?? "0"
+        return "\(text) kg"
+    }
+    
+    private func totalVolume(for exercises: [GymExercisePost]) -> Double {
+        exercises.reduce(0) { result, exercise in
+            let exerciseVolume = zip(exercise.kg, exercise.reps).reduce(0) { partial, pair in
+                partial + (pair.0 * Double(pair.1))
+            }
+            return result + exerciseVolume
+        }
+    }
+    
+    private var trimmedDescription: String? {
+        guard let text = post.description?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return nil
+        }
+        return text
+    }
+    
     func getActivityIcon(_ activity: String) -> String {
         switch activity {
         case "Löppass":
             return "figure.run"
         case "Golfrunda":
             return "flag.fill"
-        case "Promenad":
-            return "figure.walk"
+        case "Gympass":
+            return "figure.strengthtraining.traditional"
         case "Bestiga berg":
             return "mountain.2.fill"
         case "Skidåkning":

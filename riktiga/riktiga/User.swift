@@ -13,6 +13,8 @@ struct User: Codable, Identifiable {
     var pb10kmMinutes: Int? = nil
     var pbMarathonHours: Int? = nil
     var pbMarathonMinutes: Int? = nil
+    var climbedMountains: [String] = []
+    var completedRaces: [String] = []
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,6 +29,8 @@ struct User: Codable, Identifiable {
         case pb10kmMinutes = "pb_10km_minutes"
         case pbMarathonHours = "pb_marathon_hours"
         case pbMarathonMinutes = "pb_marathon_minutes"
+        case climbedMountains = "climbed_mountains"
+        case completedRaces = "completed_races"
     }
     
     // Custom decode för att hantera att email inte finns i profiles
@@ -44,6 +48,8 @@ struct User: Codable, Identifiable {
         pb10kmMinutes = try container.decodeIfPresent(Int.self, forKey: .pb10kmMinutes)
         pbMarathonHours = try container.decodeIfPresent(Int.self, forKey: .pbMarathonHours)
         pbMarathonMinutes = try container.decodeIfPresent(Int.self, forKey: .pbMarathonMinutes)
+        climbedMountains = try container.decodeIfPresent([String].self, forKey: .climbedMountains) ?? []
+        completedRaces = try container.decodeIfPresent([String].self, forKey: .completedRaces) ?? []
     }
     
     func encode(to encoder: Encoder) throws {
@@ -60,9 +66,11 @@ struct User: Codable, Identifiable {
         try container.encodeIfPresent(pb10kmMinutes, forKey: .pb10kmMinutes)
         try container.encodeIfPresent(pbMarathonHours, forKey: .pbMarathonHours)
         try container.encodeIfPresent(pbMarathonMinutes, forKey: .pbMarathonMinutes)
+        try container.encode(climbedMountains, forKey: .climbedMountains)
+        try container.encode(completedRaces, forKey: .completedRaces)
     }
     
-    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil) {
+    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil, climbedMountains: [String] = [], completedRaces: [String] = []) {
         self.id = id
         self.name = name
         self.email = email
@@ -75,5 +83,31 @@ struct User: Codable, Identifiable {
         self.pb10kmMinutes = pb10kmMinutes
         self.pbMarathonHours = pbMarathonHours
         self.pbMarathonMinutes = pbMarathonMinutes
+        self.climbedMountains = climbedMountains
+        self.completedRaces = completedRaces
     }
+}
+
+struct Mountain: Identifiable {
+    let id: String
+    let name: String
+    let imageName: String
+}
+
+extension Mountain {
+    static let all: [Mountain] = [
+        Mountain(id: "kebnekaise", name: "Kebnekaise", imageName: "25")
+    ]
+}
+
+struct Race: Identifiable {
+    let id: String
+    let name: String
+    let imageName: String
+}
+
+extension Race {
+    static let all: [Race] = [
+        Race(id: "ironman", name: "Iron Man", imageName: "26")
+    ]
 }

@@ -294,8 +294,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 
                 Task { @MainActor in
                     self.distance = self.totalDistance / 1000.0
-                    // Add point to route for visualization
-                    self.routeCoordinates.append(location.coordinate)
+                    
+                    // Add point to route for visualization only if significant distance from last point
+                    // This reduces UI updates and improves performance
+                    let shouldAddPoint: Bool
+                    if let lastRoutePoint = self.routeCoordinates.last {
+                        let lastRouteLocation = CLLocation(latitude: lastRoutePoint.latitude, longitude: lastRoutePoint.longitude)
+                        let distanceFromLastPoint = location.distance(from: lastRouteLocation)
+                        shouldAddPoint = distanceFromLastPoint >= 5.0
+                    } else {
+                        shouldAddPoint = true
+                    }
+                    
+                    if shouldAddPoint {
+                        self.routeCoordinates.append(location.coordinate)
+                    }
+                    
                     print("📏 Distance updated: \(self.distance) km")
                 }
                 

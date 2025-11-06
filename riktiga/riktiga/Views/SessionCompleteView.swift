@@ -10,6 +10,7 @@ struct SessionCompleteView: View {
     let elevationGain: Double?
     let maxSpeed: Double?
     let completedSplits: [WorkoutSplit]
+    let gymExercises: [GymExercise]?  // New parameter for gym sessions
     @Binding var isPresented: Bool
     let onComplete: () -> Void
     let onDelete: () -> Void
@@ -23,6 +24,9 @@ struct SessionCompleteView: View {
     @State private var selectedItem: PhotosPickerItem?
     @State private var isSaving = false
     @State private var showDeleteConfirmation = false
+    @State private var shouldSaveTemplate = false
+    @State private var showSaveTemplateSheet = false
+    @State private var templateName: String = ""
     
     // Calculate PRO points (1.5x boost)
     private var proPoints: Int {
@@ -117,14 +121,14 @@ struct SessionCompleteView: View {
                                         .cornerRadius(8)
                                         .clipped()
                                     
-                            Button(action: {
-                                Task {
-                                    await MainActor.run {
-                                        self.sessionImage = nil
-                                        self.selectedItem = nil
-                                    }
-                                }
-                            }) {
+                                    Button(action: {
+                                        Task {
+                                            await MainActor.run {
+                                                self.sessionImage = nil
+                                                self.selectedItem = nil
+                                            }
+                                        }
+                                    }) {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(.system(size: 24))
                                             .foregroundColor(.white)
@@ -151,17 +155,35 @@ struct SessionCompleteView: View {
                         }
                         .padding(.horizontal, 16)
                         
+                        if let gymExercises, !gymExercises.isEmpty {
+                            Toggle(isOn: Binding(
+                                get: { shouldSaveTemplate },
+                                set: { newValue in
+                                    if newValue {
+                                        shouldSaveTemplate = true
+                                        templateName = templateName.isEmpty ? title : templateName
+                                        showSaveTemplateSheet = true
+                                    } else {
+                                        shouldSaveTemplate = false
+                                        templateName = ""
+                                    }
+                                }
+                            )) {
+                                Text("Spara detta passet")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                            .toggleStyle(SwitchToggleStyle(tint: .black))
+                        }
+                        
                         Button(action: saveWorkout) {
                             if isSaving {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                            if routeImage == nil {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
                                 Text("Spara pass")
-                            }
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -170,7 +192,7 @@ struct SessionCompleteView: View {
                         .foregroundColor(.white)
                         .cornerRadius(25)
                         .font(.headline)
-                        .disabled(isSaving || title.isEmpty || routeImage == nil)
+                        .disabled(isSaving || title.isEmpty)
                         .padding(16)
                     }
                 }
@@ -237,6 +259,44 @@ struct SessionCompleteView: View {
                 }
             }
         }
+        .sheet(isPresented: $showSaveTemplateSheet, onDismiss: {
+            if templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                shouldSaveTemplate = false
+            } else {
+                shouldSaveTemplate = true
+            }
+        }) {
+            NavigationStack {
+                VStack(spacing: 20) {
+                    Text("Namn på passet")
+                        .font(.headline)
+                    TextField("Till exempel: Överkropp A", text: $templateName)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                    Spacer()
+                }
+                .padding(.top, 32)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Avbryt") {
+                            templateName = ""
+                            shouldSaveTemplate = false
+                            showSaveTemplateSheet = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Spara") {
+                            if templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                return
+                            }
+                            shouldSaveTemplate = true
+                            showSaveTemplateSheet = false
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
+        }
         // Session finalization is handled explicitly by onComplete/onDelete callbacks
         .onChange(of: selectedItem) { oldValue, newValue in
             Task {
@@ -258,6 +318,27 @@ struct SessionCompleteView: View {
             }
             
             let splits = computeSplits()
+            let trimmedTemplateName = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            let exercisesData: [GymExercisePost]? = gymExercises?.map { exercise in
+                GymExercisePost(
+                    id: exercise.id,
+                    name: exercise.name,
+                    category: exercise.category,
+                    sets: exercise.sets.count,
+                    reps: exercise.sets.map { $0.reps },
+                    kg: exercise.sets.map { $0.kg }
+                )
+            }
+            
+            var pointsToAward = earnedPoints
+            if activity.rawValue == "Gympass" {
+                let key = gymPointsKey(for: Date())
+                let alreadyAwarded = UserDefaults.standard.integer(forKey: key)
+                let remaining = max(0, 50 - alreadyAwarded)
+                pointsToAward = min(pointsToAward, remaining)
+            }
+            
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
                 activityType: activity.rawValue,
@@ -269,15 +350,32 @@ struct SessionCompleteView: View {
                 userImageUrl: nil,
                 elevationGain: elevationGain,
                 maxSpeed: maxSpeed,
-                splits: splits.isEmpty ? nil : splits
+                splits: splits.isEmpty ? nil : splits,
+                exercises: exercisesData
             )
             
             do {
-                // Pass both route image and user image
-                try await WorkoutService.shared.saveWorkoutPost(post, routeImage: routeImage, userImage: sessionImage, earnedPoints: earnedPoints)
-                print("✅ Workout saved successfully")
+                if shouldSaveTemplate,
+                   let exercisesData = exercisesData,
+                   !exercisesData.isEmpty,
+                   let userId = authViewModel.currentUser?.id,
+                   !trimmedTemplateName.isEmpty {
+                    do {
+                        let savedTemplate = try await SavedWorkoutService.shared.saveWorkoutTemplate(userId: userId, name: trimmedTemplateName, exercises: exercisesData)
+                        NotificationCenter.default.post(name: .savedGymWorkoutCreated, object: savedTemplate)
+                    } catch {
+                        print("⚠️ Failed to save workout template: \(error)")
+                    }
+                }
                 
-                // Reload user profile to update XP
+                try await WorkoutService.shared.saveWorkoutPost(post, routeImage: routeImage, userImage: sessionImage, earnedPoints: pointsToAward)
+                
+                if activity.rawValue == "Gympass" && pointsToAward > 0 {
+                    let key = gymPointsKey(for: Date())
+                    let existing = UserDefaults.standard.integer(forKey: key)
+                    UserDefaults.standard.set(existing + pointsToAward, forKey: key)
+                }
+                
                 if let userId = authViewModel.currentUser?.id {
                     if let updatedProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
                         await MainActor.run {
@@ -286,16 +384,14 @@ struct SessionCompleteView: View {
                     }
                 }
                 
-                // Notify that workout was saved to refresh stats
                 NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
-                print("✅ Workout saved, closing sheet and calling onComplete")
                 
                 await MainActor.run {
                     isSaving = false
                     isPresented = false
-                    print("📤 isPresented set to false")
+                    shouldSaveTemplate = false
+                    templateName = ""
                     onComplete()
-                    print("📤 onComplete() called")
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")
@@ -322,6 +418,12 @@ struct SessionCompleteView: View {
                                        durationSeconds: remainingDuration))
         }
         return splits
+    }
+    
+    private func gymPointsKey(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "gymPoints_\(formatter.string(from: date))"
     }
 }
 
@@ -437,6 +539,7 @@ struct ActivitySummaryCard: View {
         elevationGain: nil,
         maxSpeed: nil,
         completedSplits: [],
+        gymExercises: nil,
         isPresented: .constant(true),
         onComplete: {},
         onDelete: {}

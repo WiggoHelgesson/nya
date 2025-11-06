@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0003614C37754881BFBE7729 /* ExerciseImageLoader.swift in Resources */ = {isa = PBXBuildFile; fileRef = F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */; };
 		860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 860308202EAE82D00023EA7B /* StoreKit.framework */; };
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
@@ -24,6 +25,7 @@
 		86030F342EB75F430023EA7B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseImageLoader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -68,12 +70,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8679F6912EBA527D00C5285A /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		86B269802EAA2EBB00A4EC93 = {
 			isa = PBXGroup;
 			children = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 				86B269B82EAA5E3900A4EC93 /* Frameworks */,
 				86B2698A2EAA2EBB00A4EC93 /* Products */,
+				8679F6912EBA527D00C5285A /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -172,6 +183,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0003614C37754881BFBE7729 /* ExerciseImageLoader.swift in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -341,7 +353,6 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -366,7 +377,6 @@
 				NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
-				NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -418,7 +428,6 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -443,7 +452,6 @@
 				NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
-				NSUserTrackingUsageDescription = "Denna app använder spårning för att ge dig personliga träningsrekommendationer.";
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

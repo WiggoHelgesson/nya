@@ -14,6 +14,7 @@ struct WorkoutPost: Codable, Identifiable {
     let maxSpeed: Double?
     let createdAt: String
     let splits: [WorkoutSplit]?
+    let exercises: [GymExercisePost]?  // For gym sessions
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -29,6 +30,25 @@ struct WorkoutPost: Codable, Identifiable {
         case maxSpeed = "max_speed"
         case createdAt = "created_at"
         case splits = "split_data"
+        case exercises = "exercises_data"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userId = try container.decode(String.self, forKey: .userId)
+        activityType = try container.decode(String.self, forKey: .activityType)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        distance = try container.decodeIfPresent(Double.self, forKey: .distance)
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+        imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
+        userImageUrl = try container.decodeIfPresent(String.self, forKey: .userImageUrl)
+        elevationGain = try container.decodeIfPresent(Double.self, forKey: .elevationGain)
+        maxSpeed = try container.decodeIfPresent(Double.self, forKey: .maxSpeed)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        splits = try container.decodeIfPresent([WorkoutSplit].self, forKey: .splits)
+        exercises = try container.decodeIfPresent([GymExercisePost].self, forKey: .exercises)
     }
     
     init(id: String = UUID().uuidString,
@@ -42,7 +62,8 @@ struct WorkoutPost: Codable, Identifiable {
          userImageUrl: String? = nil,
          elevationGain: Double? = nil,
          maxSpeed: Double? = nil,
-         splits: [WorkoutSplit]? = nil) {
+         splits: [WorkoutSplit]? = nil,
+         exercises: [GymExercisePost]? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -56,5 +77,34 @@ struct WorkoutPost: Codable, Identifiable {
         self.maxSpeed = maxSpeed
         self.createdAt = ISO8601DateFormatter().string(from: Date())
         self.splits = splits
+        self.exercises = exercises
     }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(activityType, forKey: .activityType)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(distance, forKey: .distance)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(imageUrl, forKey: .imageUrl)
+        try container.encodeIfPresent(userImageUrl, forKey: .userImageUrl)
+        try container.encodeIfPresent(elevationGain, forKey: .elevationGain)
+        try container.encodeIfPresent(maxSpeed, forKey: .maxSpeed)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(splits, forKey: .splits)
+        try container.encodeIfPresent(exercises, forKey: .exercises)
+    }
+}
+
+// MARK: - Gym Exercise Post Model
+struct GymExercisePost: Codable {
+    let id: String?  // Exercise ID from API (for GIF)
+    let name: String
+    let category: String?
+    let sets: Int
+    let reps: [Int]  // Array of reps for each set
+    let kg: [Double]  // Array of kg for each set
 }

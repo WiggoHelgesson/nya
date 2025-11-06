@@ -20,6 +20,8 @@ struct ProfileView: View {
     @State private var followingCount = 0
     @State private var profileObserver: NSObjectProtocol?
     @State private var showEditProfile = false
+    @State private var weeklyActivityData: [WeeklyActivityData] = []
+    @State private var activityCount: Int = 0
     
     var body: some View {
         NavigationStack {
@@ -62,23 +64,6 @@ struct ProfileView: View {
                                     Text(authViewModel.currentUser?.name ?? "User")
                                         .font(.system(size: 20, weight: .bold))
                                     
-                                    // PRO Badge
-                                    if authViewModel.currentUser?.isProMember == true {
-                                        Text("PRO")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [Color.orange, Color.yellow]),
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                            .cornerRadius(4)
-                                    }
-                                    
                                     Spacer()
                                     
                                     Button(action: {
@@ -86,13 +71,13 @@ struct ProfileView: View {
                                     }) {
                                         Image(systemName: "pencil.circle.fill")
                                             .font(.title2)
-                                            .foregroundColor(AppColors.brandBlue)
+                                            .foregroundColor(.black)
                                     }
                                 }
                                 
                                 HStack(spacing: 20) {
                                     VStack(spacing: 4) {
-                                        Text("1")
+                                        Text("\(formatNumber(activityCount))")
                                             .font(.system(size: 16, weight: .bold))
                                         Text("Träningspass")
                                             .font(.caption2)
@@ -194,6 +179,55 @@ struct ProfileView: View {
                         )
                     }
                     
+                    NavigationLink(destination: FriendsRaceView()) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "figure.run")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 52, height: 52)
+                                .background(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.7, green: 0, blue: 0), Color(red: 0.5, green: 0, blue: 0)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .cornerRadius(14)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Tävla mot dina vänner")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                                Text("Se vem som sprungit längst denna vecka")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.gray)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                        }
+                        .padding(16)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+                    }
+                    
+                    Divider()
+                        .background(Color(.systemGray4))
+                    
+                    // MARK: - Weekly Activity Chart
+                    WeeklyActivityChart(weeklyData: weeklyActivityData)
+                        .padding(.horizontal, 16)
+                    
+                    Divider()
+                        .background(Color(.systemGray4))
+                    
+                    // MARK: - Trophy Case Section
+                    TrophyCaseView(activityCount: activityCount)
+                        .equatable()
+                    
+                    Divider()
+                        .background(Color(.systemGray4))
+                    
                     // MARK: - Aktiviteter Section
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
@@ -243,6 +277,7 @@ struct ProfileView: View {
             }
             .onAppear {
                 loadProfileStats()
+                loadWeeklyActivityData()
             }
             .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
                 loadProfileStats()
@@ -284,6 +319,123 @@ struct ProfileView: View {
                 }
             } catch {
                 print("❌ Error loading profile stats: \(error)")
+            }
+        }
+    }
+    
+    private func loadWeeklyActivityData() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        Task {
+            do {
+                let calendar = Calendar.current
+                let now = Date()
+                var weeks: [WeeklyActivityData] = []
+                
+                // Fetch all activities ONCE
+                let activities = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId)
+                
+                // Update total activity count
+                await MainActor.run {
+                    self.activityCount = activities.count
+                }
+                
+                // Parse dates once and cache them
+                let activitiesWithDates = activities.compactMap { activity -> (WorkoutPost, Date)? in
+                    guard let date = ISO8601DateFormatter().date(from: activity.createdAt) else {
+                        return nil
+                    }
+                    return (activity, date)
+                }
+                
+                // Get last 10 weeks
+                for weekOffset in (0..<10).reversed() {
+                    guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: now),
+                          let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+                        continue
+                    }
+                    
+                    // Filter activities for this week using cached dates
+                    let weekActivities = activitiesWithDates.filter { (_, date) in
+                        return date >= weekStart && date < weekEnd
+                    }.map { $0.0 }
+                    
+                    // Calculate stats by activity type
+                    var runDistance = 0.0, runTime = 0.0, runElevation = 0.0
+                    var golfDistance = 0.0, golfTime = 0.0, golfElevation = 0.0
+                    var climbingDistance = 0.0, climbingTime = 0.0, climbingElevation = 0.0
+                    var skiingDistance = 0.0, skiingTime = 0.0, skiingElevation = 0.0
+                    var gymVolume = 0.0, gymTime = 0.0
+                    
+                    for activity in weekActivities {
+                        let distance = activity.distance ?? 0
+                        let time = Double(activity.duration ?? 0)
+                        let elevation = activity.elevationGain ?? 0
+                        let type = activity.activityType.lowercased()
+                        
+                        switch type {
+                        case "run", "running", "löpning":
+                            runDistance += distance
+                            runTime += time
+                            runElevation += elevation
+                        case "golf":
+                            golfDistance += distance
+                            golfTime += time
+                            golfElevation += elevation
+                        case "climbing", "klättring", "bergsklättring":
+                            climbingDistance += distance
+                            climbingTime += time
+                            climbingElevation += elevation
+                        case "skiing", "skidåkning":
+                            skiingDistance += distance
+                            skiingTime += time
+                            skiingElevation += elevation
+                        case "gym", "gympass":
+                            gymTime += time
+                            if let exercises = activity.exercises {
+                                for exercise in exercises {
+                                    let pairs = zip(exercise.kg, exercise.reps)
+                                    let volume = pairs.reduce(0.0) { $0 + (Double($1.1) * $1.0) }
+                                    gymVolume += volume
+                                }
+                            }
+                        default:
+                            runDistance += distance
+                            runTime += time
+                            runElevation += elevation
+                        }
+                    }
+                    
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "MMM d"
+                    let weekLabel = dateFormatter.string(from: weekStart)
+                    
+                    weeks.append(WeeklyActivityData(
+                        weekLabel: weekLabel,
+                        runDistance: runDistance,
+                        runTime: runTime,
+                        runElevation: runElevation,
+                        golfDistance: golfDistance,
+                        golfTime: golfTime,
+                        golfElevation: golfElevation,
+                        climbingDistance: climbingDistance,
+                        climbingTime: climbingTime,
+                        climbingElevation: climbingElevation,
+                        skiingDistance: skiingDistance,
+                        skiingTime: skiingTime,
+                        skiingElevation: skiingElevation,
+                        gymVolume: gymVolume,
+                        gymTime: gymTime,
+                        startDate: weekStart,
+                        endDate: weekEnd
+                    ))
+                }
+                
+                await MainActor.run {
+                    self.weeklyActivityData = weeks
+                }
+            } catch {
+                print("❌ Error loading weekly activity data: \(error)")
             }
         }
     }
@@ -453,7 +605,7 @@ struct UserActivitiesView: View {
     private func deleteActivity(_ activity: WorkoutPost) {
         Task {
             do {
-                try await WorkoutService.shared.deleteWorkoutPost(postId: activity.id)
+                try await WorkoutService.shared.deleteWorkoutPost(postId: activity.id, userId: userId)
                 
                 await MainActor.run {
                     // Remove the activity from the local array
@@ -577,8 +729,8 @@ struct ProfileActivityCard: View {
             return "figure.run"
         case "Golfrunda":
             return "flag.fill"
-        case "Promenad":
-            return "figure.walk"
+        case "Gympass":
+            return "figure.strengthtraining.traditional"
         case "Bestiga berg":
             return "mountain.2.fill"
         case "Skidåkning":

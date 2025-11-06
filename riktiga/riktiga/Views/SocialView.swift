@@ -191,12 +191,7 @@ struct SocialPostCard: View {
         VStack(alignment: .leading, spacing: 0) {
             headerSection
             statsSection
-            
-            // Swipeable images (route and user image)
-            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
-                .onTapGesture {
-                    onOpenDetail(post)
-                }
+            contentSection
             
             // Likes preview row
             HStack(alignment: .center, spacing: 12) {
@@ -357,6 +352,23 @@ struct SocialPostCard: View {
         .padding(.bottom, 8)
     }
     
+    @ViewBuilder
+    private var contentSection: some View {
+        // Show exercises list for Gympass, otherwise show swipeable images
+        if post.activityType == "Gympass", let exercises = post.exercises, !exercises.isEmpty {
+            GymExercisesListView(exercises: exercises, userImage: post.userImageUrl)
+                .onTapGesture {
+                    onOpenDetail(post)
+                }
+        } else {
+            // Swipeable images (route and user image)
+            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+                .onTapGesture {
+                    onOpenDetail(post)
+                }
+        }
+    }
+    
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -377,33 +389,53 @@ struct SocialPostCard: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             
+            if let description = trimmedDescription {
+                Text(description)
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 16)
+            }
+            
             HStack(spacing: 0) {
-                if let distance = post.distance {
-                    statColumn(title: "Distans", value: String(format: "%.2f km", distance))
-                }
-                
-                if let duration = post.duration {
-                    if post.distance != nil {
-                        Divider()
-                            .frame(height: 40)
+                if isGymPost {
+                    if let duration = post.duration {
+                        statColumn(title: "Tid", value: formatDuration(duration))
                     }
-                    statColumn(title: "Tid", value: formatDuration(duration))
-                }
-                
-                if let pace = averagePaceText {
-                    if post.distance != nil || post.duration != nil {
-                        Divider()
-                            .frame(height: 40)
+                    if let volume = gymVolumeText {
+                        if post.duration != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        statColumn(title: "Volym", value: volume)
                     }
-                    statColumn(title: "Tempo", value: pace)
-                }
-                
-                if let strokes = post.strokes {
-                    if (post.distance != nil || post.duration != nil || averagePaceText != nil) {
-                        Divider()
-                            .frame(height: 40)
+                } else {
+                    if let distance = post.distance {
+                        statColumn(title: "Distans", value: String(format: "%.2f km", distance))
                     }
-                    statColumn(title: "Slag", value: "\(strokes)")
+                    
+                    if let duration = post.duration {
+                        if post.distance != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        statColumn(title: "Tid", value: formatDuration(duration))
+                    }
+                    
+                    if let pace = averagePaceText {
+                        if post.distance != nil || post.duration != nil {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        statColumn(title: "Tempo", value: pace)
+                    }
+                    
+                    if let strokes = post.strokes {
+                        if (post.distance != nil || post.duration != nil || averagePaceText != nil) {
+                            Divider()
+                                .frame(height: 40)
+                        }
+                        statColumn(title: "Slag", value: "\(strokes)")
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -423,6 +455,36 @@ struct SocialPostCard: View {
         return String(format: "%d:%02d /km", minutes, seconds)
     }
     
+    private var trimmedDescription: String? {
+        guard let text = post.description?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return nil
+        }
+        return text
+    }
+    
+    private var isGymPost: Bool {
+        post.activityType == "Gympass"
+    }
+    
+    private var gymVolumeText: String? {
+        guard isGymPost, let exercises = post.exercises else { return nil }
+        let total = totalVolume(for: exercises)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        let text = formatter.string(from: NSNumber(value: Int(round(total)))) ?? "0"
+        return "\(text) kg"
+    }
+    
+    private func totalVolume(for exercises: [GymExercisePost]) -> Double {
+        exercises.reduce(0) { result, exercise in
+            let setVolume = zip(exercise.kg, exercise.reps).reduce(0) { partial, pair in
+                partial + (pair.0 * Double(pair.1))
+            }
+            return result + setVolume
+        }
+    }
+    
     private func statColumn(title: String, value: String) -> some View {
         VStack(spacing: 6) {
             Text(title)
@@ -439,7 +501,8 @@ struct SocialPostCard: View {
     private func deletePost() {
         Task {
             do {
-                try await WorkoutService.shared.deleteWorkoutPost(postId: post.id)
+                let userId = authViewModel.currentUser?.id
+                try await WorkoutService.shared.deleteWorkoutPost(postId: post.id, userId: userId)
                 print("✅ Post deleted successfully")
                 // Remove post from the list immediately
                 await MainActor.run {
@@ -518,8 +581,8 @@ struct SocialPostCard: View {
             return "figure.run"
         case "Golfrunda":
             return "flag.fill"
-        case "Promenad":
-            return "figure.walk"
+        case "Gympass":
+            return "figure.strengthtraining.traditional"
         case "Bestiga berg":
             return "mountain.2.fill"
         case "Skidåkning":
@@ -810,10 +873,22 @@ class SocialViewModel: ObservableObject {
         do {
             let fetchedPosts = try await SocialService.shared.getReliableSocialFeed(userId: userId)
             
+            // Debug: Show all posts with their exercises status
+            print("📋 Fetched posts:")
+            for post in fetchedPosts {
+                print("  - \(post.id): \(post.activityType) | exercises: \(post.exercises?.count ?? 0)")
+            }
+            
             await MainActor.run {
                 self.posts = self.sortedByDateDesc(fetchedPosts)
                 self.isLoading = false
                 self.isFetching = false
+                
+                // Debug: Show posts after assignment
+                print("✨ Posts in ViewModel after assignment:")
+                for post in self.posts {
+                    print("  - \(post.id): \(post.activityType) | exercises: \(post.exercises?.count ?? 0)")
+                }
             }
             // Persist to cache for offline use (sorted to keep order consistent)
             AppCacheManager.shared.saveSocialFeed(self.sortedByDateDesc(fetchedPosts), userId: userId)
@@ -894,7 +969,8 @@ class SocialViewModel: ObservableObject {
                 likeCount: likeCount,
                 commentCount: updatedPost.commentCount,
                 isLikedByCurrentUser: isLiked,
-                splits: updatedPost.splits
+                splits: updatedPost.splits,
+                exercises: updatedPost.exercises
             )
             posts[index] = updatedPost
             if let uid = currentUserId {
@@ -925,7 +1001,8 @@ class SocialViewModel: ObservableObject {
                 likeCount: updatedPost.likeCount,
                 commentCount: commentCount,
                 isLikedByCurrentUser: updatedPost.isLikedByCurrentUser,
-                splits: updatedPost.splits
+                splits: updatedPost.splits,
+                exercises: updatedPost.exercises
             )
             posts[index] = updatedPost
             if let uid = currentUserId {
@@ -959,6 +1036,123 @@ class CommentsViewModel: ObservableObject {
             }
         } catch {
             print("Error fetching comments: \(error)")
+        }
+    }
+}
+
+// MARK: - Gym Exercises List View
+struct GymExercisesListView: View {
+    let exercises: [GymExercisePost]
+    let userImage: String?
+    @State private var currentPage = 0
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $currentPage) {
+                exercisesListPage.tag(0)
+                if userImage != nil {
+                    userImagePage.tag(1)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .frame(height: 400)
+        }
+        .background(Color.white)
+    }
+    
+    private var exercisesListPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(exercises.enumerated()), id: \.offset) { index, exercise in
+                    exerciseCard(exercise: exercise, isLast: index == exercises.count - 1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemGray6))
+    }
+    
+    private func exerciseCard(exercise: GymExercisePost, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Exercise GIF/Image
+            if let exerciseId = exercise.id {
+                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                    .frame(width: 80, height: 80)
+                    .cornerRadius(8)
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 80, height: 80)
+                    .overlay(
+                        Image(systemName: "dumbbell.fill")
+                            .foregroundColor(.gray)
+                    )
+            }
+            
+            // Exercise details
+            VStack(alignment: .leading, spacing: 6) {
+                Text(exercise.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                    .lineLimit(2)
+                
+                Text("\(exercise.sets) sets")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                
+                // Show all sets in a compact format
+                ForEach(0..<exercise.sets, id: \.self) { setIndex in
+                    if setIndex < exercise.kg.count && setIndex < exercise.reps.count {
+                        HStack(spacing: 4) {
+                            Text("\(setIndex + 1).")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                                .frame(width: 20, alignment: .leading)
+                            
+                            Text("\(Int(exercise.kg[setIndex])) kg")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Text("×")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                            
+                            Text("\(exercise.reps[setIndex]) reps")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black)
+                        }
+                    }
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+    
+    @ViewBuilder
+    private var userImagePage: some View {
+        if let userImageUrl = userImage, !userImageUrl.isEmpty {
+            AsyncImage(url: URL(string: userImageUrl)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                case .failure, .empty:
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: 300)
+                        .background(Color(.systemGray6))
+                @unknown default:
+                    EmptyView()
+                }
+            }
         }
     }
 }

@@ -607,7 +607,20 @@ class SocialService {
             let posts: [SocialWorkoutPost] = try await supabase
                 .from("workout_posts")
                 .select("""
-                    *,
+                    id,
+                    user_id,
+                    activity_type,
+                    title,
+                    description,
+                    distance,
+                    duration,
+                    image_url,
+                    user_image_url,
+                    elevation_gain,
+                    max_speed,
+                    created_at,
+                    split_data,
+                    exercises_data,
                     profiles!workout_posts_user_id_fkey(username, avatar_url),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -710,7 +723,8 @@ class SocialService {
                             likeCount: self.postCountsCache[post.id]?.likeCount ?? 0,
                             commentCount: self.postCountsCache[post.id]?.commentCount ?? 0,
                             isLikedByCurrentUser: false,
-                            splits: post.splits
+                            splits: post.splits,
+                            exercises: post.exercises
                         )
                     }
                     return mapped
@@ -766,7 +780,8 @@ class SocialService {
                     likeCount: post.likeCount,
                     commentCount: post.commentCount,
                     isLikedByCurrentUser: likedSet.contains(post.id),
-                    splits: post.splits
+                    splits: post.splits,
+                    exercises: post.exercises
                 )
             }
         } catch {

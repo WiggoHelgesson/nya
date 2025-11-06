@@ -13,6 +13,7 @@ struct SocialWorkoutPostRaw: Codable {
     let userImageUrl: String?
     let createdAt: String
     let splits: [WorkoutSplit]?
+    let exercises: [GymExercisePost]?
     
     // JOIN data
     let profiles: ProfileData?
@@ -31,6 +32,7 @@ struct SocialWorkoutPostRaw: Codable {
         case userImageUrl = "user_image_url"
         case createdAt = "created_at"
         case splits = "split_data"
+        case exercises = "exercises_data"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -77,6 +79,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let commentCount: Int?
     let isLikedByCurrentUser: Bool?
     let splits: [WorkoutSplit]?
+    let exercises: [GymExercisePost]?  // For gym sessions
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -98,6 +101,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case commentCount = "comment_count"
         case isLikedByCurrentUser = "is_liked_by_current_user"
         case splits = "split_data"
+        case exercises = "exercises_data"
     }
     
     // Custom decoder to handle JOIN results
@@ -129,6 +133,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         
         isLikedByCurrentUser = false // Will be set separately
         splits = raw.splits
+        exercises = raw.exercises
     }
     
     init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
@@ -151,6 +156,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = post.splits
+        self.exercises = post.exercises
     }
 
     // Memberwise convenience initializer to allow updating selective fields
@@ -173,7 +179,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         likeCount: Int?,
         commentCount: Int?,
         isLikedByCurrentUser: Bool?,
-        splits: [WorkoutSplit]?
+        splits: [WorkoutSplit]?,
+        exercises: [GymExercisePost]? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -194,6 +201,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = splits
+        self.exercises = exercises
     }
 }
 

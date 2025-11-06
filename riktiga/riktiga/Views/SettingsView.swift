@@ -17,8 +17,9 @@ struct SettingsView: View {
             ZStack {
                 Color(.systemGray6)
                     .ignoresSafeArea()
-                
-                VStack(spacing: 24) {
+
+                ScrollView {
+                    VStack(spacing: 24) {
                     // MARK: - PRENUMERATION Section
                     VStack(alignment: .leading, spacing: 0) {
                         Text("PRENUMERATION")
@@ -163,9 +164,7 @@ struct SettingsView: View {
                         .background(Color.white)
                         .cornerRadius(12)
                     }
-                    
-                    Spacer()
-                    
+
                     // MARK: - Radera konto Button
                     Button(action: {
                         showDeleteAccountConfirmation = true
@@ -185,7 +184,7 @@ struct SettingsView: View {
                         .background(Color.white)
                         .cornerRadius(12)
                     }
-                    
+
                     // MARK: - Logga ut Button
                     Button(action: {
                         authViewModel.logout()
@@ -206,8 +205,13 @@ struct SettingsView: View {
                         .background(Color.white)
                         .cornerRadius(12)
                     }
+                    .padding(.bottom, 8)
                 }
-                .padding(16)
+                .frame(maxWidth: 640)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 32)
+            }
+            .scrollIndicators(.hidden)
             }
             .navigationTitle("Inställningar")
             .navigationBarTitleDisplayMode(.inline)

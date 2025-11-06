@@ -1,0 +1,187 @@
+import Foundation
+import SwiftUI
+import Combine
+
+class GymSessionViewModel: ObservableObject {
+    @Published var exercises: [GymExercise] = []
+    @Published var formattedDuration: String = "00:00"
+    @Published var sessionData: GymSessionData?
+    @Published var savedWorkouts: [SavedGymWorkout] = []
+    @Published var isLoadingSavedWorkouts = false
+    
+    var totalVolume: Double {
+        exercises.reduce(0) { result, exercise in
+            result + exerciseVolume(exercise)
+        }
+    }
+    
+    var formattedVolume: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        let volumeValue = Int(round(totalVolume))
+        let number = NSNumber(value: volumeValue)
+        let text = formatter.string(from: number) ?? "0"
+        return "\(text) kg"
+    }
+    
+    private var startTime: Date = Date()
+    private var timer: Timer?
+    
+    func startTimer() {
+        startTime = Date()
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateDuration()
+        }
+    }
+    
+    func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func updateDuration() {
+        let elapsed = Int(Date().timeIntervalSince(startTime))
+        let minutes = elapsed / 60
+        let seconds = elapsed % 60
+        formattedDuration = String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    func loadSavedWorkouts(userId: String) async {
+        if isLoadingSavedWorkouts { return }
+        await MainActor.run { isLoadingSavedWorkouts = true }
+        do {
+            let workouts = try await SavedWorkoutService.shared.fetchSavedWorkouts(for: userId)
+            await MainActor.run {
+                self.savedWorkouts = workouts
+                self.isLoadingSavedWorkouts = false
+            }
+        } catch {
+            print("⚠️ Failed to load saved gym workouts: \(error)")
+            await MainActor.run {
+                self.isLoadingSavedWorkouts = false
+            }
+        }
+    }
+    
+    func applySavedWorkout(_ workout: SavedGymWorkout) {
+        let convertedExercises = workout.exercises.map { post -> GymExercise in
+            let combined = zip(post.kg, post.reps)
+            var sets = combined.map { pair in
+                ExerciseSet(kg: pair.0, reps: pair.1, isCompleted: false)
+            }
+            if post.sets > sets.count {
+                for _ in sets.count..<post.sets {
+                    sets.append(ExerciseSet(kg: 0, reps: 0, isCompleted: false))
+                }
+            }
+            return GymExercise(
+                id: post.id ?? UUID().uuidString,
+                name: post.name,
+                category: post.category,
+                sets: sets
+            )
+        }
+        exercises = convertedExercises
+    }
+    
+    func addExercise(_ template: ExerciseTemplate) {
+        let newExercise = GymExercise(
+            id: template.id,  // Keep the original exercise ID from the API
+            name: template.name,
+            category: template.category,
+            sets: []
+        )
+        exercises.append(newExercise)
+    }
+    
+    func removeExercise(_ id: String) {
+        exercises.removeAll { $0.id == id }
+    }
+    
+    func addSet(to exerciseId: String) {
+        guard let index = exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
+        
+        // Get previous set values for convenience
+        let previousSet = exercises[index].sets.last
+        let newSet = ExerciseSet(
+            kg: previousSet?.kg ?? 0,
+            reps: previousSet?.reps ?? 0,
+            isCompleted: false
+        )
+        
+        exercises[index].sets.append(newSet)
+    }
+    
+    func updateSet(exerciseId: String, setIndex: Int, kg: Double, reps: Int) {
+        guard let exerciseIndex = exercises.firstIndex(where: { $0.id == exerciseId }),
+              setIndex < exercises[exerciseIndex].sets.count else { return }
+        
+        exercises[exerciseIndex].sets[setIndex].kg = kg
+        exercises[exerciseIndex].sets[setIndex].reps = reps
+        exercises[exerciseIndex].sets[setIndex].isCompleted = kg > 0 && reps > 0
+    }
+    
+    func deleteSet(exerciseId: String, setIndex: Int) {
+        guard let exerciseIndex = exercises.firstIndex(where: { $0.id == exerciseId }),
+              setIndex < exercises[exerciseIndex].sets.count else { return }
+        
+        exercises[exerciseIndex].sets.remove(at: setIndex)
+    }
+    
+    func completeSession(duration: Int) {
+        let totalSets = exercises.reduce(0) { $0 + $1.sets.count }
+        let completedSets = exercises.reduce(0) { total, exercise in
+            total + exercise.sets.filter { $0.isCompleted }.count
+        }
+        
+        let volume = totalVolume
+        let pointsFromVolume = Int(volume / 160.0)
+        let earnedXP = min(50, pointsFromVolume)
+        
+        sessionData = GymSessionData(
+            duration: duration,
+            exercises: exercises,
+            totalSets: totalSets,
+            completedSets: completedSets,
+            earnedXP: earnedXP,
+            totalVolume: volume
+        )
+    }
+    
+    private func exerciseVolume(_ exercise: GymExercise) -> Double {
+        exercise.sets.reduce(0) { partial, set in
+            partial + (set.kg * Double(set.reps))
+        }
+    }
+}
+
+// MARK: - Models
+struct GymExercise: Identifiable, Codable {
+    let id: String
+    let name: String
+    let category: String?
+    var sets: [ExerciseSet]
+}
+
+struct ExerciseSet: Codable {
+    var kg: Double
+    var reps: Int
+    var isCompleted: Bool
+}
+
+struct ExerciseTemplate: Identifiable {
+    let id: String
+    let name: String
+    let category: String?
+}
+
+struct GymSessionData {
+    let duration: Int
+    let exercises: [GymExercise]
+    let totalSets: Int
+    let completedSets: Int
+    let earnedXP: Int
+    let totalVolume: Double
+}
+

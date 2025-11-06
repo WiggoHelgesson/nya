@@ -72,6 +72,25 @@ private extension Date {
 class WorkoutService {
     static let shared = WorkoutService()
     private let supabase = SupabaseConfig.supabase
+    private let cache = AppCacheManager.shared
+    private let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter
+    }()
+    
+    private struct WorkoutDistanceSummary: Decodable {
+        let activityType: String
+        let distance: Double?
+        let createdAt: String
+        
+        enum CodingKeys: String, CodingKey {
+            case activityType = "activity_type"
+            case distance
+            case createdAt = "created_at"
+        }
+    }
     
     func uploadWorkoutImage(_ image: UIImage, postId: String) async throws -> String {
         do {
@@ -127,7 +146,11 @@ class WorkoutService {
         }
     }
     
-    func getUserWorkoutPosts(userId: String) async throws -> [WorkoutPost] {
+    func getUserWorkoutPosts(userId: String, forceRefresh: Bool = false) async throws -> [WorkoutPost] {
+        if !forceRefresh, let cached = cache.getCachedUserWorkouts(userId: userId) {
+            print("💾 Returning cached workouts for user \(userId)")
+            return cached
+        }
         do {
             let response: [WorkoutPost] = try await supabase
                 .from("workout_posts")
@@ -136,17 +159,46 @@ class WorkoutService {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
+            cache.saveUserWorkouts(response, userId: userId)
             print("✅ Fetched \(response.count) workout posts for user \(userId)")
             return response
-            
         } catch {
             print("❌ Error fetching user workout posts: \(error)")
+            if let cached = cache.getCachedUserWorkouts(userId: userId, allowExpired: true) {
+                print("⚠️ Returning stale cached workouts due to error")
+                return cached
+            }
             throw error
         }
     }
     
-    func deleteWorkoutPost(postId: String) async throws {
+    func getWeeklyRunningDistance(userId: String) async throws -> Double {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start else {
+            return 0
+        }
+        let endOfWeek = calendar.date(byAdding: .day, value: 7, to: startOfWeek) ?? now
+        let startISO = isoFormatter.string(from: startOfWeek)
+        let endISO = isoFormatter.string(from: endOfWeek)
+        let summaries: [WorkoutDistanceSummary] = try await supabase
+            .from("workout_posts")
+            .select("activity_type, distance, created_at")
+            .eq("user_id", value: userId)
+            .gte("created_at", value: startISO)
+            .lt("created_at", value: endISO)
+            .execute()
+            .value
+        let runningKeywords: Set<String> = ["run", "running", "löpning", "löppass"]
+        let total = summaries.reduce(0.0) { partial, summary in
+            let type = summary.activityType.lowercased()
+            guard runningKeywords.contains(type) else { return partial }
+            return partial + (summary.distance ?? 0)
+        }
+        return total
+    }
+    
+    func deleteWorkoutPost(postId: String, userId: String? = nil) async throws {
         do {
             try await supabase
                 .from("workout_posts")
@@ -155,6 +207,9 @@ class WorkoutService {
                 .execute()
             
             print("✅ Successfully deleted workout post: \(postId)")
+            if let userId {
+                cache.clearCacheForUser(userId: userId)
+            }
             
         } catch {
             print("❌ Error deleting workout post: \(error)")
@@ -225,7 +280,8 @@ class WorkoutService {
             userImageUrl: uploadedUserImageUrl,
             elevationGain: post.elevationGain,
             maxSpeed: post.maxSpeed,
-            splits: post.splits
+            splits: post.splits,
+            exercises: post.exercises
         )
         
         do {
@@ -270,6 +326,11 @@ class WorkoutService {
                 minimalPost["split_data"] = AnyEncodable(splitPayload)
             }
             
+            if let exercises = postToSave.exercises, let exercisesPayload = encodeExercises(exercises) {
+                minimalPost["exercises_data"] = AnyEncodable(exercisesPayload)
+                print("✅ Saving post with \(exercises.count) exercises")
+            }
+            
             try await supabase
                 .from("workout_posts")
                 .insert(minimalPost)
@@ -280,6 +341,8 @@ class WorkoutService {
                 try await ProfileService.shared.updateUserPoints(userId: post.userId, pointsToAdd: earnedPoints)
                 print("✅ XP updated: +\(earnedPoints)")
             }
+            AppCacheManager.shared.clearCacheForUser(userId: post.userId)
+            
         } catch {
             print("❌ Error saving workout post: \(error)")
             throw error
@@ -401,6 +464,15 @@ class WorkoutService {
 private func encodeSplits(_ splits: [WorkoutSplit]) -> [[String: Any]]? {
     let encoder = JSONEncoder()
     guard let data = try? encoder.encode(splits),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+        return nil
+    }
+    return json
+}
+
+private func encodeExercises(_ exercises: [GymExercisePost]) -> [[String: Any]]? {
+    let encoder = JSONEncoder()
+    guard let data = try? encoder.encode(exercises),
           let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
         return nil
     }

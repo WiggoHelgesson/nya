@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 import UIKit
+import UniformTypeIdentifiers
 
 struct ShareActivityView: View {
     let post: SocialWorkoutPost
@@ -121,143 +122,120 @@ struct ShareActivityView: View {
     }
 
     private func generateCardImage(backgroundImage: UIImage?) -> UIImage? {
-        let cardSize = CGSize(width: 340, height: 550)
+        let canvasSize = CGSize(width: 1080, height: 1920)
         let format = UIGraphicsImageRendererFormat()
-        format.scale = UIScreen.main.scale
+        format.scale = 3
         format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: cardSize, format: format)
-        let image = renderer.image { context in
+
+        let stats = overlayStats(for: post)
+
+        let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+        return renderer.image { context in
             let cg = context.cgContext
             cg.setFillColor(UIColor.clear.cgColor)
-            cg.fill(CGRect(origin: .zero, size: cardSize))
+            cg.fill(CGRect(origin: .zero, size: canvasSize))
 
             if let backgroundImage {
                 cg.saveGState()
                 cg.interpolationQuality = .high
-                backgroundImage.draw(in: CGRect(origin: .zero, size: cardSize))
+                backgroundImage.draw(in: CGRect(origin: .zero, size: canvasSize))
+
                 if let gradient = CGGradient(
                     colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                    colors: [UIColor.black.withAlphaComponent(0.15).cgColor, UIColor.black.withAlphaComponent(0.75).cgColor] as CFArray,
+                    colors: [
+                        UIColor.black.withAlphaComponent(0.35).cgColor,
+                        UIColor.black.withAlphaComponent(0.85).cgColor
+                    ] as CFArray,
                     locations: [0.0, 1.0]
                 ) {
                     cg.drawLinearGradient(
                         gradient,
-                        start: CGPoint(x: cardSize.width / 2, y: 0),
-                        end: CGPoint(x: cardSize.width / 2, y: cardSize.height),
+                        start: CGPoint(x: canvasSize.width / 2, y: 0),
+                        end: CGPoint(x: canvasSize.width / 2, y: canvasSize.height),
                         options: []
                     )
                 }
                 cg.restoreGState()
             }
 
-            let padding: CGFloat = 36
-            let topOffset: CGFloat = 80
-            let iconDiameter: CGFloat = 72
-            let iconRect = CGRect(x: padding, y: topOffset, width: iconDiameter, height: iconDiameter)
-            
-            cg.setFillColor(UIColor.white.cgColor)
-            cg.fillEllipse(in: iconRect)
-            
-            if let icon = UIImage(systemName: shareActivityIconName)?
-                .applyingSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 32, weight: .semibold))?
-                .withTintColor(.black, renderingMode: .alwaysOriginal) {
-                let inset: CGFloat = (iconDiameter - 32) / 2
-                icon.draw(in: iconRect.insetBy(dx: inset, dy: inset))
-            }
-            
-            let titleFont = UIFont.systemFont(ofSize: 34, weight: .heavy)
-            let titleAttributes: [NSAttributedString.Key: Any] = [
-                .font: titleFont,
-                .foregroundColor: UIColor.white
-            ]
-            let activityTitle = (post.title.isEmpty ? (post.activityType ?? "Aktivitet") : post.title) as NSString
-            let titlePoint = CGPoint(x: iconRect.maxX + 18, y: iconRect.midY - titleFont.lineHeight / 2)
-            activityTitle.draw(at: titlePoint, withAttributes: titleAttributes)
-            
-            let labelFont = UIFont.systemFont(ofSize: 14, weight: .semibold)
-            let valueFont = UIFont.systemFont(ofSize: 28, weight: .bold)
-            let labelAttributes: [NSAttributedString.Key: Any] = [
-                .font: labelFont,
-                .kern: 0.6,
-                .foregroundColor: UIColor.white.withAlphaComponent(0.7)
-            ]
-            let valueAttributes: [NSAttributedString.Key: Any] = [
-                .font: valueFont,
-                .foregroundColor: UIColor.white
-            ]
-            
-            let statsTop = iconRect.maxY + 44
-            let secondColumnWidth: CGFloat = 140
-            let secondColumnX = cardSize.width - padding - secondColumnWidth
-            
-            ("DISTANCE" as NSString).draw(at: CGPoint(x: padding, y: statsTop), withAttributes: labelAttributes)
-            (String(format: "%.2f km", post.distance ?? 0) as NSString).draw(at: CGPoint(x: padding, y: statsTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
-            ("TIME" as NSString).draw(at: CGPoint(x: secondColumnX, y: statsTop), withAttributes: labelAttributes)
-            (formatDuration(post.duration ?? 0) as NSString).draw(at: CGPoint(x: secondColumnX, y: statsTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
-            
-            if let pace = paceString(distance: post.distance, duration: post.duration) {
-                let paceTop = statsTop + labelFont.lineHeight + valueFont.lineHeight + 34
-                ("PACE" as NSString).draw(at: CGPoint(x: padding, y: paceTop), withAttributes: labelAttributes)
-                (pace as NSString).draw(at: CGPoint(x: padding, y: paceTop + labelFont.lineHeight + 6), withAttributes: valueAttributes)
-            }
-            
-            let brandSize: CGFloat = 60
-            let brandRect = CGRect(x: padding, y: cardSize.height - brandSize - 72, width: brandSize, height: brandSize)
-            let brandCornerRadius: CGFloat = 16
-            let brandPath = UIBezierPath(roundedRect: brandRect, cornerRadius: brandCornerRadius)
+            let labelFont = UIFont.systemFont(ofSize: 72, weight: .semibold)
+            let primaryValueFont = UIFont.systemFont(ofSize: 150, weight: .heavy)
+            let secondaryValueFont = UIFont.systemFont(ofSize: 120, weight: .heavy)
+            let brandFont = UIFont.systemFont(ofSize: 110, weight: .black)
 
-            cg.saveGState()
-            cg.addPath(brandPath.cgPath)
-            cg.setFillColor(UIColor.white.cgColor)
-            cg.fillPath()
-            cg.restoreGState()
+            let labelColor = UIColor.white.withAlphaComponent(0.85)
+            let valueColor = UIColor.white
 
-            cg.saveGState()
-            brandPath.addClip()
+            var currentY: CGFloat = 220
+            let valueSpacing: CGFloat = 24
+            let sectionSpacing: CGFloat = 96
+
+            func drawCentered(_ text: String, attributes: [NSAttributedString.Key: Any], y: CGFloat) -> CGFloat {
+                let nsText = text as NSString
+                let size = nsText.size(withAttributes: attributes)
+                let rect = CGRect(x: (canvasSize.width - size.width) / 2, y: y, width: size.width, height: size.height)
+                nsText.draw(in: rect, withAttributes: attributes)
+                return rect.maxY
+            }
+
+            func drawStat(title: String, value: String, valueFont: UIFont) {
+                let titleAttributes: [NSAttributedString.Key: Any] = [
+                    .font: labelFont,
+                    .foregroundColor: labelColor
+                ]
+                let valueAttributes: [NSAttributedString.Key: Any] = [
+                    .font: valueFont,
+                    .foregroundColor: valueColor,
+                    .kern: 2.0
+                ]
+
+                currentY = drawCentered(title, attributes: titleAttributes, y: currentY)
+                currentY = drawCentered(value, attributes: valueAttributes, y: currentY + valueSpacing)
+                currentY += sectionSpacing
+            }
+
+            for stat in stats {
+                let valueFont = stat.isPrimary ? primaryValueFont : secondaryValueFont
+                drawStat(title: stat.title, value: stat.value, valueFont: valueFont)
+            }
+
+            let brandingTop = currentY + 140
+
             if let logo = UIImage(named: "23") {
-                logo.draw(in: brandRect)
-            } else {
-                cg.setFillColor(UIColor.black.cgColor)
-                cg.fill(brandRect)
+                let logoSize: CGFloat = 260
+                let logoRect = CGRect(
+                    x: (canvasSize.width - logoSize) / 2,
+                    y: brandingTop,
+                    width: logoSize,
+                    height: logoSize
+                )
+
+                let roundedPath = UIBezierPath(roundedRect: logoRect, cornerRadius: logoSize * 0.25)
+                cg.saveGState()
+                cg.addPath(roundedPath.cgPath)
+                cg.clip()
+                logo.draw(in: logoRect)
+                cg.restoreGState()
+
+                cg.saveGState()
+                cg.addPath(roundedPath.cgPath)
+                cg.setStrokeColor(UIColor.white.withAlphaComponent(0.6).cgColor)
+                cg.setLineWidth(6)
+                cg.strokePath()
+                cg.restoreGState()
+
+                let textAttributes: [NSAttributedString.Key: Any] = [
+                    .font: brandFont,
+                    .foregroundColor: valueColor
+                ]
+                let textSize = ("Up&Down" as NSString).size(withAttributes: textAttributes)
+                let textOrigin = CGPoint(
+                    x: logoRect.midX - textSize.width / 2,
+                    y: logoRect.maxY + 40
+                )
+                ("Up&Down" as NSString).draw(at: textOrigin, withAttributes: textAttributes)
             }
-            cg.restoreGState()
-
-            cg.saveGState()
-            cg.addPath(brandPath.cgPath)
-            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.6).cgColor)
-            cg.setLineWidth(2)
-            cg.strokePath()
-            cg.restoreGState()
-
-            let brandFont = UIFont.systemFont(ofSize: 22, weight: .semibold)
-            let brandAttributes: [NSAttributedString.Key: Any] = [
-                .font: brandFont,
-                .foregroundColor: UIColor.white
-            ]
-            let brandPoint = CGPoint(x: brandRect.maxX + 16, y: brandRect.midY - brandFont.lineHeight / 2)
-            ("Up&Down" as NSString).draw(at: brandPoint, withAttributes: brandAttributes)
         }
-        return image
-    }
-    
-    private func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        let secs = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        } else {
-            return String(format: "%02d:%02d", minutes, secs)
-        }
-    }
-    
-    private func paceString(distance: Double?, duration: Int?) -> String? {
-        guard let distance = distance, distance > 0,
-              let duration = duration else { return nil }
-        let paceSeconds = Double(duration) / distance
-        let minutes = Int(paceSeconds) / 60
-        let seconds = Int(paceSeconds) % 60
-        return String(format: "%d:%02d /km", minutes, seconds)
     }
     
     private func saveToPhotoLibrary(background: ShareCardBackground) {
@@ -276,7 +254,14 @@ struct ShareActivityView: View {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
                 PHPhotoLibrary.shared().performChanges({
-                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                    if background == .transparent, let pngData = image.pngData() {
+                        let request = PHAssetCreationRequest.forAsset()
+                        let options = PHAssetResourceCreationOptions()
+                        options.uniformTypeIdentifier = UTType.png.identifier
+                        request.addResource(with: .photo, data: pngData, options: options)
+                    } else {
+                        PHAssetChangeRequest.creationRequestForAsset(from: image)
+                    }
                 }) { success, error in
                     DispatchQueue.main.async {
                         if success {
@@ -309,7 +294,7 @@ struct ShareActivityView: View {
         switch post.activityType {
         case "Löppass": return "figure.run.circle.fill"
         case "Golfrunda": return "flag.circle.fill"
-        case "Promenad": return "figure.walk.circle.fill"
+        case "Gympass": return "figure.strengthtraining.traditional.circle.fill"
         case "Bestiga berg": return "mountain.2.circle.fill"
         case "Skidåkning": return "snowflake.circle.fill"
         default: return "figure.run.circle.fill"
@@ -394,24 +379,14 @@ struct ActivityCardPreview: View {
     var background: Background = .gradient
     
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            backgroundView
+        ZStack {
+            previewBackground
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.black.opacity(0.0001))
-                )
-            
-            VStack(alignment: .leading, spacing: 32) {
-                header
-                statsSection
-                Spacer()
-                brandRow
-            }
-            .padding(.top, 80)
-            .padding(.horizontal, 36)
-            .padding(.bottom, 72)
+
+            overlayContent
+                .padding(.horizontal, 32)
+                .padding(.vertical, 48)
         }
         .frame(width: 340, height: 550)
         .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -422,11 +397,11 @@ struct ActivityCardPreview: View {
     }
 
     @ViewBuilder
-    private var backgroundView: some View {
+    private var previewBackground: some View {
         switch background {
         case .gradient:
             LinearGradient(
-                colors: [Color.black.opacity(0.95), Color.black.opacity(0.65)],
+                colors: [Color.black.opacity(0.9), Color.black.opacity(0.6)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -436,14 +411,14 @@ struct ActivityCardPreview: View {
                 .scaledToFill()
                 .overlay(
                     LinearGradient(
-                        colors: [Color.black.opacity(0.15), Color.black.opacity(0.75)],
+                        colors: [Color.black.opacity(0.3), Color.black.opacity(0.85)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
         case .loading:
             LinearGradient(
-                colors: [Color.black.opacity(0.95), Color.black.opacity(0.65)],
+                colors: [Color.black.opacity(0.9), Color.black.opacity(0.6)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -459,101 +434,165 @@ struct ActivityCardPreview: View {
             )
         }
     }
-    
-    private var header: some View {
-        HStack(alignment: .center, spacing: 18) {
-            ZStack {
-                Circle()
-                    .fill(Color.white)
-                Image(systemName: activityIconName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                    .foregroundColor(.black)
+
+    private var overlayContent: some View {
+        VStack(spacing: 32) {
+            if let badge = badgeText {
+                Text(badge)
+                    .font(.system(size: 12, weight: .bold))
+                    .textCase(.uppercase)
+                    .kerning(1.2)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.12))
+                    )
+                    .foregroundColor(.white.opacity(0.9))
             }
-            .frame(width: 72, height: 72)
-            
-            Text(post.title.isEmpty ? (post.activityType ?? "Aktivitet") : post.title)
-                .font(.system(size: 34, weight: .heavy))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+
+            statStack
+
+            Spacer()
+            brandSignature
         }
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
     }
-    
-    private var statsSection: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            HStack(alignment: .top, spacing: 32) {
-                statBlock(title: "DISTANCE", value: String(format: "%.2f km", post.distance ?? 0))
-                Spacer()
-                statBlock(title: "TIME", value: formatDuration(post.duration ?? 0))
+
+    private var statStack: some View {
+        VStack(spacing: 24) {
+            ForEach(sharePreviewStats(for: post), id: \.title) { stat in
+                statBlock(title: stat.title, value: stat.value, isPrimary: stat.isPrimary)
             }
-            statBlock(title: "PACE", value: paceString(distance: post.distance, duration: post.duration) ?? "-")
-        }
-    }
-    
-    private func statBlock(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .kerning(0.6)
-                .foregroundColor(.white.opacity(0.7))
-            Text(value)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
-        }
-    }
-    
-    private var brandRow: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white)
-                Image("23")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(10)
-            }
-            .frame(width: 60, height: 60)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.6), lineWidth: 2)
-            )
-            Text("Up&Down")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(.white)
-        }
-    }
-    
-    private var activityIconName: String {
-        switch post.activityType {
-        case "Löppass": return "figure.run.circle.fill"
-        case "Golfrunda": return "flag.circle.fill"
-        case "Promenad": return "figure.walk.circle.fill"
-        case "Bestiga berg": return "mountain.2.circle.fill"
-        case "Skidåkning": return "snowflake.circle.fill"
-        default: return "figure.run.circle.fill"
         }
     }
 
-    private func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        let secs = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        } else {
-            return String(format: "%02d:%02d", minutes, secs)
+    private func statBlock(title: String, value: String, isPrimary: Bool) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+            Text(value)
+                .font(.system(size: isPrimary ? 42 : 34, weight: .heavy))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var brandSignature: some View {
+        HStack(spacing: 16) {
+            Image("23")
+                .resizable()
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.6), lineWidth: 2)
+                )
+            Text("Up&Down")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
+    }
+
+    private var badgeText: String? {
+        switch background {
+        case .gradient:
+            return "Transparent"
+        case .map:
+            return nil
+        case .loading:
+            return nil
         }
     }
     
     private func paceString(distance: Double?, duration: Int?) -> String? {
-        guard let distance = distance, distance > 0,
-              let duration = duration else { return nil }
-        let paceSeconds = Double(duration) / distance
-        let minutes = Int(paceSeconds) / 60
-        let seconds = Int(paceSeconds) % 60
-        return String(format: "%d:%02d /km", minutes, seconds)
+        formattedPace(distance: distance, duration: duration)
+    }
+}
+
+private struct ShareStat {
+    let title: String
+    let value: String
+    let isPrimary: Bool
+}
+
+private func overlayStats(for post: SocialWorkoutPost) -> [ShareStat] {
+    statsForPost(post)
+}
+
+private func sharePreviewStats(for post: SocialWorkoutPost) -> [ShareStat] {
+    statsForPost(post)
+}
+
+private func statsForPost(_ post: SocialWorkoutPost) -> [ShareStat] {
+    var stats: [ShareStat] = []
+
+    if post.activityType == "Gympass" {
+        stats.append(ShareStat(title: "Volym", value: formatGymVolume(from: post.exercises), isPrimary: true))
+        stats.append(ShareStat(title: "Tid", value: overlayDurationString(post.duration), isPrimary: false))
+    } else {
+        stats.append(ShareStat(title: "Distance", value: formatDistance(post.distance), isPrimary: true))
+        if let pace = formattedPace(distance: post.distance, duration: post.duration) {
+            stats.append(ShareStat(title: "Pace", value: pace, isPrimary: false))
+        }
+        stats.append(ShareStat(title: "Time", value: overlayDurationString(post.duration), isPrimary: false))
+    }
+
+    return stats
+}
+
+private func formatDistance(_ distance: Double?) -> String {
+    guard let distance = distance else { return "0.00 km" }
+    return String(format: "%.2f km", distance)
+}
+
+private func formatGymVolume(from exercises: [GymExercisePost]?) -> String {
+    let volume = calculateGymVolume(from: exercises)
+    return String(format: "%.0f kg", volume)
+}
+
+private func calculateGymVolume(from exercises: [GymExercisePost]?) -> Double {
+    guard let exercises = exercises else { return 0 }
+    return exercises.reduce(0) { total, exercise in
+        let pairs = zip(exercise.kg, exercise.reps)
+        let exerciseVolume = pairs.reduce(0.0) { $0 + $1.0 * Double($1.1) }
+        return total + exerciseVolume
+    }
+}
+
+private func formattedPace(distance: Double?, duration: Int?) -> String? {
+    guard let distance = distance, distance > 0,
+          let duration = duration, duration > 0 else { return nil }
+    let paceSeconds = Double(duration) / distance
+    let minutes = Int(paceSeconds) / 60
+    let seconds = Int(paceSeconds) % 60
+    return String(format: "%d:%02d /km", minutes, seconds)
+}
+
+private func overlayDurationString(_ seconds: Int?) -> String {
+    guard let seconds = seconds else { return "-" }
+    let hours = seconds / 3600
+    let minutes = (seconds % 3600) / 60
+    let secs = seconds % 60
+
+    if hours > 0 {
+        if minutes == 0 {
+            return "\(hours)h"
+        }
+        return "\(hours)h \(minutes)m"
+    } else if minutes > 0 {
+        if secs == 0 {
+            return "\(minutes)m"
+        }
+        return "\(minutes)m \(secs)s"
+    } else {
+        return "\(secs)s"
     }
 }
 

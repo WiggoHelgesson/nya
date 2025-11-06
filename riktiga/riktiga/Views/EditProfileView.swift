@@ -117,6 +117,66 @@ struct EditProfileView: View {
                             }
                         }
                         
+                        // Mountains Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Bestigning")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                            
+                            Text("Kryssa i alla berg du har bestigit för att visa det på din offentliga profil")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 2)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(Mountain.all) { mountain in
+                                        MountainSelectionCard(
+                                            mountain: mountain,
+                                            isSelected: (authViewModel.currentUser?.climbedMountains ?? []).contains(mountain.id),
+                                            onToggle: {
+                                                toggleMountain(mountain.id)
+                                            },
+                                            userId: authViewModel.currentUser?.id ?? ""
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                        
+                        // Races Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Tävlingar")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                            
+                            Text("Kryssa i alla tävlingar du genomfört för att visa de på din offentliga profil")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 2)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(Race.all) { race in
+                                        RaceSelectionCard(
+                                            race: race,
+                                            isSelected: (authViewModel.currentUser?.completedRaces ?? []).contains(race.id),
+                                            onToggle: {
+                                                toggleRace(race.id)
+                                            },
+                                            userId: authViewModel.currentUser?.id ?? ""
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                        
                         Spacer()
                         
                         // Save Button
@@ -301,7 +361,9 @@ struct EditProfileView: View {
                     pb10kmHours: pb10kHoursValue,
                     pb10kmMinutes: pb10kMinutesValue,
                     pbMarathonHours: pbMarathonHoursValue,
-                    pbMarathonMinutes: pbMarathonMinutesValue
+                    pbMarathonMinutes: pbMarathonMinutesValue,
+                    climbedMountains: authViewModel.currentUser?.climbedMountains ?? [],
+                    completedRaces: authViewModel.currentUser?.completedRaces ?? []
                 )
                 supportsPersonalBests = ProfileService.shared.hasPersonalBestColumns()
                 
@@ -346,7 +408,9 @@ struct EditProfileView: View {
         pb10kmHours: Int?,
         pb10kmMinutes: Int?,
         pbMarathonHours: Int?,
-        pbMarathonMinutes: Int?
+        pbMarathonMinutes: Int?,
+        climbedMountains: [String],
+        completedRaces: [String]
     ) async throws {
         guard let userId = authViewModel.currentUser?.id else { return }
         
@@ -358,7 +422,9 @@ struct EditProfileView: View {
             "pb_10km_hours": AnyEncodable(pb10kmHours),
             "pb_10km_minutes": AnyEncodable(pb10kmMinutes),
             "pb_marathon_hours": AnyEncodable(pbMarathonHours),
-            "pb_marathon_minutes": AnyEncodable(pbMarathonMinutes)
+            "pb_marathon_minutes": AnyEncodable(pbMarathonMinutes),
+            "climbed_mountains": AnyEncodable(climbedMountains),
+            "completed_races": AnyEncodable(completedRaces)
         ]
         
         if let avatarUrl = avatarUrl {
@@ -382,6 +448,8 @@ struct EditProfileView: View {
                 authViewModel.currentUser?.pb10kmMinutes = pb10kmMinutes
                 authViewModel.currentUser?.pbMarathonHours = pbMarathonHours
                 authViewModel.currentUser?.pbMarathonMinutes = pbMarathonMinutes
+                authViewModel.currentUser?.climbedMountains = climbedMountains
+                authViewModel.currentUser?.completedRaces = completedRaces
             }
             print("✅ Profile updated successfully")
         } catch {
@@ -415,6 +483,94 @@ struct EditProfileView: View {
                 throw error
             }
         }
+    }
+    
+    private func toggleMountain(_ mountainId: String) {
+        guard var mountains = authViewModel.currentUser?.climbedMountains else { return }
+        if mountains.contains(mountainId) {
+            mountains.removeAll { $0 == mountainId }
+        } else {
+            mountains.append(mountainId)
+        }
+        authViewModel.currentUser?.climbedMountains = mountains
+    }
+    
+    private func toggleRace(_ raceId: String) {
+        guard var races = authViewModel.currentUser?.completedRaces else { return }
+        if races.contains(raceId) {
+            races.removeAll { $0 == raceId }
+        } else {
+            races.append(raceId)
+        }
+        authViewModel.currentUser?.completedRaces = races
+    }
+}
+
+struct MountainSelectionCard: View {
+    let mountain: Mountain
+    let isSelected: Bool
+    let onToggle: () -> Void
+    let userId: String
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                NavigationLink(destination: MountainDetailView(mountain: mountain, isOwner: true, userId: userId)) {
+                    Image(mountain.imageName)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 140, height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                
+                Button(action: onToggle) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(isSelected ? .green : .white)
+                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+                .padding(12)
+            }
+            
+            Text(mountain.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black)
+        }
+        .frame(width: 140)
+    }
+}
+
+struct RaceSelectionCard: View {
+    let race: Race
+    let isSelected: Bool
+    let onToggle: () -> Void
+    let userId: String
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                NavigationLink(destination: RaceDetailView(race: race, isOwner: true, userId: userId)) {
+                    Image(race.imageName)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 140, height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                
+                Button(action: onToggle) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(isSelected ? .green : .white)
+                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+                .padding(12)
+            }
+            
+            Text(race.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black)
+        }
+        .frame(width: 140)
     }
 }
 

@@ -3,6 +3,7 @@ import MapKit
 import CoreLocation
 import Combine
 import UIKit
+import AppTrackingTransparency
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
@@ -15,7 +16,12 @@ struct StartSessionView: View {
             if sessionManager.hasActiveSession && !forceNewSession, let session = sessionManager.activeSession {
                 // Resume active session
                 if let activity = ActivityType(rawValue: session.activityType) {
-                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true, forceNewSession: $forceNewSession)
+                    if activity == .walking {
+                        // Show GymSessionView for gym sessions
+                        GymSessionView()
+                    } else {
+                        SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true, forceNewSession: $forceNewSession)
+                    }
                 } else {
                     // If activity type not found, show selection
                     SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
@@ -23,7 +29,12 @@ struct StartSessionView: View {
             } else if showActivitySelection {
                 SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
             } else if let activity = selectedActivityType {
-                SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession)
+                // Check if gym session
+                if activity == .walking {
+                    GymSessionView()
+                } else {
+                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession)
+                }
             } else {
                 // Empty view as fallback
                 EmptyView()
@@ -51,7 +62,7 @@ struct StartSessionView: View {
 enum ActivityType: String, CaseIterable {
     case running = "Löppass"
     case golf = "Golfrunda"
-    case walking = "Promenad"
+    case walking = "Gympass"
     case hiking = "Bestiga berg"
     case skiing = "Skidåkning"
     
@@ -60,13 +71,28 @@ enum ActivityType: String, CaseIterable {
         case .running:
             return "figure.run"
         case .golf:
-            return "flag.fill"
+            return "figure.golf"
         case .walking:
-            return "figure.walk"
+            return "figure.strengthtraining.traditional"
         case .hiking:
             return "mountain.2.fill"
         case .skiing:
             return "snowflake"
+        }
+    }
+    
+    var buttonText: String {
+        switch self {
+        case .running:
+            return "Starta löppass"
+        case .golf:
+            return "Starta golfrunda"
+        case .walking:
+            return "Starta gympass"
+        case .hiking:
+            return "Starta bergsbestigning"
+        case .skiing:
+            return "Starta skidpass"
         }
     }
 }
@@ -76,7 +102,7 @@ struct SelectActivityView: View {
     @Binding var selectedActivity: ActivityType?
     @Environment(\.dismiss) var dismiss
     
-    let activities: [ActivityType] = [.running, .golf, .walking, .hiking, .skiing]
+    let activities: [ActivityType] = [.running, .walking, .golf, .hiking, .skiing]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -96,7 +122,7 @@ struct SelectActivityView: View {
             .padding(.top, 50)
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
-            .background(AppColors.brandBlue.opacity(0.8))
+            .background(Color.black)
             .rotationEffect(.degrees(-2))
             .padding(.bottom, 12)
             
@@ -121,7 +147,7 @@ struct SelectActivityView: View {
                                 Text(activity.rawValue)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(.black)
-                                Text("Starta ett nytt pass")
+                                Text(activity.buttonText)
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
@@ -187,6 +213,11 @@ struct SessionMapView: View {
     @State private var earnedPoints: Int = 0
     @State private var routeImage: UIImage?
     @State private var completedSplits: [WorkoutSplit] = []
+    @State private var lastRegionUpdate: Date = Date()
+    @State private var routeCoordinatesSnapshot: [CLLocationCoordinate2D] = []
+    @State private var lastPointsUpdate: Date = Date()
+    @State private var lastSnapshotSourceCount: Int = 0
+    private let maxRouteSnapshotPoints = 1500
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -195,15 +226,13 @@ struct SessionMapView: View {
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
                 .overlay(
-                    // Route visualization - simple and smooth
+                    // Route visualization - optimized with snapshot
                     GeometryReader { geometry in
                         Path { path in
-                            guard locationManager.routeCoordinates.count > 1 else { return }
+                            guard routeCoordinatesSnapshot.count > 1 else { return }
                             
-                            // Convert coordinates to screen points using simple mercator projection
-                            for (index, coordinate) in locationManager.routeCoordinates.enumerated() {
+                            for (index, coordinate) in routeCoordinatesSnapshot.enumerated() {
                                 let point = convertToMapPoint(coordinate, in: geometry.size)
-                                
                                 if index == 0 {
                                     path.move(to: point)
                                 } else {
@@ -214,56 +243,78 @@ struct SessionMapView: View {
                         .stroke(.black, lineWidth: 4)
                     }
                 )
+                .onChange(of: locationManager.routeCoordinates.count) { _ in
+                    refreshRouteSnapshotIfNeeded()
+                }
+                .onReceive(locationManager.$routeCoordinates) { coords in
+                    if coords.isEmpty {
+                        routeCoordinatesSnapshot = []
+                        lastSnapshotSourceCount = 0
+                    } else if routeCoordinatesSnapshot.isEmpty {
+                        refreshRouteSnapshot(force: true)
+                    }
+                }
                 .onAppear {
                     // Request location permission but DON'T start tracking yet
                     locationManager.requestLocationPermission()
-                    
-                    // If resuming a session, load saved data
                     if resumeSession, let session = sessionManager.activeSession {
-                        print("🔄 Resuming session with duration: \(session.accumulatedDuration)s, distance: \(session.accumulatedDistance) km")
-                        sessionDuration = session.accumulatedDuration
-                        sessionStartTime = session.startTime
-                        isPaused = session.isPaused
-                        isRunning = !session.isPaused
-                        
-                        // Set distance from saved session
-                        locationManager.distance = session.accumulatedDistance
-                        completedSplits = session.completedSplits
-                        
-                        // Restore skiing metrics if available
-                        if let elevationGain = session.elevationGain {
-                            locationManager.elevationGain = elevationGain
-                        }
-                        if let maxSpeed = session.maxSpeed {
-                            locationManager.maxSpeed = maxSpeed
-                        }
-                        
-                        // Set activity type for location manager
-                        locationManager.setActivityType(session.activityType)
-                        
-                        // Calculate earned points for the current distance
-                        updateEarnedPoints()
-                        
-                        // Resume tracking if session was running (preserve existing data)
-                        if !session.isPaused {
-                            sessionManager.beginSession()
-                            locationManager.startTracking(preserveData: true, activityType: session.activityType)
-                            startTimer()
-                        }
-                // Ensure we are in resume mode
-                forceNewSession = false
-                        
-                        // Load route coordinates if available
-                        if !session.routeCoordinates.isEmpty {
-                            locationManager.routeCoordinates = session.routeCoordinates.map { coord in
-                                CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)
+                        Task { @MainActor in
+                            await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
+                            print("🔄 Resuming session with duration: \(session.accumulatedDuration)s, distance: \(session.accumulatedDistance) km")
+                            sessionDuration = session.accumulatedDuration
+                            sessionStartTime = session.startTime
+                            isPaused = session.isPaused
+                            isRunning = !session.isPaused
+
+                            // Set distance from saved session
+                            locationManager.distance = session.accumulatedDistance
+                            completedSplits = session.completedSplits
+
+                            // Restore skiing metrics if available
+                            if let elevationGain = session.elevationGain {
+                                locationManager.elevationGain = elevationGain
+                            }
+                            if let maxSpeed = session.maxSpeed {
+                                locationManager.maxSpeed = maxSpeed
+                            }
+
+                            // Set activity type for location manager
+                            locationManager.setActivityType(session.activityType)
+
+                            // Calculate earned points for the current distance
+                            updateEarnedPoints()
+
+                            // Resume tracking if session was running (preserve existing data)
+                            if !session.isPaused {
+                                sessionManager.beginSession()
+                                locationManager.startTracking(preserveData: true, activityType: session.activityType)
+                                startTimer()
+                            }
+
+                            // Ensure we are in resume mode
+                            forceNewSession = false
+
+                            // Load route coordinates if available
+                            if !session.routeCoordinates.isEmpty {
+                                locationManager.routeCoordinates = session.routeCoordinates.map { coord in
+                                    CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)
+                                }
+                                refreshRouteSnapshot(force: true)
                             }
                         }
+                    } else {
+                        // Initialize snapshot for new sessions
+                        refreshRouteSnapshot(force: true)
                     }
                 }
                 .onReceive(locationManager.$userLocation) { newLocation in
+                    // Throttle region updates to every 2 seconds
                     if let location = newLocation {
-                        region.center = location
+                        let now = Date()
+                        if now.timeIntervalSince(lastRegionUpdate) >= 2.0 {
+                            region.center = location
+                            lastRegionUpdate = now
+                        }
                     }
                 }
 
@@ -370,14 +421,17 @@ struct SessionMapView: View {
                         // Paused state - show Continue and End buttons
                         VStack(spacing: 12) {
                             Button(action: {
-                                // Resume tracking (preserve existing data)
-                                isSessionEnding = false  // Reset flag when resuming
-                                print("✅ Resuming session - isSessionEnding = false")
-                                sessionManager.beginSession()
-                                locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
-                                startTimer()
-                                isPaused = false
-                                isRunning = true
+                                Task { @MainActor in
+                                    await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
+                                    // Resume tracking (preserve existing data)
+                                    isSessionEnding = false  // Reset flag when resuming
+                                    print("✅ Resuming session - isSessionEnding = false")
+                                    sessionManager.beginSession()
+                                    locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
+                                    startTimer()
+                                    isPaused = false
+                                    isRunning = true
+                                }
                             }) {
                                 Text("Fortsätt")
                                     .font(.system(size: 16, weight: .black))
@@ -410,33 +464,36 @@ struct SessionMapView: View {
                                 isRunning = false
                                 isPaused = true
                             } else {
-                                // Start tracking when user presses button for new session
-                                if !isRunning {
-                                    // Reset the ending flag for new session
-                                    isSessionEnding = false
-                                    print("✅ Starting new session - isSessionEnding = false")
-                                    sessionManager.beginSession()
-                                    // Reset all session-local state so we start fresh
-                                    sessionDuration = 0
-                                    sessionStartTime = nil
-                                    currentPace = "0:00"
-                                    completedSplits = []
-                                    earnedPoints = 0
-                                    isPaused = false
-                                    // Reset location-based metrics
-                                    locationManager.distance = 0
-                                    locationManager.elevationGain = 0
-                                    locationManager.maxSpeed = 0
-                                    locationManager.routeCoordinates = []
-                                    locationManager.startNewTracking(activityType: activity.rawValue)
-                                    // Lock StartSessionView into new-session mode
-                                    forceNewSession = true
+                                Task { @MainActor in
+                                    await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
+                                    // Start tracking when user presses button for new session
+                                    if !isRunning {
+                                        // Reset the ending flag for new session
+                                        isSessionEnding = false
+                                        print("✅ Starting new session - isSessionEnding = false")
+                                        sessionManager.beginSession()
+                                        // Reset all session-local state so we start fresh
+                                        sessionDuration = 0
+                                        sessionStartTime = nil
+                                        currentPace = "0:00"
+                                        completedSplits = []
+                                        earnedPoints = 0
+                                        isPaused = false
+                                        // Reset location-based metrics
+                                        locationManager.distance = 0
+                                        locationManager.elevationGain = 0
+                                        locationManager.maxSpeed = 0
+                                        locationManager.routeCoordinates = []
+                                        locationManager.startNewTracking(activityType: activity.rawValue)
+                                        // Lock StartSessionView into new-session mode
+                                        forceNewSession = true
+                                        startTimer()
+                                        isRunning = true
+                                    }
                                 }
-                                startTimer()
-                                isRunning = true
                             }
                         }) {
-                            Text(isRunning ? "Pausa" : "Starta löpning")
+                            Text(isRunning ? "Pausa" : activity.buttonText)
                                 .font(.system(size: 16, weight: .black))
                                 .frame(maxWidth: .infinity)
                                 .padding(14)
@@ -520,6 +577,7 @@ struct SessionMapView: View {
                 elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
                 maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
                 completedSplits: completedSplits,
+                gymExercises: nil,  // No gym exercises for regular workouts
                 isPresented: $showSessionComplete,
                 onComplete: {
                     print("💾 Workout saved - finalizing session now")
@@ -551,10 +609,17 @@ struct SessionMapView: View {
             return
         }
         
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [self] _ in
             sessionDuration += 1
             updatePace()
-            updateEarnedPoints()
+            
+            // Update points less frequently (every 5 seconds)
+            let now = Date()
+            if now.timeIntervalSince(lastPointsUpdate) >= 5.0 {
+                updateEarnedPoints()
+                lastPointsUpdate = now
+            }
+            
             updateSplitsIfNeeded()
         }
     }
@@ -569,6 +634,73 @@ struct SessionMapView: View {
         } else {
             earnedPoints = basePoints
         }
+    }
+    
+    private func refreshRouteSnapshotIfNeeded(force: Bool = false) {
+        let sourceCount = locationManager.routeCoordinates.count
+        if force {
+            refreshRouteSnapshot(force: true)
+            return
+        }
+        
+        guard sourceCount > 0 else {
+            routeCoordinatesSnapshot = []
+            lastSnapshotSourceCount = 0
+            return
+        }
+        
+        // Refresh when new points were added or removed
+        if sourceCount - lastSnapshotSourceCount >= 10 || sourceCount < lastSnapshotSourceCount {
+            refreshRouteSnapshot(force: true)
+        }
+    }
+    
+    private func refreshRouteSnapshot(force: Bool) {
+        let coordinates = locationManager.routeCoordinates
+        
+        guard !coordinates.isEmpty else {
+            routeCoordinatesSnapshot = []
+            lastSnapshotSourceCount = 0
+            return
+        }
+        
+        let sourceCount = coordinates.count
+        lastSnapshotSourceCount = sourceCount
+        
+        Task.detached(priority: .userInitiated) {
+            let simplified = simplifyRoute(coordinates, targetCount: maxRouteSnapshotPoints)
+            await MainActor.run {
+                if lastSnapshotSourceCount == sourceCount {
+                    routeCoordinatesSnapshot = simplified
+                }
+            }
+        }
+    }
+    
+    private func simplifyRoute(_ coordinates: [CLLocationCoordinate2D], targetCount: Int) -> [CLLocationCoordinate2D] {
+        guard coordinates.count > targetCount, targetCount > 0 else {
+            return coordinates
+        }
+        
+        let step = max(1, coordinates.count / targetCount)
+        var simplified: [CLLocationCoordinate2D] = []
+        simplified.reserveCapacity(min(coordinates.count, targetCount + 2))
+        
+        for (index, coordinate) in coordinates.enumerated() where index % step == 0 {
+            simplified.append(coordinate)
+        }
+        
+        if let last = coordinates.last {
+            if let currentLast = simplified.last {
+                if currentLast.latitude != last.latitude || currentLast.longitude != last.longitude {
+                    simplified.append(last)
+                }
+            } else {
+                simplified.append(last)
+            }
+        }
+        
+        return simplified
     }
     
     func updateSplitsIfNeeded() {
@@ -750,6 +882,21 @@ struct SessionMapView: View {
         let y = (centerLat - coordinate.latitude) * pixelsPerDegreeLat + size.height / 2
         
         return CGPoint(x: x, y: y)
+    }
+}
+
+enum TrackingPermissionManager {
+    @MainActor
+    static func requestTrackingAuthorizationIfNeeded() async {
+        guard #available(iOS 14.0, *) else { return }
+        let status = ATTrackingManager.trackingAuthorizationStatus
+        guard status == .notDetermined else { return }
+        await withCheckedContinuation { continuation in
+            ATTrackingManager.requestTrackingAuthorization { newStatus in
+                print("📣 ATT authorization status: \(newStatus.rawValue)")
+                continuation.resume(returning: ())
+            }
+        }
     }
 }
 
