@@ -27,6 +27,9 @@ struct SessionCompleteView: View {
     @State private var shouldSaveTemplate = false
     @State private var showSaveTemplateSheet = false
     @State private var templateName: String = ""
+    @State private var showSaveSuccess = false
+    @State private var successScale: CGFloat = 0.7
+    @State private var successOpacity: Double = 0.0
     
     // Calculate PRO points (1.5x boost)
     private var proPoints: Int {
@@ -258,6 +261,29 @@ struct SessionCompleteView: View {
                     .padding(40)
                 }
             }
+            
+            if showSaveSuccess {
+                VStack {
+                    Spacer()
+                    Text("Du är gryym!")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: Color.black.opacity(0.15), radius: 18, x: 0, y: 10)
+                        )
+                        .scaleEffect(successScale)
+                        .opacity(successOpacity)
+                        .transition(.scale.combined(with: .opacity))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.0001)) // capture taps
+                .allowsHitTesting(false)
+            }
         }
         .sheet(isPresented: $showSaveTemplateSheet, onDismiss: {
             if templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -388,10 +414,9 @@ struct SessionCompleteView: View {
                 
                 await MainActor.run {
                     isSaving = false
-                    isPresented = false
                     shouldSaveTemplate = false
                     templateName = ""
-                    onComplete()
+                    triggerSaveSuccessAnimation()
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")
@@ -424,6 +449,29 @@ struct SessionCompleteView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return "gymPoints_\(formatter.string(from: date))"
+    }
+    
+    private func triggerSaveSuccessAnimation() {
+        showSaveSuccess = true
+        successScale = 0.7
+        successOpacity = 0.0
+        
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.65, blendDuration: 0.2)) {
+            successScale = 1.0
+            successOpacity = 1.0
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                successOpacity = 0.0
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            showSaveSuccess = false
+            isPresented = false
+            onComplete()
+        }
     }
 }
 

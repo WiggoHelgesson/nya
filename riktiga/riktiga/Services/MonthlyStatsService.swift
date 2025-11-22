@@ -5,6 +5,7 @@ class MonthlyStatsService {
     static let shared = MonthlyStatsService()
     private let supabase = SupabaseConfig.supabase
     private let cache = AppCacheManager.shared
+    private let stepsCache = NSCache<NSString, NSNumber>()
     
     private init() {}
     
@@ -32,11 +33,11 @@ class MonthlyStatsService {
         }
     }
 
-    func fetchTopMonthlyUsers(limit: Int = 20) async throws -> [MonthlyUser] {
+    func fetchTopMonthlyUsers(limit: Int = 20, forceRemote: Bool = false) async throws -> [MonthlyUser] {
         do {
             print("🔄 Fetching top monthly users by steps")
             let monthKey = Self.currentMonthKey()
-            if let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
+            if !forceRemote, let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
                 print("✅ Using cached monthly leaderboard (\(cached.count) entries)")
                 return Array(cached.prefix(limit))
             }
@@ -68,6 +69,32 @@ class MonthlyStatsService {
                 return Array(cached.prefix(limit))
             }
             throw error
+        }
+    }
+    
+    func fetchMonthlySteps(for userId: String) async -> Int {
+        let monthKey = Self.currentMonthKey()
+        let cacheKey = "\(userId)_\(monthKey)" as NSString
+        if let cached = stepsCache.object(forKey: cacheKey) {
+            return cached.intValue
+        }
+        
+        struct Row: Decodable { let steps: Int }
+        do {
+            let rows: [Row] = try await supabase
+                .from("monthly_steps")
+                .select("steps")
+                .eq("user_id", value: userId)
+                .eq("month", value: monthKey)
+                .limit(1)
+                .execute()
+                .value
+            let steps = rows.first?.steps ?? 0
+            stepsCache.setObject(NSNumber(value: steps), forKey: cacheKey)
+            return steps
+        } catch {
+            print("❌ Error fetching monthly steps for \(userId): \(error)")
+            return 0
         }
     }
     

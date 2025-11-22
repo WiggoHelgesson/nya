@@ -9,15 +9,15 @@ final class StepSyncService {
     private let stepsCache = NSCache<NSString, NSNumber>()
     private init() { }
     
-    private func currentWeekKey() -> String {
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        let year = components.yearForWeekOfYear ?? calendar.component(.year, from: Date())
-        let week = components.weekOfYear ?? calendar.component(.weekOfYear, from: Date())
+    static func currentWeekKey() -> String {
+        let components = shared.calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        let year = components.yearForWeekOfYear ?? shared.calendar.component(.year, from: Date())
+        let week = components.weekOfYear ?? shared.calendar.component(.weekOfYear, from: Date())
         return String(format: "%d-W%02d", year, week)
     }
     
     func syncCurrentUserWeeklySteps() async {
-        await withCheckedContinuation { continuation in
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             HealthKitManager.shared.getWeeklySteps { dailySteps in
                 let totalSteps = dailySteps.reduce(0) { $0 + $1.steps }
                 Task {
@@ -25,11 +25,11 @@ final class StepSyncService {
                     do {
                         let session = try await self.supabase.auth.session
                         let userId = session.user.id.uuidString
-                        let weekKey = self.currentWeekKey()
-                        struct Payload: Encodable { let user_id: String; let week_key: String; let steps: Int }
+                        let weekKey = Self.currentWeekKey()
+                        struct Payload: Encodable { let user_id: String; let week: String; let steps: Int }
                         try await self.supabase
                             .from("weekly_steps")
-                            .upsert(Payload(user_id: userId, week_key: weekKey, steps: totalSteps), onConflict: "user_id,week_key")
+                            .upsert(Payload(user_id: userId, week: weekKey, steps: totalSteps), onConflict: "user_id,week")
                             .execute()
                         print("✅ Synced weekly steps: \(totalSteps) for \(userId) week=\(weekKey)")
                         self.stepsCache.setObject(NSNumber(value: totalSteps), forKey: "\(userId)_\(weekKey)" as NSString)
@@ -42,7 +42,7 @@ final class StepSyncService {
     }
 
     func fetchWeeklySteps(for userId: String) async -> Int {
-        let weekKey = currentWeekKey()
+        let weekKey = Self.currentWeekKey()
         let cacheKey = "\(userId)_\(weekKey)" as NSString
         if let cached = stepsCache.object(forKey: cacheKey) {
             return cached.intValue
@@ -54,7 +54,7 @@ final class StepSyncService {
                 .from("weekly_steps")
                 .select("steps")
                 .eq("user_id", value: userId)
-                .eq("week_key", value: weekKey)
+                .eq("week", value: weekKey)
                 .limit(1)
                 .execute()
                 .value

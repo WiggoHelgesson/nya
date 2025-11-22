@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import UIKit
 
 class HealthKitManager {
     static let shared = HealthKitManager()
@@ -8,22 +9,63 @@ class HealthKitManager {
     private let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
     private let flightsType = HKQuantityType.quantityType(forIdentifier: .flightsClimbed)!
     
-    private init() {
-        // Request authorization for step count
+    private init() {}
+    
+    func requestAuthorization(completion: ((Bool) -> Void)? = nil) {
         let typesToRead: Set<HKObjectType> = [stepsType, flightsType]
         
         guard HKHealthStore.isHealthDataAvailable() else {
             print("ℹ️ Health data is not available on this device")
+            completion?(false)
             return
         }
         
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
-            if success {
-                print("✅ HealthKit authorization granted")
-            } else {
-                print("❌ HealthKit authorization denied: \(error?.localizedDescription ?? "unknown error")")
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { _, error in
+            // Defer status check slightly to allow HealthKit to update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                let authorized = self.isHealthDataAuthorized()
+                
+                if authorized {
+                    print("✅ HealthKit authorization granted for required types")
+                } else if let error = error {
+                    print("❌ HealthKit authorization failed: \(error.localizedDescription)")
+                } else {
+                    let stepsStatus = self.healthStore.authorizationStatus(for: self.stepsType)
+                    let flightsStatus = self.healthStore.authorizationStatus(for: self.flightsType)
+                    print("⚠️ HealthKit authorization incomplete – steps status: \(stepsStatus.rawValue), flights status: \(flightsStatus.rawValue)")
+                }
+                
+                completion?(authorized)
             }
         }
+    }
+    
+    func handleManageAuthorizationButton() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let status = healthStore.authorizationStatus(for: stepsType)
+        
+        switch status {
+        case .notDetermined:
+            DispatchQueue.main.async {
+                self.requestAuthorization()
+            }
+        case .sharingAuthorized, .sharingDenied:
+            DispatchQueue.main.async {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            DispatchQueue.main.async {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+        }
+    }
+    
+    func isHealthDataAuthorized() -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let stepsStatus = healthStore.authorizationStatus(for: stepsType)
+        return stepsStatus == .sharingAuthorized
     }
     
     func getWeeklySteps(completion: @escaping ([DailySteps]) -> Void) {

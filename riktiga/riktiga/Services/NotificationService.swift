@@ -1,32 +1,74 @@
 import Foundation
 import Supabase
 
-class NotificationService {
+@MainActor
+final class NotificationService {
     static let shared = NotificationService()
     private let supabase = SupabaseConfig.supabase
     
     private init() {}
     
-    // MARK: - Fetch Notifications
-    func getNotifications(userId: String) async throws -> [AppNotification] {
-        do {
-            let notifications: [AppNotification] = try await supabase
-                .from("notifications")
-                .select()
-                .eq("user_id", value: userId)
-                .order("created_at", ascending: false)
-                .execute()
-                .value
-            
-            print("✅ Fetched \(notifications.count) notifications for user \(userId)")
-            return notifications
-        } catch {
-            print("❌ Error fetching notifications: \(error)")
-            throw error
-        }
+    /// Fetch notifications for the current user
+    func fetchNotifications(userId: String) async throws -> [AppNotification] {
+        print("🔔 Fetching notifications for user: \(userId)")
+        
+        let notifications: [AppNotification] = try await supabase
+            .from("notifications")
+            .select("*")
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(50)
+            .execute()
+            .value
+        
+        print("✅ Fetched \(notifications.count) notifications")
+        
+        return notifications
     }
     
-    // MARK: - Create Like Notification
+    /// Get count of unread notifications
+    func fetchUnreadCount(userId: String) async throws -> Int {
+        struct CountResponse: Decodable {
+            let count: Int
+        }
+        
+        let response: PostgrestResponse<[AppNotification]> = try await supabase
+            .from("notifications")
+            .select("*", count: .exact)
+            .eq("user_id", value: userId)
+            .eq("is_read", value: false)
+            .execute()
+        
+        let count = response.count ?? 0
+        print("🔔 Unread notifications: \(count)")
+        
+        return count
+    }
+    
+    /// Mark a notification as read
+    func markAsRead(notificationId: String) async throws {
+        try await supabase
+            .from("notifications")
+            .update(["is_read": true])
+            .eq("id", value: notificationId)
+            .execute()
+        
+        print("✅ Marked notification as read: \(notificationId)")
+    }
+    
+    /// Mark all notifications as read
+    func markAllAsRead(userId: String) async throws {
+        try await supabase
+            .from("notifications")
+            .update(["is_read": true])
+            .eq("user_id", value: userId)
+            .eq("is_read", value: false)
+            .execute()
+        
+        print("✅ Marked all notifications as read")
+    }
+    
+    /// Create a like notification
     func createLikeNotification(
         userId: String,
         likedByUserId: String,
@@ -35,35 +77,33 @@ class NotificationService {
         postId: String,
         postTitle: String
     ) async throws {
-        let notification = [
-            "user_id": AnyEncodable(userId),
-            "triggered_by_user_id": AnyEncodable(likedByUserId),
-            "triggered_by_user_name": AnyEncodable(likedByUserName),
-            "triggered_by_user_avatar": AnyEncodable(likedByUserAvatar),
-            "actor_id": AnyEncodable(likedByUserId),
-            "actor_username": AnyEncodable(likedByUserName),
-            "type": AnyEncodable("like"),
-            "post_id": AnyEncodable(postId),
-            "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
-            "is_read": AnyEncodable(false)
-        ]
-        
-        do {
-            try await supabase
-                .from("notifications")
-                .insert(notification)
-                .execute()
-            print("✅ Like notification created")
-            
-            // Send push notification
-            NotificationManager.shared.sendLikeNotification(fromUserName: likedByUserName, postTitle: postTitle)
-        } catch {
-            print("❌ Error creating like notification: \(error)")
-            throw error
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
+            let post_id: String
         }
+        
+        let payload = Payload(
+            user_id: userId,
+            actor_id: likedByUserId,
+            actor_username: likedByUserName,
+            actor_avatar_url: likedByUserAvatar,
+            type: "like",
+            post_id: postId
+        )
+        
+        try await supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+        
+        print("✅ Created like notification")
     }
     
-    // MARK: - Create Comment Notification
+    /// Create a comment notification
     func createCommentNotification(
         userId: String,
         commentedByUserId: String,
@@ -73,140 +113,69 @@ class NotificationService {
         postTitle: String,
         commentText: String
     ) async throws {
-        let notification = [
-            "user_id": AnyEncodable(userId),
-            "triggered_by_user_id": AnyEncodable(commentedByUserId),
-            "triggered_by_user_name": AnyEncodable(commentedByUserName),
-            "triggered_by_user_avatar": AnyEncodable(commentedByUserAvatar),
-            "actor_id": AnyEncodable(commentedByUserId),
-            "actor_username": AnyEncodable(commentedByUserName),
-            "type": AnyEncodable("comment"),
-            "post_id": AnyEncodable(postId),
-            "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
-            "is_read": AnyEncodable(false)
-        ]
-        
-        do {
-            try await supabase
-                .from("notifications")
-                .insert(notification)
-                .execute()
-            print("✅ Comment notification created")
-            
-            // Send push notification
-            NotificationManager.shared.sendCommentNotification(fromUserName: commentedByUserName, commentText: commentText)
-        } catch {
-            print("❌ Error creating comment notification: \(error)")
-            throw error
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
+            let post_id: String
+            let comment_text: String
         }
+        
+        let payload = Payload(
+            user_id: userId,
+            actor_id: commentedByUserId,
+            actor_username: commentedByUserName,
+            actor_avatar_url: commentedByUserAvatar,
+            type: "comment",
+            post_id: postId,
+            comment_text: String(commentText.prefix(100)) // Limit length
+        )
+        
+        try await supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+        
+        print("✅ Created comment notification")
     }
     
-    // MARK: - Create Follow Notification
+    /// Create a follow notification
     func createFollowNotification(
         userId: String,
         followedByUserId: String,
         followedByUserName: String,
         followedByUserAvatar: String?
     ) async throws {
-        // Remove any existing follow notification from the same actor to prevent duplicates
-        do {
-            try await supabase
-                .from("notifications")
-                .delete()
-                .eq("user_id", value: userId)
-                .eq("actor_id", value: followedByUserId)
-                .eq("type", value: "follow")
-                .execute()
-        } catch {
-            print("⚠️ Failed to clear existing follow notification: \(error)")
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
         }
         
-        let notification = [
-            "user_id": AnyEncodable(userId),
-            "triggered_by_user_id": AnyEncodable(followedByUserId),
-            "triggered_by_user_name": AnyEncodable(followedByUserName),
-            "triggered_by_user_avatar": AnyEncodable(followedByUserAvatar),
-            "actor_id": AnyEncodable(followedByUserId),
-            "actor_username": AnyEncodable(followedByUserName),
-            "type": AnyEncodable("follow"),
-            "post_id": AnyEncodable(NSNull()),
-            "created_at": AnyEncodable(ISO8601DateFormatter().string(from: Date())),
-            "is_read": AnyEncodable(false)
-        ]
+        let payload = Payload(
+            user_id: userId,
+            actor_id: followedByUserId,
+            actor_username: followedByUserName,
+            actor_avatar_url: followedByUserAvatar,
+            type: "follow"
+        )
         
-        do {
-            try await supabase
-                .from("notifications")
-                .insert(notification)
-                .execute()
-            print("✅ Follow notification created")
-            
-            // Send push notification
-            NotificationManager.shared.sendFollowNotification(fromUserName: followedByUserName)
-        } catch {
-            print("❌ Error creating follow notification: \(error)")
-            throw error
-        }
+        try await supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+        
+        print("✅ Created follow notification")
     }
-    
-    // MARK: - Mark as Read
-    func markAsRead(notificationId: String) async throws {
-        do {
-            try await supabase
-                .from("notifications")
-                .update(["is_read": AnyEncodable(true)])
-                .eq("id", value: notificationId)
-                .execute()
-            print("✅ Notification marked as read")
-        } catch {
-            print("❌ Error marking notification as read: \(error)")
-            throw error
-        }
-    }
-    
-    // MARK: - Delete Notification
-    func deleteNotification(notificationId: String) async throws {
-        do {
-            try await supabase
-                .from("notifications")
-                .delete()
-                .eq("id", value: notificationId)
-                .execute()
-            print("✅ Notification deleted")
-        } catch {
-            print("❌ Error deleting notification: \(error)")
-            throw error
-        }
-    }
-    
-    // MARK: - Unread Count
-    func getUnreadCount(userId: String) async throws -> Int {
-        do {
-            let response = try await supabase
-                .from("notifications")
-                .select("id", count: .exact)
-                .eq("user_id", value: userId)
-                .eq("is_read", value: false)
-                .execute()
-            return response.count ?? 0
-        } catch {
-            print("❌ Error fetching unread notification count: \(error)")
-            throw error
-        }
-    }
-    
-    func markAllAsRead(userId: String) async throws {
-        do {
-            try await supabase
-                .from("notifications")
-                .update(["is_read": AnyEncodable(true)])
-                .eq("user_id", value: userId)
-                .eq("is_read", value: false)
-                .execute()
-            print("✅ Marked all notifications as read for user \(userId)")
-        } catch {
-            print("❌ Error marking all notifications as read: \(error)")
-            throw error
-        }
-    }
+}
+
+
+extension Notification.Name {
+    static let profileStatsUpdated = Notification.Name("profileStatsUpdated")
+    static let profileImageUpdated = Notification.Name("profileImageUpdated")
+    static let savedGymWorkoutCreated = Notification.Name("SavedGymWorkoutCreated")
 }

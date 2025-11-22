@@ -15,6 +15,7 @@ class SessionManager: ObservableObject {
         var completedSplits: [WorkoutSplit] = []
         let elevationGain: Double?
         let maxSpeed: Double?
+        let gymExercises: [GymExercise]?
         
         struct LocationCoordinate: Codable {
             let latitude: Double
@@ -30,7 +31,8 @@ class SessionManager: ObservableObject {
              routeCoordinates: [LocationCoordinate],
              completedSplits: [WorkoutSplit] = [],
              elevationGain: Double? = nil,
-             maxSpeed: Double? = nil) {
+             maxSpeed: Double? = nil,
+             gymExercises: [GymExercise]? = nil) {
             self.activityType = activityType
             self.startTime = startTime
             self.isPaused = isPaused
@@ -40,6 +42,7 @@ class SessionManager: ObservableObject {
             self.completedSplits = completedSplits
             self.elevationGain = elevationGain
             self.maxSpeed = maxSpeed
+            self.gymExercises = gymExercises
         }
     }
     
@@ -74,7 +77,8 @@ class SessionManager: ObservableObject {
                            routeCoordinates: [CLLocationCoordinate2D],
                            completedSplits: [WorkoutSplit],
                            elevationGain: Double? = nil,
-                           maxSpeed: Double? = nil) {
+                           maxSpeed: Double? = nil,
+                           gymExercises: [GymExercise]? = nil) {
         // Ignore saves if session is finalized
         guard acceptsSaves else {
             print("⏭️ saveActiveSession ignored (acceptsSaves=false)")
@@ -96,7 +100,8 @@ class SessionManager: ObservableObject {
                 },
                 completedSplits: completedSplits,
                 elevationGain: elevationGain,
-                maxSpeed: maxSpeed
+                maxSpeed: maxSpeed,
+                gymExercises: gymExercises
             )
             
             // Save to UserDefaults

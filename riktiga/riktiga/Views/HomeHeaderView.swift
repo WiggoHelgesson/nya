@@ -74,6 +74,7 @@ struct HomeHeaderView: View {
         }
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
+                .environmentObject(authViewModel)
         }
         .task {
             await refreshUnreadCount()
@@ -88,7 +89,7 @@ struct HomeHeaderView: View {
         }
         isFetchingUnread = true
         do {
-            let count = try await NotificationService.shared.getUnreadCount(userId: userId)
+            let count = try await NotificationService.shared.fetchUnreadCount(userId: userId)
             await MainActor.run {
                 unreadNotifications = count
             }

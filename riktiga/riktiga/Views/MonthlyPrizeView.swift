@@ -2,11 +2,14 @@ import SwiftUI
 import UIKit
 
 struct MonthlyPrizeView: View {
+    @EnvironmentObject private var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
     @State private var topUsers: [MonthlyUser] = []
     @State private var isLoading = false
     @State private var countdownText: String = ""
     @State private var countdownTimer: Timer?
+    @State private var autoRefreshTask: Task<Void, Never>?
+    private let leaderboardRefreshInterval: UInt64 = 45 * 1_000_000_000
     
     var body: some View {
         NavigationStack {
@@ -74,10 +77,16 @@ struct MonthlyPrizeView: View {
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
-                                    MonthlyUserRow(
-                                        rank: index + 1,
-                                        user: user
-                                    )
+                                    NavigationLink {
+                                        UserProfileView(userId: user.id)
+                                            .environmentObject(authViewModel)
+                                    } label: {
+                                        MonthlyUserRow(
+                                            rank: index + 1,
+                                            user: user
+                                        )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
                                     if index < topUsers.count - 1 {
                                         Divider()
                                             .padding(.leading, 60)
@@ -108,34 +117,67 @@ struct MonthlyPrizeView: View {
             .onAppear {
                 loadMonthlyStats()
                 startCountdown()
+                startAutoRefresh()
             }
             .onDisappear {
                 countdownTimer?.invalidate()
                 countdownTimer = nil
+                stopAutoRefresh()
             }
         }
     }
     
     private func loadMonthlyStats() {
-        isLoading = true
-        if let cached = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
+        let monthKey = MonthlyStatsService.currentMonthKey()
+        if let cached = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: monthKey) {
             self.topUsers = cached
-            self.isLoading = false
+            self.isLoading = cached.isEmpty
+        } else {
+            self.isLoading = true
         }
         Task {
-            do {
-                await MonthlyStatsService.shared.syncCurrentUserMonthlySteps()
-                topUsers = try await MonthlyStatsService.shared.fetchTopMonthlyUsers(limit: 20)
-                isLoading = false
-            } catch {
-                print("❌ Error loading monthly stats: \(error)")
-                if topUsers.isEmpty,
-                   let fallback = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
-                    topUsers = fallback
-                }
-                isLoading = false
+            await refreshLeaderboard(showLoadingState: topUsers.isEmpty)
+        }
+    }
+
+    private func refreshLeaderboard(showLoadingState: Bool = false) async {
+        if showLoadingState {
+            await MainActor.run {
+                self.isLoading = true
             }
         }
+        do {
+            await MonthlyStatsService.shared.syncCurrentUserMonthlySteps()
+            let latest = try await MonthlyStatsService.shared.fetchTopMonthlyUsers(limit: 20, forceRemote: true)
+            await MainActor.run {
+                self.topUsers = latest
+                self.isLoading = false
+            }
+        } catch {
+            print("❌ Error loading monthly stats: \(error)")
+            await MainActor.run {
+                if self.topUsers.isEmpty,
+                   let fallback = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
+                    self.topUsers = fallback
+                }
+                self.isLoading = false
+            }
+        }
+    }
+
+    private func startAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: leaderboardRefreshInterval)
+                await refreshLeaderboard()
+            }
+        }
+    }
+
+    private func stopAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
     }
 
     private func startCountdown() {
@@ -166,8 +208,7 @@ struct MonthlyPrizeView: View {
     }
 
     private func openHealthSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
+        HealthKitManager.shared.handleManageAuthorizationButton()
     }
 }
 
@@ -196,7 +237,7 @@ struct MonthlyUserRow: View {
             // Rank number
             Text("\(rank)")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(rank == 1 ? Color(red: 0.95, green: 0.75, blue: 0.18) : .black)
                 .frame(width: 30)
             
             // Profile picture
@@ -237,7 +278,10 @@ struct MonthlyUserRow: View {
             Text("\(user.steps) steg")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.black)
-                .frame(width: 100, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .fixedSize()
+                .multilineTextAlignment(.trailing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -246,5 +290,6 @@ struct MonthlyUserRow: View {
 
 #Preview {
     MonthlyPrizeView()
+        .environmentObject(AuthViewModel())
 }
 

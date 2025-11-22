@@ -12,6 +12,7 @@
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
+		8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8631B5092ECA305300EBACD6 /* OpenAISwift */; };
 		86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269AE2EAA5E2D00A4EC93 /* Auth */; };
 		86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B02EAA5E2D00A4EC93 /* Functions */; };
 		86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B22EAA5E2D00A4EC93 /* PostgREST */; };
@@ -24,6 +25,7 @@
 		860308202EAE82D00023EA7B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		86030F342EB75F430023EA7B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseImageLoader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -54,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */,
 				86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */,
 				86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */,
 				86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */,
@@ -99,6 +102,7 @@
 		86B269B82EAA5E3900A4EC93 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */,
 				860308202EAE82D00023EA7B /* StoreKit.framework */,
 				86030F342EB75F430023EA7B /* WidgetKit.framework */,
 				86030F362EB75F430023EA7B /* SwiftUI.framework */,
@@ -135,6 +139,7 @@
 				86158EAC2EACDAA400064CAA /* ReceiptParser */,
 				86158EAE2EACDAA400064CAA /* RevenueCat */,
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
+				8631B5092ECA305300EBACD6 /* OpenAISwift */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -167,6 +172,7 @@
 			packageReferences = (
 				86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */,
+				8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -352,7 +358,8 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track your workouts and provide accurate distance measurements.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Appen behöver åtkomst till ditt bildbibliotek för att välja en profilbild.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi ber om tillstånd att spåra så att vi kan förbättra upplevelsen och hålla koll på dina aktiviteter.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -362,7 +369,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 53.0;
+				MARKETING_VERSION = 60.5;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -427,7 +434,8 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track your workouts and provide accurate distance measurements.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Denna app behöver tillgång till fotobiblioteket för att välja bilder till dina träningspass.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Appen behöver åtkomst till ditt bildbibliotek för att välja en profilbild.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi ber om tillstånd att spåra så att vi kan förbättra upplevelsen och hålla koll på dina aktiviteter.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -437,7 +445,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 53.0;
+				MARKETING_VERSION = 60.5;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -503,6 +511,14 @@
 				minimumVersion = 5.45.0;
 			};
 		};
+		8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/adamrushy/openaiSwift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.1;
+			};
+		};
 		86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -528,6 +544,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */;
 			productName = RevenueCatUI;
+		};
+		8631B5092ECA305300EBACD6 /* OpenAISwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */;
+			productName = OpenAISwift;
 		};
 		86B269AE2EAA5E2D00A4EC93 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;

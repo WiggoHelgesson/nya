@@ -6,6 +6,7 @@ class GymSessionViewModel: ObservableObject {
     @Published var exercises: [GymExercise] = []
     @Published var formattedDuration: String = "00:00"
     @Published var sessionData: GymSessionData?
+    @Published private(set) var elapsedSeconds: Int = 0
     @Published var savedWorkouts: [SavedGymWorkout] = []
     @Published var isLoadingSavedWorkouts = false
     
@@ -25,11 +26,24 @@ class GymSessionViewModel: ObservableObject {
         return "\(text) kg"
     }
     
-    private var startTime: Date = Date()
+    private var startTime: Date?
     private var timer: Timer?
     
-    func startTimer() {
-        startTime = Date()
+    var sessionStartTime: Date? {
+        startTime
+    }
+
+    func startTimer(startTime: Date? = nil) {
+        if let startTime = startTime {
+            self.startTime = startTime
+        } else if self.startTime == nil {
+            self.startTime = Date()
+        }
+
+        timer?.invalidate()
+
+        updateDuration()
+
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateDuration()
         }
@@ -40,11 +54,33 @@ class GymSessionViewModel: ObservableObject {
         timer = nil
     }
     
+    func resetSession() {
+        stopTimer()
+        exercises = []
+        startTime = nil
+        elapsedSeconds = 0
+        formattedDuration = "00:00"
+        sessionData = nil
+    }
+
     private func updateDuration() {
-        let elapsed = Int(Date().timeIntervalSince(startTime))
+        guard let startTime else {
+            elapsedSeconds = 0
+            formattedDuration = "00:00"
+            return
+        }
+
+        let elapsed = max(0, Int(Date().timeIntervalSince(startTime)))
+        elapsedSeconds = elapsed
         let minutes = elapsed / 60
         let seconds = elapsed % 60
         formattedDuration = String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    func restoreSession(exercises: [GymExercise], startTime: Date) {
+        self.exercises = exercises
+        self.startTime = startTime
+        updateDuration()
     }
     
     func loadSavedWorkouts(userId: String) async {

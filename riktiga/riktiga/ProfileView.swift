@@ -1,11 +1,6 @@
 import SwiftUI
 import Combine
 
-extension Notification.Name {
-    static let profileStatsUpdated = Notification.Name("profileStatsUpdated")
-    static let profileImageUpdated = Notification.Name("profileImageUpdated")
-}
-
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showImagePicker = false
@@ -22,6 +17,18 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
+    
+    private var personalBestInfo: PersonalBestInfo {
+        let fiveKm = authViewModel.currentUser?.pb5kmMinutes
+        let tenKmMinutes: Int?
+        if let minutes = authViewModel.currentUser?.pb10kmMinutes {
+            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
+            tenKmMinutes = hours * 60 + minutes
+        } else {
+            tenKmMinutes = nil
+        }
+        return PersonalBestInfo(fiveKmMinutes: fiveKm, tenKmMinutes: tenKmMinutes)
+    }
     
     var body: some View {
         NavigationStack {
@@ -119,16 +126,6 @@ struct ProfileView: View {
                     .padding(20)
                     .background(Color(.systemGray6))
                     .cornerRadius(16)
-                    
-                    // Länk: Visa min offentliga profil
-                    if let userId = authViewModel.currentUser?.id {
-                        NavigationLink(destination: UserProfileView(userId: userId)) {
-                            Text("Visa min offentliga profil")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.blue)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                        }
-                    }
 
                     // MARK: - XP Box
                     HStack(spacing: 16) {
@@ -179,38 +176,6 @@ struct ProfileView: View {
                         )
                     }
                     
-                    NavigationLink(destination: FriendsRaceView()) {
-                        HStack(spacing: 14) {
-                            Image(systemName: "figure.run")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(width: 52, height: 52)
-                                .background(
-                                    LinearGradient(
-                                        colors: [Color(red: 0.7, green: 0, blue: 0), Color(red: 0.5, green: 0, blue: 0)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .cornerRadius(14)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Tävla mot dina vänner")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.black)
-                                Text("Se vem som sprungit längst denna vecka")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.gray)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
-                        }
-                        .padding(16)
-                        .background(Color.white)
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
-                    }
-                    
                     Divider()
                         .background(Color(.systemGray4))
                     
@@ -222,7 +187,7 @@ struct ProfileView: View {
                         .background(Color(.systemGray4))
                     
                     // MARK: - Trophy Case Section
-                    TrophyCaseView(activityCount: activityCount)
+                    TrophyCaseView(activityCount: activityCount, personalBests: personalBestInfo)
                         .equatable()
                     
                     Divider()
@@ -493,7 +458,6 @@ struct UserActivitiesView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(Array(activities.prefix(displayedCount).enumerated()), id: \.element.id) { index, activity in
                         ProfileActivityCard(activity: activity)
-                            .environmentObject(AuthViewModel())
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     activityToDelete = activity
@@ -673,11 +637,24 @@ struct ProfileActivityCard: View {
             // Content below image
             VStack(alignment: .leading, spacing: 12) {
                 // Title
-                Text(activity.title)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                HStack(spacing: 8) {
+                    Text(activity.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.black)
+                    
+                    if authViewModel.currentUser?.isProMember == true {
+                        Text("PRO")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.yellow)
+                            .cornerRadius(4)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
                 
                 // Stats row with white background
                 HStack(spacing: 0) {

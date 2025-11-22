@@ -3,9 +3,10 @@ import SwiftUI
 import Combine
 import Supabase
 import UIKit
-import AuthenticationServices
 
 class AuthViewModel: NSObject, ObservableObject {
+    static let shared = AuthViewModel()
+    
     @Published var isLoggedIn = false
     @Published var currentUser: User?
     @Published var errorMessage = ""
@@ -142,72 +143,16 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
-    func signup(name: String, username: String, email: String, password: String, confirmPassword: String) {
-        isLoading = true
-        errorMessage = ""
-        
-        // Validering
-        if name.isEmpty {
-            errorMessage = "Namnet kan inte vara tomt"
-            isLoading = false
-            return
-        }
-        if username.isEmpty {
-            errorMessage = "Användarnamnet kan inte vara tomt"
-            isLoading = false
-            return
-        }
-        if !email.contains("@") {
-            errorMessage = "Ogiltig email-adress"
-            isLoading = false
-            return
-        }
-        if password.count < 6 {
-            errorMessage = "Lösenordet måste vara minst 6 tecken"
-            isLoading = false
-            return
-        }
-        if password != confirmPassword {
-            errorMessage = "Lösenorden matchar inte"
-            isLoading = false
-            return
-        }
-        
-        Task {
-            do {
-                let session = try await supabase.auth.signUp(email: email, password: password)
-                
-                // Hämta profil-data från Supabase
-                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
-                    DispatchQueue.main.async {
-                        self.currentUser = profile
-                        self.isLoggedIn = true
-                        self.isLoading = false
-                        // Visa paywall efter lyckad registrering
-                        self.showPaywallAfterSignup = true
-                    }
-                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
-                } else {
-                    // Fallback om profil inte finns
-                    DispatchQueue.main.async {
-                        self.currentUser = User(
-                            id: session.user.id.uuidString,
-                            name: username,  // Use username as the name
-                            email: email
-                        )
-                        self.isLoggedIn = true
-                        self.isLoading = false
-                        // Visa paywall efter lyckad registrering
-                        self.showPaywallAfterSignup = true
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Signup misslyckades: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
-            }
-        }
+    func signup(name: String,
+                username: String,
+                email: String,
+                password: String,
+                confirmPassword: String,
+                onboardingData: OnboardingData? = nil) {
+        _ = (name, username, email, password, confirmPassword, onboardingData)
+        isLoading = false
+        errorMessage = "Det går inte att skapa nya konton i appen just nu."
+        print("ℹ️ Signup is disabled – attempted signup blocked.")
     }
     
     func logout() {
@@ -262,19 +207,6 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
-    func signInWithApple() {
-        isLoading = true
-        errorMessage = ""
-        
-        let request = ASAuthorizationAppleIDProvider().createRequest()
-        request.requestedScopes = [.fullName, .email]
-        
-        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
-        authorizationController.delegate = self
-        authorizationController.presentationContextProvider = self
-        authorizationController.performRequests()
-    }
-    
     func updateProfileImage(image: UIImage) {
         guard let currentUser = currentUser else { 
             print("❌ No current user found")
@@ -303,58 +235,14 @@ class AuthViewModel: NSObject, ObservableObject {
                 }
                 
                 print("✅ Image converted to data, size: \(imageData.count) bytes")
+                let publicURL = try await ProfileService.shared.updateUserAvatar(userId: currentUser.id, imageData: imageData)
                 
-                // Skapa unikt filnamn med timestamp för att undvika cache-problem
-                let timestamp = Int(Date().timeIntervalSince1970)
-                let fileName = "\(currentUser.id)_avatar_\(timestamp).jpg"
-                print("📁 Uploading file: \(fileName)")
-                
-                // Ladda upp till Supabase Storage
-                let filePath = "avatars/\(fileName)"
-                
-                // Kontrollera om bucket finns, skapa om den inte finns
-                do {
-                    _ = try await supabase.storage.from("avatars").upload(
-                        filePath,
-                        data: imageData,
-                        options: FileOptions(contentType: "image/jpeg")
-                    )
-                } catch {
-                    print("❌ Upload failed, trying to create bucket first: \(error)")
-                    // Försök skapa bucket om den inte finns
-                    try await supabase.storage.createBucket("avatars", options: BucketOptions(public: true))
-                    print("✅ Created avatars bucket")
-                    
-                    // Försök upload igen
-                    _ = try await supabase.storage.from("avatars").upload(
-                        filePath,
-                        data: imageData,
-                        options: FileOptions(contentType: "image/jpeg")
-                    )
-                }
-                
-                print("✅ Image uploaded to storage: \(filePath)")
-                
-                // Hämta public URL
-                let publicURL = try supabase.storage.from("avatars").getPublicURL(path: filePath)
-                print("🔗 Public URL: \(publicURL.absoluteString)")
-                
-                // Uppdatera användarens avatar_url i databasen
-                try await supabase
-                    .from("profiles")
-                    .update(["avatar_url": publicURL.absoluteString])
-                    .eq("id", value: currentUser.id)
-                    .execute()
-                
-                print("✅ Database updated with new avatar URL")
-                
-                // Uppdatera lokal användardata och trigga UI-uppdatering
                 DispatchQueue.main.async {
-                    self.currentUser?.avatarUrl = publicURL.absoluteString
+                    self.currentUser?.avatarUrl = publicURL
                     print("✅ Local user data updated")
                     
                     // Skicka notifikation för att uppdatera UI
-                    NotificationCenter.default.post(name: .profileImageUpdated, object: publicURL.absoluteString)
+                    NotificationCenter.default.post(name: .profileImageUpdated, object: publicURL)
                 }
                 
             } catch {
@@ -364,105 +252,5 @@ class AuthViewModel: NSObject, ObservableObject {
                 }
             }
         }
-    }
-}
-
-// MARK: - Apple Sign In Delegate
-extension AuthViewModel: ASAuthorizationControllerDelegate {
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
-            DispatchQueue.main.async {
-                self.errorMessage = "Apple Sign-In misslyckades: Ogiltig autentisering"
-                self.isLoading = false
-            }
-            return
-        }
-        
-        guard let identityToken = appleIDCredential.identityToken,
-              let identityTokenString = String(data: identityToken, encoding: .utf8) else {
-            DispatchQueue.main.async {
-                self.errorMessage = "Apple Sign-In misslyckades: Ingen identitetstoken"
-                self.isLoading = false
-            }
-            return
-        }
-        
-        Task {
-            do {
-                let session = try await supabase.auth.signInWithIdToken(
-                    credentials: .init(
-                        provider: .apple,
-                        idToken: identityTokenString,
-                        nonce: nil
-                    )
-                )
-                
-                print("✅ Apple Sign-In successful for user: \(session.user.id)")
-                
-                // Hämta profil-data från Supabase
-                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
-                    DispatchQueue.main.async {
-                        self.currentUser = profile
-                        self.isLoggedIn = true
-                        self.isLoading = false
-                        print("✅ User logged in with Apple: \(profile.name)")
-                        
-                        // Visa review popup efter lyckad inloggning
-                        ReviewManager.shared.requestReviewIfNeeded()
-                    }
-                    await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
-                } else {
-                    // Skapa profil för ny Apple-användare
-                    let fullName = appleIDCredential.fullName
-                    let displayName = [fullName?.givenName, fullName?.familyName]
-                        .compactMap { $0 }
-                        .joined(separator: " ")
-                    
-                    let userName = displayName.isEmpty ? "Apple User" : displayName
-                    
-                    DispatchQueue.main.async {
-                        self.currentUser = User(
-                            id: session.user.id.uuidString,
-                            name: userName,
-                            email: session.user.email ?? ""
-                        )
-                        self.isLoggedIn = true
-                        self.isLoading = false
-                        print("✅ New Apple user logged in: \(userName)")
-                        
-                        // Visa review popup efter lyckad inloggning
-                        ReviewManager.shared.requestReviewIfNeeded()
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Apple Sign-In misslyckades: \(error.localizedDescription)"
-                    self.isLoading = false
-                    print("❌ Apple Sign-In error: \(error)")
-                }
-            }
-        }
-    }
-    
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        DispatchQueue.main.async {
-            self.errorMessage = "Apple Sign-In avbröts: \(error.localizedDescription)"
-            self.isLoading = false
-            print("❌ Apple Sign-In cancelled or failed: \(error)")
-        }
-    }
-}
-
-extension AuthViewModel: ASAuthorizationControllerPresentationContextProviding {
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else {
-            // Fallback för simulator/test
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                return UIWindow(windowScene: windowScene)
-            }
-            return UIWindow()
-        }
-        return window
     }
 }

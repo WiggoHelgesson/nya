@@ -1,10 +1,40 @@
 import Foundation
+import UIKit
 import Supabase
+import PostgREST
 
 class ProfileService {
     static let shared = ProfileService()
     private let supabase = SupabaseConfig.supabase
     private var personalBestColumnsAvailable: Bool?
+    private let avatarBucket = "profile-images"
+    
+    private struct UsernameRow: Decodable { let id: String }
+    
+    func isUsernameAvailable(_ username: String, excludingUserId: String? = nil) async -> Bool {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        
+        do {
+            var query = supabase
+                .from("profiles")
+                .select("id", count: .exact)
+                .ilike("username", value: trimmed)
+            
+            if let excludingUserId {
+                query = query.neq("id", value: excludingUserId)
+            }
+            
+            let response: PostgrestResponse<[UsernameRow]> = try await query
+                .limit(1)
+                .execute()
+            let count = response.count ?? response.value.count
+            return count == 0
+        } catch {
+            print("⚠️ Username availability check failed: \(error.localizedDescription)")
+            return false
+        }
+    }
     
     func fetchUserProfile(userId: String) async throws -> User? {
         do {
@@ -160,6 +190,156 @@ class ProfileService {
             print("❌ Error updating username: \(error)")
             throw error
         }
+    }
+    
+    func applyOnboardingData(userId: String, data: OnboardingData) async -> String? {
+        var updates: [String: AnyEncodable] = [:]
+        if !data.trimmedUsername.isEmpty {
+            let isAvailable = await isUsernameAvailable(data.trimmedUsername, excludingUserId: userId)
+            if isAvailable {
+                updates["username"] = AnyEncodable(data.trimmedUsername)
+            } else {
+                print("⚠️ Username \(data.trimmedUsername) already taken. Skipping update for userId: \(userId)")
+            }
+        }
+        if let golfHcp = data.golfHcp {
+            updates["golf_hcp"] = AnyEncodable(golfHcp)
+        }
+        if let pb5 = data.pb5kmMinutes {
+            updates["pb_5km_minutes"] = AnyEncodable(pb5)
+        }
+        if let pb10h = data.pb10kmHours {
+            updates["pb_10km_hours"] = AnyEncodable(pb10h)
+        }
+        if let pb10m = data.pb10kmMinutes {
+            updates["pb_10km_minutes"] = AnyEncodable(pb10m)
+        }
+        if let pbMaraH = data.pbMarathonHours {
+            updates["pb_marathon_hours"] = AnyEncodable(pbMaraH)
+        }
+        if let pbMaraM = data.pbMarathonMinutes {
+            updates["pb_marathon_minutes"] = AnyEncodable(pbMaraM)
+        }
+        
+        var newAvatarURL: String?
+        if let imageData = data.profileImageData {
+            do {
+                newAvatarURL = try await uploadAvatarImageData(imageData, userId: userId)
+                if let url = newAvatarURL {
+                    updates["avatar_url"] = AnyEncodable(url)
+                }
+            } catch {
+                print("⚠️ Failed to upload onboarding profile image: \(error.localizedDescription)")
+            }
+        }
+        
+        guard !updates.isEmpty else { return newAvatarURL }
+        
+        do {
+            try await supabase
+                .from("profiles")
+                .update(updates)
+                .eq("id", value: userId)
+                .execute()
+            print("✅ Applied onboarding data for userId: \(userId)")
+        } catch {
+            print("⚠️ Failed to apply onboarding data: \(error.localizedDescription)")
+        }
+        return newAvatarURL
+    }
+
+    func uploadAvatarImageData(_ imageData: Data, userId: String) async throws -> String {
+        let dataToUpload: Data
+        if let image = UIImage(data: imageData),
+           let jpegData = image.jpegData(compressionQuality: 0.85) {
+            dataToUpload = jpegData
+        } else {
+            dataToUpload = imageData
+        }
+        
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let fileName = "\(userId)_avatar_\(timestamp).jpg"
+        
+        print("🔄 Uploading profile image: \(fileName) to bucket: \(avatarBucket)")
+        
+        do {
+            // Try upload with upsert=true to overwrite if exists
+            try await supabase.storage
+                .from(avatarBucket)
+                .upload(
+                    fileName,
+                    data: dataToUpload,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+            
+            print("✅ Upload successful: \(fileName)")
+            
+            let publicURL = try supabase.storage
+                .from(avatarBucket)
+                .getPublicURL(path: fileName)
+            
+            print("✅ Public URL generated: \(publicURL.absoluteString)")
+            return publicURL.absoluteString
+            
+        } catch let uploadError {
+            print("❌ Upload failed with error: \(uploadError)")
+            print("❌ Error details: \(uploadError.localizedDescription)")
+            
+            let message = uploadError.localizedDescription.lowercased()
+            
+            // If bucket doesn't exist, create it
+            if message.contains("bucket not found") || message.contains("does not exist") {
+                print("⚠️ Bucket not found, creating bucket: \(avatarBucket)")
+                do {
+                    try await supabase.storage.createBucket(
+                        avatarBucket,
+                        options: BucketOptions(public: true)
+                    )
+                    print("✅ Bucket created successfully")
+                } catch let createError {
+                    print("❌ Failed to create bucket: \(createError.localizedDescription)")
+                    throw createError
+                }
+                
+                // Retry upload after creating bucket
+                print("🔄 Retrying upload after bucket creation...")
+                try await supabase.storage
+                    .from(avatarBucket)
+                    .upload(fileName, data: dataToUpload, options: FileOptions(contentType: "image/jpeg", upsert: true))
+                
+                let publicURL = try supabase.storage
+                    .from(avatarBucket)
+                    .getPublicURL(path: fileName)
+                return publicURL.absoluteString
+            }
+            
+            // For RLS policy errors, provide helpful error message
+            if message.contains("row-level security") || message.contains("policy") {
+                print("❌ RLS Policy Error - The database is blocking the upload")
+                throw NSError(
+                    domain: "ProfileService",
+                    code: 403,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "Databasregeln blockerar uppladdningen. Kör SQL-skriptet i Supabase SQL Editor för att fixa detta."
+                    ]
+                )
+            }
+            
+            // Re-throw original error
+            throw uploadError
+        }
+    }
+    
+    func updateUserAvatar(userId: String, imageData: Data) async throws -> String {
+        let publicURL = try await uploadAvatarImageData(imageData, userId: userId)
+        
+        try await supabase
+            .from("profiles")
+            .update(["avatar_url": publicURL])
+            .eq("id", value: userId)
+            .execute()
+        
+        return publicURL
     }
     
     func deleteUserAccount(userId: String) async throws {

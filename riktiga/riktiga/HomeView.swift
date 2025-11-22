@@ -7,6 +7,7 @@ struct HomeView: View {
     @ObservedObject private var statisticsService = StatisticsService.shared
     private let healthKitManager = HealthKitManager.shared
     @State private var showMonthlyPrize = false
+    @State private var showStatistics = false
     @State private var weeklySteps: [DailySteps] = []
     @State private var isLoadingSteps = false
     @State private var weeklyFlights: [DailyFlights] = []
@@ -16,6 +17,9 @@ struct HomeView: View {
     @State private var isLoadingRecommended = false
     @State private var followingStatus: [String: Bool] = [:]
     @State private var currentInsightIndex: Int = 0
+    @State private var uppyInsight: String = "Laddar... //UPPY"
+    @State private var isLoadingInsight = false
+    @State private var pendingRewardCelebration: RewardCelebration?
     
     var body: some View {
         NavigationStack {
@@ -64,6 +68,9 @@ struct HomeView: View {
                         }
                         .padding(.top, 20)
                         
+                        motivationBanner
+                            .padding(.horizontal, 20)
+                        
                         // MARK: - Activity Insights (Steps / Sleep / Distance)
                         TabView(selection: $currentInsightIndex) {
                             stepsCard
@@ -87,38 +94,41 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 8)
                         
-                        NavigationLink(destination: FriendsRaceView()) {
-                            HStack(spacing: 14) {
-                                Image(systemName: "figure.run")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 52, height: 52)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [Color(red: 0.7, green: 0, blue: 0), Color(red: 0.5, green: 0, blue: 0)],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                    )
-                                    .cornerRadius(14)
+                        Button(action: {
+                            showStatistics = true
+                        }) {
+                            HStack(spacing: 12) {
+                                Image("23")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 46, height: 46)
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Tävla mot dina vänner")
+                                    Text("Utveckla din träning med UPPY")
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.black)
-                                    Text("Se vem som sprungit längst i veckan")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.white)
+                                    Text("Få AI-coachning baserat på dina pass")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.white.opacity(0.85))
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.gray)
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.9))
                             }
                             .padding(16)
-                            .background(Color.white)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.black, Color.gray.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                             .cornerRadius(16)
-                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
-                            .padding(.horizontal, 20)
+                            .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 8)
                         }
+                        .padding(.horizontal, 20)
                         
                         // MARK: - Recommended Friends Section
                         if !recommendedUsers.isEmpty || isLoadingRecommended {
@@ -173,8 +183,27 @@ struct HomeView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .enableSwipeBack()
+        .sheet(isPresented: $showStatistics) {
+            StatisticsView()
+        }
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
+        }
+        .sheet(item: $pendingRewardCelebration, onDismiss: {
+            presentNextRewardIfAvailable()
+        }) { reward in
+            XpCelebrationView(
+                points: reward.points,
+                title: "Belöning upplåst! 🎯",
+                subtitle: reward.reason,
+                buttonTitle: "Fortsätt"
+            ) {
+                pendingRewardCelebration = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    presentNextRewardIfAvailable()
+                }
+            }
         }
         .onAppear {
             if let userId = authViewModel.currentUser?.id {
@@ -182,6 +211,9 @@ struct HomeView: View {
                     await statisticsService.fetchWeeklyStats(userId: userId)
                 }
             }
+            
+            // Load AI-generated insight
+            loadUppyInsight()
             
             // Hämta stegdata från Apple Health
             isLoadingSteps = true
@@ -233,6 +265,8 @@ struct HomeView: View {
             
             // Load recommended users
             loadRecommendedUsers()
+            
+            presentNextRewardIfAvailable()
         }
         .onDisappear {
             // Remove all observers
@@ -240,6 +274,12 @@ struct HomeView: View {
                 NotificationCenter.default.removeObserver(observer)
             }
             observers.removeAll()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .rewardCelebrationQueued)) { _ in
+            presentNextRewardIfAvailable()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            presentNextRewardIfAvailable()
         }
     }
     
@@ -302,6 +342,41 @@ struct HomeView: View {
             }
         }
     }
+
+    private var motivationBanner: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image("31")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 4)
+            
+            if isLoadingInsight {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Analyserar...")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+            } else {
+                Text(uppyInsight)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+        )
+    }
     
     private func checkAndAwardDailyStepsReward(steps: [DailySteps]) {
         // Hitta dagens steg
@@ -334,6 +409,7 @@ struct HomeView: View {
                         }
                     }
                     
+                    RewardCelebrationManager.shared.enqueueReward(points: 10, reason: "10 000 steg avklarade i dag!")
                     print("✅ Awarded 10 points for reaching 10k steps")
                 } catch {
                     print("❌ Error awarding steps points: \(error)")
@@ -343,8 +419,7 @@ struct HomeView: View {
     }
 
     private func openHealthSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(url)
+        HealthKitManager.shared.handleManageAuthorizationButton()
     }
 
     private func refreshUserProfile() async {
@@ -357,6 +432,33 @@ struct HomeView: View {
             }
         } catch {
             print("❌ Error refreshing user profile: \(error)")
+        }
+    }
+    
+    private func loadUppyInsight() {
+        // Check cache first (valid for 24 hours)
+        let cacheKey = "uppyInsight_\(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970)"
+        if let cached = UserDefaults.standard.string(forKey: cacheKey) {
+            uppyInsight = cached
+            return
+        }
+        
+        isLoadingInsight = true
+        Task {
+            let insight = await UppyInsightBuilder.shared.generateDailyInsight(for: authViewModel.currentUser)
+            await MainActor.run {
+                self.uppyInsight = insight
+                self.isLoadingInsight = false
+                // Cache for 24h
+                UserDefaults.standard.set(insight, forKey: cacheKey)
+            }
+        }
+    }
+    
+    private func presentNextRewardIfAvailable() {
+        guard pendingRewardCelebration == nil else { return }
+        if let reward = RewardCelebrationManager.shared.consumeNextReward() {
+            pendingRewardCelebration = reward
         }
     }
 }
@@ -446,6 +548,7 @@ extension HomeView {
                 try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: 5)
                 UserDefaults.standard.set(Date(), forKey: "lastFlightsRewardDate")
                 await refreshUserProfile()
+                RewardCelebrationManager.shared.enqueueReward(points: 5, reason: "Du tog 10 trappor i dag!")
             } catch {
                 print("⚠️ Could not award flights points: \(error)")
             }
@@ -463,6 +566,7 @@ extension HomeView {
                 try await ProfileService.shared.updateUserPoints(userId: userId, pointsToAdd: 10)
                 UserDefaults.standard.set(Date(), forKey: "lastStepsRewardDate")
                 await refreshUserProfile()
+                RewardCelebrationManager.shared.enqueueReward(points: 10, reason: "10 000 steg avklarade i dag!")
             } catch {
                 print("⚠️ Error awarding steps points: \(error)")
             }

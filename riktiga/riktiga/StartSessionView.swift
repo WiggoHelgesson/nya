@@ -3,12 +3,13 @@ import MapKit
 import CoreLocation
 import Combine
 import UIKit
-import AppTrackingTransparency
 
 struct StartSessionView: View {
     @State private var showActivitySelection = true
     @State private var selectedActivityType: ActivityType?
+    @State private var carouselSelection: ActivityType = .walking
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var locationManager = LocationManager.shared
     @State private var forceNewSession = false
     
     var body: some View {
@@ -23,11 +24,16 @@ struct StartSessionView: View {
                         SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: true, forceNewSession: $forceNewSession)
                     }
                 } else {
-                    // If activity type not found, show selection
-                    SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+                    activitySelectionCard {
+                        selectedActivityType = carouselSelection
+                        showActivitySelection = false
+                    }
                 }
             } else if showActivitySelection {
-                SelectActivityView(isPresented: $showActivitySelection, selectedActivity: $selectedActivityType)
+                activitySelectionCard {
+                    selectedActivityType = carouselSelection
+                    showActivitySelection = false
+                }
             } else if let activity = selectedActivityType {
                 // Check if gym session
                 if activity == .walking {
@@ -43,149 +49,379 @@ struct StartSessionView: View {
         .task {
             // Ensure session manager is loaded
             print("🔍 StartSessionView.task - activeSession: \(sessionManager.activeSession != nil), hasActiveSession: \(sessionManager.hasActiveSession)")
-            if !forceNewSession && sessionManager.activeSession == nil && sessionManager.hasActiveSession {
-                print("⚠️ Reloading session from UserDefaults!")
-                await sessionManager.loadActiveSession()
-            } else {
-                print("✅ No need to reload session")
+            Task { @MainActor in
+                locationManager.requestLocationPermission()
+                locationManager.startTracking(activityType: carouselSelection.rawValue)
             }
+        }
+        .onAppear {
+            carouselSelection = .walking
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
             // Reset view state when a session is finalized anywhere
             forceNewSession = false
             selectedActivityType = nil
             showActivitySelection = true
+            carouselSelection = .walking
         }
+        .interactiveDismissDisabled(sessionManager.hasActiveSession || selectedActivityType != nil)
+    }
+    
+    @ViewBuilder
+    private func activitySelectionCard(onStart: @escaping () -> Void) -> some View {
+        ActivityCarouselSelectionView(currentSelection: $carouselSelection, onStart: onStart)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(.systemGroupedBackground))
+                    .shadow(color: Color.black.opacity(0.25), radius: 30, x: 0, y: 16)
+            )
+            .padding(.horizontal, 16)
     }
 }
 
-enum ActivityType: String, CaseIterable {
+enum ActivityType: String, CaseIterable, Identifiable {
     case running = "Löppass"
     case golf = "Golfrunda"
     case walking = "Gympass"
     case hiking = "Bestiga berg"
     case skiing = "Skidåkning"
     
+    static let carouselOrder: [ActivityType] = [.walking, .running, .golf, .hiking, .skiing]
+    
+    var id: String { rawValue }
+    
     var icon: String {
         switch self {
-        case .running:
-            return "figure.run"
-        case .golf:
-            return "figure.golf"
-        case .walking:
-            return "figure.strengthtraining.traditional"
-        case .hiking:
-            return "mountain.2.fill"
-        case .skiing:
-            return "snowflake"
+        case .running: return "figure.run"
+        case .golf: return "figure.golf"
+        case .walking: return "figure.strengthtraining.traditional"
+        case .hiking: return "mountain.2.fill"
+        case .skiing: return "snowflake"
         }
     }
     
     var buttonText: String {
         switch self {
-        case .running:
-            return "Starta löppass"
-        case .golf:
-            return "Starta golfrunda"
-        case .walking:
-            return "Starta gympass"
-        case .hiking:
-            return "Starta bergsbestigning"
-        case .skiing:
-            return "Starta skidpass"
+        case .running: return "Starta löppass"
+        case .golf: return "Starta golfrunda"
+        case .walking: return "Starta gympass"
+        case .hiking: return "Starta bergsbestigning"
+        case .skiing: return "Starta skidpass"
+        }
+    }
+    
+    var headline: String {
+        switch self {
+        case .walking: return "Bygg styrka"
+        case .running: return "Jaga farten"
+        case .golf: return "Perfekt sving"
+        case .hiking: return "Upp på toppen"
+        case .skiing: return "Följ spåren"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .walking: return "Logga gympass, set och vikter med precision."
+        case .running: return "Spela in distans, tempo och PB på dina löppass."
+        case .golf: return "Håll koll på rundor, slag och distans på banan."
+        case .hiking: return "Kapa nya toppar och spara höjdmetrarna."
+        case .skiing: return "Följ dina åk och lutning i backen."
         }
     }
 }
 
-struct SelectActivityView: View {
-    @Binding var isPresented: Bool
-    @Binding var selectedActivity: ActivityType?
-    @Environment(\.dismiss) var dismiss
+struct ActivityCarouselSelectionView: View {
+    @Binding var currentSelection: ActivityType
+    let onStart: () -> Void
     
-    let activities: [ActivityType] = [.running, .walking, .golf, .hiking, .skiing]
+    private let activities: [ActivityType] = [.walking, .running, .golf, .skiing]
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    private let maxHeight = UIScreen.main.bounds.height * 0.55
     
     var body: some View {
-        VStack(spacing: 0) {
-            // MARK: - Header with Branding and Background
-            VStack(spacing: 8) {
-                Text("VÄLJ AKTIVITET")
-                    .font(.system(size: 40, weight: .black))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Text("Vilken aktivitet vill du göra idag?")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Välj aktivitet")
+                    .font(.system(size: 26, weight: .bold))
+                Text("Tryck på en ruta för att välja och starta.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 50)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-            .background(Color.black)
-            .rotationEffect(.degrees(-2))
-            .padding(.bottom, 12)
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
             
-            Spacer()
-            
-            // MARK: - Activity Cards
-            VStack(spacing: 16) {
-                ForEach(activities, id: \.self) { activity in
-                    Button(action: {
-                        selectedActivity = activity
-                        isPresented = false
-                    }) {
-                        HStack(spacing: 16) {
-                            Image(systemName: activity.icon)
-                                .font(.system(size: 32))
-                                .foregroundColor(.black)
-                                .frame(width: 60, height: 60)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(activity.rawValue)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.black)
-                                Text(activity.buttonText)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
-                        }
-                        .padding(16)
-                        .background(Color.white)
-                        .cornerRadius(14)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color(.systemGray6), lineWidth: 1)
-                        )
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(activities) { activity in
+                    Button {
+                        currentSelection = activity
+                    } label: {
+                        ActivityGridCard(activity: activity, isSelected: currentSelection == activity)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 18)
             
-            Spacer()
-            
-            // MARK: - Cancel Button
-            Button(action: {
-                dismiss()
-            }) {
-                Text("AVBRYT")
-                    .font(.system(size: 16, weight: .black))
+            Button(action: onStart) {
+                Text(currentSelection.buttonText.uppercased())
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(Color(.systemGray5))
-                    .foregroundColor(.black)
-                    .cornerRadius(10)
+                    .padding(.vertical, 14)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .padding(.horizontal, 18)
+            
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .frame(height: maxHeight, alignment: .top)
+    }
+    
+    private struct ActivityGridCard: View {
+        let activity: ActivityType
+        let isSelected: Bool
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: activity.icon)
+                    .font(.system(size: 30, weight: .bold))
+                    .padding(12)
+                    .background(isSelected ? Color.black : Color.black.opacity(0.08))
+                    .foregroundColor(isSelected ? .white : .black)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(activity.rawValue)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
             }
             .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(isSelected ? Color.black : Color.clear, lineWidth: 2)
+            )
+            .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
         }
-        .background(AppColors.white)
+    }
+}
+
+struct XpCelebrationView: View {
+    let points: Int
+    let title: String
+    let subtitle: String
+    let badgeText: String
+    let buttonTitle: String
+    let onButtonTap: () -> Void
+    
+    @State private var animatedPoints: Double = 0
+    @State private var pulse = false
+    
+    init(
+        points: Int,
+        title: String = "Grymt jobbat! 💥",
+        subtitle: String = "Du har precis tjänat in",
+        badgeText: String = "XP",
+        buttonTitle: String = "Fortsätt",
+        onButtonTap: @escaping () -> Void
+    ) {
+        self.points = points
+        self.title = title
+        self.subtitle = subtitle
+        self.badgeText = badgeText
+        self.buttonTitle = buttonTitle
+        self.onButtonTap = onButtonTap
+    }
+    
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            
+            VStack(spacing: 32) {
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Text(title)
+                        .font(.system(size: 28, weight: .black))
+                        .foregroundColor(.black)
+                    
+                    Text(subtitle)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+                
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.06))
+                        .frame(width: 220, height: 220)
+                        .scaleEffect(pulse ? 1.08 : 0.95)
+                        .animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: pulse)
+                    
+                    Circle()
+                        .stroke(Color.black.opacity(0.15), lineWidth: 2)
+                        .frame(width: 260, height: 260)
+                        .opacity(pulse ? 0.4 : 0.15)
+                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
+                    
+                    AnimatedNumberText(value: animatedPoints)
+                        .font(.system(size: 56, weight: .black))
+                        .foregroundColor(.black)
+                }
+                
+                Text(badgeText.uppercased())
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Button(action: onButtonTap) {
+                    Text(buttonTitle.uppercased())
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.black)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
+                }
+                .padding(.horizontal, 32)
+                
+                Spacer()
+            }
+            .padding(.vertical, 40)
+        }
+        .onAppear {
+            animatedPoints = 0
+            pulse = true
+            withAnimation(.interpolatingSpring(mass: 0.7, stiffness: 70, damping: 9).delay(0.1)) {
+                animatedPoints = Double(points)
+            }
+        }
+    }
+}
+
+private struct AnimatedNumberText: Animatable, View {
+    var value: Double
+    
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+    
+    var body: some View {
+        Text("\(Int(value))")
+    }
+}
+
+private struct HoldToConfirmButton: View {
+    let title: String
+    let duration: Double
+    let onComplete: () -> Void
+    
+    @State private var progress: CGFloat = 0
+    @State private var isHolding = false
+    @State private var holdCompleted = false
+    
+    private let startFeedback = UIImpactFeedbackGenerator(style: .medium)
+    private let completionFeedback = UINotificationFeedbackGenerator()
+    private let idleIndicatorFraction: CGFloat = 0.07
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let minFillWidth = width * idleIndicatorFraction
+            let fillWidth = max(width * progress, minFillWidth)
+            
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.black.opacity(0.15))
+                
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.black)
+                    .frame(width: min(fillWidth, width))
+                
+                Text(title.uppercased())
+                    .font(.system(size: 16, weight: .black))
+                    .foregroundColor(.white)
+                    .frame(width: width, height: 48)
+            }
+            .frame(height: 48)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .onLongPressGesture(
+                minimumDuration: duration,
+                maximumDistance: 50,
+                pressing: { pressing in
+                    if pressing {
+                        startHold()
+                    } else if !holdCompleted {
+                        cancelHold(animated: true)
+                    }
+                },
+                perform: {
+                    finishHold()
+                }
+            )
+        }
+        .frame(height: 48)
+        .onDisappear {
+            progress = 0
+            isHolding = false
+            holdCompleted = false
+        }
+    }
+    
+    private func startHold() {
+        guard !isHolding else { return }
+        isHolding = true
+        holdCompleted = false
+        startFeedback.prepare()
+        completionFeedback.prepare()
+        startFeedback.impactOccurred(intensity: 0.8)
+        withAnimation(.linear(duration: duration)) {
+            progress = 1
+        }
+    }
+    
+    private func cancelHold(animated: Bool) {
+        guard isHolding else { return }
+        isHolding = false
+        holdCompleted = false
+        let reset = {
+            progress = 0
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.25)) {
+                reset()
+            }
+        } else {
+            reset()
+        }
+    }
+    
+    private func finishHold() {
+        guard isHolding else { return }
+        holdCompleted = true
+        isHolding = false
+        progress = 1
+        completionFeedback.notificationOccurred(.success)
+        onComplete()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            holdCompleted = false
+            withAnimation(.easeOut(duration: 0.25)) {
+                progress = 0
+            }
+        }
     }
 }
 
@@ -207,18 +443,20 @@ struct SessionMapView: View {
     @State private var sessionStartTime: Date?
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
-    @State private var showCompletionPopup = false
+    @State private var showXpCelebration = false
+    @State private var xpCelebrationPoints = 0
     @State private var showSessionComplete = false
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
     @State private var routeImage: UIImage?
     @State private var completedSplits: [WorkoutSplit] = []
-    @State private var lastRegionUpdate: Date = Date()
+    @State private var lastRegionUpdate: Date = .distantPast
     @State private var routeCoordinatesSnapshot: [CLLocationCoordinate2D] = []
     @State private var lastPointsUpdate: Date = Date()
     @State private var lastSnapshotSourceCount: Int = 0
     private let maxRouteSnapshotPoints = 1500
     @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -257,9 +495,9 @@ struct SessionMapView: View {
                 .onAppear {
                     // Request location permission but DON'T start tracking yet
                     locationManager.requestLocationPermission()
+                    centerMapOnUser(animated: false)
                     if resumeSession, let session = sessionManager.activeSession {
                         Task { @MainActor in
-                            await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
                             print("🔄 Resuming session with duration: \(session.accumulatedDuration)s, distance: \(session.accumulatedDistance) km")
                             sessionDuration = session.accumulatedDuration
                             sessionStartTime = session.startTime
@@ -308,13 +546,10 @@ struct SessionMapView: View {
                     }
                 }
                 .onReceive(locationManager.$userLocation) { newLocation in
-                    // Throttle region updates to every 2 seconds
-                    if let location = newLocation {
-                        let now = Date()
-                        if now.timeIntervalSince(lastRegionUpdate) >= 2.0 {
-                            region.center = location
-                            lastRegionUpdate = now
-                        }
+                    guard let location = newLocation else { return }
+                    let now = Date()
+                    if !isRunning || now.timeIntervalSince(lastRegionUpdate) >= 2.0 {
+                        centerMap(on: location, animated: true)
                     }
                 }
 
@@ -383,6 +618,7 @@ struct SessionMapView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
                         }
+                        .frame(maxWidth: .infinity)
                         
                         VStack(spacing: 4) {
                             Text(formattedTime(sessionDuration))
@@ -392,6 +628,7 @@ struct SessionMapView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
                         }
+                        .frame(maxWidth: .infinity)
                         
                         // Show elevation for skiing, pace for others
                         if activity == .skiing || activity == .hiking {
@@ -403,6 +640,7 @@ struct SessionMapView: View {
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.gray)
                             }
+                            .frame(maxWidth: .infinity)
                         } else {
                             VStack(spacing: 4) {
                                 Text(currentPace)
@@ -412,6 +650,19 @@ struct SessionMapView: View {
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.gray)
                             }
+                            .frame(maxWidth: .infinity)
+                        }
+                        
+                        if activity == .skiing {
+                            VStack(spacing: 4) {
+                                Text(formatTopSpeed(locationManager.maxSpeed))
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(.black)
+                                Text("Topphastighet")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -421,38 +672,38 @@ struct SessionMapView: View {
                         // Paused state - show Continue and End buttons
                         VStack(spacing: 12) {
                             Button(action: {
-                                Task { @MainActor in
-                                    await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
-                                    // Resume tracking (preserve existing data)
-                                    isSessionEnding = false  // Reset flag when resuming
-                                    print("✅ Resuming session - isSessionEnding = false")
-                                    sessionManager.beginSession()
-                                    locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
-                                    startTimer()
-                                    isPaused = false
-                                    isRunning = true
+                                let generator = UIImpactFeedbackGenerator(style: .heavy)
+                                generator.prepare()
+                                generator.impactOccurred(intensity: 1.0)
+                                Task {
+                                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                                    await MainActor.run {
+                                        isSessionEnding = false
+                                        print("✅ Resuming session - isSessionEnding = false")
+                                        sessionManager.beginSession()
+                                        locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
+                                        startTimer()
+                                        isPaused = false
+                                        isRunning = true
+                                    }
                                 }
                             }) {
                                 Text("Fortsätt")
                                     .font(.system(size: 16, weight: .black))
                                     .frame(maxWidth: .infinity)
                                     .padding(14)
-                                    .background(AppColors.brandGreen)
+                                    .background(Color.black)
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                             }
                             
-                            Button(action: {
-                                endSession()
-                            }) {
-                                Text("Avsluta")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(14)
-                                    .background(AppColors.brandBlue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
+                            HoldToConfirmButton(
+                                title: "Avsluta",
+                                duration: 1.5,
+                                onComplete: {
+                                    endSession()
+                                }
+                            )
                         }
                         .padding(.horizontal, 16)
                     } else {
@@ -464,31 +715,31 @@ struct SessionMapView: View {
                                 isRunning = false
                                 isPaused = true
                             } else {
-                                Task { @MainActor in
-                                    await TrackingPermissionManager.requestTrackingAuthorizationIfNeeded()
-                                    // Start tracking when user presses button for new session
-                                    if !isRunning {
-                                        // Reset the ending flag for new session
-                                        isSessionEnding = false
-                                        print("✅ Starting new session - isSessionEnding = false")
-                                        sessionManager.beginSession()
-                                        // Reset all session-local state so we start fresh
-                                        sessionDuration = 0
-                                        sessionStartTime = nil
-                                        currentPace = "0:00"
-                                        completedSplits = []
-                                        earnedPoints = 0
-                                        isPaused = false
-                                        // Reset location-based metrics
-                                        locationManager.distance = 0
-                                        locationManager.elevationGain = 0
-                                        locationManager.maxSpeed = 0
-                                        locationManager.routeCoordinates = []
-                                        locationManager.startNewTracking(activityType: activity.rawValue)
-                                        // Lock StartSessionView into new-session mode
-                                        forceNewSession = true
-                                        startTimer()
-                                        isRunning = true
+                                let generator = UIImpactFeedbackGenerator(style: .heavy)
+                                generator.prepare()
+                                generator.impactOccurred(intensity: 1.0)
+                                Task {
+                                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                                    await MainActor.run {
+                                        if !isRunning {
+                                            isSessionEnding = false
+                                            print("✅ Starting new session - isSessionEnding = false")
+                                            sessionManager.beginSession()
+                                            sessionDuration = 0
+                                            sessionStartTime = nil
+                                            currentPace = "0:00"
+                                            completedSplits = []
+                                            earnedPoints = 0
+                                            isPaused = false
+                                            locationManager.distance = 0
+                                            locationManager.elevationGain = 0
+                                            locationManager.maxSpeed = 0
+                                            locationManager.routeCoordinates = []
+                                            locationManager.startNewTracking(activityType: activity.rawValue)
+                                            forceNewSession = true
+                                            startTimer()
+                                            isRunning = true
+                                        }
                                     }
                                 }
                             }
@@ -513,45 +764,6 @@ struct SessionMapView: View {
                 .padding(16)
             }
             
-            // MARK: - Completion Popup
-            if showCompletionPopup {
-                ZStack {
-                    Color.black.opacity(0.4)
-                        .ignoresSafeArea()
-                    
-                    VStack(spacing: 20) {
-                        Text("GRYMT JOBBAT!")
-                            .font(.system(size: 28, weight: .black))
-                            .foregroundColor(.black)
-                            .multilineTextAlignment(.center)
-                        
-                        Text("Du fick \(earnedPoints) poäng")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(AppColors.brandBlue)
-                            .multilineTextAlignment(.center)
-                        
-                        Button(action: {
-                            showCompletionPopup = false
-                            showSessionComplete = true
-                        }) {
-                            Text("SKAPA INLÄGG")
-                                .font(.system(size: 16, weight: .black))
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(AppColors.brandBlue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                    .padding(30)
-                    .background(Color.white)
-                    .cornerRadius(20)
-                    .shadow(radius: 20)
-                    .padding(40)
-                }
-            }
-            
         }
         .navigationBarHidden(true)
         .alert("Platsåtkomst i bakgrunden krävs", isPresented: $locationManager.showLocationDeniedAlert) {
@@ -566,6 +778,15 @@ struct SessionMapView: View {
             // Save session state when view disappears, but DON'T stop timer
             // Timer continues in background
             saveSessionState()
+        }
+        .sheet(isPresented: $showXpCelebration) {
+            XpCelebrationView(
+                points: xpCelebrationPoints,
+                buttonTitle: "Skapa inlägg"
+            ) {
+                showXpCelebration = false
+                showSessionComplete = true
+            }
         }
         .sheet(isPresented: $showSessionComplete) {
             SessionCompleteView(
@@ -596,6 +817,13 @@ struct SessionMapView: View {
             )
         }
         // No onChange needed - session is cleared in endSession()
+        .onChange(of: scenePhase) { _, newPhase in
+            guard sessionStartTime != nil else { return }
+            if newPhase == .background || newPhase == .inactive {
+                print("📥 ScenePhase changed to \(newPhase) - saving session state")
+                saveSessionState()
+            }
+        }
     }
 
     func startTimer() {
@@ -624,9 +852,29 @@ struct SessionMapView: View {
         }
     }
     
+    private func centerMapOnUser(animated: Bool) {
+        guard let coordinate = locationManager.userLocation else { return }
+        centerMap(on: coordinate, animated: animated)
+    }
+    
+    private func centerMap(on coordinate: CLLocationCoordinate2D, animated: Bool) {
+        let update = {
+            region.center = coordinate
+        }
+        
+        if animated {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                update()
+            }
+        } else {
+            update()
+        }
+        
+        lastRegionUpdate = Date()
+    }
+    
     func updateEarnedPoints() {
-        // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
-        let basePoints = Int(locationManager.distance * 15)
+        let basePoints = Int((locationManager.distance * distancePointMultiplier()).rounded())
         
         // PRO-medlemmar får 1.5x poäng
         if revenueCatManager.isPremium {
@@ -770,7 +1018,7 @@ struct SessionMapView: View {
         locationManager.elevationGain = 0
         locationManager.maxSpeed = 0
         showSessionComplete = false
-        showCompletionPopup = false
+        showXpCelebration = false
         forceNewSession = true
     }
 
@@ -796,7 +1044,10 @@ struct SessionMapView: View {
         print("📍 Route coordinates: \(locationManager.routeCoordinates)")
         
         // Generate route snapshot and wait for it
-        MapSnapshotService.shared.generateRouteSnapshot(routeCoordinates: locationManager.routeCoordinates) { snapshotImage in
+        MapSnapshotService.shared.generateRouteSnapshot(
+            routeCoordinates: locationManager.routeCoordinates,
+            userLocation: locationManager.userLocation
+        ) { snapshotImage in
             print("🗺️ Route snapshot generation completed")
             if let snapshotImage = snapshotImage {
                 print("✅ Route snapshot generated successfully")
@@ -814,8 +1065,7 @@ struct SessionMapView: View {
             }
         }
         
-        // Beräkna poäng: 1.5 poäng per 100m = 15 poäng per km
-        let basePoints = Int(locationManager.distance * 15)
+        let basePoints = Int((locationManager.distance * distancePointMultiplier()).rounded())
         
         // PRO-medlemmar får 1.5x poäng
         if revenueCatManager.isPremium {
@@ -826,10 +1076,20 @@ struct SessionMapView: View {
         
         print("💾 Earned points: \(earnedPoints)")
         
-        // Add small delay to ensure route image is generated before showing completion
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            print("✅ Showing completion popup...")
-            self.showCompletionPopup = true
+        // Add small delay to ensure route image is generated before showing celebration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            print("✅ Showing XP celebration...")
+            self.xpCelebrationPoints = self.earnedPoints
+            self.showXpCelebration = true
+        }
+    }
+    
+    private func distancePointMultiplier() -> Double {
+        switch activity {
+        case .running, .golf, .hiking, .skiing:
+            return 2.5 // 0.25 XP per 100 m
+        default:
+            return 15.0 // kvar för andra aktiviteter om de använder distanspoäng
         }
     }
 
@@ -864,6 +1124,11 @@ struct SessionMapView: View {
             return String(format: "%02d:%02d", minutes, secs)
         }
     }
+
+    private func formatTopSpeed(_ speed: Double) -> String {
+        let kmh = max(speed, 0) * 3.6
+        return String(format: "%.1f km/h", kmh)
+    }
     
     // Convert coordinate to map point for path drawing
     func convertToMapPoint(_ coordinate: CLLocationCoordinate2D, in size: CGSize) -> CGPoint {
@@ -882,21 +1147,6 @@ struct SessionMapView: View {
         let y = (centerLat - coordinate.latitude) * pixelsPerDegreeLat + size.height / 2
         
         return CGPoint(x: x, y: y)
-    }
-}
-
-enum TrackingPermissionManager {
-    @MainActor
-    static func requestTrackingAuthorizationIfNeeded() async {
-        guard #available(iOS 14.0, *) else { return }
-        let status = ATTrackingManager.trackingAuthorizationStatus
-        guard status == .notDetermined else { return }
-        await withCheckedContinuation { continuation in
-            ATTrackingManager.requestTrackingAuthorization { newStatus in
-                print("📣 ATT authorization status: \(newStatus.rawValue)")
-                continuation.resume(returning: ())
-            }
-        }
     }
 }
 

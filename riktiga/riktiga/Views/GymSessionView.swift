@@ -1,15 +1,25 @@
 import SwiftUI
 
+enum GymSessionInputField: Hashable {
+    case kg(exerciseId: String, setIndex: Int)
+    case reps(exerciseId: String, setIndex: Int)
+}
+
 struct GymSessionView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var sessionManager = SessionManager.shared
     @StateObject private var viewModel = GymSessionViewModel()
     @State private var showExercisePicker = false
     @State private var showCompleteSession = false
-    @State private var sessionStartTime = Date()
     @State private var showCancelConfirmation = false
-    @State private var showFinishConfirmation = false
     @State private var didLoadSavedWorkouts = false
+    @State private var hasInitializedSession = false
+    @State private var lastPersistedElapsedSeconds: Int = 0
+    @State private var showXpCelebration = false
+    @State private var xpCelebrationPoints: Int = 0
+    @FocusState private var focusedField: GymSessionInputField?
     
     @ViewBuilder
     private var savedWorkoutsSection: some View {
@@ -126,7 +136,8 @@ struct GymSessionView: View {
                                     },
                                     onDelete: {
                                         viewModel.removeExercise(exercise.id)
-                                    }
+                                    },
+                                    focusedField: $focusedField
                                 )
                             }
                             
@@ -204,14 +215,6 @@ struct GymSessionView: View {
                     }
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Spara") {
-                        showFinishConfirmation = true
-                    }
-                    .foregroundColor(.black)
-                    .fontWeight(.semibold)
-                    .disabled(viewModel.exercises.isEmpty)
-                }
             }
             .alert("Vill du verkligen avsluta?", isPresented: $showCancelConfirmation) {
                 Button("Fortsätt", role: .cancel) {
@@ -219,24 +222,23 @@ struct GymSessionView: View {
                 }
                 Button("Avsluta", role: .destructive) {
                     viewModel.stopTimer()
-                    dismiss()
+                    finalizeSessionAndDismiss()
                 }
             } message: {
                 Text("Ditt pass kommer inte att sparas om du avbryter nu.")
             }
-            .alert("Är du klar?", isPresented: $showFinishConfirmation) {
-                Button("Fortsätt", role: .cancel) {
-                    // Do nothing, continue training
-                }
-                Button("Spara") {
-                    completeSession()
-                }
-            } message: {
-                Text("Tryck på Spara för att spara ditt pass.")
-            }
             .sheet(isPresented: $showExercisePicker) {
                 ExercisePickerView { exercise in
                     viewModel.addExercise(exercise)
+                }
+            }
+            .sheet(isPresented: $showXpCelebration) {
+                XpCelebrationView(
+                    points: xpCelebrationPoints,
+                    buttonTitle: "Skapa inlägg"
+                ) {
+                    showXpCelebration = false
+                    showCompleteSession = true
                 }
             }
             .fullScreenCover(isPresented: $showCompleteSession) {
@@ -253,25 +255,20 @@ struct GymSessionView: View {
                         gymExercises: sessionData.exercises,  // Pass gym exercises
                         isPresented: $showCompleteSession,
                         onComplete: {
-                            dismiss()
+                            finalizeSessionAndDismiss()
                         },
                         onDelete: {
-                            dismiss()
+                            finalizeSessionAndDismiss()
                         }
                     )
                     .environmentObject(authViewModel)
                 }
             }
             .onAppear {
-                viewModel.startTimer()
-                if !didLoadSavedWorkouts, let userId = authViewModel.currentUser?.id {
-                    didLoadSavedWorkouts = true
-                    Task {
-                        await viewModel.loadSavedWorkouts(userId: userId)
-                    }
-                }
+                initializeSessionIfNeeded()
             }
             .onDisappear {
+                persistSession(force: true)
                 viewModel.stopTimer()
             }
             .interactiveDismissDisabled()
@@ -281,13 +278,50 @@ struct GymSessionView: View {
                     await viewModel.loadSavedWorkouts(userId: userId)
                 }
             }
+            .onReceive(viewModel.$exercises) { _ in
+                persistSession(force: true)
+            }
+            .onReceive(viewModel.$elapsedSeconds) { newValue in
+                if newValue - lastPersistedElapsedSeconds >= 15 {
+                    persistSession()
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .inactive || newPhase == .background {
+                    persistSession(force: true)
+                }
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Klart") {
+                        focusedField = nil
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if viewModel.exercises.isEmpty {
+                    Color.clear.frame(height: 0)
+                } else {
+                    HoldToSaveButton(title: "Spara pass", duration: 1.0) {
+                        completeSession()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+                }
+            }
         }
     }
     
     private func completeSession() {
-        let duration = Int(Date().timeIntervalSince(sessionStartTime))
+        focusedField = nil
+        persistSession(force: true)
+        let duration = viewModel.elapsedSeconds
         viewModel.completeSession(duration: duration)
-        showCompleteSession = true
+        xpCelebrationPoints = viewModel.sessionData?.earnedXP ?? 0
+        showXpCelebration = true
     }
     
     private func metricView(title: String, value: String) -> some View {
@@ -302,6 +336,164 @@ struct GymSessionView: View {
     }
 }
 
+extension GymSessionView {
+    private func initializeSessionIfNeeded() {
+        guard !hasInitializedSession else { return }
+        hasInitializedSession = true
+
+        if !didLoadSavedWorkouts, let userId = authViewModel.currentUser?.id {
+            didLoadSavedWorkouts = true
+            Task {
+                await viewModel.loadSavedWorkouts(userId: userId)
+            }
+        }
+
+        if let activeSession = sessionManager.activeSession,
+           activeSession.activityType == ActivityType.walking.rawValue {
+            let startTime = activeSession.startTime
+            let exercises = activeSession.gymExercises ?? []
+            sessionManager.beginSession()
+            viewModel.restoreSession(exercises: exercises, startTime: startTime)
+            viewModel.startTimer(startTime: startTime)
+            lastPersistedElapsedSeconds = viewModel.elapsedSeconds
+            return
+        }
+
+        sessionManager.beginSession()
+        viewModel.resetSession()
+        let now = Date()
+        viewModel.startTimer(startTime: now)
+        lastPersistedElapsedSeconds = 0
+        persistSession(force: true)
+    }
+
+    private func persistSession(force: Bool = false) {
+        guard let startTime = viewModel.sessionStartTime else { return }
+        let elapsed = viewModel.elapsedSeconds
+
+        if !force && elapsed == lastPersistedElapsedSeconds {
+            return
+        }
+
+        sessionManager.saveActiveSession(
+            activityType: ActivityType.walking.rawValue,
+            startTime: startTime,
+            isPaused: false,
+            duration: elapsed,
+            distance: 0,
+            routeCoordinates: [],
+            completedSplits: [],
+            gymExercises: viewModel.exercises
+        )
+
+        lastPersistedElapsedSeconds = elapsed
+    }
+
+    private func finalizeSessionAndDismiss() {
+        focusedField = nil
+        sessionManager.finalizeSession()
+        viewModel.resetSession()
+        showCompleteSession = false
+        dismiss()
+    }
+}
+
+private struct HoldToSaveButton: View {
+    let title: String
+    let duration: Double
+    let onComplete: () -> Void
+    
+    @State private var progress: CGFloat = 0
+    @State private var isHolding = false
+    @State private var holdCompleted = false
+    
+    private let startFeedback = UIImpactFeedbackGenerator(style: .heavy)
+    private let completionFeedback = UINotificationFeedbackGenerator()
+    private let idleIndicatorFraction: CGFloat = 0.08
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let minFillWidth = width * idleIndicatorFraction
+            let fillWidth = max(width * progress, minFillWidth)
+            
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.systemGray5))
+                
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.black)
+                    .frame(width: min(fillWidth, width))
+                
+                Text(title.uppercased())
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(height: 54)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .onLongPressGesture(
+                minimumDuration: duration,
+                maximumDistance: 50,
+                pressing: { pressing in
+                    if pressing {
+                        startHold()
+                    } else if !holdCompleted {
+                        cancelHold(animated: true)
+                    }
+                },
+                perform: {
+                    finishHold()
+                }
+            )
+        }
+        .frame(height: 54)
+    }
+    
+    private func startHold() {
+        guard !isHolding else { return }
+        isHolding = true
+        holdCompleted = false
+        startFeedback.prepare()
+        completionFeedback.prepare()
+        startFeedback.impactOccurred(intensity: 0.7)
+        withAnimation(.linear(duration: duration)) {
+            progress = 1
+        }
+    }
+    
+    private func cancelHold(animated: Bool) {
+        guard isHolding else { return }
+        isHolding = false
+        holdCompleted = false
+        let reset = {
+            progress = 0
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2)) {
+                reset()
+            }
+        } else {
+            reset()
+        }
+    }
+    
+    private func finishHold() {
+        guard isHolding else { return }
+        holdCompleted = true
+        isHolding = false
+        progress = 1
+        completionFeedback.notificationOccurred(.success)
+        onComplete()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            holdCompleted = false
+            withAnimation(.easeOut(duration: 0.2)) {
+                progress = 0
+            }
+        }
+    }
+}
+
 // MARK: - Exercise Card
 struct ExerciseCard: View {
     let exercise: GymExercise
@@ -309,6 +501,7 @@ struct ExerciseCard: View {
     let onUpdateSet: (Int, Double, Int) -> Void
     let onDeleteSet: (Int) -> Void
     let onDelete: () -> Void
+    let focusedField: FocusState<GymSessionInputField?>.Binding
     
     @State private var showDeleteConfirmation = false
     
@@ -367,10 +560,13 @@ struct ExerciseCard: View {
             // Sets
             ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
                 SetRow(
+                    exerciseId: exercise.id,
+                    setIndex: index,
                     setNumber: index + 1,
                     kg: set.kg,
                     reps: set.reps,
                     isCompleted: set.isCompleted,
+                    focusedField: focusedField,
                     onUpdate: { kg, reps in
                         onUpdateSet(index, kg, reps)
                     },
@@ -409,23 +605,27 @@ struct ExerciseCard: View {
 
 // MARK: - Set Row
 struct SetRow: View {
+    let exerciseId: String
+    let setIndex: Int
     let setNumber: Int
     @State var kg: Double
     @State var reps: Int
     let isCompleted: Bool
+    let focusedField: FocusState<GymSessionInputField?>.Binding
     let onUpdate: (Double, Int) -> Void
     let onDelete: () -> Void
     
     @State private var kgText: String
     @State private var repsText: String
-    @FocusState private var kgFocused: Bool
-    @FocusState private var repsFocused: Bool
     
-    init(setNumber: Int, kg: Double, reps: Int, isCompleted: Bool, onUpdate: @escaping (Double, Int) -> Void, onDelete: @escaping () -> Void) {
+    init(exerciseId: String, setIndex: Int, setNumber: Int, kg: Double, reps: Int, isCompleted: Bool, focusedField: FocusState<GymSessionInputField?>.Binding, onUpdate: @escaping (Double, Int) -> Void, onDelete: @escaping () -> Void) {
+        self.exerciseId = exerciseId
+        self.setIndex = setIndex
         self.setNumber = setNumber
         self.kg = kg
         self.reps = reps
         self.isCompleted = isCompleted
+        self.focusedField = focusedField
         self.onUpdate = onUpdate
         self.onDelete = onDelete
         _kgText = State(initialValue: kg > 0 ? String(format: "%.0f", kg) : "")
@@ -449,7 +649,7 @@ struct SetRow: View {
                 .padding(.vertical, 8)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
-                .focused($kgFocused)
+                .focused(focusedField, equals: .kg(exerciseId: exerciseId, setIndex: setIndex))
                 .onChange(of: kgText) { newValue in
                     if let value = Double(newValue) {
                         kg = value
@@ -466,7 +666,7 @@ struct SetRow: View {
                 .padding(.vertical, 8)
                 .background(Color(.systemGray6))
                 .cornerRadius(8)
-                .focused($repsFocused)
+                .focused(focusedField, equals: .reps(exerciseId: exerciseId, setIndex: setIndex))
                 .onChange(of: repsText) { newValue in
                     if let value = Int(newValue) {
                         reps = value
@@ -486,16 +686,6 @@ struct SetRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color.white)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Klart") {
-                    kgFocused = false
-                    repsFocused = false
-                }
-                .font(.system(size: 16, weight: .semibold))
-            }
-        }
     }
 }
 

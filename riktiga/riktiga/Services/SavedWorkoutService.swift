@@ -96,7 +96,3 @@ final class SavedWorkoutService {
         }
     }
 }
-
-extension Notification.Name {
-    static let savedGymWorkoutCreated = Notification.Name("SavedGymWorkoutCreated")
-}

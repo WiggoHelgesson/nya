@@ -348,12 +348,39 @@ class SocialService {
     
     // MARK: - Comment Functions
     
-    func addComment(postId: String, userId: String, content: String, postOwnerId: String? = nil, postTitle: String = "") async throws {
+    func addComment(postId: String,
+                    userId: String,
+                    content: String,
+                    parentCommentId: String? = nil,
+                    postOwnerId: String? = nil,
+                    postTitle: String = "") async throws {
         do {
-            let comment = PostComment(postId: postId, userId: userId, content: content)
+            let comment = PostComment(postId: postId,
+                                      userId: userId,
+                                      content: content,
+                                      parentCommentId: parentCommentId)
+            
+            struct InsertPayload: Encodable {
+                let id: String
+                let workout_post_id: String
+                let user_id: String
+                let content: String
+                let parent_comment_id: String?
+                let created_at: String
+            }
+            
+            let payload = InsertPayload(
+                id: comment.id,
+                workout_post_id: postId,
+                user_id: userId,
+                content: content,
+                parent_comment_id: parentCommentId,
+                created_at: comment.createdAt
+            )
+
             _ = try await supabase
                 .from("workout_post_comments")
-                .insert(comment)
+                .insert(payload)
                 .execute()
             print("✅ Comment added successfully")
             
@@ -391,12 +418,19 @@ class SocialService {
         }
     }
     
-    func getPostComments(postId: String) async throws -> [PostComment] {
+    func getPostComments(postId: String, currentUserId: String?) async throws -> [PostComment] {
         do {
             // Fetch comments
             let comments: [PostComment] = try await supabase
                 .from("workout_post_comments")
-                .select()
+                .select("""
+                    id,
+                    workout_post_id,
+                    user_id,
+                    content,
+                    created_at,
+                    parent_comment_id
+                """)
                 .eq("workout_post_id", value: postId)
                 .order("created_at", ascending: true)
                 .execute()
@@ -430,14 +464,73 @@ class SocialService {
                     content: comment.content,
                     createdAt: comment.createdAt,
                     userName: user?.name,
-                    userAvatarUrl: user?.avatarUrl
+                    userAvatarUrl: user?.avatarUrl,
+                    parentCommentId: comment.parentCommentId
                 )
             }
             
-            return enrichedComments
+            let commentIds = enrichedComments.map { $0.id }
+            if commentIds.isEmpty { return enrichedComments }
+            
+            struct CommentLike: Decodable {
+                let comment_id: String
+                let user_id: String
+            }
+            
+            let likes: [CommentLike] = try await supabase
+                .from("comment_likes")
+                .select("comment_id, user_id")
+                .in("comment_id", values: commentIds)
+                .execute()
+                .value
+            
+            var likeMap: [String: Int] = [:]
+            var likedByUser = Set<String>()
+            for like in likes {
+                likeMap[like.comment_id, default: 0] += 1
+                if let currentUserId, like.user_id == currentUserId {
+                    likedByUser.insert(like.comment_id)
+                }
+            }
+            
+            return enrichedComments.map { comment in
+                var updated = comment
+                updated.likeCount = likeMap[comment.id] ?? 0
+                updated.isLikedByCurrentUser = likedByUser.contains(comment.id)
+                return updated
+            }
         } catch {
             print("❌ Error fetching post comments: \(error)")
             return []
+        }
+    }
+    
+    func likeComment(commentId: String, userId: String) async throws {
+        struct Payload: Encodable { let comment_id: String; let user_id: String }
+        do {
+            try await supabase
+                .from("comment_likes")
+                .insert(Payload(comment_id: commentId, user_id: userId))
+                .execute()
+            print("✅ Comment liked")
+        } catch {
+            print("❌ Error liking comment: \(error)")
+            throw error
+        }
+    }
+    
+    func unlikeComment(commentId: String, userId: String) async throws {
+        do {
+            try await supabase
+                .from("comment_likes")
+                .delete()
+                .eq("comment_id", value: commentId)
+                .eq("user_id", value: userId)
+                .execute()
+            print("✅ Comment unliked")
+        } catch {
+            print("❌ Error unliking comment: \(error)")
+            throw error
         }
     }
     

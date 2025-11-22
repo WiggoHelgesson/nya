@@ -7,18 +7,26 @@ class MapSnapshotService {
     
     private init() {}
     
-    func generateRouteSnapshot(routeCoordinates: [CLLocationCoordinate2D], completion: @escaping (UIImage?) -> Void) {
+    func generateRouteSnapshot(routeCoordinates: [CLLocationCoordinate2D], userLocation: CLLocationCoordinate2D?, completion: @escaping (UIImage?) -> Void) {
         // Always create a snapshot, even if there are no coordinates
         let hasCoordinates = routeCoordinates.count > 1
         
-        // Calculate bounding box for the route (or use default location)
+        // Calculate bounding box for the route (or use user's current location)
         let boundingBox: (center: CLLocationCoordinate2D, latitudeDelta: CLLocationDegrees, longitudeDelta: CLLocationDegrees)
         
         if hasCoordinates {
             boundingBox = calculateBoundingBox(for: routeCoordinates)
+        } else if let userLocation = userLocation {
+            // Use user's actual current location if no route coordinates
+            print("✅ No route coordinates, using user's current location for map snapshot")
+            boundingBox = (
+                center: userLocation,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01
+            )
         } else {
-            // Use default location (Stockholm) if no coordinates
-            print("⚠️ No route coordinates, using default location for map snapshot")
+            // Fallback to default location (Stockholm) only if user location is also unavailable
+            print("⚠️ No route coordinates or user location, using default location for map snapshot")
             boundingBox = (
                 center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
                 latitudeDelta: 0.01,

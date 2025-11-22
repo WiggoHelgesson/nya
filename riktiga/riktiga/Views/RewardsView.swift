@@ -367,6 +367,7 @@ struct RewardsView: View {
             }
             .navigationTitle("Belöningar")
             .navigationBarTitleDisplayMode(.inline)
+            .enableSwipeBack()
             .sheet(isPresented: $showSearchView) {
                 SearchRewardsView(allRewards: allRewards)
             }
@@ -449,6 +450,8 @@ struct FullScreenRewardCard: View {
     let reward: RewardCard
     @Binding var favoritedRewards: Set<Int>
     
+    static let cardHeight: CGFloat = 360
+    
     private let cornerRadius: CGFloat = 24
     private let cardBackground = Color.white
     private let infoBackground = Color(red: 247/255, green: 247/255, blue: 255/255)
@@ -471,11 +474,11 @@ struct FullScreenRewardCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(accentColor)
+                        .foregroundColor(.black)
                     
                     Text(reward.points)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(accentColor)
+                        .foregroundColor(.black)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)

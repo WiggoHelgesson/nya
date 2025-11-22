@@ -1,103 +1,125 @@
 import SwiftUI
 
 struct NotificationsView: View {
-    @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var notifications: [AppNotification] = []
+    private let notificationService = NotificationService.shared
     @State private var isLoading = false
-    @State private var task: Task<Void, Never>?
-    @State private var hasMarkedRead = false
+    @State private var notifications: [AppNotification] = []
+    @State private var selectedNotification: AppNotification?
     var onDismiss: (() -> Void)? = nil
     
     var body: some View {
         NavigationStack {
-            VStack {
-                HStack {
-                    Text("Notifikationer")
-                        .font(.headline)
-                    Spacer()
-                    Button(action: {
-                        markAllAsReadIfNeeded()
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.black)
-                    }
-                }
-                .padding()
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
-                if isLoading {
-                    VStack(spacing: 20) {
-                        ProgressView()
-                            .tint(.blue)
-                        Text("Laddar notifikationer...")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                    }
-                    .frame(maxHeight: .infinity)
+                if isLoading && notifications.isEmpty {
+                    ProgressView()
+                        .scaleEffect(1.5)
                 } else if notifications.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "bell.slash.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        
-                        Text("Inga notifikationer")
-                            .font(.headline)
-                        
-                        Text("Du har inga nya notifikationer just nu")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxHeight: .infinity)
-                    .padding()
+                    emptyStateView
                 } else {
-                    List {
-                        ForEach(notifications) { notification in
-                            NavigationLink(destination: UserProfileView(userId: notification.triggeredByUserId)) {
-                                NotificationRow(notification: notification)
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(notifications) { notification in
+                                NotificationRow(notification: notification) {
+                                    handleNotificationTap(notification)
+                                }
                             }
-                            .listRowSeparator(.hidden)
                         }
+                        .padding()
                     }
-                    .listStyle(.plain)
                 }
-                
-                Spacer()
             }
-            .task {
+            .navigationTitle("Notiser")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                if !notifications.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Markera alla som lästa") {
+                            markAllAsRead()
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                    }
+                }
+            }
+            .refreshable {
                 await loadNotifications()
             }
-            .onDisappear {
-                markAllAsReadIfNeeded()
+            .onAppear {
+                Task {
+                    await loadNotifications()
+                }
             }
+            .onDisappear {
+                onDismiss?()
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "bell.slash.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            
+            Text("Inga notiser")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text("Du kommer att få notiser när någon gillar, kommenterar eller följer dig")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
         }
     }
     
     private func loadNotifications() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        isLoading = true
+        await MainActor.run { isLoading = true }
         do {
-            notifications = try await NotificationService.shared.getNotifications(userId: userId)
-            isLoading = false
+            let fetched = try await notificationService.fetchNotifications(userId: userId)
+            await MainActor.run {
+                notifications = fetched
+                isLoading = false
+            }
         } catch {
             print("❌ Error loading notifications: \(error)")
-            isLoading = false
+            await MainActor.run { isLoading = false }
         }
     }
     
-    private func markAllAsReadIfNeeded() {
-        guard !hasMarkedRead, let userId = authViewModel.currentUser?.id else { return }
-        hasMarkedRead = true
+    private func handleNotificationTap(_ notification: AppNotification) {
         Task {
-            do {
-                try await NotificationService.shared.markAllAsRead(userId: userId)
-            } catch {
-                print("⚠️ Failed to mark notifications as read: \(error)")
+            // Mark as read
+            if !notification.isRead {
+                try? await notificationService.markAsRead(notificationId: notification.id)
+                await MainActor.run {
+                    if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
+                        notifications[index].isRead = true
+                    }
+                }
             }
+            
+            // Navigate based on type
+            // TODO: Navigate to post if postId exists
+        }
+    }
+    
+    private func markAllAsRead() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        Task {
+            try? await notificationService.markAllAsRead(userId: userId)
             await MainActor.run {
-                onDismiss?()
+                notifications = notifications.map { item in
+                    var updated = item
+                    updated.isRead = true
+                    return updated
+                }
             }
         }
     }
@@ -105,111 +127,89 @@ struct NotificationsView: View {
 
 struct NotificationRow: View {
     let notification: AppNotification
+    let onTap: () -> Void
     
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // User avatar
-            if let avatarUrl = notification.triggeredByUserAvatar, !avatarUrl.isEmpty {
-                AsyncImage(url: URL(string: avatarUrl)) { image in
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Avatar
+                AsyncImage(url: URL(string: notification.actorAvatarUrl ?? "")) { image in
                     image
                         .resizable()
                         .scaledToFill()
                 } placeholder: {
                     Image(systemName: "person.circle.fill")
+                        .font(.system(size: 40))
                         .foregroundColor(.gray)
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
                 .clipShape(Circle())
-            } else {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(.gray)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                // User name with action type
-                HStack(spacing: 4) {
-                    Text(notification.triggeredByUserName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
+                
+                // Content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(notification.displayText)
+                        .font(.system(size: 15))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
                     
-                    Image(systemName: getIconForType(notification.type))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(getColorForType(notification.type))
+                    Text(relativeTime(from: notification.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                 }
                 
-                // Description
-                Text(notification.displayText)
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
+                Spacer()
                 
-                // Time
-                Text(formatTime(notification.createdAt))
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
+                // Icon and unread indicator
+                VStack {
+                    Image(systemName: notification.icon)
+                        .font(.system(size: 16))
+                        .foregroundColor(iconColor(for: notification.iconColor))
+                    
+                    if !notification.isRead {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                    }
+                }
             }
-            
-            Spacer()
-            
-            // Unread indicator
-            if !notification.isRead {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 8, height: 8)
-            }
+            .padding()
+            .background(notification.isRead ? Color(.systemBackground) : Color(.systemBackground).opacity(0.95))
+            .cornerRadius(12)
+            .shadow(color: notification.isRead ? Color.black.opacity(0.05) : Color.red.opacity(0.1), radius: 4, x: 0, y: 2)
         }
-        .padding(12)
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-        .padding(.vertical, 4)
+        .buttonStyle(PlainButtonStyle())
     }
     
-    private func getIconForType(_ type: AppNotification.NotificationType) -> String {
-        switch type {
-        case .like:
-            return "heart.fill"
-        case .comment:
-            return "bubble.right.fill"
-        case .follow:
-            return "person.badge.plus.fill"
+    private func iconColor(for colorString: String) -> Color {
+        switch colorString {
+        case "red": return .red
+        case "blue": return .blue
+        case "green": return .green
+        default: return .gray
         }
     }
     
-    private func getColorForType(_ type: AppNotification.NotificationType) -> Color {
-        switch type {
-        case .like:
-            return .red
-        case .comment:
-            return .blue
-        case .follow:
-            return .green
-        }
-    }
-    
-    private func formatTime(_ dateString: String) -> String {
+    private func relativeTime(from isoString: String) -> String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: dateString) else {
-            return "just nu"
-        }
+        guard let date = formatter.date(from: isoString) else { return "" }
         
-        let calendar = Calendar.current
         let now = Date()
-        let components = calendar.dateComponents([.minute, .hour, .day], from: date, to: now)
+        let diff = now.timeIntervalSince(date)
         
-        if let day = components.day, day >= 1 {
-            return "\(day)d sedan"
-        } else if let hour = components.hour, hour >= 1 {
-            return "\(hour)h sedan"
-        } else if let minute = components.minute, minute >= 1 {
-            return "\(minute)m sedan"
+        if diff < 60 {
+            return "Just nu"
+        } else if diff < 3600 {
+            let minutes = Int(diff / 60)
+            return "\(minutes)m sedan"
+        } else if diff < 86400 {
+            let hours = Int(diff / 3600)
+            return "\(hours)h sedan"
+        } else if diff < 604800 {
+            let days = Int(diff / 86400)
+            return "\(days)d sedan"
         } else {
-            return "just nu"
+            let weeks = Int(diff / 604800)
+            return "\(weeks)v sedan"
         }
     }
-}
-
-#Preview {
-    NotificationsView()
-        .environmentObject(AuthViewModel())
 }

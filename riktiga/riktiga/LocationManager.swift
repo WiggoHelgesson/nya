@@ -71,14 +71,38 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    private var shouldRequestAlwaysAfterWhenInUse = false
+    
     func requestLocationPermission() {
-        // Request Always authorization directly for background tracking
-        locationManager.requestAlwaysAuthorization()
+        switch authorizationStatus {
+        case .authorizedAlways:
+            Task { @MainActor in self.locationError = nil }
+        case .authorizedWhenInUse:
+            locationManager.requestAlwaysAuthorization()
+        case .denied, .restricted:
+            openSettings()
+        case .notDetermined:
+            shouldRequestAlwaysAfterWhenInUse = true
+            locationManager.requestWhenInUseAuthorization()
+        @unknown default:
+            locationManager.requestWhenInUseAuthorization()
+        }
     }
     
     func requestBackgroundLocationPermission() {
-        // Request Always authorization for background tracking
-        locationManager.requestAlwaysAuthorization()
+        shouldRequestAlwaysAfterWhenInUse = true
+        switch authorizationStatus {
+        case .authorizedAlways:
+            break
+        case .authorizedWhenInUse:
+            locationManager.requestAlwaysAuthorization()
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            openSettings()
+        @unknown default:
+            locationManager.requestAlwaysAuthorization()
+        }
     }
     
     func setActivityType(_ activityType: String?) {
@@ -382,19 +406,30 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         switch status {
         case .notDetermined:
-            print("📍 Location permission not determined, requesting...")
-            requestLocationPermission()
+            print("📍 Location permission not determined, awaiting user choice...")
+            Task { @MainActor in
+                self.locationError = nil
+            }
             
         case .authorizedAlways:
             print("✅ Location access granted (always)")
-            // Only this status is OK - enable background location updates and clear error
             enableBackgroundLocationIfAuthorized()
             Task { @MainActor in
                 self.locationError = nil
             }
             
-        case .authorizedWhenInUse, .restricted, .denied:
-            // All other cases show the same warning
+        case .authorizedWhenInUse:
+            print("ℹ️ Location access granted only when in use")
+            if shouldRequestAlwaysAfterWhenInUse {
+                shouldRequestAlwaysAfterWhenInUse = false
+                locationManager.requestAlwaysAuthorization()
+            }
+            Task { @MainActor in
+                self.locationError = "Välj 'Tillåt alltid' för att appen ska fungera i bakgrunden."
+                self.showLocationDeniedAlert = true
+            }
+            
+        case .restricted, .denied:
             print("⚠️ Location permission insufficient - showing warning")
             Task { @MainActor in
                 self.locationError = "Platsåtkomst i bakgrunden krävs för att spåra din rutt när appen är stängd. Välj 'Tillåt alltid' i Inställningar."
