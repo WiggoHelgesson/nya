@@ -7,18 +7,14 @@ struct HeroBannerAsset: Identifiable {
 }
 
 struct RewardsView: View {
-    @State private var selectedCategory = "Golf"
+    @State private var selectedCategory = "Gym"
     @State private var currentHeroIndex = 0
-    @State private var currentRewardIndex = 0
-    @State private var selectedReward: RewardCard?
     @State private var searchText = ""
     @State private var showSearchView = false
     @State private var showFavorites = false
     @State private var showMyPurchases = false
     @State private var favoritedRewards: Set<Int> = []
     @EnvironmentObject var authViewModel: AuthViewModel
-    
-    let categories = ["Golf", "Löpning", "Gym", "Skidåkning"]
     
     private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
     private let sectionShadowColor = Color.black.opacity(0.05)
@@ -28,6 +24,8 @@ struct RewardsView: View {
         HeroBannerAsset(imageName: "32", url: "https://peaksummit.se"),
         HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
     ]
+    
+    let categories = ["Gym", "Löpning", "Golf", "Skidåkning"]
     
     let allRewards = [
         RewardCard(
@@ -132,7 +130,7 @@ struct RewardsView: View {
         RewardCard(
             id: 12,
             brandName: "PEAK",
-            discount: "15% rabatt med koden Summit",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "33",
             category: "Golf",
@@ -141,7 +139,7 @@ struct RewardsView: View {
         RewardCard(
             id: 13,
             brandName: "PEAK",
-            discount: "15% rabatt med koden Summit",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "33",
             category: "Löpning",
@@ -150,7 +148,7 @@ struct RewardsView: View {
         RewardCard(
             id: 14,
             brandName: "PEAK",
-            discount: "15% rabatt med koden Summit",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "33",
             category: "Gym",
@@ -159,43 +157,16 @@ struct RewardsView: View {
         RewardCard(
             id: 15,
             brandName: "PEAK",
-            discount: "15% rabatt med koden Summit",
+            discount: "15% rabatt",
             points: "200 poäng",
             imageName: "33",
             category: "Skidåkning",
             isBookmarked: false
         ),
         RewardCard(
-            id: 16,
-            brandName: "CAPSTONE",
-            discount: "10% rabatt med koden CAPSTONE10",
-            points: "200 poäng",
-            imageName: "34",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 17,
-            brandName: "CAPSTONE",
-            discount: "10% rabatt med koden CAPSTONE10",
-            points: "200 poäng",
-            imageName: "34",
-            category: "Löpning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 18,
-            brandName: "CAPSTONE",
-            discount: "10% rabatt med koden CAPSTONE10",
-            points: "200 poäng",
-            imageName: "34",
-            category: "Gym",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 19,
             brandName: "CAPSTONE",
-            discount: "10% rabatt med koden CAPSTONE10",
+            discount: "10% rabatt",
             points: "200 poäng",
             imageName: "34",
             category: "Skidåkning",
@@ -203,58 +174,144 @@ struct RewardsView: View {
         )
     ]
     
-    var filteredRewards: [RewardCard] {
-        return allRewards.filter { $0.category == selectedCategory }
+    private func sortedRewards(for category: String) -> [RewardCard] {
+        let rewards = allRewards.filter { $0.category == category }
+        
+        if category == "Golf" {
+            let priority: [String: Int] = [
+                "LONEGOLF": 0,
+                "PLIKTGOLF": 1
+            ]
+            
+            return rewards.sorted { lhs, rhs in
+                let leftPriority = priority[lhs.brandName] ?? Int.max
+                let rightPriority = priority[rhs.brandName] ?? Int.max
+                
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+                
+                return featuredSort(lhs, rhs)
+            }
+        }
+        
+        return rewards.sorted(by: featuredSort(_:_:))
     }
     
-    var sortedAllRewards: [RewardCard] {
-        // Remove duplicates by brand name
-        let uniqueRewards = Dictionary(grouping: allRewards, by: { $0.brandName })
-            .compactMapValues { $0.first }
-            .values
-        
-        return Array(uniqueRewards).sorted { first, second in
-            // PUMPLABS first
-            if first.brandName == "PUMPLABS" && second.brandName != "PUMPLABS" {
-                return true
-            }
-            if second.brandName == "PUMPLABS" && first.brandName != "PUMPLABS" {
-                return false
-            }
-            
-            // ZEN ENERGY second
-            if first.brandName == "ZEN ENERGY" && second.brandName != "ZEN ENERGY" && second.brandName != "PUMPLABS" {
-                return true
-            }
-            if second.brandName == "ZEN ENERGY" && first.brandName != "ZEN ENERGY" && first.brandName != "PUMPLABS" {
-                return false
-            }
-            
-            // Rest in alphabetical order
-            return first.brandName < second.brandName
+    private func featuredSort(_ first: RewardCard, _ second: RewardCard) -> Bool {
+        if first.brandName == "PUMPLABS" && second.brandName != "PUMPLABS" {
+            return true
         }
+        if second.brandName == "PUMPLABS" && first.brandName != "PUMPLABS" {
+            return false
+        }
+        
+        if first.brandName == "ZEN ENERGY" && second.brandName != "ZEN ENERGY" && second.brandName != "PUMPLABS" {
+            return true
+        }
+        if second.brandName == "ZEN ENERGY" && first.brandName != "ZEN ENERGY" && first.brandName != "PUMPLABS" {
+            return false
+        }
+        
+        return first.brandName < second.brandName
     }
     
     private var heroBannerSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(heroBanners.indices, id: \.self) { index in
-                    let banner = heroBanners[index]
-                    HeroBannerCard(imageName: banner.imageName)
-                        .frame(width: UIScreen.main.bounds.width - 32)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if let url = URL(string: banner.url) {
-                                UIApplication.shared.open(url)
-                            }
-                            currentHeroIndex = index
+        TabView(selection: $currentHeroIndex) {
+            ForEach(heroBanners.indices, id: \.self) { index in
+                let banner = heroBanners[index]
+                HeroBannerCard(imageName: banner.imageName)
+                    .contentShape(Rectangle())
+                    .tag(index)
+                    .onTapGesture {
+                        if let url = URL(string: banner.url) {
+                            UIApplication.shared.open(url)
                         }
-                        .id(index)
+                    }
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .frame(height: 200)
+        .padding(.horizontal, 16)
+    }
+    
+    private var categoriesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Kategorier")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 16)
+            
+            HStack(spacing: 16) {
+                ForEach(categories, id: \.self) { category in
+                    NavigationLink {
+                        CategoryRewardsListView(
+                            category: category,
+                            rewards: sortedRewards(for: category),
+                            favoritedRewards: $favoritedRewards
+                        )
+                    } label: {
+                        CategoryButton(
+                            category: category,
+                            isSelected: selectedCategory == category
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            selectedCategory = category
+                        }
+                    )
                 }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+        }
+    }
+    
+    @ViewBuilder
+    private func sliderSection(title: String, category: String) -> some View {
+        let rewards = sortedRewards(for: category)
+        if rewards.isEmpty {
+            EmptyView()
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(sectionBackgroundColor)
+                    .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
+                
+                VStack(alignment: .leading, spacing: 20) {
+                    Text(title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 4)
+                    
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 20) {
+                                ForEach(Array(rewards.enumerated()), id: \.element.id) { index, reward in
+                                    NavigationLink(destination: RewardDetailView(reward: reward)) {
+                                        FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .id(index)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 4)
+                            .scrollTargetLayout()
+                        }
+                        .scrollTargetBehavior(.viewAligned)
+                        .onAppear {
+                            proxy.scrollTo(0, anchor: .center)
+                        }
+                    }
+                }
+                .padding(.vertical, 28)
+                .padding(.horizontal, 22)
             }
             .padding(.horizontal, 16)
         }
-        .frame(height: 200)
     }
     
     var body: some View {
@@ -339,110 +396,16 @@ struct RewardsView: View {
                     .background(Color(.systemBackground))
                     
                     ScrollView {
-                    VStack(spacing: 24) {
-                        heroBannerSection
-                        
-                        // MARK: - Categories Section
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Kategorier")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 16)
-                            
-                            HStack(spacing: 16) {
-                                ForEach(categories, id: \.self) { category in
-                                    CategoryButton(
-                                        category: category,
-                                        isSelected: selectedCategory == category,
-                                        action: {
-                                            selectedCategory = category
-                                        }
-                                    )
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 16)
+                        VStack(spacing: 24) {
+                            heroBannerSection
+                            categoriesSection
+                            sliderSection(title: "Gym", category: "Gym")
+                            sliderSection(title: "Löpning", category: "Löpning")
+                            sliderSection(title: "Golf", category: "Golf")
+                            sliderSection(title: "Skidåkning", category: "Skidåkning")
+                            Spacer(minLength: 100)
                         }
-                        
-                        // MARK: - Rewards Section
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                .fill(sectionBackgroundColor)
-                                .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
-                            
-                            VStack(alignment: .leading, spacing: 20) {
-                                Text("Belöningar")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 4)
-                                
-                                ScrollViewReader { proxy in
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 20) {
-                                            ForEach(Array(filteredRewards.enumerated()), id: \.element.id) { index, reward in
-                                                NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .id(index)
-                                            }
-                                        }
-                                        .padding(.vertical, 8)
-                                        .padding(.horizontal, 4)
-                                        .scrollTargetLayout()
-                                    }
-                                    .scrollTargetBehavior(.viewAligned)
-                                    .onAppear {
-                                        proxy.scrollTo(currentRewardIndex, anchor: .center)
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 28)
-                            .padding(.horizontal, 22)
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        // MARK: - Alla belöningar Section
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                .fill(sectionBackgroundColor)
-                                .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
-                            
-                            VStack(alignment: .leading, spacing: 20) {
-                                Text("Alla belöningar")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 4)
-                                
-                                ScrollViewReader { proxy in
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 20) {
-                                            ForEach(Array(sortedAllRewards.enumerated()), id: \.element.id) { index, reward in
-                                                NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
-                                                }
-                                                .buttonStyle(PlainButtonStyle())
-                                                .id(index)
-                                            }
-                                        }
-                                        .padding(.vertical, 8)
-                                        .padding(.horizontal, 4)
-                                        .scrollTargetLayout()
-                                    }
-                                    .scrollTargetBehavior(.viewAligned)
-                                    .onAppear {
-                                        proxy.scrollTo(0, anchor: .center)
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 28)
-                            .padding(.horizontal, 22)
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        Spacer(minLength: 100)
-                    }
-                    .padding(.top, 8)
+                        .padding(.top, 8)
                     }
                 }
             }
@@ -478,30 +441,27 @@ struct HeroBannerCard: View {
 struct CategoryButton: View {
     let category: String
     let isSelected: Bool
-    let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: getCategoryIcon(category))
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(isSelected ? .white : .gray)
-                
-                Text(category)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? .white : .gray)
-            }
-            .frame(width: 80, height: 80)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? .black : Color(.systemGray5))
-            )
+        VStack(spacing: 6) {
+            Image(systemName: iconName)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(isSelected ? .white : .gray)
+            
+            Text(category)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(isSelected ? .white : .gray)
         }
+        .frame(width: 80, height: 80)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? .black : Color(.systemGray5))
+        )
         .scaleEffect(isSelected ? 1.05 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
     
-    func getCategoryIcon(_ category: String) -> String {
+    private var iconName: String {
         switch category {
         case "Golf":
             return "flag.fill"
@@ -510,7 +470,7 @@ struct CategoryButton: View {
         case "Gym":
             return "dumbbell.fill"
         case "Skidåkning":
-            return "mountain.2.fill"
+            return "figure.skiing.downhill"
         default:
             return "star.fill"
         }
@@ -623,8 +583,35 @@ struct FullScreenRewardCard: View {
         case "11": return "20" // RETROGOLF
         case "12": return "21" // PUMPLABS
         case "13": return "22" // ZEN ENERGY
+        case "33": return "33" // PEAK
+        case "34": return "34" // CAPSTONE
         default: return "5" // Default to PEGMATE
         }
+    }
+}
+
+struct CategoryRewardsListView: View {
+    let category: String
+    let rewards: [RewardCard]
+    @Binding var favoritedRewards: Set<Int>
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                ForEach(rewards, id: \.id) { reward in
+                    NavigationLink(destination: RewardDetailView(reward: reward)) {
+                        FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.vertical, 24)
+            .padding(.horizontal, 8)
+        }
+        .padding(.horizontal, 8)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(category)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -1214,6 +1201,10 @@ struct ConfirmationView: View {
             return "UPNDOWN15"
         case "ZEN ENERGY":
             return "UPDOWN15"
+        case "PEAK":
+            return "Summit"
+        case "CAPSTONE":
+            return "CAPSTONE10"
         default:
             return "CODE2025"
         }
