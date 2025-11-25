@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HeroBannerAsset: Identifiable {
     let id = UUID()
@@ -747,11 +748,11 @@ struct RewardDetailView: View {
     private func getCompanyDescription(for brandName: String) -> String {
         switch brandName {
         case "PLIKTGOLF":
-            return "PLIKTGOLF är Sveriges ledande golfbutik med över 30 års erfarenhet. Vi erbjuder det senaste inom golfutrustning, kläder och accessoarer från världens bästa märken."
+            return "Pliktgolf startade hösten 2023 med målet att göra golf mer tillgängligt och hållbart genom att sälja återvunna premiumbollar till ett lägre pris. Tillsammans med golfklubbar samlar de in bortslagna bollar från vatten och natur, rengör och sorterar dem, och erbjuder sedan golfare ett cirkulärt alternativ kompletterat med träningstillbehör och teknik."
         case "PEGMATE":
-            return "PEGMATE specialiserar sig på högkvalitativ golfutrustning och är känt för sina innovativa produkter som hjälper golfare att förbättra sitt spel."
+            return "Pegmate är en svensk uppfinning från Karlshamn/Mörrum i Blekinge. En extra peg-hållare med elastiskt fäste som sitter kvar i marken och gör att peggen inte flyger iväg vid utslag eller på rangen. Produkten är lokalproducerad, giftfri och fungerar lika bra på gräs som konstgräs."
         case "LONEGOLF":
-            return "LONEGOLF fokuserar på premium golfutrustning och personlig service. Vi hjälper dig att hitta rätt utrustning för ditt spel."
+            return "Lone Golf är ett svenskt startup-varumärke som designar och säljer egna golfklubbor med ambitionen att ge premiumkänsla till ett mer tillgängligt pris. Fokus ligger på egen design, teknik och en rak dialog med golfare."
         case "WINWIZE":
             return "WINWIZE är en innovativ golfbutik som kombinerar traditionell kvalitet med moderna lösningar för att ge dig det bästa golfupplevelsen."
         case "SCANDIGOLF":
@@ -763,13 +764,13 @@ struct RewardDetailView: View {
         case "RETROGOLF":
             return "RETROGOLF erbjuder klassisk golfutrustning med en modern twist, perfekt för golfare som uppskattar både tradition och innovation."
         case "PUMPLABS":
-            return "PUMPLABS är en modern gymkedja som fokuserar på funktionell träning och personlig utveckling. Vi hjälper dig att nå dina fitnessmål."
+            return "PumpLab tar fram högkvalitativa kosttillskott utvecklade och producerade i Sverige. Fokus ligger på rena ingredienser, tydliga doser och produkter som faktiskt levererar resultat – bättre prestation, snabbare återhämtning och god smak för dig som vill ta träningen till nästa nivå."
         case "ZEN ENERGY":
-            return "ZEN ENERGY erbjuder energidrycker och supplement som ger dig den extra energin du behöver för din träning och vardag."
+            return "Zen Energy är energidrycken för dig som vill ta både kroppen och hjärnan till nästa nivå. Varje burk innehåller 10 g veganskt protein, 165 mg naturligt koffein och 300 mg ekologiskt Lion’s Mane för skärpa och fokus – plus ett komplett vitaminkomplex utan artificiella tillsatser."
         case "PEAK":
-            return "PEAK Summit ger dig funktionella outdoor- och träningskläder som klarar både berg, löpning och gym. Använd koden SUMMIT för 15% rabatt."
+            return "PeakSummit är energidrycken för bergsbestigare och äventyrare som aldrig nöjer sig med att stanna vid baslägret. Den är framtagen för att ge målinriktad energi, återhämtning och uthållighet i de mest krävande miljöerna."
         case "CAPSTONE":
-            return "CAPSTONE erbjuder premium tränings- och friluftskläder för allt från gym till bergstoppar. Använd koden CAPSTONE10 för 10% rabatt."
+            return "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }

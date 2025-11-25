@@ -18,6 +18,11 @@ struct ProfileView: View {
     @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
     @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
+    @State private var lastActivityFetch: Date?
+    @State private var isUsingCachedWeeklyData = false
+    
+    private let cacheManager = AppCacheManager.shared
+    private let weeklyDataThrottle: TimeInterval = 120
     
     private func updatePersonalBestInfo() {
         let fiveKm = authViewModel.currentUser?.pb5kmMinutes
@@ -184,6 +189,10 @@ struct ProfileView: View {
                     WeeklyActivityChart(weeklyData: weeklyActivityData)
                         .padding(.horizontal, 16)
                     
+                    if isUsingCachedWeeklyData {
+                        cachedStatsIndicator
+                    }
+                    
                     Divider()
                         .background(Color(.systemGray4))
                     
@@ -272,6 +281,20 @@ struct ProfileView: View {
         }
     }
     
+    private var cachedStatsIndicator: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Visar sparad statistik")
+                .font(.system(size: 12, weight: .medium))
+        }
+        .foregroundColor(.black)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.05))
+        .cornerRadius(12)
+    }
+    
     private func loadProfileStats() {
         guard let currentUserId = authViewModel.currentUser?.id else { return }
         
@@ -290,150 +313,214 @@ struct ProfileView: View {
         }
     }
     
-    private func loadWeeklyActivityData() {
+    private func loadWeeklyActivityData(forceReload: Bool = false) {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        Task {
+        let pbFive = authViewModel.currentUser?.pb5kmMinutes
+        let pbTenCombined: Int? = {
+            guard let minutes = authViewModel.currentUser?.pb10kmMinutes else { return nil }
+            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
+            return hours * 60 + minutes
+        }()
+        
+        if !forceReload,
+           let cachedWorkouts = cacheManager.getCachedUserWorkouts(userId: userId, allowExpired: true),
+           !cachedWorkouts.isEmpty {
+            Task.detached(priority: .utility) {
+                let metrics = ProfileView.computeMetrics(from: cachedWorkouts)
+                await MainActor.run {
+                    self.applyProfileMetrics(metrics,
+                                             pbFive: pbFive,
+                                             pbTen: pbTenCombined,
+                                             usingCache: true)
+                }
+            }
+        }
+        
+        if !forceReload,
+           let lastFetch = lastActivityFetch,
+           Date().timeIntervalSince(lastFetch) < weeklyDataThrottle,
+           !weeklyActivityData.isEmpty {
+            return
+        }
+        
+        Task(priority: .userInitiated) {
             do {
-                let calendar = Calendar.current
-                let now = Date()
-                var weeks: [WeeklyActivityData] = []
-                
-                // Fetch all activities ONCE
                 let activities = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId)
+                cacheManager.saveUserWorkouts(activities, userId: userId)
                 
-                // Update total activity count
-                await MainActor.run {
-                    self.activityCount = activities.count
-                }
-                
-                // Calculate bench press max across all activities
-                var benchBestKg: Double = 0.0
-                for activity in activities {
-                    let type = activity.activityType.lowercased()
-                    if type.contains("gym"), let exercises = activity.exercises {
-                        for exercise in exercises {
-                            let normalizedName = exercise.name.lowercased()
-                            if normalizedName.contains("bänk") || normalizedName.contains("bench") {
-                                if let maxKg = exercise.kg.max() {
-                                    benchBestKg = max(benchBestKg, maxKg)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Update personal best info with bench press max
-                await MainActor.run {
-                    self.personalBestInfo = PersonalBestInfo(
-                        fiveKmMinutes: authViewModel.currentUser?.pb5kmMinutes,
-                        tenKmMinutes: {
-                            guard let minutes = authViewModel.currentUser?.pb10kmMinutes else { return nil }
-                            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
-                            return hours * 60 + minutes
-                        }(),
-                        benchMaxKg: benchBestKg > 0 ? benchBestKg : nil
-                    )
-                }
-                
-                // Parse dates once and cache them
-                let activitiesWithDates = activities.compactMap { activity -> (WorkoutPost, Date)? in
-                    guard let date = ISO8601DateFormatter().date(from: activity.createdAt) else {
-                        return nil
-                    }
-                    return (activity, date)
-                }
-                
-                // Get last 10 weeks
-                for weekOffset in (0..<10).reversed() {
-                    guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: now),
-                          let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
-                        continue
-                    }
-                    
-                    // Filter activities for this week using cached dates
-                    let weekActivities = activitiesWithDates.filter { (_, date) in
-                        return date >= weekStart && date < weekEnd
-                    }.map { $0.0 }
-                    
-                    // Calculate stats by activity type
-                    var runDistance = 0.0, runTime = 0.0, runElevation = 0.0
-                    var golfDistance = 0.0, golfTime = 0.0, golfElevation = 0.0
-                    var climbingDistance = 0.0, climbingTime = 0.0, climbingElevation = 0.0
-                    var skiingDistance = 0.0, skiingTime = 0.0, skiingElevation = 0.0
-                    var gymVolume = 0.0, gymTime = 0.0
-                    
-                    for activity in weekActivities {
-                        let distance = activity.distance ?? 0
-                        let time = Double(activity.duration ?? 0)
-                        let elevation = activity.elevationGain ?? 0
-                        let type = activity.activityType.lowercased()
-                        
-                        switch type {
-                        case "run", "running", "löpning":
-                            runDistance += distance
-                            runTime += time
-                            runElevation += elevation
-                        case "golf":
-                            golfDistance += distance
-                            golfTime += time
-                            golfElevation += elevation
-                        case "climbing", "klättring", "bergsklättring":
-                            climbingDistance += distance
-                            climbingTime += time
-                            climbingElevation += elevation
-                        case "skiing", "skidåkning":
-                            skiingDistance += distance
-                            skiingTime += time
-                            skiingElevation += elevation
-                        case "gym", "gympass":
-                            gymTime += time
-                            if let exercises = activity.exercises {
-                                for exercise in exercises {
-                                    let pairs = zip(exercise.kg, exercise.reps)
-                                    let volume = pairs.reduce(0.0) { $0 + (Double($1.1) * $1.0) }
-                                    gymVolume += volume
-                                }
-                            }
-                        default:
-                            runDistance += distance
-                            runTime += time
-                            runElevation += elevation
-                        }
-                    }
-                    
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "MMM d"
-                    let weekLabel = dateFormatter.string(from: weekStart)
-                    
-                    weeks.append(WeeklyActivityData(
-                        weekLabel: weekLabel,
-                        runDistance: runDistance,
-                        runTime: runTime,
-                        runElevation: runElevation,
-                        golfDistance: golfDistance,
-                        golfTime: golfTime,
-                        golfElevation: golfElevation,
-                        climbingDistance: climbingDistance,
-                        climbingTime: climbingTime,
-                        climbingElevation: climbingElevation,
-                        skiingDistance: skiingDistance,
-                        skiingTime: skiingTime,
-                        skiingElevation: skiingElevation,
-                        gymVolume: gymVolume,
-                        gymTime: gymTime,
-                        startDate: weekStart,
-                        endDate: weekEnd
-                    ))
-                }
+                let metrics = await Task.detached(priority: .utility) {
+                    ProfileView.computeMetrics(from: activities)
+                }.value
                 
                 await MainActor.run {
-                    self.weeklyActivityData = weeks
+                    self.lastActivityFetch = Date()
+                    self.applyProfileMetrics(metrics,
+                                             pbFive: pbFive,
+                                             pbTen: pbTenCombined,
+                                             usingCache: false)
                 }
             } catch {
+                if Task.isCancelled { return }
                 print("❌ Error loading weekly activity data: \(error)")
             }
         }
+    }
+}
+
+    @MainActor
+    private func applyProfileMetrics(_ metrics: ProfileMetrics,
+                                     pbFive: Int?,
+                                     pbTen: Int?,
+                                     usingCache: Bool) {
+        weeklyActivityData = metrics.weeklyData
+        activityCount = metrics.activityCount
+        personalBestInfo = PersonalBestInfo(
+            fiveKmMinutes: pbFive,
+            tenKmMinutes: pbTen,
+            benchMaxKg: metrics.benchMaxKg
+        )
+        isUsingCachedWeeklyData = usingCache
+    }
+}
+
+private struct ProfileMetrics {
+    let weeklyData: [WeeklyActivityData]
+    let activityCount: Int
+    let benchMaxKg: Double?
+}
+
+private extension ProfileView {
+    static func computeMetrics(from activities: [WorkoutPost]) -> ProfileMetrics {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+        let isoFormatter = ISO8601DateFormatter()
+        var activitiesWithDates: [(WorkoutPost, Date)] = []
+        activitiesWithDates.reserveCapacity(activities.count)
+        var benchBestKg: Double = 0.0
+        
+        for activity in activities {
+            guard let date = isoFormatter.date(from: activity.createdAt) else { continue }
+            activitiesWithDates.append((activity, date))
+            
+            if activity.activityType.lowercased().contains("gym"),
+               let exercises = activity.exercises {
+                for exercise in exercises {
+                    let normalizedName = exercise.name.lowercased()
+                    if normalizedName.contains("bänk") || normalizedName.contains("bench"),
+                       let maxKg = exercise.kg.max() {
+                        benchBestKg = max(benchBestKg, maxKg)
+                    }
+                }
+            }
+        }
+        
+        struct WeekKey: Hashable {
+            let year: Int
+            let week: Int
+        }
+        
+        var buckets: [WeekKey: [WorkoutPost]] = [:]
+        for (activity, date) in activitiesWithDates {
+            let comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+            guard let year = comps.yearForWeekOfYear,
+                  let week = comps.weekOfYear else { continue }
+            let key = WeekKey(year: year, week: week)
+            buckets[key, default: []].append(activity)
+        }
+        
+        let labelFormatter = DateFormatter()
+        labelFormatter.locale = Locale(identifier: "sv_SE")
+        labelFormatter.dateFormat = "MMM d"
+        
+        var weeks: [WeeklyActivityData] = []
+        for offset in stride(from: 9, through: 0, by: -1) {
+            guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -offset, to: currentWeekStart),
+                  let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else { continue }
+            
+            let comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart)
+            guard let year = comps.yearForWeekOfYear,
+                  let week = comps.weekOfYear else { continue }
+            
+            let key = WeekKey(year: year, week: week)
+            let weeklyActivities = buckets[key] ?? []
+            
+            var runDistance = 0.0, runTime = 0.0, runElevation = 0.0
+            var golfDistance = 0.0, golfTime = 0.0, golfElevation = 0.0
+            var climbingDistance = 0.0, climbingTime = 0.0, climbingElevation = 0.0
+            var skiingDistance = 0.0, skiingTime = 0.0, skiingElevation = 0.0
+            var gymVolume = 0.0, gymTime = 0.0
+            
+            for activity in weeklyActivities {
+                let distance = activity.distance ?? 0
+                let time = Double(activity.duration ?? 0)
+                let elevation = activity.elevationGain ?? 0
+                let type = activity.activityType.lowercased()
+                
+                switch type {
+                case "run", "running", "löpning":
+                    runDistance += distance
+                    runTime += time
+                    runElevation += elevation
+                case "golf":
+                    golfDistance += distance
+                    golfTime += time
+                    golfElevation += elevation
+                case "climbing", "klättring", "bergsklättring":
+                    climbingDistance += distance
+                    climbingTime += time
+                    climbingElevation += elevation
+                case "skiing", "skidåkning":
+                    skiingDistance += distance
+                    skiingTime += time
+                    skiingElevation += elevation
+                case "gym", "gympass":
+                    gymTime += time
+                    if let exercises = activity.exercises {
+                        for exercise in exercises {
+                            let volume = zip(exercise.kg, exercise.reps).reduce(0.0) { partial, pair in
+                                partial + (pair.0 * Double(pair.1))
+                            }
+                            gymVolume += volume
+                        }
+                    }
+                default:
+                    runDistance += distance
+                    runTime += time
+                    runElevation += elevation
+                }
+            }
+            
+            weeks.append(
+                WeeklyActivityData(
+                    weekLabel: labelFormatter.string(from: weekStart),
+                    runDistance: runDistance,
+                    runTime: runTime,
+                    runElevation: runElevation,
+                    golfDistance: golfDistance,
+                    golfTime: golfTime,
+                    golfElevation: golfElevation,
+                    climbingDistance: climbingDistance,
+                    climbingTime: climbingTime,
+                    climbingElevation: climbingElevation,
+                    skiingDistance: skiingDistance,
+                    skiingTime: skiingTime,
+                    skiingElevation: skiingElevation,
+                    gymVolume: gymVolume,
+                    gymTime: gymTime,
+                    startDate: weekStart,
+                    endDate: weekEnd
+                )
+            )
+        }
+        
+        let benchValue = benchBestKg > 0 ? benchBestKg : nil
+        return ProfileMetrics(
+            weeklyData: weeks,
+            activityCount: activities.count,
+            benchMaxKg: benchValue
+        )
     }
 }
 
