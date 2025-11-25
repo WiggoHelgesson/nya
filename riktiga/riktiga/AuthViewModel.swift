@@ -149,10 +149,72 @@ class AuthViewModel: NSObject, ObservableObject {
                 password: String,
                 confirmPassword: String,
                 onboardingData: OnboardingData? = nil) {
-        _ = (name, username, email, password, confirmPassword, onboardingData)
-        isLoading = false
-        errorMessage = "Det går inte att skapa nya konton i appen just nu."
-        print("ℹ️ Signup is disabled – attempted signup blocked.")
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Namnet kan inte vara tomt."
+            return
+        }
+        guard trimmedUsername.count >= 2 else {
+            errorMessage = "Välj ett användarnamn (minst 2 tecken)."
+            return
+        }
+        guard trimmedEmail.range(of: #"^\S+@\S+\.\S+$"#, options: .regularExpression) != nil else {
+            errorMessage = "Ogiltig e-postadress."
+            return
+        }
+        guard password.count >= 6 else {
+            errorMessage = "Lösenordet måste vara minst 6 tecken."
+            return
+        }
+        guard password == confirmPassword else {
+            errorMessage = "Lösenorden matchar inte."
+            return
+        }
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                let response = try await supabase.auth.signUp(
+                    email: trimmedEmail,
+                    password: password
+                )
+                
+                let userId = response.user.id.uuidString
+                
+                let placeholderUsername = "user-\(userId.prefix(6))"
+                var newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
+                try await ProfileService.shared.createUserProfile(newUser)
+                
+                if let onboardingData {
+                    _ = await ProfileService.shared.applyOnboardingData(userId: userId, data: onboardingData)
+                } else {
+                    try await ProfileService.shared.updateUsername(userId: userId, username: trimmedUsername)
+                }
+                
+                if var profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                    profile.name = trimmedUsername
+                    newUser = profile
+                }
+                
+                await RevenueCatManager.shared.logInFor(appUserId: userId)
+                
+                await MainActor.run {
+                    self.currentUser = newUser
+                    self.isLoggedIn = true
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Signup misslyckades: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     func logout() {

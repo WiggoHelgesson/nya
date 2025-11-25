@@ -20,6 +20,7 @@ struct HomeView: View {
     @State private var uppyInsight: String = "Laddar... //UPPY"
     @State private var isLoadingInsight = false
     @State private var pendingRewardCelebration: RewardCelebration?
+    @State private var streakInfo = StreakManager.shared.getCurrentStreak()
     
     var body: some View {
         NavigationStack {
@@ -94,41 +95,8 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 8)
                         
-                        Button(action: {
-                            showStatistics = true
-                        }) {
-                            HStack(spacing: 12) {
-                                Image("23")
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 46, height: 46)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Utveckla din träning med UPPY")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
-                                    Text("Få AI-coachning baserat på dina pass")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.85))
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.9))
-                            }
-                            .padding(16)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.black, Color.gray.opacity(0.85)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .cornerRadius(16)
-                            .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 8)
-                        }
-                        .padding(.horizontal, 20)
+                        streakSection
+                            .padding(.horizontal, 20)
                         
                         // MARK: - Recommended Friends Section
                         if !recommendedUsers.isEmpty || isLoadingRecommended {
@@ -212,6 +180,9 @@ struct HomeView: View {
                 }
             }
             
+            // Refresh streak info
+            streakInfo = StreakManager.shared.getCurrentStreak()
+            
             // Load AI-generated insight
             loadUppyInsight()
             
@@ -253,7 +224,9 @@ struct HomeView: View {
                 object: nil,
                 queue: .main
             ) { _ in
-                print("🔄 Workout saved, refreshing weekly stats...")
+                print("🔄 Workout saved, refreshing weekly stats and streak...")
+                // Refresh streak info
+                streakInfo = StreakManager.shared.getCurrentStreak()
                 if let userId = authViewModel.currentUser?.id {
                     Task {
                         await statisticsService.fetchWeeklyStats(userId: userId)
@@ -344,38 +317,139 @@ struct HomeView: View {
     }
 
     private var motivationBanner: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image("31")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 4)
-            
-            if isLoadingInsight {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Analyserar...")
-                        .font(.system(size: 13))
+        NavigationLink {
+            UppyChatView()
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                Image("31")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 4)
+                
+                if isLoadingInsight {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Analyserar...")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                    }
+                } else {
+                    Text(uppyInsight)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.leading)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var streakSection: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // Flame icon with gradient
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.orange.opacity(0.2), Color.orange.opacity(0.05)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 70, height: 70)
+                    
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.orange, Color.red],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Din streak")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.black)
+                    
+                    HStack(spacing: 8) {
+                        Text("\(streakInfo.consecutiveDays)")
+                            .font(.system(size: 28, weight: .black))
+                            .foregroundColor(.black)
+                        Text(streakInfo.consecutiveDays == 1 ? "dag i rad" : "dagar i rad")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Text("\(streakInfo.completedDaysThisWeek)/7 dagar denna vecka")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.gray)
                 }
-            } else {
-                Text(uppyInsight)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.leading)
+                
+                Spacer()
             }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            )
             
-            Spacer()
+            // Week calendar
+            HStack(spacing: 8) {
+                ForEach(0..<7) { index in
+                    let symbols = Calendar.current.shortWeekdaySymbols
+                    let symbol = symbols[index]
+                    let isCompleted = streakInfo.completedDaysThisWeek > index
+                    
+                    VStack(spacing: 6) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(isCompleted ?
+                                      LinearGradient(colors: [Color.orange, Color.orange.opacity(0.8)], startPoint: .top, endPoint: .bottom) :
+                                      LinearGradient(colors: [Color(.systemGray6), Color(.systemGray6)], startPoint: .top, endPoint: .bottom))
+                                .frame(height: 48)
+                            
+                            if isCompleted {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                            } else {
+                                Circle()
+                                    .fill(Color.white.opacity(0.5))
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                        
+                        Text(String(symbol.prefix(2)))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            )
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
-        )
     }
     
     private func checkAndAwardDailyStepsReward(steps: [DailySteps]) {

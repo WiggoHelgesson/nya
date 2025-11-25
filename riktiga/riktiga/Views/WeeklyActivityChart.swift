@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WeeklyActivityChart: View {
     let weeklyData: [WeeklyActivityData]
-    @State private var selectedActivity: ActivityType = .run
+    @State private var selectedActivity: ActivityType = .gym
     @State private var selectedWeekIndex: Int? = nil
     @State private var showStatistics = false
     @State private var showPaywall = false
@@ -34,7 +34,7 @@ struct WeeklyActivityChart: View {
         VStack(spacing: 16) {
             // Activity Type Selector
             HStack(spacing: 6) {
-                ForEach(ActivityType.allCases, id: \.self) { type in
+                ForEach([ActivityType.gym, ActivityType.run], id: \.self) { type in
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             selectedActivity = type

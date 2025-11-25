@@ -19,7 +19,74 @@ struct GymSessionView: View {
     @State private var lastPersistedElapsedSeconds: Int = 0
     @State private var showXpCelebration = false
     @State private var xpCelebrationPoints: Int = 0
+    @State private var showStreakCelebration = false
+    @State private var selectedOtherActivity: ActivityType?
     @FocusState private var focusedField: GymSessionInputField?
+    
+    @ViewBuilder
+    private var otherActivitiesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Andra aktiviteter")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 16)
+            
+            HStack(spacing: 12) {
+                Button {
+                    selectedOtherActivity = .running
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "figure.run")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.black)
+                        Text("Löpning")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                
+                Button {
+                    selectedOtherActivity = .golf
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "figure.golf")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.black)
+                        Text("Golf")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                
+                Button {
+                    selectedOtherActivity = .skiing
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "figure.skiing.downhill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.black)
+                        Text("Skidåkning")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 8)
+    }
     
     @ViewBuilder
     private var savedWorkoutsSection: some View {
@@ -71,35 +138,51 @@ struct GymSessionView: View {
                     .ignoresSafeArea()
                 
                 if viewModel.exercises.isEmpty {
-                    // Empty state
-                    VStack(spacing: 24) {
-                        Image(systemName: "dumbbell.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        
-                        Text("Lägg till övningar för att börja")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                        
-                        Button(action: {
-                            showExercisePicker = true
-                        }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Lägg till övning")
+                    // Empty state with centered main content
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // Spacer to push content to center
+                            Spacer()
+                                .frame(height: 120)
+                            
+                            // Centered empty state
+                            VStack(spacing: 24) {
+                                Image(systemName: "dumbbell.fill")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.gray)
+                                
+                                Text("Lägg till övningar för att börja")
+                                    .font(.headline)
+                                    .foregroundColor(.gray)
+                                
+                                Button(action: {
+                                    showExercisePicker = true
+                                }) {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Lägg till övning")
+                                    }
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(12)
+                                }
+                                .padding(.horizontal, 16)
                             }
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
+                            
+                            // Spacer before scrollable sections
+                            Spacer()
+                                .frame(height: 60)
+                            
+                            // Scrollable sections below
+                            VStack(spacing: 24) {
+                                otherActivitiesSection
+                                savedWorkoutsSection
+                            }
+                            .padding(.bottom, 100)
                         }
-                        .padding(.horizontal, 16)
-                        
-                        savedWorkoutsSection
-                        
-                        .padding(.bottom, 100)
                     }
                 } else {
                     // Exercise list
@@ -235,11 +318,17 @@ struct GymSessionView: View {
             .sheet(isPresented: $showXpCelebration) {
                 XpCelebrationView(
                     points: xpCelebrationPoints,
-                    buttonTitle: "Skapa inlägg"
+                    buttonTitle: "Fortsätt"
                 ) {
                     showXpCelebration = false
-                    showCompleteSession = true
+                    showStreakCelebration = true
                 }
+            }
+            .sheet(isPresented: $showStreakCelebration) {
+                StreakCelebrationView(onDismiss: {
+                    showStreakCelebration = false
+                    showCompleteSession = true
+                })
             }
             .fullScreenCover(isPresented: $showCompleteSession) {
                 if let sessionData = viewModel.sessionData {
@@ -263,6 +352,10 @@ struct GymSessionView: View {
                     )
                     .environmentObject(authViewModel)
                 }
+            }
+            .fullScreenCover(item: $selectedOtherActivity) { activity in
+                StartSessionView(initialActivity: activity)
+                    .ignoresSafeArea()
             }
             .onAppear {
                 initializeSessionIfNeeded()
@@ -320,6 +413,10 @@ struct GymSessionView: View {
         persistSession(force: true)
         let duration = viewModel.elapsedSeconds
         viewModel.completeSession(duration: duration)
+        
+        // Update streak
+        StreakManager.shared.registerWorkoutCompletion()
+        
         xpCelebrationPoints = viewModel.sessionData?.earnedXP ?? 0
         showXpCelebration = true
     }
@@ -708,6 +805,7 @@ struct ExercisePickerView: View {
     @State private var equipmentList: [String] = []
     @State private var targetList: [String] = []
     @State private var hasLoadedExercises = false
+    @State private var recentlyUsedExercises: [ExerciseDBExercise] = []
     
     var filteredExercises: [ExerciseDBExercise] {
         if searchText.isEmpty {
@@ -825,6 +923,57 @@ struct ExercisePickerView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
+                            // Recently used exercises section
+                            if !recentlyUsedExercises.isEmpty && searchText.isEmpty {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Senast använda")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                        .padding(.horizontal, 16)
+                                        .padding(.top, 16)
+                                    
+                                    ForEach(recentlyUsedExercises) { exercise in
+                                        Button(action: {
+                                            let template = ExerciseTemplate(
+                                                id: exercise.id,
+                                                name: exercise.displayName,
+                                                category: exercise.swedishBodyPart
+                                            )
+                                            onSelect(template)
+                                            dismiss()
+                                        }) {
+                                            HStack(spacing: 12) {
+                                                ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
+                                                
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(exercise.displayName)
+                                                        .font(.system(size: 16, weight: .medium))
+                                                        .foregroundColor(.black)
+                                                    Text(exercise.swedishBodyPart)
+                                                        .font(.system(size: 13))
+                                                        .foregroundColor(.gray)
+                                                }
+                                                Spacer()
+                                                Image(systemName: "clock.arrow.circlepath")
+                                                    .foregroundColor(.orange)
+                                                    .font(.system(size: 18))
+                                            }
+                                            .padding(.vertical, 12)
+                                            .padding(.horizontal, 16)
+                                            .background(Color(.systemGray6).opacity(0.5))
+                                        }
+                                    }
+                                    
+                                    Divider()
+                                        .padding(.vertical, 12)
+                                    
+                                    Text("Alla övningar")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                        .padding(.horizontal, 16)
+                                }
+                            }
+                            
                             ForEach(filteredExercises) { exercise in
                                 Button(action: {
                                     let template = ExerciseTemplate(
@@ -960,6 +1109,10 @@ struct ExercisePickerView: View {
         }
         do {
             let allExercises = try await ExerciseDBService.shared.fetchAllExercises()
+            
+            // Load recently used exercises
+            await loadRecentlyUsedExercises(from: allExercises)
+            
             await MainActor.run {
                 exercises = allExercises
                 isLoading = false
@@ -972,6 +1125,47 @@ struct ExercisePickerView: View {
                 hasLoadedExercises = true
             }
             print("❌ Error loading exercises: \(error)")
+        }
+    }
+    
+    private func loadRecentlyUsedExercises(from allExercises: [ExerciseDBExercise]) async {
+        // Get user's recent workout posts
+        guard let userId = AuthViewModel.shared.currentUser?.id else { return }
+        
+        do {
+            let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: false)
+            
+            // Extract unique exercise names from recent workouts (last 10 workouts)
+            var exerciseNames: [String] = []
+            let recentPosts = Array(posts.prefix(10))
+            
+            for post in recentPosts {
+                if let exercises = post.exercises {
+                    for exercise in exercises {
+                        if !exerciseNames.contains(exercise.name) {
+                            exerciseNames.append(exercise.name)
+                        }
+                    }
+                }
+            }
+            
+            // Match exercise names with ExerciseDB exercises
+            let recentExercises = allExercises.filter { exercise in
+                exerciseNames.contains { name in
+                    let normalized1 = name.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+                    let normalized2 = exercise.displayName.lowercased().folding(options: .diacriticInsensitive, locale: .current)
+                    return normalized1 == normalized2
+                }
+            }
+            
+            // Take only first 5 most recently used
+            await MainActor.run {
+                recentlyUsedExercises = Array(recentExercises.prefix(5))
+            }
+            
+            print("✅ Loaded \(recentlyUsedExercises.count) recently used exercises")
+        } catch {
+            print("❌ Error loading recently used exercises: \(error)")
         }
     }
     

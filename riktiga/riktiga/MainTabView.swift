@@ -89,19 +89,12 @@ struct MainTabView: View {
         }
         .enableSwipeBack()
         .fullScreenCover(isPresented: $showStartSession) {
-            TransparentStartSessionContainer(onDismiss: {
-                showStartSession = false
-            }) {
-                StartSessionView()
-                    .background(Color.clear)
-                    .ignoresSafeArea()
-            }
+            GymSessionView()
+                .ignoresSafeArea()
         }
-        .sheet(isPresented: $showResumeSession) {
+        .fullScreenCover(isPresented: $showResumeSession) {
             StartSessionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .ignoresSafeArea()
         }
         .onAppear {
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession {

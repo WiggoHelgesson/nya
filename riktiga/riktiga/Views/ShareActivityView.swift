@@ -162,6 +162,8 @@ struct ShareActivityView: View {
             let primaryValueFont = UIFont.systemFont(ofSize: 150, weight: .heavy)
             let secondaryValueFont = UIFont.systemFont(ofSize: 120, weight: .heavy)
             let brandFont = UIFont.systemFont(ofSize: 110, weight: .black)
+            let handleFont = UIFont.systemFont(ofSize: 70, weight: .semibold)
+            let handleText = shareHandle(for: post)
 
             let labelColor = UIColor.white.withAlphaComponent(0.85)
             let valueColor = UIColor.white
@@ -234,6 +236,17 @@ struct ShareActivityView: View {
                     y: logoRect.maxY + 40
                 )
                 ("Up&Down" as NSString).draw(at: textOrigin, withAttributes: textAttributes)
+
+                let handleAttributes: [NSAttributedString.Key: Any] = [
+                    .font: handleFont,
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.9)
+                ]
+                let handleSize = (handleText as NSString).size(withAttributes: handleAttributes)
+                let handleOrigin = CGPoint(
+                    x: logoRect.midX - handleSize.width / 2,
+                    y: textOrigin.y + textSize.height + 18
+                )
+                (handleText as NSString).draw(at: handleOrigin, withAttributes: handleAttributes)
             }
         }
     }
@@ -492,9 +505,14 @@ struct ActivityCardPreview: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.white.opacity(0.6), lineWidth: 2)
                 )
-            Text("Up&Down")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.white)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Up&Down")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                Text(shareHandle(for: post))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 24)
@@ -619,4 +637,14 @@ private func overlayDurationString(_ seconds: Int?) -> String {
         commentCount: 2,
         isLikedByCurrentUser: false
     ))
+}
+
+private func shareHandle(for post: SocialWorkoutPost) -> String {
+    let username = post.userName?
+        .replacingOccurrences(of: " ", with: "")
+        .replacingOccurrences(of: "@", with: "")
+        ?? "uppy"
+    let cleaned = username.isEmpty ? "uppy" : username
+    let prefix = cleaned.prefix(7)
+    return "@" + String(prefix)
 }

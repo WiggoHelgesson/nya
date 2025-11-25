@@ -51,6 +51,7 @@ struct AuthenticationView: View {
     @State private var showLanding = true
     @State private var currentHeroIndex = 0
     @State private var onboardingStep: OnboardingStep? = nil
+    @State private var showSignupForm = false
     @State private var onboardingData = OnboardingData()
     @State private var locationStatusMessage: String?
     @State private var healthRequestStatus: String?
@@ -62,6 +63,11 @@ struct AuthenticationView: View {
     @State private var lastCheckedUsername = ""
     @State private var usernameCheckTask: Task<Void, Never>?
     
+    @State private var signupName: String = ""
+    @State private var signupEmail: String = ""
+    @State private var signupPassword: String = ""
+    @State private var signupConfirmPassword: String = ""
+    
     private let heroImages = ["27", "28", "29"]
     private let onboardingSteps = OnboardingStep.allCases
     
@@ -70,6 +76,8 @@ struct AuthenticationView: View {
             Color.white.ignoresSafeArea()
             if let step = onboardingStep {
                 onboardingView(for: step)
+            } else if showSignupForm {
+                signupFormView
             } else if showLanding {
                 landingView
             } else {
@@ -158,7 +166,9 @@ struct AuthenticationView: View {
                             currentHeroIndex += 1
                         }
                     } else {
+                        // Start onboarding flow
                         showLanding = false
+                        onboardingStep = onboardingSteps.first
                     }
                 } label: {
                     Text(currentHeroIndex < heroImages.count - 1 ? "Nästa" : "Skapa konto")
@@ -203,9 +213,9 @@ struct AuthenticationView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.black)
                         .padding(10)
-                        .background(Color.white.opacity(0.12))
+                        .background(Color.black.opacity(0.08))
                         .clipShape(Circle())
                 }
                 Spacer()
@@ -547,7 +557,7 @@ struct AuthenticationView: View {
     }
     
     private var currentOnboardingIndex: Int {
-        guard let step = onboardingStep, let index = onboardingSteps.firstIndex(of: step) else { return 0 }
+        guard let step = onboardingStep, let index = onboardingSteps.firstIndex(of: step) else { return onboardingSteps.count }
         return index
     }
     
@@ -654,7 +664,13 @@ struct AuthenticationView: View {
             onboardingStep = onboardingSteps[index + 1]
         } else {
             onboardingStep = nil
+            showSignupForm = true
             showLanding = false
+            authViewModel.errorMessage = ""
+            signupName = ""
+            signupEmail = ""
+            signupPassword = ""
+            signupConfirmPassword = ""
         }
     }
     
@@ -705,6 +721,143 @@ private extension AuthenticationView {
                 }
             }
         }
+    }
+}
+
+private extension AuthenticationView {
+    var signupFormView: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        showSignupForm = false
+                        onboardingStep = onboardingSteps.first
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.black)
+                            .padding(10)
+                            .background(Color.black.opacity(0.05))
+                            .clipShape(Circle())
+                    }
+                    
+                    Text("Skapa konto")
+                        .font(.system(size: 32, weight: .black))
+                        .foregroundColor(.black)
+                    
+                    Text("Fyll i dina kontouppgifter för att slutföra onboarding.")
+                        .font(.system(size: 15))
+                        .foregroundColor(.black.opacity(0.6))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 40)
+                
+                VStack(spacing: 18) {
+                    TextField("Fullständigt namn", text: $signupName)
+                        .textInputAutocapitalization(.words)
+                        .padding(14)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(18)
+                    
+                    TextField("E-postadress", text: $signupEmail)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .textContentType(.emailAddress)
+                        .autocorrectionDisabled()
+                        .padding(14)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(18)
+                    
+                    SecureField("Lösenord (minst 6 tecken)", text: $signupPassword)
+                        .padding(14)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(18)
+                    
+                    SecureField("Bekräfta lösenord", text: $signupConfirmPassword)
+                        .padding(14)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(18)
+                }
+                .padding(.horizontal, 24)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Valt användarnamn")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.black.opacity(0.6))
+                    
+                    HStack {
+                        Text("@\(onboardingData.trimmedUsername)")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.black)
+                        Spacer()
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.green)
+                    }
+                    .padding(14)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(18)
+                }
+                .padding(.horizontal, 24)
+                
+                if !authViewModel.errorMessage.isEmpty {
+                    Text(authViewModel.errorMessage)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 24)
+                }
+                
+                Button {
+                    authViewModel.signup(
+                        name: signupName.trimmingCharacters(in: .whitespacesAndNewlines),
+                        username: onboardingData.trimmedUsername,
+                        email: signupEmail.trimmingCharacters(in: .whitespacesAndNewlines),
+                        password: signupPassword,
+                        confirmPassword: signupConfirmPassword,
+                        onboardingData: onboardingData
+                    )
+                } label: {
+                    if authViewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Skapa konto")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.vertical, 16)
+                .background(canSubmitSignup ? Color.black : Color.black.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.horizontal, 24)
+                .disabled(!canSubmitSignup || authViewModel.isLoading)
+                
+                Button {
+                    showSignupForm = false
+                    onboardingStep = nil
+                    showLanding = true
+                } label: {
+                    Text("Avbryt")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black.opacity(0.6))
+                }
+                .padding(.bottom, 32)
+            }
+        }
+    }
+    
+    var canSubmitSignup: Bool {
+        let trimmedName = signupName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = signupEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emailValid = trimmedEmail.range(of: #"^\S+@\S+\.\S+$"#, options: .regularExpression) != nil
+        return trimmedName.count >= 2 &&
+               emailValid &&
+               signupPassword.count >= 6 &&
+               signupPassword == signupConfirmPassword &&
+               !onboardingData.trimmedUsername.isEmpty
     }
 }
 

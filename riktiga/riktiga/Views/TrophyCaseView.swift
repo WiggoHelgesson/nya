@@ -1,25 +1,20 @@
 import SwiftUI
 
 private let trophyCatalog: [Trophy] = [
-    Trophy(id: "5k-sub20", title: "5 km under 20 min", requirement: .fiveKmUnder(20)),
-    Trophy(id: "5k-sub18", title: "5 km under 18 min", requirement: .fiveKmUnder(18)),
-    Trophy(id: "10k-sub45", title: "10 km under 45 min", requirement: .tenKmUnder(45)),
-    Trophy(id: "10k-sub40", title: "10 km under 40 min", requirement: .tenKmUnder(40)),
-    Trophy(id: "act-025", title: "25:e aktivitet", requirement: .activities(25)),
-    Trophy(id: "act-050", title: "50:e aktivitet", requirement: .activities(50)),
-    Trophy(id: "act-075", title: "75:e aktivitet", requirement: .activities(75)),
-    Trophy(id: "act-100", title: "100:e aktivitet", requirement: .activities(100)),
-    Trophy(id: "act-150", title: "150:e aktivitet", requirement: .activities(150)),
-    Trophy(id: "act-200", title: "200:e aktivitet", requirement: .activities(200))
+    Trophy(id: "bench-60kg", title: "Bänkpress 60 kg", requirement: .benchPress(60)),
+    Trophy(id: "bench-100kg", title: "Bänkpress 100 kg", requirement: .benchPress(100)),
+    Trophy(id: "bench-140kg", title: "Bänkpress 140 kg", requirement: .benchPress(140))
 ]
 
 struct PersonalBestInfo: Equatable {
     let fiveKmMinutes: Int?
     let tenKmMinutes: Int?
+    let benchMaxKg: Double?
     
-    init(fiveKmMinutes: Int?, tenKmMinutes: Int?) {
+    init(fiveKmMinutes: Int? = nil, tenKmMinutes: Int? = nil, benchMaxKg: Double? = nil) {
         self.fiveKmMinutes = fiveKmMinutes
         self.tenKmMinutes = tenKmMinutes
+        self.benchMaxKg = benchMaxKg
     }
     
     var formattedFiveKm: String? {
@@ -31,12 +26,18 @@ struct PersonalBestInfo: Equatable {
         guard let minutes = tenKmMinutes else { return nil }
         return formatMinutes(minutes)
     }
+    
+    var formattedBench: String? {
+        guard let kg = benchMaxKg else { return nil }
+        return "\(String(format: "%.1f", kg)) kg"
+    }
 }
 
 enum TrophyRequirement: Equatable {
     case activities(Int)
     case fiveKmUnder(Int)
     case tenKmUnder(Int)
+    case benchPress(Double)
 }
 
 struct Trophy: Equatable {
@@ -52,6 +53,8 @@ struct Trophy: Equatable {
             return "5K"
         case .tenKmUnder:
             return "10K"
+        case .benchPress(let kg):
+            return "\(Int(kg))"
         }
     }
 }
@@ -239,6 +242,9 @@ private func isUnlocked(_ trophy: Trophy, activityCount: Int, personalBests: Per
     case .tenKmUnder(let target):
         guard let pb = personalBests.tenKmMinutes else { return false }
         return pb < target
+    case .benchPress(let target):
+        guard let pb = personalBests.benchMaxKg else { return false }
+        return pb >= target
     }
 }
 
@@ -275,6 +281,18 @@ private func detailText(for trophy: Trophy, activityCount: Int, personalBests: P
             return "Spring 10 km under \(target) min (nu: \(current))"
         }
         return "Spring 10 km under \(target) min"
+    case .benchPress(let target):
+        let current = personalBests.formattedBench
+        if unlocked {
+            if let current {
+                return "Upplåst! Bästa lyft: \(current)"
+            }
+            return "Upplåst!"
+        }
+        if let current {
+            return "Bänkpress \(Int(target)) kg eller mer (nu: \(current))"
+        }
+        return "Bänkpress \(Int(target)) kg eller mer"
     }
 }
 

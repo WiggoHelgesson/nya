@@ -5,12 +5,21 @@ import Combine
 import UIKit
 
 struct StartSessionView: View {
-    @State private var showActivitySelection = true
+    private let initialActivity: ActivityType?
+    @State private var showActivitySelection: Bool
     @State private var selectedActivityType: ActivityType?
     @State private var carouselSelection: ActivityType = .walking
     @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var forceNewSession = false
+    @Environment(\.dismiss) private var dismiss
+    
+    init(initialActivity: ActivityType? = nil) {
+        self.initialActivity = initialActivity
+        _showActivitySelection = State(initialValue: initialActivity == nil)
+        _selectedActivityType = State(initialValue: initialActivity)
+        _forceNewSession = State(initialValue: initialActivity != nil)
+    }
     
     var body: some View {
         Group {
@@ -44,6 +53,19 @@ struct StartSessionView: View {
             } else {
                 // Empty view as fallback
                 EmptyView()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if !sessionManager.hasActiveSession && showActivitySelection {
+                Button {
+                    NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.black.opacity(0.8))
+                        .padding(16)
+                }
             }
         }
         .task {
@@ -150,7 +172,7 @@ struct ActivityCarouselSelectionView: View {
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18)
             .padding(.top, 12)
             
@@ -172,7 +194,7 @@ struct ActivityCarouselSelectionView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.black)
+            .background(Color.black)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
             .padding(.horizontal, 18)
@@ -190,25 +212,25 @@ struct ActivityCarouselSelectionView: View {
         
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: activity.icon)
+                            Image(systemName: activity.icon)
                     .font(.system(size: 30, weight: .bold))
                     .padding(12)
                     .background(isSelected ? Color.black : Color.black.opacity(0.08))
                     .foregroundColor(isSelected ? .white : .black)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(activity.rawValue)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(activity.rawValue)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
-            }
-            .padding(16)
+                        }
+                        .padding(16)
             .frame(maxWidth: .infinity)
-            .background(Color.white)
+                        .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(
+                        .overlay(
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(isSelected ? Color.black : Color.clear, lineWidth: 2)
             )
@@ -249,8 +271,8 @@ struct XpCelebrationView: View {
             Color.white.ignoresSafeArea()
             
             VStack(spacing: 32) {
-                Spacer()
-                
+            Spacer()
+            
                 VStack(spacing: 12) {
                     Text(title)
                         .font(.system(size: 28, weight: .black))
@@ -289,7 +311,7 @@ struct XpCelebrationView: View {
                     Text(buttonTitle.uppercased())
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(Color.black)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -321,6 +343,181 @@ private struct AnimatedNumberText: Animatable, View {
     
     var body: some View {
         Text("\(Int(value))")
+    }
+}
+
+struct StreakCelebrationView: View {
+    let onDismiss: () -> Void
+    @State private var streakInfo = StreakManager.shared.getCurrentStreak()
+    @State private var showContent = false
+    @State private var flameScale: CGFloat = 0
+    @State private var flameRotation: Double = -20
+    
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 32) {
+                    Spacer().frame(height: 40)
+                    
+                    // Title
+                    VStack(spacing: 8) {
+                        Text("Din streak lever!")
+                            .font(.system(size: 32, weight: .black))
+                    .foregroundColor(.black)
+                            .opacity(showContent ? 1 : 0)
+                            .offset(y: showContent ? 0 : 20)
+                        
+                        Text(streakInfo.streakTitle)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.gray)
+                            .opacity(showContent ? 1 : 0)
+                            .offset(y: showContent ? 0 : 20)
+                    }
+                    
+                    // Flame icon
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.orange.opacity(0.3), Color.orange.opacity(0.1)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 200, height: 200)
+                            .blur(radius: 20)
+                            .opacity(showContent ? 1 : 0)
+                        
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 100))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.orange, Color.red],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .scaleEffect(flameScale)
+                            .rotationEffect(.degrees(flameRotation))
+                    }
+                    .frame(height: 200)
+                    
+                    // Stats cards
+                    HStack(spacing: 16) {
+                        statCard(
+                            value: "\(streakInfo.consecutiveDays)",
+                            label: "DAGAR I RAD"
+                        )
+                        
+                        statCard(
+                            value: "\(streakInfo.completedDaysThisWeek)/7",
+                            label: "DENNA VECKA"
+                        )
+                    }
+                    .padding(.horizontal, 32)
+                    .opacity(showContent ? 1 : 0)
+                    .offset(y: showContent ? 0 : 30)
+                    
+                    // Week calendar
+                    VStack(spacing: 16) {
+                        Text("VECKA \(Calendar.current.component(.weekOfYear, from: Date()))")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.gray)
+                        
+                        HStack(spacing: 12) {
+                            ForEach(0..<7) { index in
+                                weekdayCircle(index: index)
+                            }
+                        }
+                    }
+                    .opacity(showContent ? 1 : 0)
+                    .offset(y: showContent ? 0 : 30)
+                    
+                    Text("Fortsätt logga pass för att hålla streaken vid liv!")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .opacity(showContent ? 1 : 0)
+                    
+                    // Button
+                    Button(action: onDismiss) {
+                        Text("SKAPA INLÄGG")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
+                    }
+                    .padding(.horizontal, 32)
+                    .opacity(showContent ? 1 : 0)
+                    .offset(y: showContent ? 0 : 30)
+                    
+                    Spacer().frame(height: 40)
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
+                showContent = true
+            }
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.3)) {
+                flameScale = 1.0
+                flameRotation = 0
+            }
+            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true).delay(0.8)) {
+                flameScale = 1.1
+            }
+        }
+    }
+    
+    private func statCard(value: String, label: String) -> some View {
+        VStack(spacing: 8) {
+            Text(value)
+                .font(.system(size: 36, weight: .black))
+                .foregroundColor(.black)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+    
+    private func weekdayCircle(index: Int) -> some View {
+        let symbols = Calendar.current.shortWeekdaySymbols
+        let symbol = symbols[index]
+        let isCompleted = streakInfo.completedDaysThisWeek > index
+        
+        return VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isCompleted ? 
+                          LinearGradient(colors: [Color.orange, Color.orange.opacity(0.8)], startPoint: .top, endPoint: .bottom) : 
+                          LinearGradient(colors: [Color(.systemGray6), Color(.systemGray6)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 44, height: 44)
+                
+                if isCompleted {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                } else {
+                    Circle()
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: 8, height: 8)
+                }
+            }
+            
+            Text(symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.gray)
+        }
     }
 }
 
@@ -445,6 +642,7 @@ struct SessionMapView: View {
     @State private var timer: Timer?
     @State private var showXpCelebration = false
     @State private var xpCelebrationPoints = 0
+    @State private var showStreakCelebration = false
     @State private var showSessionComplete = false
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
@@ -547,7 +745,7 @@ struct SessionMapView: View {
                 }
                 .onReceive(locationManager.$userLocation) { newLocation in
                     guard let location = newLocation else { return }
-                    let now = Date()
+                        let now = Date()
                     if !isRunning || now.timeIntervalSince(lastRegionUpdate) >= 2.0 {
                         centerMap(on: location, animated: true)
                     }
@@ -701,7 +899,7 @@ struct SessionMapView: View {
                                 title: "Avsluta",
                                 duration: 1.5,
                                 onComplete: {
-                                    endSession()
+                                endSession()
                                 }
                             )
                         }
@@ -782,11 +980,17 @@ struct SessionMapView: View {
         .sheet(isPresented: $showXpCelebration) {
             XpCelebrationView(
                 points: xpCelebrationPoints,
-                buttonTitle: "Skapa inlägg"
+                buttonTitle: "Fortsätt"
             ) {
                 showXpCelebration = false
-                showSessionComplete = true
+                showStreakCelebration = true
             }
+        }
+        .sheet(isPresented: $showStreakCelebration) {
+            StreakCelebrationView(onDismiss: {
+                showStreakCelebration = false
+                showSessionComplete = true
+            })
         }
         .sheet(isPresented: $showSessionComplete) {
             SessionCompleteView(
@@ -1019,6 +1223,7 @@ struct SessionMapView: View {
         locationManager.maxSpeed = 0
         showSessionComplete = false
         showXpCelebration = false
+        showStreakCelebration = false
         forceNewSession = true
     }
 
@@ -1074,7 +1279,8 @@ struct SessionMapView: View {
             earnedPoints = basePoints
         }
         
-        print("💾 Earned points: \(earnedPoints)")
+        // Update streak
+        StreakManager.shared.registerWorkoutCompletion()
         
         // Add small delay to ensure route image is generated before showing celebration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {

@@ -5,168 +5,166 @@ struct ProgressiveOverloadView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var exerciseProgress: [ExerciseProgress] = []
-    private let weightFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 1
-        return formatter
-    }()
+    @State private var exerciseHistories: [ExerciseHistory] = []
+    
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
+        formatter.dateFormat = "d MMM yyyy"
         return formatter
     }()
+    
     private let isoFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
     }()
+    
     private let isoFallbackFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
     }()
-    private let changeThreshold: Double = 0.25
     
     var body: some View {
         ZStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Följ din styrkeutveckling")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
-                        Text("Vi jämför de två senaste passen per övning och visar om vikten ökar, står still eller minskar. Endast övningar som loggats minst två gånger visas.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.vertical, 4)
-                }
-                Section {
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 14))
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.leading)
-                            .padding(.vertical, 8)
-                            .listRowBackground(Color(.systemGroupedBackground))
-                    } else if exerciseProgress.isEmpty {
-                        Text("Logga samma övning i minst två gympass för att se din utveckling här.")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.leading)
-                            .padding(.vertical, 8)
-                            .listRowBackground(Color(.systemGroupedBackground))
-                    } else {
-                        ForEach(exerciseProgress) { progress in
-                            ExerciseProgressRow(
-                                progress: progress,
-                                weightFormatter: weightFormatter,
-                                dateFormatter: dateFormatter
-                            )
-                            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
-                            .listRowBackground(Color(.systemGroupedBackground))
-                        }
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Progressive Overload")
-            .refreshable { await loadProgress() }
-            .task { await loadProgress() }
-            
             if isLoading {
                 ProgressView()
                     .progressViewStyle(.circular)
+            } else if let errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    Text(errorMessage)
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            } else if exerciseHistories.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "chart.bar")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    Text("Logga gympass för att se din utveckling här")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Header section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Följ din styrkeutveckling")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+                            Text("Se alla övningar du har loggat. Tryck in på en övning för att se vikter, datum och hur mycket du ökar eller minskar.")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 20)
+                        
+                        // Exercise list
+                        LazyVStack(spacing: 12) {
+                            ForEach(exerciseHistories) { history in
+                                NavigationLink {
+                                    ExerciseHistoryDetailView(history: history, dateFormatter: dateFormatter)
+                                } label: {
+                                    ExerciseHistoryRow(history: history, dateFormatter: dateFormatter)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                }
             }
         }
+        .navigationTitle("Progressive Overload")
         .background(Color(.systemGroupedBackground))
+        .task { await loadExercises() }
+        .refreshable { await loadExercises() }
     }
     
-    private func loadProgress() async {
+    private func loadExercises() async {
         guard let userId = authViewModel.currentUser?.id else {
-            self.errorMessage = "Kunde inte hitta användare."
-            self.exerciseProgress = []
-            self.isLoading = false
+            errorMessage = "Kunde inte hitta användare."
+            exerciseHistories = []
+            isLoading = false
             return
         }
-        self.isLoading = true
-        self.errorMessage = nil
+        isLoading = true
+        errorMessage = nil
         do {
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: true)
-            let progress = computeProgress(from: posts)
-            self.exerciseProgress = progress
-            self.isLoading = false
+            let histories = computeHistories(from: posts)
+            exerciseHistories = histories
+            isLoading = false
         } catch {
-            self.errorMessage = "Kunde inte hämta träningsdata just nu. Försök igen senare."
-            self.exerciseProgress = []
-            self.isLoading = false
+            errorMessage = "Kunde inte hämta träningsdata just nu. Försök igen senare."
+            exerciseHistories = []
+            isLoading = false
         }
     }
     
-    private func computeProgress(from posts: [WorkoutPost]) -> [ExerciseProgress] {
-        var history: [String: [ExerciseSnapshot]] = [:]
+    private func computeHistories(from posts: [WorkoutPost]) -> [ExerciseHistory] {
+        var map: [String: [ExerciseSnapshot]] = [:]
         for post in posts {
             let type = post.activityType.lowercased()
             guard type.contains("gym") else { continue }
-            guard let exercises = post.exercises else { continue }
+            guard let exercises = post.exercises, !exercises.isEmpty else { continue }
             guard let date = parseDate(post.createdAt) else { continue }
+            
             for exercise in exercises {
                 let sets = zip(exercise.kg, exercise.reps)
                     .map { ExerciseSetSnapshot(weight: $0.0, reps: $0.1) }
                     .filter { $0.reps > 0 }
                 guard !sets.isEmpty else { continue }
-                guard let bestSet = sets.max(by: { $0.weight < $1.weight }) else { continue }
+                
+                // Best set based on total volume (kg * reps)
+                let bestSet = sets.max(by: { ($0.weight * Double($0.reps)) < ($1.weight * Double($1.reps)) }) ?? sets[0]
+                
                 let snapshot = ExerciseSnapshot(
                     date: date,
                     bestSet: bestSet,
                     sets: sets,
                     category: exercise.category
                 )
-                history[exercise.name, default: []].append(snapshot)
+                map[exercise.name, default: []].append(snapshot)
             }
         }
-        var results: [ExerciseProgress] = []
-        for (name, snapshots) in history {
+        
+        let histories = map.map { name, snapshots -> ExerciseHistory in
             let sorted = snapshots.sorted { $0.date < $1.date }
-            guard sorted.count >= 2 else { continue }
-            let trimmedHistory = Array(sorted.suffix(8))
-            guard let previous = trimmedHistory.dropLast().last, let latest = trimmedHistory.last else { continue }
-            let delta = latest.bestSet.weight - previous.bestSet.weight
-            let trend: ExerciseProgress.Trend
-            if delta > changeThreshold {
-                trend = .increase
-            } else if delta < -changeThreshold {
-                trend = .decrease
-            } else {
-                trend = .same
-            }
-            let progress = ExerciseProgress(
+            return ExerciseHistory(
                 name: name,
-                category: latest.category,
-                history: trimmedHistory,
-                change: delta,
-                trend: trend
+                category: sorted.last?.category,
+                history: sorted
             )
-            results.append(progress)
         }
-        return results.sorted { lhs, rhs in
-            if lhs.trend.sortPriority != rhs.trend.sortPriority {
-                return lhs.trend.sortPriority < rhs.trend.sortPriority
-            }
-            return lhs.latestDate > rhs.latestDate
+        
+        // Sort by latest activity
+        return histories.sorted { (lhs, rhs) -> Bool in
+            let leftDate = lhs.latestSnapshot?.date ?? .distantPast
+            let rightDate = rhs.latestSnapshot?.date ?? .distantPast
+            return leftDate > rightDate
         }
     }
-}
-
-extension ProgressiveOverloadView {
+    
     private func parseDate(_ isoString: String) -> Date? {
         if let date = isoFormatter.date(from: isoString) {
             return date
@@ -175,10 +173,15 @@ extension ProgressiveOverloadView {
     }
 }
 
+// MARK: - Supporting Models
 private struct ExerciseSetSnapshot: Identifiable {
     let id = UUID()
     let weight: Double
     let reps: Int
+    
+    var effectiveLoad: Double {
+        weight * Double(reps)
+    }
 }
 
 private struct ExerciseSnapshot: Identifiable {
@@ -189,293 +192,266 @@ private struct ExerciseSnapshot: Identifiable {
     let category: String?
 }
 
-private struct ExerciseProgressRow: View {
-    let progress: ExerciseProgress
-    let weightFormatter: NumberFormatter
-    let dateFormatter: DateFormatter
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(progress.name)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.primary)
-                    if let category = progress.category, !category.isEmpty {
-                        Text(category)
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                Spacer()
-                TrendBadge(progress: progress)
-            }
-            
-            SparklineView(progress: progress, weightFormatter: weightFormatter)
-                .frame(height: 120)
-                .padding(.horizontal, 4)
-            
-            HStack(alignment: .top, spacing: 20) {
-                ProgressColumn(
-                    title: "Senaste pass",
-                    snapshot: progress.latestSnapshot,
-                    weightFormatter: weightFormatter,
-                    dateFormatter: dateFormatter
-                )
-                Divider()
-                    .frame(height: 60)
-                ProgressColumn(
-                    title: "Föregående",
-                    snapshot: progress.previousSnapshot,
-                    weightFormatter: weightFormatter,
-                    dateFormatter: dateFormatter
-                )
-            }
-        }
-        .padding(20)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 5)
-    }
-}
-
-private struct SparklineView: View {
-    let progress: ExerciseProgress
-    let weightFormatter: NumberFormatter
-    
-    private var trackColor: Color {
-        switch progress.trend {
-        case .increase: return Color.green.opacity(0.9)
-        case .same: return Color.gray.opacity(0.8)
-        case .decrease: return Color.red.opacity(0.9)
-        }
-    }
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-            let values = progress.history.map { $0.bestSet.weight }
-            let minValue = values.min() ?? 0
-            let maxValue = values.max() ?? 1
-            let range = max(maxValue - minValue, 0.5)
-            let verticalPadding: CGFloat = 24
-            let stepX = progress.history.count > 1 ? width / CGFloat(progress.history.count - 1) : width
-            
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.tertiarySystemBackground))
-                
-                if progress.history.count >= 2 {
-                    let points = progress.history.enumerated().map { index, snapshot -> CGPoint in
-                        let normalized = (snapshot.bestSet.weight - minValue) / range
-                        let y = height - (CGFloat(normalized) * (height - verticalPadding) + verticalPadding / 2)
-                        let x = CGFloat(index) * stepX
-                        return CGPoint(x: x, y: y)
-                    }
-                    
-                    Path { path in
-                        guard let first = points.first else { return }
-                        path.move(to: first)
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                    }
-                    .stroke(trackColor, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-                    .shadow(color: trackColor.opacity(0.25), radius: 6, x: 0, y: 5)
-                    
-                    HStack(spacing: 0) {
-                        SparklineDot(value: progress.previousWeight, label: "Tidigare", formatter: weightFormatter, color: Color(.systemGray))
-                        Spacer()
-                        SparklineDot(value: progress.latestWeight, label: "Nu", formatter: weightFormatter, color: trackColor)
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.top, 8)
-                } else {
-                    Text("För lite data")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-    }
-}
-
-private struct SparklineDot: View {
-    let value: Double
-    let label: String
-    let formatter: NumberFormatter
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 12, height: 12)
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                .shadow(color: color.opacity(0.6), radius: 4, x: 0, y: 2)
-            VStack(spacing: 2) {
-                Text("\(formattedValue) kg")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(color)
-                Text(label)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-    
-    private var formattedValue: String {
-        formatter.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
-    }
-}
-
-private struct ProgressColumn: View {
-    let title: String
-    let snapshot: ExerciseSnapshot
-    let weightFormatter: NumberFormatter
-    let dateFormatter: DateFormatter
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
-            Text("\(formattedWeight) kg")
-                .font(.system(size: 20, weight: .bold))
-            Text("\(snapshot.bestSet.reps) reps")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
-            Text(dateFormatter.string(from: snapshot.date))
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-            
-            if !snapshot.sets.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(snapshot.sets) { set in
-                            Text("\(format(set.weight)) kg × \(set.reps)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(.systemGray6))
-                                .clipShape(Capsule())
-                        }
-                    }
-                }
-                .padding(.top, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    
-    private var formattedWeight: String {
-        weightFormatter.string(from: NSNumber(value: snapshot.bestSet.weight)) ?? String(format: "%.1f", snapshot.bestSet.weight)
-    }
-    
-    private func format(_ value: Double) -> String {
-        weightFormatter.string(from: NSNumber(value: value)) ?? String(format: "%.1f", value)
-    }
-}
-
-private struct TrendBadge: View {
-    let progress: ExerciseProgress
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: progress.trend.systemImage)
-                .font(.system(size: 13, weight: .semibold))
-            Text(progress.trend.title)
-                .font(.system(size: 13, weight: .semibold))
-            Text(progress.changeDescription)
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .foregroundColor(progress.trend.foregroundColor)
-        .background(progress.trend.backgroundColor.opacity(0.15))
-        .clipShape(Capsule())
-    }
-}
-
-private struct ExerciseProgress: Identifiable {
+private struct ExerciseHistory: Identifiable {
     let id = UUID()
     let name: String
     let category: String?
     let history: [ExerciseSnapshot]
-    let change: Double
-    let trend: Trend
     
-    var latestSnapshot: ExerciseSnapshot {
-        history.last!
+    var latestSnapshot: ExerciseSnapshot? { history.last }
+}
+
+// MARK: - Exercise History Row
+private struct ExerciseHistoryRow: View {
+    let history: ExerciseHistory
+    let dateFormatter: DateFormatter
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(history.name)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.black)
+                    
+                    if let category = history.category {
+                        Text(category)
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Spacer()
+                
+                if let latest = history.latestSnapshot {
+                    Text("\(String(format: "%.0f", latest.bestSet.weight)) kg")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.black)
+                }
+            }
+            
+            if let latest = history.latestSnapshot {
+                Text(dateFormatter.string(from: latest.date))
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                
+                if history.history.count >= 2, let change = changeInfo {
+                    HStack(spacing: 8) {
+                        Image(systemName: change.icon)
+                            .font(.system(size: 13, weight: .bold))
+                        Text(change.text)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(change.color)
+                    .clipShape(Capsule())
+                } else if history.history.count < 2 {
+                    Text("Logga övningen två gånger för att se utveckling.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
-    var previousSnapshot: ExerciseSnapshot {
-        history.dropLast().last!
-    }
-    
-    var latestWeight: Double { latestSnapshot.bestSet.weight }
-    var latestDate: Date { latestSnapshot.date }
-    var previousWeight: Double { previousSnapshot.bestSet.weight }
-    var previousDate: Date { previousSnapshot.date }
-    
-    enum Trend {
-        case increase
-        case same
-        case decrease
+    private var changeInfo: (text: String, color: Color, icon: String)? {
+        guard history.history.count >= 2 else { return nil }
+        let latest = history.history[history.history.count - 1]
+        let previous = history.history[history.history.count - 2]
         
-        var title: String {
-            switch self {
-            case .increase: return "Ökar"
-            case .same: return "Oförändrad"
-            case .decrease: return "Minskar"
-            }
-        }
+        let deltaWeight = latest.bestSet.weight - previous.bestSet.weight
+        let deltaReps = latest.bestSet.reps - previous.bestSet.reps
         
-        var systemImage: String {
-            switch self {
-            case .increase: return "arrow.up.right"
-            case .same: return "minus"
-            case .decrease: return "arrow.down.right"
-            }
-        }
+        // Determine trend based on both weight and reps
+        let weightIncreased = deltaWeight > 0.5
+        let weightDecreased = deltaWeight < -0.5
+        let repsIncreased = deltaReps > 0
+        let repsDecreased = deltaReps < 0
         
-        var foregroundColor: Color {
-            switch self {
-            case .increase: return Color.green
-            case .same: return Color.gray
-            case .decrease: return Color.red
+        if weightIncreased || (abs(deltaWeight) < 0.5 && repsIncreased) {
+            // Weight increased OR same weight but more reps
+            var text = "Ökar"
+            var parts: [String] = []
+            if abs(deltaWeight) >= 0.5 {
+                parts.append("+\(String(format: "%.1f", deltaWeight)) kg")
             }
-        }
-        
-        var backgroundColor: Color {
-            switch self {
-            case .increase: return Color.green
-            case .same: return Color.gray
-            case .decrease: return Color.red
+            if deltaReps > 0 {
+                parts.append("+\(deltaReps) reps")
             }
-        }
-        
-        var sortPriority: Int {
-            switch self {
-            case .increase: return 0
-            case .same: return 1
-            case .decrease: return 2
+            if !parts.isEmpty {
+                text = "Ökar \(parts.joined(separator: " / "))"
             }
+            return (text, .green, "arrow.up")
+        } else if weightDecreased || (abs(deltaWeight) < 0.5 && repsDecreased) {
+            // Weight decreased OR same weight but fewer reps
+            var text = "Minskar"
+            var parts: [String] = []
+            if abs(deltaWeight) >= 0.5 {
+                parts.append("\(String(format: "%.1f", deltaWeight)) kg")
+            }
+            if deltaReps < 0 {
+                parts.append("\(deltaReps) reps")
+            }
+            if !parts.isEmpty {
+                text = "Minskar \(parts.joined(separator: " / "))"
+            }
+            return (text, .red, "arrow.down")
+        } else {
+            return ("Oförändrad ±0 kg", .gray, "minus")
         }
-    }
-    
-    var changeDescription: String {
-        let absolute = abs(change)
-        if absolute < 0.05 { return "±0 kg" }
-        let formatted = String(format: "%.1f", absolute)
-        let sign = change > 0 ? "+" : "−"
-        return "\(sign)\(formatted) kg"
     }
 }
 
-#Preview {
-    ProgressiveOverloadView()
-        .environmentObject(AuthViewModel())
+// MARK: - Exercise History Detail View
+private struct ExerciseHistoryDetailView: View {
+    let history: ExerciseHistory
+    let dateFormatter: DateFormatter
+    
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+            
+            if history.history.count < 2 {
+                VStack(spacing: 16) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    Text("Logga denna övning minst två gånger för att se din utveckling")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            } else {
+                List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(history.name)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.black)
+                            if let category = history.category {
+                                Text(category)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
+                    Section(header: Text("HISTORIK").font(.system(size: 13, weight: .semibold))) {
+                        ForEach(Array(history.history.enumerated().reversed()), id: \.element.id) { index, snapshot in
+                            let previousSnapshot = index < history.history.count - 1 ? history.history[history.history.count - index - 2] : nil
+                            ExerciseSnapshotRow(
+                                snapshot: snapshot,
+                                previous: previousSnapshot,
+                                dateFormatter: dateFormatter
+                            )
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("Utveckling")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
+// MARK: - Exercise Snapshot Row
+private struct ExerciseSnapshotRow: View {
+    let snapshot: ExerciseSnapshot
+    let previous: ExerciseSnapshot?
+    let dateFormatter: DateFormatter
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(dateFormatter.string(from: snapshot.date))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.black)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Bästa set:")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Text("\(String(format: "%.1f", snapshot.bestSet.weight)) kg")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.black)
+                        Text("×")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                        Text("\(snapshot.bestSet.reps) reps")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.black)
+                    }
+                }
+                
+                if let changeInfo = changeInfo {
+                    HStack {
+                        Text("Förändring:")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Image(systemName: changeInfo.icon)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(changeInfo.text)
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(changeInfo.color)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+    
+    private var changeInfo: (text: String, color: Color, icon: String)? {
+        guard let previous else { return nil }
+        
+        let deltaWeight = snapshot.bestSet.weight - previous.bestSet.weight
+        let deltaReps = snapshot.bestSet.reps - previous.bestSet.reps
+        let deltaVolume = snapshot.bestSet.effectiveLoad - previous.bestSet.effectiveLoad
+        
+        var parts: [String] = []
+        if abs(deltaWeight) >= 0.05 {
+            let sign = deltaWeight > 0 ? "+" : ""
+            parts.append("\(sign)\(String(format: "%.1f", deltaWeight)) kg")
+        }
+        if deltaReps != 0 {
+            let sign = deltaReps > 0 ? "+" : ""
+            parts.append("\(sign)\(deltaReps) reps")
+        }
+        
+        guard !parts.isEmpty else { return ("Ingen förändring", .gray, "minus") }
+        
+        let color: Color
+        let icon: String
+        if deltaVolume > 0.5 {
+            color = .green
+            icon = "arrow.up"
+        } else if deltaVolume < -0.5 {
+            color = .red
+            icon = "arrow.down"
+        } else {
+            color = .gray
+            icon = "minus"
+        }
+        
+        return (parts.joined(separator: " / "), color, icon)
+    }
+}

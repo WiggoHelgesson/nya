@@ -1,5 +1,11 @@
 import SwiftUI
 
+struct HeroBannerAsset: Identifiable {
+    let id = UUID()
+    let imageName: String
+    let url: String
+}
+
 struct RewardsView: View {
     @State private var selectedCategory = "Golf"
     @State private var currentHeroIndex = 0
@@ -17,9 +23,10 @@ struct RewardsView: View {
     private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
     private let sectionShadowColor = Color.black.opacity(0.05)
     
-    let heroImages = [
-        "2",
-        "3"
+    let heroBanners: [HeroBannerAsset] = [
+        HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
+        HeroBannerAsset(imageName: "32", url: "https://peaksummit.se"),
+        HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
     ]
     
     let allRewards = [
@@ -120,6 +127,78 @@ struct RewardsView: View {
             points: "200 poäng",
             imageName: "13",
             category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 12,
+            brandName: "PEAK",
+            discount: "15% rabatt med koden Summit",
+            points: "200 poäng",
+            imageName: "33",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 13,
+            brandName: "PEAK",
+            discount: "15% rabatt med koden Summit",
+            points: "200 poäng",
+            imageName: "33",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 14,
+            brandName: "PEAK",
+            discount: "15% rabatt med koden Summit",
+            points: "200 poäng",
+            imageName: "33",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 15,
+            brandName: "PEAK",
+            discount: "15% rabatt med koden Summit",
+            points: "200 poäng",
+            imageName: "33",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 16,
+            brandName: "CAPSTONE",
+            discount: "10% rabatt med koden CAPSTONE10",
+            points: "200 poäng",
+            imageName: "34",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 17,
+            brandName: "CAPSTONE",
+            discount: "10% rabatt med koden CAPSTONE10",
+            points: "200 poäng",
+            imageName: "34",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 18,
+            brandName: "CAPSTONE",
+            discount: "10% rabatt med koden CAPSTONE10",
+            points: "200 poäng",
+            imageName: "34",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 19,
+            brandName: "CAPSTONE",
+            discount: "10% rabatt med koden CAPSTONE10",
+            points: "200 poäng",
+            imageName: "34",
+            category: "Skidåkning",
             isBookmarked: false
         )
     ]
@@ -243,12 +322,15 @@ struct RewardsView: View {
                         ScrollViewReader { proxy in
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
-                                    ForEach(0..<heroImages.count, id: \.self) { index in
-                                        HeroBannerCard(
-                                            imageName: heroImages[index]
-                                        )
-                                        .frame(width: UIScreen.main.bounds.width - 32)
-                                        .id(index)
+                                    ForEach(heroBanners.indices, id: \.self) { index in
+                                        let banner = heroBanners[index]
+                                        HeroBannerCard(imageName: banner.imageName)
+                                            .frame(width: UIScreen.main.bounds.width - 32)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                openHeroBannerURL(banner.url)
+                                            }
+                                            .id(index)
                                     }
                                 }
                                 .padding(.horizontal, 16)
@@ -698,6 +780,10 @@ struct RewardDetailView: View {
             return "PUMPLABS är en modern gymkedja som fokuserar på funktionell träning och personlig utveckling. Vi hjälper dig att nå dina fitnessmål."
         case "ZEN ENERGY":
             return "ZEN ENERGY erbjuder energidrycker och supplement som ger dig den extra energin du behöver för din träning och vardag."
+        case "PEAK":
+            return "PEAK Summit ger dig funktionella outdoor- och träningskläder som klarar både berg, löpning och gym. Använd koden SUMMIT för 15% rabatt."
+        case "CAPSTONE":
+            return "CAPSTONE erbjuder premium tränings- och friluftskläder för allt från gym till bergstoppar. Använd koden CAPSTONE10 för 10% rabatt."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
@@ -725,6 +811,10 @@ struct RewardDetailView: View {
             return "21" // Pumplabs logo
         case "ZEN ENERGY":
             return "22" // Zen energy logo
+        case "PEAK":
+            return "33"
+        case "CAPSTONE":
+            return "34"
         default:
             return "5" // Default to Pegmate logo
         }
@@ -743,11 +833,15 @@ struct RewardDetailView: View {
         case "HAPPYALBA":
             urlString = "https://www.happyalba.com/"
         case "LONEGOLF":
-            urlString = "https://lonegolf.se/?srsltid=AfmBOopu2tfDkMnsvsc2hH59Bvis1B_3rzrOy3I3-5eF7tFcOvT6gfOh"
+            urlString = "https://lonegolf.se"
         case "PEGMATE":
             urlString = "https://pegmate.se/en/"
         case "PLIKTGOLF":
-            urlString = "https://pliktgolf.se/?srsltid=AfmBOop6tGP9-2K-6KSTSjjU-8Tsl5BqFMPLGnRwgcu56raQcMloZq_s"
+            urlString = "https://pliktgolf.se"
+        case "PEAK":
+            urlString = "https://peaksummit.se"
+        case "CAPSTONE":
+            urlString = "https://capstone.nu/"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":
@@ -761,6 +855,11 @@ struct RewardDetailView: View {
         if let url = URL(string: urlString) {
             UIApplication.shared.open(url)
         }
+    }
+    
+    private func openHeroBannerURL(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -1134,11 +1233,11 @@ struct ConfirmationView: View {
         case "HAPPYALBA":
             urlString = "https://www.happyalba.com/"
         case "LONEGOLF":
-            urlString = "https://lonegolf.se/?srsltid=AfmBOopu2tfDkMnsvsc2hH59Bvis1B_3rzrOy3I3-5eF7tFcOvT6gfOh"
+            urlString = "https://lonegolf.se"
         case "PEGMATE":
             urlString = "https://pegmate.se/en/"
         case "PLIKTGOLF":
-            urlString = "https://pliktgolf.se/?srsltid=AfmBOop6tGP9-2K-6KSTSjjU-8Tsl5BqFMPLGnRwgcu56raQcMloZq_s"
+            urlString = "https://pliktgolf.se"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":

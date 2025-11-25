@@ -52,21 +52,6 @@ struct SocialView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
 
-                        Button {
-                            guard let userId = authViewModel.currentUser?.id else { return }
-                            visiblePostCount = 5
-                            Task {
-                                await socialViewModel.fetchSocialFeedAsync(userId: userId)
-                            }
-                        } label: {
-                            Text("Hämta inlägg")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(AppColors.brandBlue)
-                                .cornerRadius(12)
-                        }
                     }
                 } else {
                     ScrollView {

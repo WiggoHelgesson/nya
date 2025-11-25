@@ -17,8 +17,9 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
+    @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
     
-    private var personalBestInfo: PersonalBestInfo {
+    private func updatePersonalBestInfo() {
         let fiveKm = authViewModel.currentUser?.pb5kmMinutes
         let tenKmMinutes: Int?
         if let minutes = authViewModel.currentUser?.pb10kmMinutes {
@@ -27,7 +28,7 @@ struct ProfileView: View {
         } else {
             tenKmMinutes = nil
         }
-        return PersonalBestInfo(fiveKmMinutes: fiveKm, tenKmMinutes: tenKmMinutes)
+        personalBestInfo = PersonalBestInfo(fiveKmMinutes: fiveKm, tenKmMinutes: tenKmMinutes, benchMaxKg: personalBestInfo.benchMaxKg)
     }
     
     var body: some View {
@@ -241,6 +242,7 @@ struct ProfileView: View {
                 EditProfileView()
             }
             .onAppear {
+                updatePersonalBestInfo()
                 loadProfileStats()
                 loadWeeklyActivityData()
             }
@@ -303,6 +305,35 @@ struct ProfileView: View {
                 // Update total activity count
                 await MainActor.run {
                     self.activityCount = activities.count
+                }
+                
+                // Calculate bench press max across all activities
+                var benchBestKg: Double = 0.0
+                for activity in activities {
+                    let type = activity.activityType.lowercased()
+                    if type.contains("gym"), let exercises = activity.exercises {
+                        for exercise in exercises {
+                            let normalizedName = exercise.name.lowercased()
+                            if normalizedName.contains("bänk") || normalizedName.contains("bench") {
+                                if let maxKg = exercise.kg.max() {
+                                    benchBestKg = max(benchBestKg, maxKg)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Update personal best info with bench press max
+                await MainActor.run {
+                    self.personalBestInfo = PersonalBestInfo(
+                        fiveKmMinutes: authViewModel.currentUser?.pb5kmMinutes,
+                        tenKmMinutes: {
+                            guard let minutes = authViewModel.currentUser?.pb10kmMinutes else { return nil }
+                            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
+                            return hours * 60 + minutes
+                        }(),
+                        benchMaxKg: benchBestKg > 0 ? benchBestKg : nil
+                    )
                 }
                 
                 // Parse dates once and cache them
