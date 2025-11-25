@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0003614C37754881BFBE7729 /* ExerciseImageLoader.swift in Resources */ = {isa = PBXBuildFile; fileRef = F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */; };
 		860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 860308202EAE82D00023EA7B /* StoreKit.framework */; };
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
@@ -27,7 +26,6 @@
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseImageLoader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -73,21 +71,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		8679F6912EBA527D00C5285A /* Recovered References */ = {
-			isa = PBXGroup;
-			children = (
-				F574D94AA0064B059C40F893 /* ExerciseImageLoader.swift */,
-			);
-			name = "Recovered References";
-			sourceTree = "<group>";
-		};
 		86B269802EAA2EBB00A4EC93 = {
 			isa = PBXGroup;
 			children = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 				86B269B82EAA5E3900A4EC93 /* Frameworks */,
 				86B2698A2EAA2EBB00A4EC93 /* Products */,
-				8679F6912EBA527D00C5285A /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -189,7 +178,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0003614C37754881BFBE7729 /* ExerciseImageLoader.swift in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
