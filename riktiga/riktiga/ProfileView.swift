@@ -366,8 +366,7 @@ struct ProfileView: View {
             }
         }
     }
-}
-
+    
     @MainActor
     private func applyProfileMetrics(_ metrics: ProfileMetrics,
                                      pbFive: Int?,
