@@ -235,6 +235,28 @@ struct RewardsView: View {
         }
     }
     
+    private var heroBannerSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(heroBanners.indices, id: \.self) { index in
+                    let banner = heroBanners[index]
+                    HeroBannerCard(imageName: banner.imageName)
+                        .frame(width: UIScreen.main.bounds.width - 32)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if let url = URL(string: banner.url) {
+                                UIApplication.shared.open(url)
+                            }
+                            currentHeroIndex = index
+                        }
+                        .id(index)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(height: 200)
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -318,30 +340,7 @@ struct RewardsView: View {
                     
                     ScrollView {
                     VStack(spacing: 24) {
-                        // MARK: - Hero Banner Slider
-                        ScrollViewReader { proxy in
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(heroBanners.indices, id: \.self) { index in
-                                        let banner = heroBanners[index]
-                                        HeroBannerCard(imageName: banner.imageName)
-                                            .frame(width: UIScreen.main.bounds.width - 32)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                openHeroBannerURL(banner.url)
-                                            }
-                                            .id(index)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .scrollTargetLayout()
-                            }
-                            .scrollTargetBehavior(.viewAligned)
-                            .onAppear {
-                                proxy.scrollTo(currentHeroIndex, anchor: .leading)
-                            }
-                        }
-                        .frame(height: 200)
+                        heroBannerSection
                         
                         // MARK: - Categories Section
                         VStack(alignment: .leading, spacing: 16) {
