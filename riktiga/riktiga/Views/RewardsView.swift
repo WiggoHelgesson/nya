@@ -172,6 +172,42 @@ struct RewardsView: View {
             imageName: "34",
             category: "Skidåkning",
             isBookmarked: false
+        ),
+        RewardCard(
+            id: 20,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 21,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 22,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 23,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Skidåkning",
+            isBookmarked: false
         )
     ]
     
@@ -586,6 +622,7 @@ struct FullScreenRewardCard: View {
         case "13": return "22" // ZEN ENERGY
         case "33": return "33" // PEAK
         case "34": return "34" // CAPSTONE
+        case "35": return "35" // FUSE ENERGY
         default: return "5" // Default to PEGMATE
         }
     }
@@ -771,6 +808,8 @@ struct RewardDetailView: View {
             return "PeakSummit är energidrycken för bergsbestigare och äventyrare som aldrig nöjer sig med att stanna vid baslägret. Den är framtagen för att ge målinriktad energi, återhämtning och uthållighet i de mest krävande miljöerna."
         case "CAPSTONE":
             return "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa."
+        case "FUSE ENERGY":
+            return "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
@@ -802,6 +841,8 @@ struct RewardDetailView: View {
             return "33"
         case "CAPSTONE":
             return "34"
+        case "FUSE ENERGY":
+            return "35"
         default:
             return "5" // Default to Pegmate logo
         }
@@ -829,6 +870,8 @@ struct RewardDetailView: View {
             urlString = "https://peaksummit.se"
         case "CAPSTONE":
             urlString = "https://capstone.nu/"
+        case "FUSE ENERGY":
+            urlString = "https://fuseenergy.se"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":
@@ -1206,6 +1249,8 @@ struct ConfirmationView: View {
             return "Summit"
         case "CAPSTONE":
             return "CAPSTONE10"
+        case "FUSE ENERGY":
+            return "Wiggo"
         default:
             return "CODE2025"
         }
@@ -1229,6 +1274,12 @@ struct ConfirmationView: View {
             urlString = "https://pegmate.se/en/"
         case "PLIKTGOLF":
             urlString = "https://pliktgolf.se"
+        case "PEAK":
+            urlString = "https://peaksummit.se"
+        case "CAPSTONE":
+            urlString = "https://capstone.nu/"
+        case "FUSE ENERGY":
+            urlString = "https://fuseenergy.se"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":
@@ -1289,6 +1340,9 @@ struct AllRewardsCard: View {
         case "11": return "20" // RETROGOLF
         case "12": return "21" // PUMPLABS
         case "13": return "22" // ZEN ENERGY
+        case "33": return "33" // PEAK
+        case "34": return "34" // CAPSTONE
+        case "35": return "35" // FUSE ENERGY
         default: return "5" // Default to PEGMATE
         }
     }
