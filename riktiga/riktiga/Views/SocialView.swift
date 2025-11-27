@@ -1067,6 +1067,35 @@ class SocialViewModel: ObservableObject {
             }
         }
     }
+
+    func loadPostsForUser(userId targetUserId: String, viewerId: String) async {
+        currentUserId = viewerId
+        isLoading = true
+        do {
+            let posts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
+            await MainActor.run {
+                self.posts = posts
+                self.isLoading = false
+            }
+        } catch is CancellationError {
+            await MainActor.run { self.isLoading = false }
+        } catch {
+            print("❌ Error loading posts for user \(targetUserId): \(error)")
+            await MainActor.run { self.isLoading = false }
+        }
+    }
+    
+    func refreshPostsForUser(userId targetUserId: String, viewerId: String) async {
+        currentUserId = viewerId
+        do {
+            let posts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
+            await MainActor.run {
+                self.posts = posts
+            }
+        } catch {
+            print("⚠️ Could not refresh posts for user \(targetUserId): \(error)")
+        }
+    }
     
     private func enrichAuthorMetadataIfNeeded() async {
         if isFetchingAuthorMetadata { return }
@@ -1376,6 +1405,7 @@ struct GymExercisesListView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: hasUserImage ? .automatic : .never))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             )
             .frame(height: hasUserImage ? 420 : 380)
             .padding(.horizontal, 16)

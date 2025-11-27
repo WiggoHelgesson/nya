@@ -1,34 +1,26 @@
 import SwiftUI
 import UIKit
 
-struct HeroBannerAsset: Identifiable {
-    let id = UUID()
-    let imageName: String
-    let url: String
-}
-
-struct RewardsView: View {
-    @State private var selectedCategory = "Gym"
-    @State private var currentHeroIndex = 0
-    @State private var searchText = ""
-    @State private var showSearchView = false
-    @State private var showFavorites = false
-    @State private var showMyPurchases = false
-    @State private var favoritedRewards: Set<Int> = []
-    @EnvironmentObject var authViewModel: AuthViewModel
-    
-    private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
-    private let sectionShadowColor = Color.black.opacity(0.05)
-    
-    let heroBanners: [HeroBannerAsset] = [
-        HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
-        HeroBannerAsset(imageName: "32", url: "https://peaksummit.se"),
-        HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
-    ]
-    
-    let categories = ["Gym", "Löpning", "Golf", "Skidåkning"]
-    
-    let allRewards = [
+struct RewardCatalog {
+    static let all: [RewardCard] = [
+        RewardCard(
+            id: 24,
+            brandName: "J.LINDEBERG",
+            discount: "5% rabatt",
+            points: "200 poäng",
+            imageName: "36",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 25,
+            brandName: "J.LINDEBERG",
+            discount: "5% rabatt",
+            points: "200 poäng",
+            imageName: "36",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
         RewardCard(
             id: 1,
             brandName: "PLIKTGOLF",
@@ -210,14 +202,62 @@ struct RewardsView: View {
             isBookmarked: false
         )
     ]
+}
+
+struct HeroBannerAsset: Identifiable {
+    let id = UUID()
+    let imageName: String
+    let url: String
+}
+
+struct RewardsView: View {
+    @State private var selectedCategory = "Gym"
+    @State private var currentHeroIndex = 0
+    @State private var searchText = ""
+    @State private var showSearchView = false
+    @State private var showFavorites = false
+    @State private var showMyPurchases = false
+    @State private var favoritedRewards: Set<Int> = []
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
+    private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
+    private let sectionShadowColor = Color.black.opacity(0.05)
+    
+    let heroBanners: [HeroBannerAsset] = [
+        HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
+        HeroBannerAsset(imageName: "32", url: "https://peaksummit.se"),
+        HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
+    ]
+    
+    let categories = ["Gym", "Löpning", "Golf", "Skidåkning"]
+    
+    let allRewards = RewardCatalog.all
     
     private func sortedRewards(for category: String) -> [RewardCard] {
         let rewards = allRewards.filter { $0.category == category }
         
         if category == "Golf" {
             let priority: [String: Int] = [
+                "J.LINDEBERG": 0,
                 "LONEGOLF": 0,
                 "PLIKTGOLF": 1
+            ]
+            
+            return rewards.sorted { lhs, rhs in
+                let leftPriority = priority[lhs.brandName] ?? Int.max
+                let rightPriority = priority[rhs.brandName] ?? Int.max
+                
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+                
+                return featuredSort(lhs, rhs)
+            }
+        }
+        
+        if category == "Skidåkning" {
+            let priority: [String: Int] = [
+                "J.LINDEBERG": 0
             ]
             
             return rewards.sorted { lhs, rhs in
@@ -810,6 +850,8 @@ struct RewardDetailView: View {
             return "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa."
         case "FUSE ENERGY":
             return "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft."
+        case "J.LINDEBERG":
+            return "J.Lindeberg kombinerar skandinaviskt mode med högpresterande sportplagg. Kollektionerna är designade för golfbanan och backen med tekniska material, skarpa snitt och premiumdetaljer – så att du kan prestera på topp och samtidigt se ut som ett proffs."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
@@ -817,6 +859,8 @@ struct RewardDetailView: View {
     
     private func getCompanyLogo(for brandName: String) -> String {
         switch brandName {
+        case "J.LINDEBERG":
+            return "37"
         case "PLIKTGOLF":
             return "15" // Pliktgolf logo
         case "PEGMATE":
@@ -878,6 +922,8 @@ struct RewardDetailView: View {
             urlString = "https://www.scandigolf.se/"
         case "WINWIZE":
             urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
+        case "J.LINDEBERG":
+            urlString = "https://jlindeberg.com/"
         default:
             urlString = "https://google.com" // Fallback
         }

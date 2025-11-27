@@ -3,9 +3,10 @@ import Combine
 import Supabase
 
 struct ActivitiesView: View {
-    @StateObject private var workoutPosts: WorkoutPostsViewModel = WorkoutPostsViewModel()
+    @StateObject private var userPostsViewModel = SocialViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var task: Task<Void, Never>?
+    @State private var selectedPost: SocialWorkoutPost?
     
     // Alla belöningar i önskad ordning (PUMPLABS först, ZEN ENERGY som andra)
     let allRewards = [
@@ -106,7 +107,15 @@ struct ActivitiesView: View {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 
-                if workoutPosts.posts.isEmpty {
+                if userPostsViewModel.isLoading && userPostsViewModel.posts.isEmpty {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .tint(AppColors.brandBlue)
+                        Text("Hämtar dina inlägg...")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                } else if userPostsViewModel.posts.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "figure.run")
                             .font(.system(size: 48))
@@ -138,12 +147,17 @@ struct ActivitiesView: View {
                             }
                             
                             // MARK: - Aktiviteter
-                            VStack(spacing: 16) {
-                                ForEach(workoutPosts.posts) { post in
-                                    WorkoutPostCard(post: post)
+                            LazyVStack(spacing: 0) {
+                                ForEach(userPostsViewModel.posts) { post in
+                                    SocialPostCard(
+                                        post: post,
+                                        onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                        viewModel: userPostsViewModel
+                                    )
+                                    Divider()
+                                        .background(Color(.systemGray5))
                                 }
                             }
-                            .padding(.horizontal, 16)
                         }
                         .padding(.vertical, 16)
                     }
@@ -151,6 +165,9 @@ struct ActivitiesView: View {
             }
             .navigationTitle("Aktiviteter")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedPost) { post in
+                WorkoutDetailView(post: post)
+            }
             .task {
                 // Cancel any previous task
                 task?.cancel()
@@ -159,7 +176,7 @@ struct ActivitiesView: View {
                 
                 // Create new task
                 task = Task {
-                    await workoutPosts.fetchUserPostsAsync(userId: userId)
+                    await userPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
                 }
             }
             .onDisappear {
@@ -167,7 +184,7 @@ struct ActivitiesView: View {
             }
             .refreshable {
                 if let userId = authViewModel.currentUser?.id {
-                    await workoutPosts.refreshUserPosts(userId: userId)
+                    await userPostsViewModel.refreshPostsForUser(userId: userId, viewerId: userId)
                 }
             }
         }

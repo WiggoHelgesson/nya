@@ -6,6 +6,7 @@ struct NotificationsView: View {
     @State private var isLoading = false
     @State private var notifications: [AppNotification] = []
     @State private var selectedNotification: AppNotification?
+    @State private var selectedProfileId: String?
     var onDismiss: (() -> Void)? = nil
     
     var body: some View {
@@ -54,6 +55,18 @@ struct NotificationsView: View {
             }
             .onDisappear {
                 onDismiss?()
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { selectedProfileId != nil },
+                set: { newValue in
+                    if !newValue {
+                        selectedProfileId = nil
+                    }
+                }
+            )) {
+                if let userId = selectedProfileId {
+                    UserProfileView(userId: userId)
+                }
             }
         }
     }
@@ -104,8 +117,9 @@ struct NotificationsView: View {
                 }
             }
             
-            // Navigate based on type
-            // TODO: Navigate to post if postId exists
+            await MainActor.run {
+                selectedProfileId = notification.actorId
+            }
         }
     }
     

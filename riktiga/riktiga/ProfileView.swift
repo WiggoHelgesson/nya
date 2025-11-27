@@ -20,6 +20,7 @@ struct ProfileView: View {
     @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
     @State private var lastActivityFetch: Date?
     @State private var isUsingCachedWeeklyData = false
+    @State private var selectedPost: SocialWorkoutPost?
     
     private let cacheManager = AppCacheManager.shared
     private let weeklyDataThrottle: TimeInterval = 120
@@ -212,7 +213,9 @@ struct ProfileView: View {
                         }
                         
                         if let userId = authViewModel.currentUser?.id {
-                            UserActivitiesView(userId: userId)
+                            UserActivitiesView(userId: userId) { post in
+                                selectedPost = post
+                            }
                         }
                     }
                     
@@ -222,6 +225,9 @@ struct ProfileView: View {
             }
             .navigationTitle("Inställningar")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedPost) { post in
+                WorkoutDetailView(post: post)
+            }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
@@ -525,19 +531,13 @@ private extension ProfileView {
 
 struct UserActivitiesView: View {
     let userId: String
-    @State private var activities: [WorkoutPost] = []
-    @State private var isLoading = true
-    @State private var displayedCount = 3 // Start with 3 activities
-    @State private var isLoadingMore = false
-    @State private var showingDeleteAlert = false
-    @State private var activityToDelete: WorkoutPost?
-    @State private var isUsingCache = false
+    var onSelectPost: (SocialWorkoutPost) -> Void
     
-    private let cacheManager = AppCacheManager.shared
+    @StateObject private var postsViewModel = SocialViewModel()
     
     var body: some View {
         VStack(spacing: 12) {
-            if isLoading {
+            if postsViewModel.isLoading && postsViewModel.posts.isEmpty {
                 HStack {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -547,7 +547,7 @@ struct UserActivitiesView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-            } else if activities.isEmpty {
+            } else if postsViewModel.posts.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "figure.run")
                         .font(.title2)
@@ -559,308 +559,24 @@ struct UserActivitiesView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
             } else {
-                // Show cache indicator if using cached data
-                if isUsingCache {
-                    HStack {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .foregroundColor(.blue)
-                        Text("Visar sparad data")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                }
-                
-                LazyVStack(spacing: 12) {
-                    ForEach(Array(activities.prefix(displayedCount).enumerated()), id: \.element.id) { index, activity in
-                        ProfileActivityCard(activity: activity)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    activityToDelete = activity
-                                    showingDeleteAlert = true
-                                } label: {
-                                    Label("Ta bort", systemImage: "trash")
-                                }
-                            }
-                            .onAppear {
-                                // Load more when reaching the last item
-                                if index == displayedCount - 1 && displayedCount < activities.count {
-                                    loadMoreActivities()
-                                }
-                            }
-                    }
-                    
-                    if isLoadingMore {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                            Text("Laddar fler...")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    if displayedCount < activities.count {
-                        Button(action: {
-                            loadMoreActivities()
-                        }) {
-                            Text("Visa fler aktiviteter (\(activities.count - displayedCount) kvar)")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                                .padding(.vertical, 8)
-                        }
+                LazyVStack(spacing: 0) {
+                    ForEach(postsViewModel.posts) { post in
+                        SocialPostCard(
+                            post: post,
+                            onOpenDetail: { onSelectPost($0) },
+                            viewModel: postsViewModel
+                        )
+                        Divider()
+                            .background(Color(.systemGray5))
                     }
                 }
             }
         }
-        .onAppear {
-            loadActivities()
+        .task {
+            await postsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
         }
-        .alert("Ta bort aktivitet", isPresented: $showingDeleteAlert) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Ta bort", role: .destructive) {
-                if let activity = activityToDelete {
-                    deleteActivity(activity)
-                }
-            }
-        } message: {
-            Text("Är du säker på att du vill ta bort denna aktivitet? Denna åtgärd kan inte ångras.")
-        }
-    }
-    
-    private func loadActivities() {
-        isLoading = true
-        
-        // First, try to load from cache for instant display
-        if let cachedActivities = cacheManager.getCachedUserWorkouts(userId: userId) {
-            DispatchQueue.main.async {
-                self.activities = cachedActivities
-                self.isLoading = false
-                self.isUsingCache = true
-                self.displayedCount = min(3, cachedActivities.count)
-                print("✅ Loaded \(cachedActivities.count) activities from cache")
-            }
-        }
-        
-        // Then fetch fresh data in background
-        Task {
-            do {
-                let fetchedActivities = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId)
-                await MainActor.run {
-                    // Only update if we got new data or cache was empty
-                    if self.activities.isEmpty || !self.isUsingCache {
-                        self.activities = fetchedActivities
-                        self.displayedCount = min(3, fetchedActivities.count)
-                    }
-                    self.isLoading = false
-                    self.isUsingCache = false
-                    
-                    // Save to cache for next time
-                    self.cacheManager.saveUserWorkouts(fetchedActivities, userId: self.userId)
-                }
-            } catch {
-                print("❌ Error loading user activities: \(error)")
-                await MainActor.run {
-                    self.isLoading = false
-                    self.isUsingCache = false
-                }
-            }
-        }
-    }
-    
-    private func loadMoreActivities() {
-        guard !isLoadingMore && displayedCount < activities.count else { return }
-        
-        isLoadingMore = true
-        
-        // Simulate loading delay for better UX
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let newCount = min(displayedCount + 3, activities.count)
-            displayedCount = newCount
-            isLoadingMore = false
-        }
-    }
-    
-    private func deleteActivity(_ activity: WorkoutPost) {
-        Task {
-            do {
-                try await WorkoutService.shared.deleteWorkoutPost(postId: activity.id, userId: userId)
-                
-                await MainActor.run {
-                    // Remove the activity from the local array
-                    activities.removeAll { $0.id == activity.id }
-                    
-                    // Adjust displayed count if needed
-                    if displayedCount > activities.count {
-                        displayedCount = activities.count
-                    }
-                    
-                    // Clear the activity to delete
-                    activityToDelete = nil
-                }
-                
-                print("✅ Successfully deleted activity: \(activity.title)")
-                
-            } catch {
-                print("❌ Error deleting activity: \(error)")
-                await MainActor.run {
-                    activityToDelete = nil
-                }
-            }
-        }
-    }
-}
-
-struct ProfileActivityCard: View {
-    let activity: WorkoutPost
-    @EnvironmentObject var authViewModel: AuthViewModel
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header with user info - exactly like SocialPostCard
-            HStack(spacing: 12) {
-                // User avatar
-                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 40)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(authViewModel.currentUser?.name ?? "Du")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
-                    
-                    Text(formatDate(activity.createdAt))
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                Button(action: {}) {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(.black)
-                        .font(.system(size: 16))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            
-            // Large image
-            if let imageUrl = activity.imageUrl, !imageUrl.isEmpty {
-                LocalAsyncImage(path: imageUrl)
-            }
-            
-            // Content below image
-            VStack(alignment: .leading, spacing: 12) {
-                // Title
-                HStack(spacing: 8) {
-                    Text(activity.title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.black)
-                    
-                    if authViewModel.currentUser?.isProMember == true {
-                        Text("PRO")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.yellow)
-                            .cornerRadius(4)
-                            .transition(.opacity)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                
-                // Stats row with white background
-                HStack(spacing: 0) {
-                    if let distance = activity.distance {
-                        VStack(spacing: 6) {
-                            Text("Distans")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.2f km", distance))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    
-                    if let duration = activity.duration {
-                        if activity.distance != nil {
-                            Divider()
-                                .frame(height: 40)
-                        }
-                        
-                        VStack(spacing: 6) {
-                            Text("Tid")
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                            Text(formatDuration(duration))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                }
-                .background(Color.white)
-                .cornerRadius(12)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-            }
-        }
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-    }
-    
-    private func getActivityIcon(_ activity: String) -> String {
-        switch activity {
-        case "Löppass":
-            return "figure.run"
-        case "Golfrunda":
-            return "flag.fill"
-        case "Gympass":
-            return "figure.strengthtraining.traditional"
-        case "Bestiga berg":
-            return "mountain.2.fill"
-        case "Skidåkning":
-            return "snowflake"
-        default:
-            return "figure.walk"
-        }
-    }
-    
-    private func formatDate(_ dateString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: dateString) {
-            let calendar = Calendar.current
-            if calendar.isDateInToday(date) {
-                let timeFormatter = DateFormatter()
-                timeFormatter.timeStyle = .short
-                return timeFormatter.string(from: date)
-            } else if calendar.isDateInYesterday(date) {
-                return "Igår"
-            } else {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateStyle = .short
-                return dateFormatter.string(from: date)
-            }
-        }
-        return dateString
-    }
-    
-    private func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        let secs = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        } else {
-            return String(format: "%02d:%02d", minutes, secs)
+        .refreshable {
+            await postsViewModel.refreshPostsForUser(userId: userId, viewerId: userId)
         }
     }
 }

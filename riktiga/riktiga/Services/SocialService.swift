@@ -766,6 +766,48 @@ class SocialService {
         }
         return enrichedFallback
     }
+
+    func getPostsForUser(targetUserId: String, viewerId: String) async throws -> [SocialWorkoutPost] {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            let posts: [SocialWorkoutPost] = try await supabase
+                .from("workout_posts")
+                .select("""
+                    id,
+                    user_id,
+                    activity_type,
+                    title,
+                    description,
+                    distance,
+                    duration,
+                    image_url,
+                    user_image_url,
+                    elevation_gain,
+                    max_speed,
+                    created_at,
+                    split_data,
+                    exercises_data,
+                    profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .eq("user_id", value: targetUserId)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            for post in posts {
+                postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
+            }
+            
+            return await markLikedPosts(posts, userId: viewerId)
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch {
+            print("❌ Error fetching posts for user \(targetUserId): \(error)")
+            throw error
+        }
+    }
     
     private func buildFallbackFeed(userId: String) async -> [SocialWorkoutPost] {
         var userIdSet: Set<String> = [userId]

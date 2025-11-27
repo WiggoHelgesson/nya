@@ -7,10 +7,11 @@ struct UserProfileView: View {
     @State private var avatarUrl: String? = nil
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
-    @State private var posts: [WorkoutPost] = []
     @State private var isLoading: Bool = true
     @State private var isFollowingUser: Bool = false
     @State private var followToggleInProgress: Bool = false
+    @StateObject private var profilePostsViewModel = SocialViewModel()
+    @State private var selectedPost: SocialWorkoutPost?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authViewModel: AuthViewModel
     
@@ -99,13 +100,40 @@ struct UserProfileView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
                     } else {
-                        LazyVStack(spacing: 16) {
-                            ForEach(posts) { post in
-                                WorkoutPostCard(post: post)
-                                    .id(post.id)
+                        if profilePostsViewModel.isLoading && profilePostsViewModel.posts.isEmpty {
+                            VStack(spacing: 12) {
+                                ProgressView().tint(AppColors.brandBlue)
+                                Text("Hämtar inlägg...")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
+                        } else if profilePostsViewModel.posts.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "figure.run")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.gray)
+                                Text("Inga inlägg än")
+                                    .font(.headline)
+                                Text("När användaren sparar pass visas de här.")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.top, 40)
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(profilePostsViewModel.posts) { post in
+                                    SocialPostCard(
+                                        post: post,
+                                        onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                        viewModel: profilePostsViewModel
+                                    )
+                                    Divider()
+                                        .background(Color(.systemGray5))
+                                }
                             }
                         }
-                        .padding(16)
                     }
                 }
             }
@@ -113,6 +141,9 @@ struct UserProfileView: View {
         .navigationTitle("Profil")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadData() }
+        .navigationDestination(item: $selectedPost) { post in
+            WorkoutDetailView(post: post)
+        }
     }
     
     private func loadData() async {
@@ -122,13 +153,11 @@ struct UserProfileView: View {
         async let profileTask = ProfileService.shared.fetchUserProfile(userId: userId)
         async let followersIdsTask = SocialService.shared.getFollowers(userId: userId)
         async let followingIdsTask = SocialService.shared.getFollowing(userId: userId)
-        async let postsTask = WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
         
         // Wait for all results
         let profile = try? await profileTask
         let followersIds = (try? await followersIdsTask) ?? []
         let followingIds = (try? await followingIdsTask) ?? []
-        let fetchedPosts = (try? await postsTask) ?? []
         
         // Update UI once with all data
         await MainActor.run {
@@ -139,7 +168,6 @@ struct UserProfileView: View {
             
             self.followersCount = followersIds.count
             self.followingCount = followingIds.count
-            self.posts = fetchedPosts
             self.isLoading = false
             
             if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
@@ -147,6 +175,12 @@ struct UserProfileView: View {
             } else {
                 self.isFollowingUser = false
             }
+        }
+        
+        if let viewerId = authViewModel.currentUser?.id {
+            await profilePostsViewModel.loadPostsForUser(userId: userId, viewerId: viewerId)
+        } else {
+            await profilePostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
         }
     }
     

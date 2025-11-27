@@ -30,6 +30,8 @@ struct SessionCompleteView: View {
     @State private var showSaveSuccess = false
     @State private var successScale: CGFloat = 0.7
     @State private var successOpacity: Double = 0.0
+    @State private var pendingSharePost: SocialWorkoutPost?
+    @State private var showShareGallery = false
     
     // Calculate PRO points (1.5x boost)
     private var proPoints: Int {
@@ -47,11 +49,7 @@ struct SessionCompleteView: View {
                         .font(.headline)
                     Spacer()
                     Button(action: {
-                        Task {
-                            await MainActor.run {
-                                showDeleteConfirmation = true
-                            }
-                        }
+                        showDeleteConfirmation = true
                     }) {
                         Image(systemName: "xmark")
                             .foregroundColor(.black)
@@ -115,9 +113,9 @@ struct SessionCompleteView: View {
                             Text("Bild")
                                 .font(.headline)
                             
-                            if let sessionImage = sessionImage {
+                            if let currentImage = sessionImage {
                                 ZStack(alignment: .topTrailing) {
-                                    Image(uiImage: sessionImage)
+                                    Image(uiImage: currentImage)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(height: 200)
@@ -125,12 +123,8 @@ struct SessionCompleteView: View {
                                         .clipped()
                                     
                                     Button(action: {
-                                        Task {
-                                            await MainActor.run {
-                                                self.sessionImage = nil
-                                                self.selectedItem = nil
-                                            }
-                                        }
+                                        sessionImage = nil
+                                        selectedItem = nil
                                     }) {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(.system(size: 24))
@@ -220,11 +214,7 @@ struct SessionCompleteView: View {
                         
                         HStack(spacing: 16) {
                             Button(action: {
-                                Task {
-                                    await MainActor.run {
-                                        showDeleteConfirmation = false
-                                    }
-                                }
+                                showDeleteConfirmation = false
                             }) {
                                 Text("Avbryt")
                                     .font(.system(size: 16, weight: .medium))
@@ -236,13 +226,9 @@ struct SessionCompleteView: View {
                             }
                             
                             Button(action: {
-                                Task {
-                                    await MainActor.run {
-                                        showDeleteConfirmation = false
-                                        isPresented = false
-                                        onDelete()
-                                    }
-                                }
+                                showDeleteConfirmation = false
+                                isPresented = false
+                                onDelete()
                             }) {
                                 Text("Radera")
                                     .font(.system(size: 16, weight: .bold))
@@ -324,21 +310,33 @@ struct SessionCompleteView: View {
             }
         }
         // Session finalization is handled explicitly by onComplete/onDelete callbacks
-        .onChange(of: selectedItem) { oldValue, newValue in
-            Task {
-                if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                    if let uiImage = UIImage(data: data) {
-                        await MainActor.run {
-                            sessionImage = uiImage
-                        }
+        .onChange(of: selectedItem) { _, newValue in
+            guard let newValue else { return }
+            Task(priority: .userInitiated) {
+                if let data = try? await newValue.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    await MainActor.run {
+                        sessionImage = uiImage
                     }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showShareGallery, onDismiss: {
+            pendingSharePost = nil
+        }) {
+            if let post = pendingSharePost {
+                ShareActivityView(post: post) {
+                    showShareGallery = false
+                    pendingSharePost = nil
+                    isPresented = false
+                    onComplete()
                 }
             }
         }
     }
     
     func saveWorkout() {
-        Task {
+        Task(priority: .userInitiated) {
             await MainActor.run {
                 isSaving = true
             }
@@ -396,6 +394,13 @@ struct SessionCompleteView: View {
                 
                 try await WorkoutService.shared.saveWorkoutPost(post, routeImage: routeImage, userImage: sessionImage, earnedPoints: pointsToAward)
                 
+                let sharePost = SocialWorkoutPost(
+                    from: post,
+                    userName: authViewModel.currentUser?.name,
+                    userAvatarUrl: authViewModel.currentUser?.avatarUrl,
+                    userIsPro: authViewModel.currentUser?.isProMember
+                )
+                
                 if activity.rawValue == "Gympass" && pointsToAward > 0 {
                     let key = gymPointsKey(for: Date())
                     let existing = UserDefaults.standard.integer(forKey: key)
@@ -416,6 +421,7 @@ struct SessionCompleteView: View {
                     isSaving = false
                     shouldSaveTemplate = false
                     templateName = ""
+                    pendingSharePost = sharePost
                     triggerSaveSuccessAnimation()
                 }
             } catch {
@@ -469,8 +475,12 @@ struct SessionCompleteView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             showSaveSuccess = false
-            isPresented = false
-            onComplete()
+            if pendingSharePost != nil {
+                showShareGallery = true
+            } else {
+                isPresented = false
+                onComplete()
+            }
         }
     }
 }

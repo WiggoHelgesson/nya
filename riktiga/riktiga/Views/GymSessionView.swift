@@ -22,6 +22,16 @@ struct GymSessionView: View {
     @State private var showStreakCelebration = false
     @State private var selectedOtherActivity: ActivityType?
     @FocusState private var focusedField: GymSessionInputField?
+    @State private var showWorkoutGenerator = false
+    @State private var generatorPrompt: String = ""
+    @State private var generatorWordCount: Int = 0
+    @State private var generatorError: String?
+    @State private var isGeneratingWorkout = false
+    @State private var showSubscriptionView = false
+    @State private var generatorResultMessage: String?
+    @State private var showGeneratorResultAlert = false
+    
+    private let generatorWordLimit = 100
     
     @ViewBuilder
     private var otherActivitiesSection: some View {
@@ -88,18 +98,187 @@ struct GymSessionView: View {
         .padding(.top, 8)
     }
     
+    private var uppyGeneratorButton: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button(action: handleGeneratorButtonTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Skapa ett pass med UPPY")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .background(Color.black)
+                .cornerRadius(14)
+            }
+            
+            Text("Beta version")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    private var workoutGeneratorSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Beskriv passet du vill skapa (max 100 ord).")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                
+                ZStack(alignment: .topLeading) {
+                    if generatorPrompt.isEmpty {
+                        Text("Exempel: \"Vill ha ett 45 min benpass med fokus på explosivitet och maskiner.\"")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray.opacity(0.8))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                    }
+                    
+                    TextEditor(text: $generatorPrompt)
+                        .frame(minHeight: 180)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(16)
+                        .onChange(of: generatorPrompt) { newValue in
+                            updateGeneratorWordCount(for: newValue)
+                        }
+                }
+                
+                HStack {
+                    Text("\(generatorWordCount)/\(generatorWordLimit) ord")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(generatorWordCount > generatorWordLimit ? .red : .gray)
+                    Spacer()
+                    if isGeneratingWorkout {
+                        ProgressView()
+                    }
+                }
+                
+                if let generatorError {
+                    Text(generatorError)
+                        .font(.system(size: 13))
+                        .foregroundColor(.red)
+                }
+                
+                Button(action: generateWorkoutFromPrompt) {
+                    HStack {
+                        Image(systemName: "wand.and.stars")
+                        Text(isGeneratingWorkout ? "Skapar pass..." : "Generera pass")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(generatorWordCount == 0 || isGeneratingWorkout ? Color.gray.opacity(0.3) : Color.black)
+                    .foregroundColor(generatorWordCount == 0 || isGeneratingWorkout ? .gray : .white)
+                    .cornerRadius(16)
+                }
+                .disabled(generatorWordCount == 0 || isGeneratingWorkout)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Skapa med UPPY")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Stäng") {
+                        showWorkoutGenerator = false
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleGeneratorButtonTap() {
+        guard authViewModel.currentUser?.isProMember == true else {
+            showSubscriptionView = true
+            return
+        }
+        generatorError = nil
+        showWorkoutGenerator = true
+    }
+    
+    private func updateGeneratorWordCount(for text: String) {
+        let components = text
+            .split { $0.isWhitespace || $0.isNewline }
+        if components.count <= generatorWordLimit {
+            generatorWordCount = components.count
+            return
+        }
+        let trimmed = components.prefix(generatorWordLimit).joined(separator: " ")
+        generatorPrompt = trimmed
+        generatorWordCount = generatorWordLimit
+    }
+    
+    private func generateWorkoutFromPrompt() {
+        let trimmed = generatorPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            generatorError = "Beskriv passet du vill skapa."
+            return
+        }
+        guard !isGeneratingWorkout else { return }
+        
+        isGeneratingWorkout = true
+        generatorError = nil
+        
+        Task {
+            do {
+                let result = try await WorkoutGeneratorService.shared.generateWorkout(prompt: trimmed)
+                guard !result.entries.isEmpty else {
+                    await MainActor.run {
+                        generatorError = "UPPY hittade inga övningar, försök specificera passet mer."
+                    }
+                    return
+                }
+                await MainActor.run {
+                    viewModel.appendGeneratedExercises(result.entries)
+                    generatorPrompt = ""
+                    generatorWordCount = 0
+                    showWorkoutGenerator = false
+                    generatorResultMessage = generatorResultText(for: result)
+                    showGeneratorResultAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    generatorError = error.localizedDescription
+                }
+            }
+            await MainActor.run {
+                isGeneratingWorkout = false
+            }
+        }
+    }
+    
+    private func generatorResultText(for result: GeneratedWorkoutResult) -> String {
+        var summary = "UPPY lade till \(result.entries.count) övningar."
+        if !result.missingExercises.isEmpty {
+            let missing = result.missingExercises.joined(separator: ", ")
+            summary += "\nKunde inte hitta: \(missing)."
+        }
+        return summary
+    }
+    
     @ViewBuilder
     private var savedWorkoutsSection: some View {
-        if viewModel.isLoadingSavedWorkouts {
-            ProgressView()
-                .padding(.top, 8)
-        } else if !viewModel.savedWorkouts.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Sparade pass")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sparade pass")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 16)
+            
+            if viewModel.isLoadingSavedWorkouts {
+                ProgressView()
                     .padding(.horizontal, 16)
-                
+                    .padding(.top, 4)
+            } else if viewModel.savedWorkouts.isEmpty {
+                Text("Du har inga sparade pass ännu.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 16)
+            } else {
                 ForEach(viewModel.savedWorkouts) { workout in
                     Button {
                         viewModel.applySavedWorkout(workout)
@@ -127,8 +306,10 @@ struct GymSessionView: View {
                     .padding(.horizontal, 16)
                 }
             }
-            .padding(.top, 8)
+            
+            uppyGeneratorButton
         }
+        .padding(.top, 8)
     }
     
     var body: some View {
@@ -217,6 +398,11 @@ struct GymSessionView: View {
                                     onDeleteSet: { setIndex in
                                         viewModel.deleteSet(exerciseId: exercise.id, setIndex: setIndex)
                                     },
+                                    onToggleSetCompletion: { setIndex in
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            viewModel.toggleSetCompletion(exerciseId: exercise.id, setIndex: setIndex)
+                                        }
+                                    },
                                     onDelete: {
                                         viewModel.removeExercise(exercise.id)
                                     },
@@ -241,45 +427,7 @@ struct GymSessionView: View {
                             }
                             .padding(.horizontal, 16)
                             
-                            if viewModel.isLoadingSavedWorkouts {
-                                ProgressView()
-                                    .padding(.top, 8)
-                            } else if !viewModel.savedWorkouts.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Sparade pass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.black)
-                                        .padding(.horizontal, 16)
-                                    
-                                    ForEach(viewModel.savedWorkouts) { workout in
-                                        Button {
-                                            viewModel.applySavedWorkout(workout)
-                                        } label: {
-                                            HStack {
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    Text(workout.name)
-                                                        .font(.system(size: 16, weight: .medium))
-                                                        .foregroundColor(.black)
-                                                    Text("\(workout.exercises.count) övningar")
-                                                        .font(.system(size: 13))
-                                                        .foregroundColor(.gray)
-                                                }
-                                                Spacer()
-                                                Image(systemName: "arrow.down.circle.fill")
-                                                    .foregroundColor(.black)
-                                                    .font(.system(size: 18))
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 12)
-                                            .background(Color.white)
-                                            .cornerRadius(12)
-                                            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
-                                        }
-                                        .padding(.horizontal, 16)
-                                    }
-                                }
-                                .padding(.top, 8)
-                            }
+                            savedWorkoutsSection
                         }
                         .padding(.bottom, 100)
                     }
@@ -329,6 +477,12 @@ struct GymSessionView: View {
                     showStreakCelebration = false
                     showCompleteSession = true
                 })
+            }
+            .sheet(isPresented: $showWorkoutGenerator) {
+                workoutGeneratorSheet
+            }
+            .sheet(isPresented: $showSubscriptionView) {
+                SubscriptionView()
             }
             .fullScreenCover(isPresented: $showCompleteSession) {
                 if let sessionData = viewModel.sessionData {
@@ -383,6 +537,11 @@ struct GymSessionView: View {
                 if newPhase == .inactive || newPhase == .background {
                     persistSession(force: true)
                 }
+            }
+            .alert("UPPY", isPresented: $showGeneratorResultAlert, presenting: generatorResultMessage) { _ in
+                Button("Okej", role: .cancel) {}
+            } message: { message in
+                Text(message)
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -597,6 +756,7 @@ struct ExerciseCard: View {
     let onAddSet: () -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
     let onDeleteSet: (Int) -> Void
+    let onToggleSetCompletion: (Int) -> Void
     let onDelete: () -> Void
     let focusedField: FocusState<GymSessionInputField?>.Binding
     
@@ -667,6 +827,9 @@ struct ExerciseCard: View {
                     onUpdate: { kg, reps in
                         onUpdateSet(index, kg, reps)
                     },
+                    onToggleCompletion: {
+                        onToggleSetCompletion(index)
+                    },
                     onDelete: {
                         onDeleteSet(index)
                     }
@@ -710,12 +873,22 @@ struct SetRow: View {
     let isCompleted: Bool
     let focusedField: FocusState<GymSessionInputField?>.Binding
     let onUpdate: (Double, Int) -> Void
+    let onToggleCompletion: () -> Void
     let onDelete: () -> Void
     
     @State private var kgText: String
     @State private var repsText: String
     
-    init(exerciseId: String, setIndex: Int, setNumber: Int, kg: Double, reps: Int, isCompleted: Bool, focusedField: FocusState<GymSessionInputField?>.Binding, onUpdate: @escaping (Double, Int) -> Void, onDelete: @escaping () -> Void) {
+    init(exerciseId: String,
+         setIndex: Int,
+         setNumber: Int,
+         kg: Double,
+         reps: Int,
+         isCompleted: Bool,
+         focusedField: FocusState<GymSessionInputField?>.Binding,
+         onUpdate: @escaping (Double, Int) -> Void,
+         onToggleCompletion: @escaping () -> Void,
+         onDelete: @escaping () -> Void) {
         self.exerciseId = exerciseId
         self.setIndex = setIndex
         self.setNumber = setNumber
@@ -724,12 +897,17 @@ struct SetRow: View {
         self.isCompleted = isCompleted
         self.focusedField = focusedField
         self.onUpdate = onUpdate
+        self.onToggleCompletion = onToggleCompletion
         self.onDelete = onDelete
         _kgText = State(initialValue: kg > 0 ? String(format: "%.0f", kg) : "")
         _repsText = State(initialValue: reps > 0 ? "\(reps)" : "")
     }
     
     var body: some View {
+        let inputBackground = isCompleted ? Color.white.opacity(0.95) : Color(.systemGray6)
+        let rowBackground = isCompleted ? Color(red: 210/255, green: 248/255, blue: 210/255) : Color.white
+        let checkBackground = isCompleted ? Color(red: 47/255, green: 158/255, blue: 68/255) : Color(.systemGray5)
+        
         HStack(spacing: 12) {
             // Set number
             Text("\(setNumber)")
@@ -744,7 +922,7 @@ struct SetRow: View {
                 .font(.system(size: 16, weight: .medium))
                 .frame(width: 80)
                 .padding(.vertical, 8)
-                .background(Color(.systemGray6))
+                .background(inputBackground)
                 .cornerRadius(8)
                 .focused(focusedField, equals: .kg(exerciseId: exerciseId, setIndex: setIndex))
                 .onChange(of: kgText) { newValue in
@@ -761,7 +939,7 @@ struct SetRow: View {
                 .font(.system(size: 16, weight: .medium))
                 .frame(width: 80)
                 .padding(.vertical, 8)
-                .background(Color(.systemGray6))
+                .background(inputBackground)
                 .cornerRadius(8)
                 .focused(focusedField, equals: .reps(exerciseId: exerciseId, setIndex: setIndex))
                 .onChange(of: repsText) { newValue in
@@ -773,6 +951,21 @@ struct SetRow: View {
             
             Spacer()
             
+            Button(action: {
+                onToggleCompletion()
+            }) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(isCompleted ? .white : Color(.systemGray3))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(checkBackground)
+                    )
+            }
+            .buttonStyle(.plain)
+            .frame(width: 40, alignment: .center)
+            
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20, weight: .semibold))
@@ -782,7 +975,11 @@ struct SetRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color.white)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(rowBackground)
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isCompleted)
     }
 }
 

@@ -2,6 +2,28 @@ import SwiftUI
 import Combine
 import UIKit
 
+struct BrandLogoItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let imageName: String
+    
+    static let all: [BrandLogoItem] = [
+        BrandLogoItem(name: "J.LINDEBERG", imageName: "37"),
+        BrandLogoItem(name: "PLIKTGOLF", imageName: "15"),
+        BrandLogoItem(name: "PEGMATE", imageName: "5"),
+        BrandLogoItem(name: "LONEGOLF", imageName: "14"),
+        BrandLogoItem(name: "WINWIZE", imageName: "17"),
+        BrandLogoItem(name: "SCANDIGOLF", imageName: "18"),
+        BrandLogoItem(name: "HAPPYALBA", imageName: "16"),
+        BrandLogoItem(name: "RETROGOLF", imageName: "20"),
+        BrandLogoItem(name: "PUMPLABS", imageName: "21"),
+        BrandLogoItem(name: "ZEN ENERGY", imageName: "22"),
+        BrandLogoItem(name: "PEAK", imageName: "33"),
+        BrandLogoItem(name: "CAPSTONE", imageName: "34"),
+        BrandLogoItem(name: "FUSE ENERGY", imageName: "35")
+    ]
+}
+
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var statisticsService = StatisticsService.shared
@@ -21,6 +43,23 @@ struct HomeView: View {
     @State private var isLoadingInsight = false
     @State private var pendingRewardCelebration: RewardCelebration?
     @State private var streakInfo = StreakManager.shared.getCurrentStreak()
+    private let brandLogos = BrandLogoItem.all
+    @State private var monthlyWorkoutDays: Set<Int> = []
+    @State private var monthReferenceDate = Date()
+    @State private var isLoadingMonthlyCalendar = true
+    @State private var selectedReward: RewardCard? = nil
+    
+    private let isoFormatterWithMs: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    
+    private let isoFormatterNoMs: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
     
     var body: some View {
         NavigationStack {
@@ -74,9 +113,9 @@ struct HomeView: View {
                         
                         // MARK: - Activity Insights (Steps / Sleep / Distance)
                         TabView(selection: $currentInsightIndex) {
-                            stepsCard
+                            monthlyCalendarCard
                                 .tag(0)
-                            flightsCard
+                            stepsCard
                                 .tag(1)
                             weeklyDistanceCard
                                 .tag(2)
@@ -94,6 +133,9 @@ struct HomeView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.bottom, 8)
+                        
+                        brandLogoSlider
+                            .padding(.horizontal, 20)
                         
                         streakSection
                             .padding(.horizontal, 20)
@@ -158,6 +200,9 @@ struct HomeView: View {
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
         }
+        .sheet(item: $selectedReward) { reward in
+            RewardDetailView(reward: reward)
+        }
         .sheet(item: $pendingRewardCelebration, onDismiss: {
             presentNextRewardIfAvailable()
         }) { reward in
@@ -185,6 +230,7 @@ struct HomeView: View {
             
             // Load AI-generated insight
             loadUppyInsight()
+            loadMonthlyCalendarData()
             
             // Hämta stegdata från Apple Health
             isLoadingSteps = true
@@ -232,6 +278,7 @@ struct HomeView: View {
                         await statisticsService.fetchWeeklyStats(userId: userId)
                     }
                 }
+                loadMonthlyCalendarData(force: true)
             }
             
             observers.append(contentsOf: [profileObserver, workoutObserver])
@@ -254,6 +301,13 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             presentNextRewardIfAvailable()
         }
+    }
+    
+    private var calendar: Calendar {
+        var cal = Calendar(identifier: .iso8601)
+        cal.locale = Locale(identifier: "sv_SE")
+        cal.firstWeekday = 2
+        return cal
     }
     
     private func loadRecommendedUsers() {
@@ -354,6 +408,103 @@ struct HomeView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+    
+    private var brandLogoSlider: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Varumärken")
+                .font(.system(size: 20, weight: .black))
+                .foregroundColor(.black)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 18) {
+                    ForEach(brandLogos) { brand in
+                        Button {
+                            handleBrandTap(brand.name)
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(brand.imageName)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 68, height: 68)
+                                    .background(Color(.systemGray6))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                                
+                                Text(brand.name.capitalized)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.black)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
+        )
+    }
+    
+    private func handleBrandTap(_ brandName: String) {
+        if let reward = rewardForBrand(brandName) {
+            selectedReward = reward
+        } else {
+            openBrandWebsite(brandName)
+        }
+    }
+    
+    private func rewardForBrand(_ brandName: String) -> RewardCard? {
+        RewardCatalog.all.first { $0.brandName.caseInsensitiveCompare(brandName) == .orderedSame }
+    }
+    
+    private func openBrandWebsite(_ brandName: String) {
+        let urlString: String
+        switch brandName.uppercased() {
+        case "J.LINDEBERG":
+            urlString = "https://jlindeberg.com/"
+        case "PUMPLABS":
+            urlString = "https://pumplab.se/"
+        case "EXOTIC GOLF":
+            urlString = "https://exoticagolf.se/"
+        case "ZEN ENERGY":
+            urlString = "https://zenenergydrinks.com/?srsltid=AfmBOoo0XewnkvbPLeH1CbuslALX3C-hEOOaf_jJuHh3XMGlHm-rB2Pb"
+        case "HAPPYALBA":
+            urlString = "https://www.happyalba.com/"
+        case "LONEGOLF":
+            urlString = "https://lonegolf.se"
+        case "PEGMATE":
+            urlString = "https://pegmate.se/en/"
+        case "PLIKTGOLF":
+            urlString = "https://pliktgolf.se"
+        case "PEAK":
+            urlString = "https://peaksummit.se"
+        case "CAPSTONE":
+            urlString = "https://capstone.nu/"
+        case "FUSE ENERGY":
+            urlString = "https://fuseenergy.se"
+        case "RETROGOLF":
+            urlString = "https://retrogolfacademy.se/"
+        case "SCANDIGOLF":
+            urlString = "https://www.scandigolf.se/"
+        case "WINWIZE":
+            urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
+        default:
+            urlString = "https://google.com"
+        }
+        
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
     }
     
     private var streakSection: some View {
@@ -550,6 +701,7 @@ extension HomeView {
                     .foregroundColor(.gray)
             }
             .padding(.horizontal, 20)
+            .padding(.top, 20)
             
             VStack(spacing: 12) {
                 if isLoadingSteps {
@@ -575,32 +727,24 @@ extension HomeView {
         .padding(.horizontal, 20)
     }
     
-    private var flightsCard: some View {
+    private var monthlyCalendarCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Antal trappor")
+                Text("Träningspass denna månaden")
                     .font(.system(size: 20, weight: .black))
                     .foregroundColor(.black)
-                Text("Sikta på minst 10 trappsteg varje dag - 5 poäng/dag")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
             }
             .padding(.horizontal, 20)
+            .padding(.top, 32)
             
-            VStack(spacing: 12) {
-                if isLoadingFlights {
-                    ForEach(0..<7) { _ in
-                        WeeklyFlightsRow(day: "---", flights: 0, isToday: false)
-                    }
-                } else if weeklyFlights.isEmpty {
-                    let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
-                    ForEach(days, id: \.self) { day in
-                        WeeklyFlightsRow(day: day, flights: 0, isToday: false)
-                    }
+            VStack(spacing: 16) {
+                if isLoadingMonthlyCalendar {
+                    ProgressView("Hämtar kalender…")
+                        .padding()
                 } else {
-                    ForEach(weeklyFlights) { dailyFlights in
-                        WeeklyFlightsRow(day: dailyFlights.dayName, flights: dailyFlights.count, isToday: dailyFlights.isToday)
-                    }
+                    MonthMiniGrid(referenceDate: monthReferenceDate,
+                                  workoutDays: monthlyWorkoutDays,
+                                  calendar: calendar)
                 }
             }
             .padding(20)
@@ -645,6 +789,39 @@ extension HomeView {
                 print("⚠️ Error awarding steps points: \(error)")
             }
         }
+    }
+    
+    private func loadMonthlyCalendarData(force: Bool = false) {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        Task {
+            do {
+                let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: force)
+                let cal = calendar
+                let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: Date())) ?? Date()
+                let endOfMonth = cal.date(byAdding: .month, value: 1, to: startOfMonth) ?? Date()
+                let days = posts.compactMap { post -> Int? in
+                    guard let date = parseISODate(post.createdAt) else { return nil }
+                    guard date >= startOfMonth && date < endOfMonth else { return nil }
+                    return cal.component(.day, from: date)
+                }
+                await MainActor.run {
+                    monthReferenceDate = startOfMonth
+                    monthlyWorkoutDays = Set(days)
+                    isLoadingMonthlyCalendar = false
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingMonthlyCalendar = false
+                }
+            }
+        }
+    }
+    
+    private func parseISODate(_ string: String) -> Date? {
+        if let date = isoFormatterWithMs.date(from: string) {
+            return date
+        }
+        return isoFormatterNoMs.date(from: string)
     }
     
     private var weeklyDistanceCard: some View {
@@ -847,6 +1024,71 @@ struct WeeklyFlightsRow: View {
                 .frame(width: 55, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct MonthMiniGrid: View {
+    let referenceDate: Date
+    let workoutDays: Set<Int>
+    let calendar: Calendar
+    
+    private var monthLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "LLLL yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter.string(from: referenceDate).capitalized
+    }
+    
+    private var daysInMonth: [Int] {
+        guard let range = calendar.range(of: .day, in: .month, for: referenceDate) else { return [] }
+        return Array(range)
+    }
+    
+    private var firstWeekdayOffset: Int {
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: referenceDate)) ?? referenceDate
+        let weekday = calendar.component(.weekday, from: monthStart)
+        return (weekday - calendar.firstWeekday + 7) % 7
+    }
+    
+    private var weekdaySymbols: [String] {
+        ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(monthLabel)
+                .font(.system(size: 18, weight: .semibold))
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 10) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                }
+                
+                ForEach(0..<firstWeekdayOffset, id: \.self) { _ in
+                    Text("")
+                        .frame(height: 30)
+                }
+                
+                ForEach(daysInMonth, id: \.self) { day in
+                    let hasWorkout = workoutDays.contains(day)
+                    Text("\(day)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(hasWorkout ? Color.black : Color.clear)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.08), lineWidth: hasWorkout ? 0 : 1)
+                                )
+                        )
+                        .foregroundColor(hasWorkout ? .white : .primary)
+                }
+            }
+        }
     }
 }
 

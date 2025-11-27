@@ -20,6 +20,13 @@ struct StatisticsView: View {
                             subtitle: "Sammanfattning av dina pass denna månad"
                         )
                     }
+                    NavigationLink(destination: CalendarOverviewView()) {
+                        StatisticsMenuRow(
+                            icon: "calendar",
+                            title: "Kalender",
+                            subtitle: "Se alla träningsdagar i månad, år eller flera år"
+                        )
+                    }
                     NavigationLink(destination: ProgressiveOverloadView()) {
                         StatisticsMenuRow(
                             icon: "chart.bar.xaxis",
@@ -46,6 +53,493 @@ struct StatisticsView: View {
             }
         }
         .enableSwipeBack()
+    }
+}
+
+private enum CalendarMode: String, CaseIterable, Identifiable {
+    case month = "Månad"
+    case year = "År"
+    case multiYear = "Flera år"
+    
+    var id: String { rawValue }
+}
+
+private struct CalendarOverviewView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var workoutDates: [Date] = []
+    @State private var workoutSet: Set<Date> = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var mode: CalendarMode = .month
+    @State private var referenceDate = Date()
+    @State private var earliestDate: Date?
+    
+    private var calendar: Calendar {
+        var cal = Calendar(identifier: .iso8601)
+        cal.locale = Locale(identifier: "sv_SE")
+        cal.firstWeekday = 2
+        return cal
+    }
+    
+    private let isoFormatterWithMs: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    
+    private let isoFormatterNoMs: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                modePicker
+                switch mode {
+                case .month:
+                    MonthCalendarView(referenceDate: $referenceDate,
+                                      workoutSet: workoutSet,
+                                      calendar: calendar)
+                case .year:
+                    YearCalendarView(referenceDate: $referenceDate,
+                                     workoutSet: workoutSet,
+                                     calendar: calendar)
+                case .multiYear:
+                    MultiYearCalendarView(referenceDate: referenceDate,
+                                          earliestDate: earliestDate,
+                                          workoutSet: workoutSet,
+                                          calendar: calendar)
+                }
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle("Kalender")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: reload) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(isLoading)
+            }
+        }
+        .overlay(alignment: .center) {
+            if isLoading {
+                ProgressView("Hämtar träningsdagar…")
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
+            } else if let errorMessage {
+                VStack(spacing: 12) {
+                    Text(errorMessage)
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                    Button("Försök igen") {
+                        reload()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background(Color.black)
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(18)
+                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
+            }
+        }
+        .task {
+            await loadWorkoutDates()
+        }
+        .refreshable {
+            await loadWorkoutDates(force: true)
+        }
+    }
+    
+    private var modePicker: some View {
+        VStack(spacing: 12) {
+            Picker("Vy", selection: $mode) {
+                ForEach(CalendarMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            
+            switch mode {
+            case .month:
+                MonthNavigationControls(referenceDate: $referenceDate, calendar: calendar)
+            case .year:
+                YearNavigationControls(referenceDate: $referenceDate, calendar: calendar)
+            case .multiYear:
+                EmptyView()
+            }
+        }
+    }
+    
+    private func reload() {
+        Task {
+            await loadWorkoutDates(force: true)
+        }
+    }
+    
+    private func loadWorkoutDates(force: Bool = false) async {
+        guard let userId = authViewModel.currentUser?.id else {
+            await MainActor.run {
+                self.errorMessage = "Logga in för att se kalendern."
+                self.isLoading = false
+            }
+            return
+        }
+        
+        await MainActor.run {
+            if force || workoutDates.isEmpty {
+                isLoading = true
+            }
+            errorMessage = nil
+        }
+        
+        do {
+            let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: force)
+            let fetchedDates: [Date] = posts.compactMap { post in
+                if let date = isoFormatterWithMs.date(from: post.createdAt) {
+                    return date
+                }
+                return isoFormatterNoMs.date(from: post.createdAt)
+            }
+            let daySet = Set(fetchedDates.map { calendar.startOfDay(for: $0) })
+            let earliest = fetchedDates.min()
+            
+            await MainActor.run {
+                withAnimation {
+                    self.workoutDates = fetchedDates
+                    self.workoutSet = daySet
+                    self.earliestDate = earliest
+                    self.isLoading = false
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Kunde inte hämta kalenderdata just nu."
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+private struct MonthNavigationControls: View {
+    @Binding var referenceDate: Date
+    let calendar: Calendar
+    
+    var body: some View {
+        HStack {
+            Button(action: { changeMonth(-1) }) {
+                Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+            Spacer()
+            Text(monthFormatter.string(from: referenceDate).capitalized)
+                .font(.system(size: 18, weight: .bold))
+            Spacer()
+            Button(action: { changeMonth(1) }) {
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+        }
+    }
+    
+    private var monthFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "LLLL yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter
+    }
+    
+    private func changeMonth(_ offset: Int) {
+        if let newDate = calendar.date(byAdding: .month, value: offset, to: referenceDate) {
+            referenceDate = newDate
+        }
+    }
+}
+
+private struct YearNavigationControls: View {
+    @Binding var referenceDate: Date
+    let calendar: Calendar
+    
+    var body: some View {
+        HStack {
+            Button(action: { shiftYear(-1) }) {
+                Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+            Spacer()
+            Text(yearFormatter.string(from: referenceDate))
+                .font(.system(size: 18, weight: .bold))
+            Spacer()
+            Button(action: { shiftYear(1) }) {
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .padding(8)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+        }
+    }
+    
+    private var yearFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter
+    }
+    
+    private func shiftYear(_ offset: Int) {
+        if let newDate = calendar.date(byAdding: .year, value: offset, to: referenceDate) {
+            referenceDate = newDate
+        }
+    }
+}
+
+private struct MonthCalendarView: View {
+    @Binding var referenceDate: Date
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    private var monthLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "LLLL yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter.string(from: referenceDate).capitalized
+    }
+    
+    private var daysInMonth: [Int] {
+        guard let range = calendar.range(of: .day, in: .month, for: referenceDate) else { return [] }
+        return Array(range)
+    }
+    
+    private var firstWeekdayOffset: Int {
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: referenceDate)) ?? referenceDate
+        let weekday = calendar.component(.weekday, from: monthStart)
+        let normalized = (weekday - calendar.firstWeekday + 7) % 7
+        return normalized
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(monthLabel)
+                .font(.system(size: 22, weight: .bold))
+            
+            let weekdaySymbols = calendar.shortWeekdaySymbols
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 12) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol.capitalized)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                }
+                
+                ForEach(0..<firstWeekdayOffset, id: \.self) { _ in
+                    Text("")
+                        .frame(height: 36)
+                }
+                
+                ForEach(daysInMonth, id: \.self) { day in
+                    let date = dayDate(day: day)
+                    let isWorkoutDay = date.map { workoutSet.contains(calendar.startOfDay(for: $0)) } ?? false
+                    Text("\(day)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle()
+                                .fill(isWorkoutDay ? Color.black : Color.clear)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.08), lineWidth: isWorkoutDay ? 0 : 1)
+                                )
+                        )
+                        .foregroundColor(isWorkoutDay ? .white : .primary)
+                }
+            }
+            .padding()
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 6)
+        }
+    }
+    
+    private func dayDate(day: Int) -> Date? {
+        var comps = calendar.dateComponents([.year, .month], from: referenceDate)
+        comps.day = day
+        return calendar.date(from: comps)
+    }
+}
+
+private struct YearCalendarView: View {
+    @Binding var referenceDate: Date
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    private var months: [Date] {
+        guard let yearStart = calendar.date(from: calendar.dateComponents([.year], from: referenceDate)) else { return [] }
+        return (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: yearStart) }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(yearFormatter.string(from: referenceDate))
+                .font(.system(size: 22, weight: .bold))
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 16) {
+                ForEach(months, id: \.self) { monthStart in
+                    MiniMonthCard(monthStart: monthStart, workoutSet: workoutSet, calendar: calendar)
+                }
+            }
+        }
+    }
+    
+    private var yearFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter
+    }
+}
+
+private struct MiniMonthCard: View {
+    let monthStart: Date
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    private var monthLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        formatter.locale = Locale(identifier: "sv_SE")
+        return formatter.string(from: monthStart).capitalized
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(monthLabel)
+                .font(.system(size: 15, weight: .semibold))
+            let days = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(days, id: \.self) { day in
+                    let date = makeDate(day: day)
+                    let hasWorkout = date.map { workoutSet.contains(calendar.startOfDay(for: $0)) } ?? false
+                    Circle()
+                        .fill(hasWorkout ? Color.black : Color(.systemGray5))
+                        .frame(width: 10, height: 10)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 4)
+    }
+    
+    private func makeDate(day: Int) -> Date? {
+        var comps = calendar.dateComponents([.year, .month], from: monthStart)
+        comps.day = day
+        return calendar.date(from: comps)
+    }
+}
+
+private struct MultiYearCalendarView: View {
+    let referenceDate: Date
+    let earliestDate: Date?
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    private var years: [Int] {
+        let refYear = calendar.component(.year, from: referenceDate)
+        guard let earliest = earliestDate else { return [refYear] }
+        let earliestYear = calendar.component(.year, from: earliest)
+        return Array(earliestYear...refYear).reversed()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("Flera år")
+                .font(.system(size: 22, weight: .bold))
+            if years.isEmpty {
+                Text("Inga registrerade pass ännu.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(years, id: \.self) { year in
+                    YearHeatRow(year: year, workoutSet: workoutSet, calendar: calendar)
+                }
+            }
+        }
+    }
+}
+
+private struct YearHeatRow: View {
+    let year: Int
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(year)")
+                .font(.system(size: 17, weight: .semibold))
+            let months = (0..<12).compactMap { offset -> Date? in
+                var comps = DateComponents()
+                comps.year = year
+                comps.month = offset + 1
+                comps.day = 1
+                return calendar.date(from: comps)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(16), spacing: 4), count: 12), spacing: 4) {
+                ForEach(months, id: \.self) { monthStart in
+                    MiniMonthDot(monthStart: monthStart, workoutSet: workoutSet, calendar: calendar)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private struct MiniMonthDot: View {
+    let monthStart: Date
+    let workoutSet: Set<Date>
+    let calendar: Calendar
+    
+    var body: some View {
+        let hasWorkout = monthHasWorkout
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(hasWorkout ? Color.black : Color(.systemGray5))
+            .frame(width: 14, height: 14)
+    }
+    
+    private var monthHasWorkout: Bool {
+        let range = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
+        for day in range {
+            var comps = calendar.dateComponents([.year, .month], from: monthStart)
+            comps.day = day
+            if let date = calendar.date(from: comps) {
+                if workoutSet.contains(calendar.startOfDay(for: date)) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }
 

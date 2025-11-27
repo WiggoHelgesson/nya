@@ -12,6 +12,9 @@ struct HealthDataDisclosureView: View {
     var showsManageButton: Bool = false
     var manageAction: (() -> Void)? = nil
     
+    @State private var isAuthorized = HealthKitManager.shared.isHealthDataAuthorized()
+    @Environment(\.scenePhase) private var scenePhase
+    
     var body: some View {
         Group {
             if style == .card {
@@ -25,6 +28,14 @@ struct HealthDataDisclosureView: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .onAppear {
+            refreshAuthorizationState()
+        }
+        .onChange(of: scenePhase) { newPhase, _ in
+            if newPhase == .active {
+                refreshAuthorizationState()
+            }
+        }
     }
     
     @ViewBuilder
@@ -48,21 +59,48 @@ struct HealthDataDisclosureView: View {
                 }
             }
             
-            if showsManageButton, let manageAction {
-                Button(action: manageAction) {
-                    HStack(spacing: 6) {
-                        Text("Hantera Apple Health-behörighet")
+            if showsManageButton {
+                Button(action: handleManageButtonTap) {
+                    HStack(spacing: 8) {
+                        Text(isAuthorized ? "Hantera Apple Health" : "Aktivera Apple Health")
                             .font(.system(size: 13, weight: .semibold))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .bold))
+                        Image(systemName: isAuthorized ? "chevron.right" : "bolt.heart.fill")
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(.black)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 14)
-                    .background(Color(.systemGray5))
+                    .background(isAuthorized ? Color(.systemGray5) : Color.black.opacity(0.08))
                     .cornerRadius(10)
                 }
-                .accessibilityLabel("Hantera Apple Health-behörighet")
+                .accessibilityLabel(isAuthorized ? "Hantera Apple Health-behörighet" : "Aktivera Apple Health")
+            }
+        }
+    }
+    
+    private func refreshAuthorizationState() {
+        isAuthorized = HealthKitManager.shared.isHealthDataAuthorized()
+    }
+    
+    private func handleManageButtonTap() {
+        if isAuthorized {
+            if let manageAction {
+                manageAction()
+            } else {
+                HealthKitManager.shared.handleManageAuthorizationButton()
+            }
+        } else {
+            HealthKitManager.shared.requestAuthorization { granted in
+                DispatchQueue.main.async {
+                    self.isAuthorized = granted
+                    if granted {
+                        if let manageAction {
+                            manageAction()
+                        } else {
+                            HealthKitManager.shared.handleManageAuthorizationButton()
+                        }
+                    }
+                }
             }
         }
     }

@@ -165,6 +165,33 @@ class GymSessionViewModel: ObservableObject {
         exercises[exerciseIndex].sets.remove(at: setIndex)
     }
     
+    func toggleSetCompletion(exerciseId: String, setIndex: Int) {
+        guard let exerciseIndex = exercises.firstIndex(where: { $0.id == exerciseId }),
+              setIndex < exercises[exerciseIndex].sets.count else { return }
+        
+        exercises[exerciseIndex].sets[setIndex].isCompleted.toggle()
+    }
+    
+    func appendGeneratedExercises(_ generated: [GeneratedWorkoutEntry]) {
+        guard !generated.isEmpty else { return }
+        
+        let mapped = generated.map { entry in
+            let setCount = max(entry.sets, 1)
+            let repsValue = max(entry.targetReps, 1)
+            let exerciseSets = (0..<setCount).map { _ in
+                ExerciseSet(kg: 0, reps: repsValue, isCompleted: false)
+            }
+            return GymExercise(
+                id: entry.exerciseId,
+                name: entry.name,
+                category: entry.category,
+                sets: exerciseSets
+            )
+        }
+        
+        exercises.append(contentsOf: mapped)
+    }
+    
     func completeSession(duration: Int) {
         let totalSets = exercises.reduce(0) { $0 + $1.sets.count }
         let completedSets = exercises.reduce(0) { total, exercise in
@@ -210,6 +237,14 @@ struct ExerciseTemplate: Identifiable {
     let id: String
     let name: String
     let category: String?
+}
+
+struct GeneratedWorkoutEntry {
+    let exerciseId: String
+    let name: String
+    let category: String?
+    let sets: Int
+    let targetReps: Int
 }
 
 struct GymSessionData {
