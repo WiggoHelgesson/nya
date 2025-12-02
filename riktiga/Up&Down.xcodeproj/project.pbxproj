@@ -18,6 +18,12 @@
 		86B269B52EAA5E2D00A4EC93 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B42EAA5E2D00A4EC93 /* Realtime */; };
 		86B269B72EAA5E2D00A4EC93 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B62EAA5E2D00A4EC93 /* Storage */; };
 		86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B92EAA5E3900A4EC93 /* Supabase */; };
+		86D759BB2EDC536B00CE3755 /* Stripe in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759BA2EDC536B00CE3755 /* Stripe */; };
+		86D759BD2EDC536B00CE3755 /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759BC2EDC536B00CE3755 /* StripeApplePay */; };
+		86D759BF2EDC536B00CE3755 /* StripeCardScan in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759BE2EDC536B00CE3755 /* StripeCardScan */; };
+		86D759C12EDC536B00CE3755 /* StripeConnect in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759C02EDC536B00CE3755 /* StripeConnect */; };
+		86D759C32EDC536B00CE3755 /* StripeFinancialConnections in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759C22EDC536B00CE3755 /* StripeFinancialConnections */; };
+		86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,12 +60,18 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				86D759BF2EDC536B00CE3755 /* StripeCardScan in Frameworks */,
 				8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */,
 				86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */,
 				86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */,
+				86D759C12EDC536B00CE3755 /* StripeConnect in Frameworks */,
 				86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */,
 				86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */,
+				86D759BB2EDC536B00CE3755 /* Stripe in Frameworks */,
+				86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */,
 				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
+				86D759C32EDC536B00CE3755 /* StripeFinancialConnections in Frameworks */,
+				86D759BD2EDC536B00CE3755 /* StripeApplePay in Frameworks */,
 				86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */,
 				86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */,
 				860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */,
@@ -129,6 +141,12 @@
 				86158EAE2EACDAA400064CAA /* RevenueCat */,
 				86158EB02EACDAA400064CAB /* RevenueCatUI */,
 				8631B5092ECA305300EBACD6 /* OpenAISwift */,
+				86D759BA2EDC536B00CE3755 /* Stripe */,
+				86D759BC2EDC536B00CE3755 /* StripeApplePay */,
+				86D759BE2EDC536B00CE3755 /* StripeCardScan */,
+				86D759C02EDC536B00CE3755 /* StripeConnect */,
+				86D759C22EDC536B00CE3755 /* StripeFinancialConnections */,
+				86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -162,6 +180,7 @@
 				86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */,
 				8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */,
+				86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -357,7 +376,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 67.0;
+				MARKETING_VERSION = 68.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -433,7 +452,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 67.0;
+				MARKETING_VERSION = 68.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -515,6 +534,14 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 25.1.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -567,6 +594,36 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		86D759BA2EDC536B00CE3755 /* Stripe */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = Stripe;
+		};
+		86D759BC2EDC536B00CE3755 /* StripeApplePay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeApplePay;
+		};
+		86D759BE2EDC536B00CE3755 /* StripeCardScan */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeCardScan;
+		};
+		86D759C02EDC536B00CE3755 /* StripeConnect */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeConnect;
+		};
+		86D759C22EDC536B00CE3755 /* StripeFinancialConnections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeFinancialConnections;
+		};
+		86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripePaymentSheet;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

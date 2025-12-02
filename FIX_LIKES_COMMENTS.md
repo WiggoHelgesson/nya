@@ -99,3 +99,5 @@ AppCacheManager.shared.clearSocialFeedCache(userId: userId)
 3. Flera användare likar samma inlägg → Alla ska se rätt count ✅
 
 
+
+

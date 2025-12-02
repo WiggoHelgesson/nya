@@ -68,3 +68,5 @@ create policy "comment_likes select" on comment_likes for select to authenticate
 commit;
 
 
+
+

@@ -47,3 +47,5 @@ create index if not exists idx_notifications_is_read on notifications(is_read) w
 commit;
 
 
+
+

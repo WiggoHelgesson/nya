@@ -89,7 +89,7 @@ struct MainTabView: View {
         }
         .enableSwipeBack()
         .fullScreenCover(isPresented: $showStartSession) {
-            GymSessionView()
+            StartSessionView()
                 .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showResumeSession) {
