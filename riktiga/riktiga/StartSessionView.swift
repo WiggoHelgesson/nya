@@ -630,6 +630,7 @@ struct SessionMapView: View {
     @ObservedObject private var locationManager = LocationManager.shared
     @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var territoryStore = TerritoryStore.shared
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -662,25 +663,56 @@ struct SessionMapView: View {
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
                 .overlay(
-                    // Route visualization - optimized with snapshot
                     GeometryReader { geometry in
-                        Path { path in
-                            guard routeCoordinatesSnapshot.count > 1 else { return }
+                        ZStack {
+                            // Territory polygons
+                            ForEach(territoryStore.activeSessionTerritories) { territory in
+                                Path { path in
+                                    for polygon in territory.polygons {
+                                        guard polygon.count > 2 else { continue }
+                                        // Assuming polygon is [CLLocationCoordinate2D] or similar
+                                        let points = polygon.map { convertToMapPoint($0, in: geometry.size) }
+                                        
+                                        if let first = points.first {
+                                            path.move(to: first)
+                                            for point in points.dropFirst() {
+                                                path.addLine(to: point)
+                                            }
+                                            path.closeSubpath()
+                                        }
+                                    }
+                                }
+                                .fill(territory.color.opacity(0.4))
+                                .stroke(territory.color, lineWidth: 2)
+                            }
                             
-                            for (index, coordinate) in routeCoordinatesSnapshot.enumerated() {
-                                let point = convertToMapPoint(coordinate, in: geometry.size)
-                                if index == 0 {
-                                    path.move(to: point)
-                                } else {
-                                    path.addLine(to: point)
+                            // Route visualization - optimized with snapshot
+                            Path { path in
+                                guard routeCoordinatesSnapshot.count > 1 else { return }
+                                
+                                for (index, coordinate) in routeCoordinatesSnapshot.enumerated() {
+                                    let point = convertToMapPoint(coordinate, in: geometry.size)
+                                    if index == 0 {
+                                        path.move(to: point)
+                                    } else {
+                                        path.addLine(to: point)
+                                    }
                                 }
                             }
+                            .stroke(.black, lineWidth: 4)
                         }
-                        .stroke(.black, lineWidth: 4)
                     }
                 )
                 .onChange(of: locationManager.routeCoordinates.count) { _ in
                     refreshRouteSnapshotIfNeeded()
+                    // Check for loops in real-time
+                    if let userId = AuthViewModel.shared.currentUser?.id {
+                        territoryStore.checkRouteForLoops(
+                            coordinates: locationManager.routeCoordinates,
+                            activity: activity,
+                            userId: userId
+                        )
+                    }
                 }
                 .onReceive(locationManager.$routeCoordinates) { coords in
                     if coords.isEmpty {
@@ -1282,12 +1314,29 @@ struct SessionMapView: View {
         // Update streak
         StreakManager.shared.registerWorkoutCompletion()
         
+        // Capture territory if a closed loop was completed
+        captureTerritoryFromRouteIfNeeded()
+        
         // Add small delay to ensure route image is generated before showing celebration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             print("✅ Showing XP celebration...")
+            // Ensure points are up to date with latest distance
+            self.updateEarnedPoints()
             self.xpCelebrationPoints = self.earnedPoints
+            print("🎉 Celebration points: \(self.xpCelebrationPoints), Distance: \(self.locationManager.distance)")
             self.showXpCelebration = true
         }
+    }
+    
+    private func captureTerritoryFromRouteIfNeeded() {
+        let eligibleActivities: Set<ActivityType> = [.running, .golf, .hiking, .skiing]
+        guard eligibleActivities.contains(activity) else { return }
+        guard let userId = AuthViewModel.shared.currentUser?.id else { return }
+        TerritoryStore.shared.captureTerritoryIfNeeded(
+            activity: activity,
+            routeCoordinates: locationManager.routeCoordinates,
+            userId: userId
+        )
     }
     
     private func distancePointMultiplier() -> Double {

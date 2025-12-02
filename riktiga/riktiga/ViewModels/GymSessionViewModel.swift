@@ -2,6 +2,15 @@ import Foundation
 import SwiftUI
 import Combine
 
+struct PreviousExerciseSet: Equatable {
+    let kg: Double
+    let reps: Int
+}
+
+struct ExerciseHistorySnapshot {
+    let sets: [PreviousExerciseSet]
+}
+
 class GymSessionViewModel: ObservableObject {
     @Published var exercises: [GymExercise] = []
     @Published var formattedDuration: String = "00:00"
@@ -9,6 +18,7 @@ class GymSessionViewModel: ObservableObject {
     @Published private(set) var elapsedSeconds: Int = 0
     @Published var savedWorkouts: [SavedGymWorkout] = []
     @Published var isLoadingSavedWorkouts = false
+    @Published private(set) var exerciseHistory: [String: ExerciseHistorySnapshot] = [:]
     
     var totalVolume: Double {
         exercises.reduce(0) { result, exercise in
@@ -28,6 +38,7 @@ class GymSessionViewModel: ObservableObject {
     
     private var startTime: Date?
     private var timer: Timer?
+    private let historyLimit = 60
     
     var sessionStartTime: Date? {
         startTime
@@ -131,6 +142,10 @@ class GymSessionViewModel: ObservableObject {
         exercises.append(newExercise)
     }
     
+    func previousSets(for exerciseName: String) -> [PreviousExerciseSet] {
+        exerciseHistory[exerciseName]?.sets ?? []
+    }
+    
     func removeExercise(_ id: String) {
         exercises.removeAll { $0.id == id }
     }
@@ -192,7 +207,7 @@ class GymSessionViewModel: ObservableObject {
         exercises.append(contentsOf: mapped)
     }
     
-    func completeSession(duration: Int) {
+    func completeSession(duration: Int, isPro: Bool) {
         let totalSets = exercises.reduce(0) { $0 + $1.sets.count }
         let completedSets = exercises.reduce(0) { total, exercise in
             total + exercise.sets.filter { $0.isCompleted }.count
@@ -200,7 +215,11 @@ class GymSessionViewModel: ObservableObject {
         
         let volume = totalVolume
         let pointsFromVolume = Int(volume / 160.0)
-        let earnedXP = min(50, pointsFromVolume)
+        var earnedXP = min(50, pointsFromVolume)
+        
+        if isPro {
+            earnedXP = Int(Double(earnedXP) * 1.5)
+        }
         
         sessionData = GymSessionData(
             duration: duration,
@@ -215,6 +234,32 @@ class GymSessionViewModel: ObservableObject {
     private func exerciseVolume(_ exercise: GymExercise) -> Double {
         exercise.sets.reduce(0) { partial, set in
             partial + (set.kg * Double(set.reps))
+        }
+    }
+    
+    func loadExerciseHistory(userId: String) async {
+        do {
+            let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: false)
+            var latest: [String: ExerciseHistorySnapshot] = [:]
+            for post in posts where post.activityType.lowercased().contains("gym") {
+                guard let exercises = post.exercises else { continue }
+                for exercise in exercises {
+                    guard latest[exercise.name] == nil else { continue }
+                    let zipped = zip(exercise.kg, exercise.reps)
+                        .map { PreviousExerciseSet(kg: $0.0, reps: $0.1) }
+                        .filter { $0.kg > 0 || $0.reps > 0 }
+                    guard !zipped.isEmpty else { continue }
+                    latest[exercise.name] = ExerciseHistorySnapshot(sets: zipped)
+                }
+                if latest.count >= historyLimit {
+                    break
+                }
+            }
+            await MainActor.run {
+                self.exerciseHistory = latest
+            }
+        } catch {
+            print("⚠️ Failed to load exercise history: \(error)")
         }
     }
 }

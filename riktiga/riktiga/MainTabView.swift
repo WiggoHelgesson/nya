@@ -1,13 +1,15 @@
 import SwiftUI
 import Combine
 import UIKit
+import MapKit
+import CoreLocation
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var sessionManager = SessionManager.shared
     @State private var showStartSession = false
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem, 1=Socialt, 2=Start, 3=Belöningar, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem, 1=Zon krig, 2=Start, 3=Belöningar, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
@@ -45,18 +47,18 @@ struct MainTabView: View {
                     }
                 }
             )) {
-                HomeView()
+                SocialView()
                     .tag(0)
                     .tabItem {
                         Image(systemName: "house.fill")
                         Text("Hem")
                     }
                 
-                SocialView()
+                ZoneWarView()
                     .tag(1)
                     .tabItem {
-                        Image(systemName: "person.2.fill")
-                        Text("Socialt")
+                        Image(systemName: "map.fill")
+                        Text("Zon krig")
                     }
                 
                 Color.clear
@@ -89,7 +91,7 @@ struct MainTabView: View {
         }
         .enableSwipeBack()
         .fullScreenCover(isPresented: $showStartSession) {
-            StartSessionView()
+            GymSessionView()
                 .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showResumeSession) {
@@ -114,7 +116,7 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 1
+            selectedTab = 0
             showStartSession = false
             showResumeSession = false
         }
@@ -252,3 +254,118 @@ extension View {
         background(SwipeBackEnabler())
     }
 }
+
+// MARK: - Zone War
+
+struct ZoneWarView: View {
+    @ObservedObject private var territoryStore = TerritoryStore.shared
+    
+    var body: some View {
+        ZoneWarMapView(territories: territoryStore.territories)
+            .ignoresSafeArea(edges: .bottom)
+            .task {
+                await territoryStore.refresh()
+            }
+            .refreshable {
+                await territoryStore.refresh()
+            }
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Zon krig")
+                        .font(.system(size: 26, weight: .bold))
+                    Text(territorySubtitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(.thinMaterial)
+                )
+                .padding()
+            }
+    }
+    
+    private var territorySubtitle: String {
+        let count = territoryStore.territories.count
+        if count == 0 {
+            return "Spring en slinga för att ta din första zon."
+        } else if count == 1 {
+            return "Du äger 1 zon."
+        } else {
+            return "Du äger \(count) zoner."
+        }
+    }
+}
+
+private struct ZoneWarMapView: UIViewRepresentable {
+    let territories: [Territory]
+    
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView()
+        mapView.delegate = context.coordinator
+        mapView.showsUserLocation = true
+        mapView.pointOfInterestFilter = .excludingAll
+        mapView.mapType = .mutedStandard
+        return mapView
+    }
+    
+    func updateUIView(_ uiView: MKMapView, context: Context) {
+        context.coordinator.update(uiView, territories: territories)
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    final class Coordinator: NSObject, MKMapViewDelegate {
+        private var hasCentered = false
+        
+        func update(_ mapView: MKMapView, territories: [Territory]) {
+            mapView.removeOverlays(mapView.overlays)
+            
+            let polygons: [MKPolygon] = territories.flatMap { territory -> [MKPolygon] in
+                territory.polygons.compactMap { ring in
+                    guard ring.count >= 3 else { return nil }
+                    var coords = ring
+                    return coords.withUnsafeMutableBufferPointer { buffer in
+                        let polygon = MKPolygon(coordinates: buffer.baseAddress!, count: ring.count)
+                        polygon.title = territory.activity?.rawValue
+                        return polygon
+                    }
+                }
+            }
+            
+            mapView.addOverlays(polygons)
+            
+            if !hasCentered {
+                if let first = polygons.first {
+                    mapView.setVisibleMapRect(
+                        first.boundingMapRect,
+                        edgePadding: UIEdgeInsets(top: 120, left: 60, bottom: 160, right: 60),
+                        animated: false
+                    )
+                } else {
+                    let stockholm = MKCoordinateRegion(
+                        center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
+                        span: MKCoordinateSpan(latitudeDelta: 0.25, longitudeDelta: 0.25)
+                    )
+                    mapView.setRegion(stockholm, animated: false)
+                }
+                hasCentered = true
+            }
+        }
+        
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let polygon = overlay as? MKPolygon else {
+                return MKOverlayRenderer(overlay: overlay)
+            }
+            let renderer = MKPolygonRenderer(polygon: polygon)
+            renderer.lineWidth = 2
+            renderer.strokeColor = polygon.activityColor
+            renderer.fillColor = polygon.activityColor.withAlphaComponent(0.25)
+            return renderer
+        }
+    }
+}
+

@@ -30,6 +30,7 @@ struct GymSessionView: View {
     @State private var showSubscriptionView = false
     @State private var generatorResultMessage: String?
     @State private var showGeneratorResultAlert = false
+    @State private var didLoadExerciseHistory = false
     
     private let generatorWordLimit = 100
     
@@ -389,8 +390,13 @@ struct GymSessionView: View {
                             ForEach(viewModel.exercises) { exercise in
                                 ExerciseCard(
                                     exercise: exercise,
+                                    previousSets: viewModel.previousSets(for: exercise.name),
                                     onAddSet: {
-                                        viewModel.addSet(to: exercise.id)
+                                        var transaction = Transaction()
+                                        transaction.disablesAnimations = true
+                                        withTransaction(transaction) {
+                                            viewModel.addSet(to: exercise.id)
+                                        }
                                     },
                                     onUpdateSet: { setIndex, kg, reps in
                                         viewModel.updateSet(exerciseId: exercise.id, setIndex: setIndex, kg: kg, reps: reps)
@@ -571,7 +577,8 @@ struct GymSessionView: View {
         focusedField = nil
         persistSession(force: true)
         let duration = viewModel.elapsedSeconds
-        viewModel.completeSession(duration: duration)
+        let isPro = revenueCatManager.isPremium
+        viewModel.completeSession(duration: duration, isPro: isPro)
         
         // Update streak
         StreakManager.shared.registerWorkoutCompletion()
@@ -601,6 +608,13 @@ extension GymSessionView {
             didLoadSavedWorkouts = true
             Task {
                 await viewModel.loadSavedWorkouts(userId: userId)
+            }
+        }
+        
+        if !didLoadExerciseHistory, let userId = authViewModel.currentUser?.id {
+            didLoadExerciseHistory = true
+            Task {
+                await viewModel.loadExerciseHistory(userId: userId)
             }
         }
 
@@ -753,6 +767,7 @@ private struct HoldToSaveButton: View {
 // MARK: - Exercise Card
 struct ExerciseCard: View {
     let exercise: GymExercise
+    let previousSets: [PreviousExerciseSet]
     let onAddSet: () -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
     let onDeleteSet: (Int) -> Void
@@ -800,6 +815,10 @@ struct ExerciseCard: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.gray)
                     .frame(width: 40, alignment: .center)
+                Text("FÖRRA")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.gray)
+                    .frame(width: 70, alignment: .leading)
                 Text("KG")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.gray)
@@ -824,6 +843,7 @@ struct ExerciseCard: View {
                     reps: set.reps,
                     isCompleted: set.isCompleted,
                     focusedField: focusedField,
+                    previousSet: previousSet(for: index),
                     onUpdate: { kg, reps in
                         onUpdateSet(index, kg, reps)
                     },
@@ -861,6 +881,14 @@ struct ExerciseCard: View {
             Button("Avbryt", role: .cancel) {}
         }
     }
+    
+    private func previousSet(for index: Int) -> PreviousExerciseSet? {
+        guard !previousSets.isEmpty else { return nil }
+        if index < previousSets.count {
+            return previousSets[index]
+        }
+        return previousSets.last
+    }
 }
 
 // MARK: - Set Row
@@ -872,6 +900,7 @@ struct SetRow: View {
     @State var reps: Int
     let isCompleted: Bool
     let focusedField: FocusState<GymSessionInputField?>.Binding
+    let previousSet: PreviousExerciseSet?
     let onUpdate: (Double, Int) -> Void
     let onToggleCompletion: () -> Void
     let onDelete: () -> Void
@@ -886,6 +915,7 @@ struct SetRow: View {
          reps: Int,
          isCompleted: Bool,
          focusedField: FocusState<GymSessionInputField?>.Binding,
+         previousSet: PreviousExerciseSet?,
          onUpdate: @escaping (Double, Int) -> Void,
          onToggleCompletion: @escaping () -> Void,
          onDelete: @escaping () -> Void) {
@@ -896,6 +926,7 @@ struct SetRow: View {
         self.reps = reps
         self.isCompleted = isCompleted
         self.focusedField = focusedField
+        self.previousSet = previousSet
         self.onUpdate = onUpdate
         self.onToggleCompletion = onToggleCompletion
         self.onDelete = onDelete
@@ -914,6 +945,22 @@ struct SetRow: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.black)
                 .frame(width: 40, alignment: .center)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                if let previousSet {
+                    Text(formattedWeight(previousSet.kg))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.gray)
+                    Text("\(previousSet.reps) reps")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                } else {
+                    Text("—")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                }
+            }
+            .frame(width: 70, alignment: .leading)
             
             // KG input
             TextField("0", text: $kgText)
@@ -981,6 +1028,13 @@ struct SetRow: View {
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isCompleted)
     }
+    
+    private func formattedWeight(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.01 {
+            return "\(Int(value.rounded())) kg"
+        }
+        return String(format: "%.1f kg", value)
+    }
 }
 
 // MARK: - Exercise Picker
@@ -1039,6 +1093,7 @@ struct ExercisePickerView: View {
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .background(Color.white)
                 
                 // Filter buttons
                 HStack(spacing: 12) {
@@ -1078,6 +1133,7 @@ struct ExercisePickerView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .background(Color.white)
                 
                 if isLoading {
                     ProgressView()
@@ -1136,6 +1192,7 @@ struct ExercisePickerView: View {
                                                 name: exercise.displayName,
                                                 category: exercise.swedishBodyPart
                                             )
+                                            RecentExerciseStore.shared.record(exerciseId: exercise.id)
                                             onSelect(template)
                                             dismiss()
                                         }) {
@@ -1178,6 +1235,7 @@ struct ExercisePickerView: View {
                                         name: exercise.displayName,
                                         category: exercise.swedishBodyPart
                                     )
+                                    RecentExerciseStore.shared.record(exerciseId: exercise.id)
                                     onSelect(template)
                                     dismiss()
                                 }) {
@@ -1257,6 +1315,7 @@ struct ExercisePickerView: View {
                     }
                 )
             }
+            .background(Color.white)
         }
     }
     
@@ -1326,43 +1385,62 @@ struct ExercisePickerView: View {
     }
     
     private func loadRecentlyUsedExercises(from allExercises: [ExerciseDBExercise]) async {
-        // Get user's recent workout posts
-        guard let userId = AuthViewModel.shared.currentUser?.id else { return }
+        var ids = RecentExerciseStore.shared.load()
         
+        if ids.isEmpty {
+            let fetched = await fetchRecentExerciseIdsFromPosts(using: allExercises)
+            if !fetched.isEmpty {
+                ids = fetched
+                RecentExerciseStore.shared.replace(with: ids)
+            }
+        }
+        
+        guard !ids.isEmpty else {
+            await MainActor.run { recentlyUsedExercises = [] }
+            return
+        }
+        
+        let lookup = Dictionary(uniqueKeysWithValues: allExercises.map { ($0.id, $0) })
+        let matched = ids.compactMap { lookup[$0] }
+        
+        await MainActor.run {
+            recentlyUsedExercises = Array(matched.prefix(6))
+        }
+    }
+    
+    private func fetchRecentExerciseIdsFromPosts(using allExercises: [ExerciseDBExercise]) async -> [String] {
+        guard let userId = AuthViewModel.shared.currentUser?.id else { return [] }
         do {
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: false)
+            var orderedIds: [String] = []
+            var pendingNames: [String] = []
             
-            // Extract unique exercise names from recent workouts (last 10 workouts)
-            var exerciseNames: [String] = []
-            let recentPosts = Array(posts.prefix(10))
+            for post in posts where post.activityType.lowercased().contains("gym") {
+                guard let exercises = post.exercises else { continue }
+                for exercise in exercises {
+                    if let id = exercise.id, !orderedIds.contains(id) {
+                        orderedIds.append(id)
+                    } else if exercise.id == nil {
+                        pendingNames.append(exercise.name)
+                    }
+                }
+                if orderedIds.count >= 12 { break }
+            }
             
-            for post in recentPosts {
-                if let exercises = post.exercises {
-                    for exercise in exercises {
-                        if !exerciseNames.contains(exercise.name) {
-                            exerciseNames.append(exercise.name)
-                        }
+            if !pendingNames.isEmpty {
+                let nameLookup = Dictionary(uniqueKeysWithValues: allExercises.map { ($0.displayName.normalizedKey, $0.id) })
+                for name in pendingNames {
+                    let key = name.normalizedKey
+                    if let id = nameLookup[key], !orderedIds.contains(id) {
+                        orderedIds.append(id)
                     }
                 }
             }
             
-            // Match exercise names with ExerciseDB exercises
-            let recentExercises = allExercises.filter { exercise in
-                exerciseNames.contains { name in
-                    let normalized1 = name.lowercased().folding(options: .diacriticInsensitive, locale: .current)
-                    let normalized2 = exercise.displayName.lowercased().folding(options: .diacriticInsensitive, locale: .current)
-                    return normalized1 == normalized2
-                }
-            }
-            
-            // Take only first 5 most recently used
-            await MainActor.run {
-                recentlyUsedExercises = Array(recentExercises.prefix(5))
-            }
-            
-            print("✅ Loaded \(recentlyUsedExercises.count) recently used exercises")
+            return orderedIds
         } catch {
-            print("❌ Error loading recently used exercises: \(error)")
+            print("❌ Error loading recent exercise ids: \(error)")
+            return []
         }
     }
     
@@ -1600,6 +1678,38 @@ struct FilterButton: View {
                 .foregroundColor(isSelected ? .white : .black)
                 .cornerRadius(20)
         }
+    }
+}
+
+final class RecentExerciseStore {
+    static let shared = RecentExerciseStore()
+    private let defaults = UserDefaults.standard
+    private let storageKey = "recent_gym_exercises"
+    private let maxItems = 12
+    
+    func record(exerciseId: String) {
+        var ids = load()
+        ids.removeAll { $0 == exerciseId }
+        ids.insert(exerciseId, at: 0)
+        save(Array(ids.prefix(maxItems)))
+    }
+    
+    func load() -> [String] {
+        defaults.stringArray(forKey: storageKey) ?? []
+    }
+    
+    func replace(with ids: [String]) {
+        save(Array(ids.prefix(maxItems)))
+    }
+    
+    private func save(_ ids: [String]) {
+        defaults.set(ids, forKey: storageKey)
+    }
+}
+
+private extension String {
+    var normalizedKey: String {
+        lowercased().folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
     }
 }
 

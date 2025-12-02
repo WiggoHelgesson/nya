@@ -35,7 +35,15 @@ struct SessionCompleteView: View {
     
     // Calculate PRO points (1.5x boost)
     private var proPoints: Int {
-        return Int(Double(earnedPoints) * 1.5)
+        // If user is already PRO, earnedPoints already includes the boost.
+        // To show what "regular" points would be, we divide by 1.5.
+        // But for the comparison view (showing what you COULD get), 
+        // if user is NOT PRO, we want to show (earned * 1.5).
+        if revenueCatManager.isPremium {
+             return earnedPoints 
+        } else {
+             return Int(Double(earnedPoints) * 1.5)
+        }
     }
     
     var body: some View {
@@ -517,7 +525,7 @@ struct ActivitySummaryCard: View {
                 // Points section
                 VStack(spacing: 8) {
                     if isPro {
-                        // PRO user - show both regular and PRO points
+                        // PRO user - only show total points
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Du fick")
@@ -530,14 +538,19 @@ struct ActivitySummaryCard: View {
                             
                             Spacer()
                             
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Med PRO")
+                            // Show PRO badge instead of comparison
+                            HStack(spacing: 4) {
+                                Image(systemName: "crown.fill")
+                                    .foregroundColor(.yellow)
+                                Text("PRO Boost aktiv")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
-                                Text("\(proPoints) poäng")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .fontWeight(.medium)
                                     .foregroundColor(.black)
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.yellow.opacity(0.2))
+                            .cornerRadius(20)
                         }
                     } else {
                         // Non-PRO user - show regular points and PRO boost info

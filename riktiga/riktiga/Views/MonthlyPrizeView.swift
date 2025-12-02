@@ -241,17 +241,7 @@ struct MonthlyUserRow: View {
                 .frame(width: 30)
             
             // Profile picture
-            AsyncImage(url: URL(string: user.avatarUrl ?? "")) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(.gray)
-            }
-            .frame(width: 40, height: 40)
-            .clipShape(Circle())
+            ProfileImage(url: user.avatarUrl, size: 40)
             
             // Username with PRO badge if applicable
             HStack(spacing: 6) {

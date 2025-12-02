@@ -346,6 +346,35 @@ class SocialService {
         }
     }
     
+    func getAllPostLikers(postId: String) async throws -> [UserSearchResult] {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            let likes: [PostLike] = try await supabase
+                .from("workout_post_likes")
+                .select()
+                .eq("workout_post_id", value: postId)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            let likerIds = likes.map { $0.userId }
+            guard !likerIds.isEmpty else { return [] }
+            
+            let users: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: likerIds)
+                .execute()
+                .value
+            
+            let userMap = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
+            return likerIds.compactMap { userMap[$0] }
+        } catch {
+            print("❌ Error fetching likers list: \(error)")
+            return []
+        }
+    }
+    
     // MARK: - Comment Functions
     
     func addComment(postId: String,

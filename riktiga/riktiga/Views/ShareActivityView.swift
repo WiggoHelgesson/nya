@@ -271,34 +271,32 @@ final class ShareInsightsLoader: ObservableObject {
     @MainActor
     private func load() async {
         let calendar = Calendar.current
-        let referenceDate = isoFormatter.date(from: post.createdAt) ?? Date()
+        
+        func parseDate(_ string: String) -> Date? {
+            if let date = isoFormatter.date(from: string) { return date }
+            
+            // Fallback for dates without fractional seconds
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter.date(from: string)
+        }
+        
+        let referenceDate = parseDate(post.createdAt) ?? Date()
         let targetComponents = calendar.dateComponents([.year, .month], from: referenceDate)
         
-        func postDateIfInTargetMonth(_ isoString: String) -> Date? {
-            guard let date = isoFormatter.date(from: isoString) else { return nil }
+        func isDateInTargetMonth(_ date: Date) -> Bool {
             let comps = calendar.dateComponents([.year, .month], from: date)
-            guard comps.year == targetComponents.year, comps.month == targetComponents.month else { return nil }
-            return date
+            return comps.year == targetComponents.year && comps.month == targetComponents.month
         }
         
-        func dedupDates(_ dates: [Date]) -> [Date] {
-            var seen: Set<String> = []
-            var result: [Date] = []
-            for date in dates.sorted() {
-                let comps = calendar.dateComponents([.year, .month, .day], from: date)
-                let key = "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
-                if !seen.contains(key) {
-                    seen.insert(key)
-                    result.append(date)
-                }
-            }
-            return result
-        }
-        
-        let currentWorkoutDate = postDateIfInTargetMonth(post.createdAt)
+        let currentWorkoutDate = parseDate(post.createdAt)
         
         if post.userId.isEmpty {
-            let monthDates = currentWorkoutDate.map { [$0] } ?? []
+            var monthDates: [Date] = []
+            if let current = currentWorkoutDate, isDateInTargetMonth(current) {
+                monthDates.append(current)
+            }
+            
             insights = ShareInsights(
                 totalWorkouts: monthDates.isEmpty ? 0 : 1,
                 monthWorkoutDates: monthDates,
@@ -313,22 +311,36 @@ final class ShareInsightsLoader: ObservableObject {
         
         do {
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: post.userId, forceRefresh: true)
-            var monthDates: [Date] = posts.compactMap { postDateIfInTargetMonth($0.createdAt) }
-            if let currentWorkoutDate {
-                monthDates.append(currentWorkoutDate)
+            
+            // Filter out the current post ID to avoid double counting, then parse dates
+            let otherPosts = posts.filter { $0.id != self.post.id }
+            var monthDates: [Date] = otherPosts.compactMap { post in
+                guard let date = parseDate(post.createdAt) else { return nil }
+                return isDateInTargetMonth(date) ? date : nil
             }
-            monthDates = dedupDates(monthDates)
+            
+            // Always add the current workout if it's in the target month (it should be)
+            if let current = currentWorkoutDate, isDateInTargetMonth(current) {
+                monthDates.append(current)
+            }
+            
+            // Sort dates for consistency
+            monthDates.sort()
             
             insights = ShareInsights(
-                totalWorkouts: max(posts.count, monthDates.count),
-                monthWorkoutDates: monthDates,
+                totalWorkouts: max(posts.count, monthDates.count), // posts.count is roughly lifetime count
+                monthWorkoutDates: monthDates, // Now contains ALL workouts in month (not deduped)
                 monthReferenceDate: referenceDate,
                 exerciseVolume: calculateGymVolume(from: self.post.exercises),
                 totalSets: post.exercises?.reduce(0) { $0 + $1.sets } ?? 0,
                 muscleGroups: muscleGroups(from: post.exercises)
             )
         } catch {
-            let monthDates = currentWorkoutDate.map { [$0] } ?? []
+            var monthDates: [Date] = []
+            if let current = currentWorkoutDate, isDateInTargetMonth(current) {
+                monthDates.append(current)
+            }
+            
             insights = ShareInsights(
                 totalWorkouts: monthDates.isEmpty ? 0 : 1,
                 monthWorkoutDates: monthDates,

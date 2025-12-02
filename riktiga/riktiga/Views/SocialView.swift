@@ -162,6 +162,7 @@ struct SocialPostCard: View {
     @State private var showDeleteAlert = false
     @State private var likeInProgress = false
     @State private var showShareSheet = false
+    @State private var showLikesList = false
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject var viewModel: SocialViewModel
     
@@ -180,35 +181,7 @@ struct SocialPostCard: View {
             statsSection
             contentSection
             
-            // Likes preview row
-            HStack(alignment: .center, spacing: 12) {
-                if likeCount > 0 {
-                    ZStack {
-                        ForEach(Array(topLikers.prefix(3).enumerated()), id: \.offset) { item in
-                            let index = item.offset
-                            let liker = item.element
-                            ProfileImage(url: liker.avatarUrl ?? "", size: 36)
-                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                .offset(x: CGFloat(index) * -10)
-                        }
-                    }
-                    .frame(width: 56, height: 36, alignment: .leading)
-                    .clipped()
-                }
-                
-                Text("\(likeCount) likes")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
-                
-                Spacer()
-                
-                Text("\(commentCount) kommentarer")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 4)
+            likesPreview
             
             // Like, Comment, Share buttons - large, evenly spaced
             HStack(spacing: 0) {
@@ -280,21 +253,16 @@ struct SocialPostCard: View {
         .sheet(isPresented: $showShareSheet) {
             ShareActivityView(post: post)
         }
+        .sheet(isPresented: $showLikesList) {
+            LikesListView(postId: post.id)
+                .environmentObject(authViewModel)
+        }
     }
     
     private var headerSection: some View {
         HStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: post.userId)) {
-                AsyncImage(url: URL(string: post.userAvatarUrl ?? "")) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .foregroundColor(.gray)
-                }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
+                ProfileImage(url: post.userAvatarUrl, size: 40)
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -631,6 +599,68 @@ struct SocialPostCard: View {
         } catch {
             print("⚠️ Could not fetch top likers: \(error)")
         }
+    }
+}
+
+private extension SocialPostCard {
+    var likesPreview: some View {
+        HStack(spacing: 12) {
+            if likeCount > 0 {
+                Button(action: { showLikesList = true }) {
+                    HStack(spacing: 12) {
+                        OverlappingAvatarStack(users: Array(topLikers.prefix(3)))
+                        Text(likeCountText)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("Bli först att gilla")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            Text("\(commentCount) kommentarer")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 4)
+    }
+    
+    var likeCountText: String {
+        likeCount == 1 ? "1 like" : "\(likeCount) likes"
+    }
+}
+
+private struct OverlappingAvatarStack: View {
+    let users: [UserSearchResult]
+    
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if users.isEmpty {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 14))
+                    )
+            } else {
+                ForEach(Array(users.enumerated()), id: \.element.id) { index, liker in
+                    ProfileImage(url: liker.avatarUrl, size: 36)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .offset(x: CGFloat(index) * 20)
+                }
+            }
+        }
+        .frame(width: CGFloat(max(users.count, 1)) * 20 + 20, height: 40, alignment: .leading)
     }
 }
 

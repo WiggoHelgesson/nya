@@ -4,24 +4,6 @@ import UIKit
 struct RewardCatalog {
     static let all: [RewardCard] = [
         RewardCard(
-            id: 24,
-            brandName: "J.LINDEBERG",
-            discount: "5% rabatt",
-            points: "200 poäng",
-            imageName: "36",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 25,
-            brandName: "J.LINDEBERG",
-            discount: "5% rabatt",
-            points: "200 poäng",
-            imageName: "36",
-            category: "Skidåkning",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 1,
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
