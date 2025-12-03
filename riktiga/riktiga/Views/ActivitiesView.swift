@@ -99,6 +99,42 @@ struct ActivitiesView: View {
             imageName: "11",
             category: "Golf",
             isBookmarked: false
+        ),
+        RewardCard(
+            id: 24,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 25,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 26,
+            brandName: "Fjällsyn UF",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "38",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 27,
+            brandName: "Powerwell",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "40",
+            category: "Gym",
+            isBookmarked: false
         )
     ]
     

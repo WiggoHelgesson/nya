@@ -32,6 +32,7 @@ final class TerritoryService {
     }
     
     func fetchTerritories() async throws -> [TerritoryFeature] {
+        try await AuthSessionManager.shared.ensureValidSession()
         try await supabase.database
             .from("territory_geojson")
             .select()
@@ -43,6 +44,7 @@ final class TerritoryService {
     func claimTerritory(ownerId: String,
                         activity: ActivityType,
                         coordinates: [CLLocationCoordinate2D]) async throws -> TerritoryFeature {
+        try await AuthSessionManager.shared.ensureValidSession()
         let payload = TerritoryClaimParams(
             p_owner: ownerId,
             p_activity: activity.rawValue,

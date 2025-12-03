@@ -113,6 +113,7 @@ struct LikesListView: View {
                 self.likers = likers
                 self.followingIds = Set(followingIds)
                 self.isLoading = false
+                ImageCacheManager.shared.prefetch(urls: likers.compactMap { $0.avatarUrl })
             }
         } catch {
             await MainActor.run {

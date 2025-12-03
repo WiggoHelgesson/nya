@@ -132,6 +132,7 @@ struct MonthlyPrizeView: View {
         if let cached = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: monthKey) {
             self.topUsers = cached
             self.isLoading = cached.isEmpty
+            prefetchAvatarImages(for: cached)
         } else {
             self.isLoading = true
         }
@@ -152,6 +153,7 @@ struct MonthlyPrizeView: View {
             await MainActor.run {
                 self.topUsers = latest
                 self.isLoading = false
+                prefetchAvatarImages(for: latest)
             }
         } catch {
             print("❌ Error loading monthly stats: \(error)")
@@ -159,6 +161,7 @@ struct MonthlyPrizeView: View {
                 if self.topUsers.isEmpty,
                    let fallback = AppCacheManager.shared.getCachedMonthlyLeaderboard(monthKey: MonthlyStatsService.currentMonthKey()) {
                     self.topUsers = fallback
+                    prefetchAvatarImages(for: fallback)
                 }
                 self.isLoading = false
             }
@@ -210,6 +213,12 @@ struct MonthlyPrizeView: View {
     private func openHealthSettings() {
         HealthKitManager.shared.handleManageAuthorizationButton()
     }
+    
+    private func prefetchAvatarImages(for users: [MonthlyUser]) {
+        let urls = users.compactMap { $0.avatarUrl }.filter { !$0.isEmpty }
+        guard !urls.isEmpty else { return }
+        ImageCacheManager.shared.prefetch(urls: urls)
+    }
 }
 
 struct MonthlyUser: Identifiable, Codable {
@@ -252,13 +261,11 @@ struct MonthlyUserRow: View {
                     .truncationMode(.tail)
                 
                 if user.isPro {
-                    Text("PRO")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1.5)
-                        .background(Color.yellow)
-                        .cornerRadius(3)
+                    Image("41")
+                        .resizable()
+                        .renderingMode(.original)
+                        .scaledToFit()
+                        .frame(height: 14)
                 }
             }
             

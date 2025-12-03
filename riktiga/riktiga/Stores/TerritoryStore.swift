@@ -108,7 +108,8 @@ final class TerritoryStore: ObservableObject {
     
     private func captureLoop(coordinates: [CLLocationCoordinate2D], activity: ActivityType, userId: String) {
         print("🎯 Loop detected! Capturing territory...")
-        let simplified = simplify(coordinates)
+        // Ensure the coordinates form a valid closed loop first
+        let simplified = ensureClosedLoop(simplify(coordinates))
         
         // Optimistic update: Create a local temporary territory
         let tempId = UUID()
@@ -120,10 +121,13 @@ final class TerritoryStore: ObservableObject {
             polygons: [simplified]
         )
         
+        // Update UI immediately on main thread
         DispatchQueue.main.async {
             self.activeSessionTerritories.append(tempTerritory)
-            // Also add to main list for Zone War view
-            self.territories.append(tempTerritory)
+            // Also add to main list for Zone War view if not already there
+            if !self.territories.contains(where: { $0.id == tempId }) {
+                self.territories.append(tempTerritory)
+            }
         }
         
         // Send to backend
@@ -132,12 +136,16 @@ final class TerritoryStore: ObservableObject {
                 let feature = try await service.claimTerritory(ownerId: userId, activity: activity, coordinates: simplified)
                 if let territory = feature.asTerritory() {
                     await MainActor.run {
-                        // Replace temp territory with real one
+                        // Remove temp territory
                         self.activeSessionTerritories.removeAll { $0.id == tempId }
                         self.territories.removeAll { $0.id == tempId }
                         
+                        // Add real territory
                         self.activeSessionTerritories.append(territory)
-                        self.territories.append(territory)
+                        // Prevent duplicates in main list
+                        if !self.territories.contains(where: { $0.id == territory.id }) {
+                            self.territories.append(territory)
+                        }
                     }
                     print("✅ Territory captured and saved!")
                 }
@@ -155,14 +163,12 @@ final class TerritoryStore: ObservableObject {
     
     // Existing end-of-session check (kept for backup)
     func captureTerritoryIfNeeded(activity: ActivityType, routeCoordinates: [CLLocationCoordinate2D], userId: String) {
-        // This might be redundant if real-time works, but good as a fallback for simple closed routes
-        // that might have been missed by the realtime buffer.
         guard eligibleActivities.contains(activity) else { return }
         guard routeCoordinates.count >= 4 else { return }
         
-        // Only run if we haven't captured anything substantial yet?
-        // Or just run it. The backend handles overlaps.
         if isClosedLoop(routeCoordinates) {
+             // Force capture even if detected before, to be safe at end of session?
+             // No, captureLoop handles backend calls.
              captureLoop(coordinates: routeCoordinates, activity: activity, userId: userId)
         }
     }
@@ -188,6 +194,21 @@ extension TerritoryStore {
             simplified.append(last)
         }
         return simplified.count < 3 ? coordinates : simplified
+    }
+
+    private func ensureClosedLoop(_ coordinates: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        guard coordinates.count >= 3, let first = coordinates.first, let last = coordinates.last else { return coordinates }
+        let start = CLLocation(latitude: first.latitude, longitude: first.longitude)
+        let end = CLLocation(latitude: last.latitude, longitude: last.longitude)
+        if start.distance(from: end) <= 5 {
+            var closed = coordinates
+            closed[closed.count - 1] = first
+            return closed
+        } else {
+            var closed = coordinates
+            closed.append(first)
+            return closed
+        }
     }
 }
 

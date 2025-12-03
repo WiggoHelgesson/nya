@@ -7,6 +7,9 @@ class SocialService {
     
     // In-memory cache for post counts (likes and comments)
     private var postCountsCache: [String: (likeCount: Int, commentCount: Int)] = [:]
+    // In-memory cache for top likers to prevent N+1 queries during scrolling
+    private var topLikersCache: [String: [UserSearchResult]] = [:]
+    
     private let cacheManager = AppCacheManager.shared
     private var hasLoggedFollowingCancelled = false
     private var hasLoggedSocialFeedCancelled = false
@@ -253,6 +256,9 @@ class SocialService {
                 .execute()
             print("✅ Post liked successfully")
             
+            // Invalidate top likers cache so next fetch gets fresh data
+            topLikersCache.removeValue(forKey: postId)
+            
             // Create notification if we have post owner info
             if let postOwnerId = postOwnerId, postOwnerId != userId {
                 do {
@@ -295,6 +301,9 @@ class SocialService {
                 .eq("user_id", value: userId)
                 .execute()
             print("✅ Post unliked successfully")
+            
+            // Invalidate top likers cache
+            topLikersCache.removeValue(forKey: postId)
         } catch {
             print("❌ Error unliking post: \(error)")
             throw error
@@ -318,6 +327,11 @@ class SocialService {
     }
     
     func getTopPostLikers(postId: String, limit: Int = 3) async throws -> [UserSearchResult] {
+        // Check memory cache first
+        if let cached = topLikersCache[postId] {
+            return cached
+        }
+        
         do {
             try await AuthSessionManager.shared.ensureValidSession()
             // Fetch likes ordered by most recent
@@ -330,7 +344,14 @@ class SocialService {
                 .execute()
                 .value
             let likerIds = likes.map { $0.userId }
-            guard !likerIds.isEmpty else { return [] }
+            guard !likerIds.isEmpty else { 
+                topLikersCache[postId] = []
+                return [] 
+            }
+            
+            // Check if we have these users in some other cache?
+            // For now, just fetch them.
+            
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
                 .select("id, username, avatar_url")
@@ -339,7 +360,12 @@ class SocialService {
                 .value
             // Preserve order matching likes array
             let userMap = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
-            return likerIds.compactMap { userMap[$0] }
+            let result = likerIds.compactMap { userMap[$0] }
+            ImageCacheManager.shared.prefetch(urls: result.compactMap { $0.avatarUrl })
+            
+            // Update cache
+            topLikersCache[postId] = result
+            return result
         } catch {
             print("❌ Error fetching top likers: \(error)")
             return []
@@ -368,7 +394,9 @@ class SocialService {
                 .value
             
             let userMap = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
-            return likerIds.compactMap { userMap[$0] }
+            let result = likerIds.compactMap { userMap[$0] }
+            ImageCacheManager.shared.prefetch(urls: result.compactMap { $0.avatarUrl })
+            return result
         } catch {
             print("❌ Error fetching likers list: \(error)")
             return []

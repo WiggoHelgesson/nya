@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import UIKit
 
 // MARK: - Image Cache Manager
 class ImageCacheManager {
@@ -7,6 +8,8 @@ class ImageCacheManager {
     private let cache = NSCache<NSString, UIImage>()
     private let fileManager = FileManager.default
     private let cacheDirectory: URL
+    private let prefetchLock = NSLock()
+    private var prefetchingURLs: Set<String> = []
     
     private init() {
         // Configure memory cache
@@ -47,10 +50,18 @@ class ImageCacheManager {
         // Store in disk cache
         saveToDisk(image: image, key: key)
     }
+
+    func hasImage(for url: String) -> Bool {
+        let key = NSString(string: url)
+        if cache.object(forKey: key) != nil {
+            return true
+        }
+        let fileURL = cacheFileURL(for: key)
+        return fileManager.fileExists(atPath: fileURL.path)
+    }
     
     private func loadFromDisk(key: NSString) -> UIImage? {
-        let fileName = key.replacingOccurrences(of: "/", with: "_")
-        let fileURL = cacheDirectory.appendingPathComponent(fileName)
+        let fileURL = cacheFileURL(for: key)
         
         guard let data = try? Data(contentsOf: fileURL),
               let image = UIImage(data: data) else {
@@ -60,13 +71,70 @@ class ImageCacheManager {
         return image
     }
     
+    private func cacheFileURL(for key: NSString) -> URL {
+        let sanitized = key.replacingOccurrences(of: "/", with: "_")
+        return cacheDirectory.appendingPathComponent(sanitized)
+    }
+    
     private func saveToDisk(image: UIImage, key: NSString) {
         guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         
-        let fileName = key.replacingOccurrences(of: "/", with: "_")
-        let fileURL = cacheDirectory.appendingPathComponent(fileName)
+        let fileURL = cacheFileURL(for: key)
         
         try? data.write(to: fileURL)
+    }
+    
+    @discardableResult
+    func downloadAndCacheImage(from urlString: String) async throws -> UIImage {
+        if urlString.hasPrefix("/"), fileManager.fileExists(atPath: urlString) {
+            guard let localImage = UIImage(contentsOfFile: urlString) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            setImage(localImage, for: urlString)
+            return localImage
+        }
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        guard let image = UIImage(data: data) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        setImage(image, for: urlString)
+        return image
+    }
+    
+    func prefetch(urls: [String]) {
+        for url in urls where !url.isEmpty {
+            if hasImage(for: url) { continue }
+            
+            var shouldDownload = false
+            prefetchLock.lock()
+            if !prefetchingURLs.contains(url) {
+                prefetchingURLs.insert(url)
+                shouldDownload = true
+            }
+            prefetchLock.unlock()
+            
+            guard shouldDownload else { continue }
+            
+            Task.detached(priority: .utility) { [weak self] in
+                guard let self else { return }
+                defer {
+                    self.prefetchLock.lock()
+                    self.prefetchingURLs.remove(url)
+                    self.prefetchLock.unlock()
+                }
+                
+                do {
+                    _ = try await self.downloadAndCacheImage(from: url)
+                } catch {
+                    // Ignore failures silently to avoid spamming the console
+                }
+            }
+        }
     }
     
     func clearCache() {
@@ -178,35 +246,7 @@ struct OptimizedAsyncImage: View {
     }
     
     private func loadImageFromURL(_ urlString: String) async throws -> UIImage {
-        // Check if it's a local file path
-        if urlString.hasPrefix("/") && FileManager.default.fileExists(atPath: urlString) {
-            // Load local image
-            guard let localImage = UIImage(contentsOfFile: urlString) else {
-                throw URLError(.cannotDecodeContentData)
-            }
-            
-            // Cache the local image
-            ImageCacheManager.shared.setImage(localImage, for: urlString)
-            print("✅ Local image loaded: \(urlString)")
-            
-            return localImage
-        }
-        
-        // Handle network URLs
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-        
-        let (data, _) = try await URLSession.shared.data(from: url)
-        
-        guard let image = UIImage(data: data) else {
-            throw URLError(.cannotDecodeContentData)
-        }
-        
-        // Cache the image
-        ImageCacheManager.shared.setImage(image, for: urlString)
-        
-        return image
+        try await ImageCacheManager.shared.downloadAndCacheImage(from: urlString)
     }
 }
 

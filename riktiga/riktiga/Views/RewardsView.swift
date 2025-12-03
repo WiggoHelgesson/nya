@@ -182,6 +182,42 @@ struct RewardCatalog {
             imageName: "35",
             category: "Skidåkning",
             isBookmarked: false
+        ),
+        RewardCard(
+            id: 24,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 25,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 26,
+            brandName: "Fjällsyn UF",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "38",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 27,
+            brandName: "Powerwell",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "40",
+            category: "Gym",
+            isBookmarked: false
         )
     ]
 }
@@ -645,6 +681,9 @@ struct FullScreenRewardCard: View {
         case "33": return "33" // PEAK
         case "34": return "34" // CAPSTONE
         case "35": return "35" // FUSE ENERGY
+        case "38": return "38" // Fjällsyn UF
+        case "39": return "39" // CLYRO
+        case "40": return "40" // Powerwell
         default: return "5" // Default to PEGMATE
         }
     }
@@ -834,6 +873,12 @@ struct RewardDetailView: View {
             return "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft."
         case "J.LINDEBERG":
             return "J.Lindeberg kombinerar skandinaviskt mode med högpresterande sportplagg. Kollektionerna är designade för golfbanan och backen med tekniska material, skarpa snitt och premiumdetaljer – så att du kan prestera på topp och samtidigt se ut som ett proffs."
+        case "CLYRO":
+            return "Clyro tillverkar energidrycker med 20 gram protein och hög kvalitet så att du kan kombinera boost och återhämtning i samma burk. Perfekt före eller efter gymmet – utan att kompromissa på smak eller innehåll."
+        case "Fjällsyn UF":
+            return "Fjällsyn tillverkar moderna och stilrena skidglasögon till schyssta priser – designade i svensk fjällmiljö för att du ska få bästa sikt på berget."
+        case "Powerwell":
+            return "Powerwell tillverkar PWO och kosttillskott av hög kvalitet för dig som vill prestera varje pass. Svenska recept, rena ingredienser och brutalt fokus på effekt utan onödiga tillsatser."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
@@ -869,6 +914,12 @@ struct RewardDetailView: View {
             return "34"
         case "FUSE ENERGY":
             return "35"
+        case "CLYRO":
+            return "39"
+        case "Fjällsyn UF":
+            return "38"
+        case "Powerwell":
+            return "40"
         default:
             return "5" // Default to Pegmate logo
         }
@@ -906,6 +957,12 @@ struct RewardDetailView: View {
             urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
         case "J.LINDEBERG":
             urlString = "https://jlindeberg.com/"
+        case "CLYRO":
+            urlString = "https://clyro.se/"
+        case "Fjällsyn UF":
+            urlString = "https://fjallsynuf.se/"
+        case "Powerwell":
+            urlString = "https://powerwell.se/"
         default:
             urlString = "https://google.com" // Fallback
         }
@@ -1279,6 +1336,12 @@ struct ConfirmationView: View {
             return "CAPSTONE10"
         case "FUSE ENERGY":
             return "Wiggo"
+        case "CLYRO":
+            return "Up&Down20"
+        case "Fjällsyn UF":
+            return "FJÄLLSYN15PÅALLT"
+        case "Powerwell":
+            return "1EFN34345G1J"
         default:
             return "CODE2025"
         }
@@ -1314,6 +1377,12 @@ struct ConfirmationView: View {
             urlString = "https://www.scandigolf.se/"
         case "WINWIZE":
             urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
+        case "CLYRO":
+            urlString = "https://clyro.se/"
+        case "Fjällsyn UF":
+            urlString = "https://fjallsynuf.se/"
+        case "Powerwell":
+            urlString = "https://powerwell.se/"
         default:
             urlString = "https://google.com" // Fallback
         }
@@ -1371,6 +1440,9 @@ struct AllRewardsCard: View {
         case "33": return "33" // PEAK
         case "34": return "34" // CAPSTONE
         case "35": return "35" // FUSE ENERGY
+        case "38": return "38" // Fjällsyn
+        case "39": return "39" // CLYRO
+        case "40": return "40" // Powerwell
         default: return "5" // Default to PEGMATE
         }
     }

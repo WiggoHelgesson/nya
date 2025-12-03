@@ -10,6 +10,7 @@ struct GymSessionView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @StateObject private var viewModel = GymSessionViewModel()
     @State private var showExercisePicker = false
     @State private var showCompleteSession = false

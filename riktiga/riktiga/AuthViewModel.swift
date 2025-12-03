@@ -75,6 +75,7 @@ class AuthViewModel: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.currentUser = profile
                         self.isLoggedIn = true
+                        self.prefetchAvatar(url: profile.avatarUrl)
                         
                         // Check if user has a valid username (not "Användare" or empty)
                         let hasValidUsername = !profile.name.isEmpty && profile.name != "Användare"
@@ -119,6 +120,7 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.isLoading = false
+                        self.prefetchAvatar(url: profile.avatarUrl)
                         
                         // Visa review popup efter lyckad inloggning
                         ReviewManager.shared.requestReviewIfNeeded()
@@ -207,6 +209,7 @@ class AuthViewModel: NSObject, ObservableObject {
                     self.currentUser = newUser
                     self.isLoggedIn = true
                     self.isLoading = false
+                    self.prefetchAvatar(url: newUser.avatarUrl)
                 }
             } catch {
                 await MainActor.run {
@@ -262,6 +265,7 @@ class AuthViewModel: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     self.currentUser = profile
                     print("✅ User profile reloaded: \(profile.name), XP: \(profile.currentXP)")
+                    self.prefetchAvatar(url: profile.avatarUrl)
                 }
             }
         } catch {
@@ -302,6 +306,7 @@ class AuthViewModel: NSObject, ObservableObject {
                 DispatchQueue.main.async {
                     self.currentUser?.avatarUrl = publicURL
                     print("✅ Local user data updated")
+                    self.prefetchAvatar(url: publicURL)
                     
                     // Skicka notifikation för att uppdatera UI
                     NotificationCenter.default.post(name: .profileImageUpdated, object: publicURL)
@@ -314,5 +319,10 @@ class AuthViewModel: NSObject, ObservableObject {
                 }
             }
         }
+    }
+    
+    private func prefetchAvatar(url: String?) {
+        guard let url = url, !url.isEmpty else { return }
+        ImageCacheManager.shared.prefetch(urls: [url])
     }
 }

@@ -165,6 +165,7 @@ struct SocialPostCard: View {
     @State private var showLikesList = false
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject var viewModel: SocialViewModel
+    @State private var loadLikersTask: Task<Void, Never>?
     
     init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, viewModel: SocialViewModel) {
         self.post = post
@@ -217,9 +218,19 @@ struct SocialPostCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .onAppear {
-            Task {
-                await loadTopLikers()
+            // Cancel any existing task
+            loadLikersTask?.cancel()
+            
+            // Only fetch if we have likes to show
+            if likeCount > 0 {
+                loadLikersTask = Task {
+                    await loadTopLikers()
+                }
             }
+        }
+        .onDisappear {
+            loadLikersTask?.cancel()
+            loadLikersTask = nil
         }
         .onChange(of: post.likeCount) { newValue in
             likeCount = newValue ?? likeCount
@@ -339,13 +350,12 @@ struct SocialPostCard: View {
                     .foregroundColor(.black)
                 
                 if let isPro = post.userIsPro, isPro {
-                    Text("PRO")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.yellow)
-                        .cornerRadius(4)
+                    Image("41")
+                        .resizable()
+                        .renderingMode(.original)
+                        .scaledToFit()
+                        .frame(height: 16)
+                        .padding(.leading, 4)
                 }
             }
             .padding(.horizontal, 16)
@@ -1004,6 +1014,7 @@ class SocialViewModel: ObservableObject {
                 await MainActor.run {
                     self.posts = fetchedPosts
                     self.isLoading = false
+                    self.prefetchAvatars(for: fetchedPosts)
                 }
             } catch {
                 print("Error fetching social feed: \(error)")
@@ -1025,6 +1036,7 @@ class SocialViewModel: ObservableObject {
         // Try to load from cache first (ensure stable order); keep loading state until network finishes
         if let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
             posts = sortedByDateDesc(cachedPosts)
+            prefetchAvatars(for: posts)
             Task { await self.enrichAuthorMetadataIfNeeded() }
         }
         
@@ -1038,6 +1050,7 @@ class SocialViewModel: ObservableObject {
             }
             
             posts = sortedByDateDesc(fetchedPosts)
+            prefetchAvatars(for: posts)
             isLoading = false
             isFetching = false
             
@@ -1059,6 +1072,7 @@ class SocialViewModel: ObservableObject {
             if posts.isEmpty,
                let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
                 posts = sortedByDateDesc(cached)
+                prefetchAvatars(for: posts)
             }
             isLoading = false
             isFetching = false
@@ -1080,6 +1094,7 @@ class SocialViewModel: ObservableObject {
             if !fetchedPosts.isEmpty {
                 let sorted = sortedByDateDesc(fetchedPosts)
                 posts = sorted
+                prefetchAvatars(for: posts)
                 AppCacheManager.shared.saveSocialFeed(sorted, userId: userId)
                 Task { await self.enrichAuthorMetadataIfNeeded() }
             } else {
@@ -1093,6 +1108,7 @@ class SocialViewModel: ObservableObject {
             if let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true),
                posts.isEmpty {
                 posts = sortedByDateDesc(cached)
+                prefetchAvatars(for: posts)
                 Task { await self.enrichAuthorMetadataIfNeeded() }
             }
         }
@@ -1106,6 +1122,7 @@ class SocialViewModel: ObservableObject {
             await MainActor.run {
                 self.posts = posts
                 self.isLoading = false
+                self.prefetchAvatars(for: posts)
             }
         } catch is CancellationError {
             await MainActor.run { self.isLoading = false }
@@ -1121,6 +1138,7 @@ class SocialViewModel: ObservableObject {
             let posts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
             await MainActor.run {
                 self.posts = posts
+                self.prefetchAvatars(for: posts)
             }
         } catch {
             print("⚠️ Could not refresh posts for user \(targetUserId): \(error)")
@@ -1195,6 +1213,13 @@ class SocialViewModel: ObservableObject {
         if let uid = currentUserId {
             AppCacheManager.shared.saveSocialFeed(posts, userId: uid)
         }
+    }
+    
+    private func prefetchAvatars(for posts: [SocialWorkoutPost]) {
+        guard !posts.isEmpty else { return }
+        let urls = posts.compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+        guard !urls.isEmpty else { return }
+        ImageCacheManager.shared.prefetch(urls: urls)
     }
     
     func updatePostLikeStatus(postId: String, isLiked: Bool, likeCount: Int) {

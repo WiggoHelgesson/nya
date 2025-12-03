@@ -153,6 +153,12 @@ class PurchaseService: ObservableObject {
             return "UPNDOWN15"
         case "ZEN ENERGY":
             return "UPDOWN15"
+        case "CLYRO":
+            return "Up&Down20"
+        case "Fjällsyn UF":
+            return "FJÄLLSYN15PÅALLT"
+        case "Powerwell":
+            return "1EFN34345G1J"
         default:
             return "CODE2025"
         }
