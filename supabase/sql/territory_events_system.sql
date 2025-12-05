@@ -110,7 +110,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     pts geometry[];
@@ -150,7 +150,7 @@ begin
         raise exception 'Invalid polygon supplied.';
     end if;
 
-    if ST_Area(new_geom::geography) < 200 then
+    if ST_Area(new_geom::geography) < 10 then
         raise exception 'Territory is too small to capture.';
     end if;
 

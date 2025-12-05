@@ -39,7 +39,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
-        locationManager.distanceFilter = kCLDistanceFilterNone
+        locationManager.distanceFilter = 5 // Update every 5 meters for better performance
         locationManager.activityType = .fitness
         
         // VIKTIGT: Inte pausera uppdateringar automatiskt

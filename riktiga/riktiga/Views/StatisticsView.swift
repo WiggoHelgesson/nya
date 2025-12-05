@@ -6,6 +6,11 @@ struct StatisticsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Steg statistik") {
+                    StepStatisticsSectionView()
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
                 Section {
                     NavigationLink(destination: UppyChatView()) {
                         UppyMenuRow(
@@ -649,6 +654,204 @@ private struct UppyMenuRow: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+private struct StepStatisticsSectionView: View {
+    @State private var todaySteps: Int?
+    @State private var lastWeekSteps: Int?
+    @State private var lastMonthSteps: Int?
+    @State private var isAuthorized = HealthKitManager.shared.isHealthDataAuthorized()
+    @State private var isLoading = false
+    @State private var hasInitialized = false
+    @State private var pendingRequests = 0
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Din aktivitet")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Synkas från Apple Hälsa")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if isAuthorized {
+                    Button {
+                        loadStepData()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                            .padding(8)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                    .disabled(isLoading)
+                    .accessibilityLabel("Uppdatera stegstatistik")
+                }
+            }
+            
+            if !isAuthorized {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("För att se din stegstatistik behöver du ge appen tillgång till stegdata i Apple Hälsa.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    HStack {
+                        Button(action: requestAuthorization) {
+                            Text("Tillåt stegdata")
+                                .font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.black)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                        Button(action: HealthKitManager.shared.handleManageAuthorizationButton) {
+                            Text("Öppna inställningar")
+                                .font(.system(size: 14, weight: .medium))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color(.systemGray5))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            } else if isLoading {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("Hämtar stegdata…")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 12) {
+                    StepStatRow(title: "Idag", steps: todaySteps)
+                    Divider()
+                    StepStatRow(title: "Förra veckan", steps: lastWeekSteps, subtitle: "Mån–Sön föregående vecka")
+                    Divider()
+                    StepStatRow(title: "Förra månaden", steps: lastMonthSteps)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
+        .onAppear {
+            guard !hasInitialized else { return }
+            hasInitialized = true
+            if isAuthorized {
+                loadStepData()
+            } else {
+                requestAuthorizationIfPossible()
+            }
+        }
+    }
+    
+    private func requestAuthorization() {
+        requestAuthorizationIfPossible()
+    }
+    
+    private func requestAuthorizationIfPossible() {
+        HealthKitManager.shared.requestAuthorization { granted in
+            DispatchQueue.main.async {
+                self.isAuthorized = granted
+                if granted {
+                    self.loadStepData()
+                }
+            }
+        }
+    }
+    
+    private func loadStepData() {
+        guard isAuthorized else { return }
+        isLoading = true
+        pendingRequests = 3
+        
+        let calendar = Calendar(identifier: .iso8601)
+        let now = Date()
+        
+        HealthKitManager.shared.getStepsForDate(now) { steps in
+            self.todaySteps = steps
+            self.markRequestComplete()
+        }
+        
+        if let startOfCurrentWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)),
+           let startOfLastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: startOfCurrentWeek) {
+            HealthKitManager.shared.getStepsTotal(from: startOfLastWeek, to: startOfCurrentWeek) { steps in
+                self.lastWeekSteps = steps
+                self.markRequestComplete()
+            }
+        } else {
+            self.lastWeekSteps = 0
+            markRequestComplete()
+        }
+        
+        if let startOfCurrentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
+           let startOfLastMonth = calendar.date(byAdding: .month, value: -1, to: startOfCurrentMonth) {
+            HealthKitManager.shared.getStepsTotal(from: startOfLastMonth, to: startOfCurrentMonth) { steps in
+                self.lastMonthSteps = steps
+                self.markRequestComplete()
+            }
+        } else {
+            self.lastMonthSteps = 0
+            markRequestComplete()
+        }
+    }
+    
+    private func markRequestComplete() {
+        pendingRequests -= 1
+        if pendingRequests <= 0 {
+            isLoading = false
+        }
+    }
+}
+
+private struct StepStatRow: View {
+    let title: String
+    let steps: Int?
+    var subtitle: String?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Text(formattedSteps)
+                    .font(.system(size: 20, weight: .bold))
+            }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            Text(kilometerText)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private var formattedSteps: String {
+        guard let steps = steps else { return "--" }
+        return NumberFormatter.stepsFormatter.string(from: NSNumber(value: steps)) ?? "\(steps)"
+    }
+    
+    private var kilometerText: String {
+        guard let steps = steps, steps > 0 else { return "Ingen data" }
+        let kilometers = StepSyncService.convertStepsToKilometers(steps)
+        return String(format: "≈ %.1f km", kilometers)
+    }
+}
+
+private extension NumberFormatter {
+    static let stepsFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
 }
 
 private struct MonthlySummary {

@@ -4,10 +4,16 @@ import Combine
 struct SocialView: View {
     @StateObject private var socialViewModel = SocialViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var visiblePostCount = 5 // Start with 5 posts
     @State private var isLoadingMore = false
     @State private var task: Task<Void, Never>?
     @State private var selectedPost: SocialWorkoutPost?
+    @State private var recommendedUsers: [UserSearchResult] = []
+    @State private var recommendedFollowingStatus: [String: Bool] = [:]
+    @State private var isLoadingRecommended = false
+    @State private var showPaywall = false
+    private let brandLogos = BrandLogoItem.all
     
     var body: some View {
             NavigationStack {
@@ -25,6 +31,10 @@ struct SocialView: View {
                     }
                 } else if socialViewModel.posts.isEmpty {
                     VStack(spacing: 20) {
+                        if !revenueCatManager.isPremium {
+                            proUpgradeBanner
+                                .padding(.horizontal, 16)
+                        }
                         Image(systemName: "person.2.badge.plus")
                             .font(.system(size: 64))
                             .foregroundColor(.gray)
@@ -61,7 +71,7 @@ struct SocialView: View {
                                 .padding(.bottom, 16)
                             
                             LazyVStack(spacing: 0) {
-                                ForEach(postsToDisplay) { post in
+                                ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
                                     VStack(spacing: 0) {
                                         SocialPostCard(
                                             post: post,
@@ -77,6 +87,18 @@ struct SocialView: View {
                                            visiblePostCount < socialViewModel.posts.count {
                                             loadMorePosts()
                                         }
+                                    }
+                                    
+                                    if index == 1, shouldShowRecommendedFriendsSection {
+                                        recommendedFriendsInlineSection
+                                        Divider()
+                                            .background(Color(.systemGray5))
+                                    }
+                                    
+                                    if index == 4, shouldShowBrandSlider {
+                                        brandSliderInlineSection
+                                        Divider()
+                                            .background(Color(.systemGray5))
                                     }
                                 }
                                 
@@ -116,6 +138,7 @@ struct SocialView: View {
                 // Create new task
                 task = Task {
                     await socialViewModel.fetchSocialFeedAsync(userId: userId)
+                    await loadRecommendedUsers(for: userId)
                 }
             }
             .onDisappear {
@@ -125,7 +148,11 @@ struct SocialView: View {
                 if let userId = authViewModel.currentUser?.id {
                     visiblePostCount = 5 // Reset to 5 posts when refreshing
                     await socialViewModel.refreshSocialFeed(userId: userId)
+                    await loadRecommendedUsers(for: userId)
                 }
+            }
+            .sheet(isPresented: $showPaywall) {
+                PresentPaywallView()
             }
             .enableSwipeBack()
         }
@@ -147,6 +174,215 @@ struct SocialView: View {
     
     private var postsToDisplay: [SocialWorkoutPost] {
         Array(socialViewModel.posts.prefix(visiblePostCount))
+    }
+    
+    private var shouldShowRecommendedFriendsSection: Bool {
+        isLoadingRecommended || !recommendedUsers.isEmpty
+    }
+    
+    private var shouldShowBrandSlider: Bool {
+        postsToDisplay.count >= 5
+    }
+    
+    @ViewBuilder
+    private var recommendedFriendsInlineSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Rekommenderade vänner")
+                    .font(.system(size: 18, weight: .bold))
+                Spacer()
+                if isLoadingRecommended && recommendedUsers.isEmpty {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, 16)
+            
+            if recommendedUsers.isEmpty {
+                if isLoadingRecommended {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Spacer()
+                    }
+                } else {
+                    Text("Vi hittar snart fler att följa.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(recommendedUsers) { user in
+                            RecommendedFriendCard(
+                                user: user,
+                                isFollowing: recommendedFollowingStatus[user.id] ?? false,
+                                onFollowToggle: {
+                                    toggleRecommendedFollow(for: user.id)
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .frame(maxHeight: 150)
+            }
+        }
+        .padding(.vertical, 20)
+        .background(Color(.systemGray6))
+    }
+    
+    private var brandSliderInlineSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Varumärken")
+                .font(.system(size: 18, weight: .bold))
+                .padding(.horizontal, 16)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(brandLogos) { brand in
+                        Button(action: navigateToRewards) {
+                            VStack(spacing: 8) {
+                                Image(brand.imageName)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                                    )
+                                
+                                Text(brand.name.capitalized)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .lineLimit(1)
+                                    .foregroundColor(.black)
+                            }
+                            .frame(width: 90)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.vertical, 20)
+        .background(Color.white)
+    }
+    
+    private var proUpgradeBanner: some View {
+        Button(action: {
+            showPaywall = true
+        }) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Uppgradera till Pro")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Få alla premiumfunktioner och bonus-XP.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+                .foregroundColor(.white)
+                
+                Spacer()
+                
+                Image("41")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 42, height: 42)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var proBadgeButton: some View {
+        Button(action: {
+            showPaywall = true
+        }) {
+            Image("41")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 36, height: 36)
+                .padding(10)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Uppgradera till Pro")
+    }
+    
+    private func toggleRecommendedFollow(for userId: String) {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        let isCurrentlyFollowing = recommendedFollowingStatus[userId] ?? false
+        
+        Task {
+            do {
+                if isCurrentlyFollowing {
+                    try await SocialService.shared.unfollowUser(followerId: currentUserId, followingId: userId)
+                } else {
+                    try await SocialService.shared.followUser(followerId: currentUserId, followingId: userId)
+                }
+                
+                await MainActor.run {
+                    recommendedFollowingStatus[userId] = !isCurrentlyFollowing
+                }
+            } catch {
+                print("❌ Error toggling follow from SocialView: \(error)")
+            }
+        }
+    }
+    
+    private func loadRecommendedUsers(for userId: String) async {
+        await MainActor.run {
+            if recommendedUsers.isEmpty {
+                isLoadingRecommended = true
+            }
+        }
+        
+        if let cached = AppCacheManager.shared.getCachedRecommendedUsers(userId: userId) {
+            await MainActor.run {
+                self.recommendedUsers = cached
+            }
+        }
+        
+        do {
+            let recommended = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
+                return try await SocialService.shared.getRecommendedUsers(userId: userId, limit: 8)
+            }
+            
+            var followStatus: [String: Bool] = [:]
+            for user in recommended {
+                let isFollowing = try await SocialService.shared.isFollowing(followerId: userId, followingId: user.id)
+                followStatus[user.id] = isFollowing
+            }
+            
+            await MainActor.run {
+                self.recommendedUsers = recommended
+                self.recommendedFollowingStatus = followStatus
+                self.isLoadingRecommended = false
+            }
+            
+            AppCacheManager.shared.saveRecommendedUsers(recommended, userId: userId)
+        } catch {
+            print("❌ Error loading recommended users in SocialView: \(error)")
+            await MainActor.run {
+                self.isLoadingRecommended = false
+            }
+        }
+    }
+    
+    private func navigateToRewards() {
+        NotificationCenter.default.post(name: NSNotification.Name("NavigateToRewards"), object: nil)
     }
 }
 

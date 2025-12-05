@@ -3,6 +3,7 @@ import Combine
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
     @State private var showSettings = false
@@ -15,6 +16,8 @@ struct ProfileView: View {
     @State private var followingCount = 0
     @State private var profileObserver: NSObjectProtocol?
     @State private var showEditProfile = false
+    @State private var showPaywall = false
+    @State private var showTrainerOnboarding = false
     @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
     @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
@@ -43,6 +46,18 @@ struct ProfileView: View {
                 VStack(spacing: 16) {
                     // MARK: - Profile Header Card with Settings button in top right
                     HStack {
+                        if !revenueCatManager.isPremium {
+                            Button(action: {
+                                showPaywall = true
+                            }) {
+                                Image("41")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 36, height: 36)
+                                    .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
+                            }
+                        }
+                        
                         Spacer()
                         
                         Button(action: {
@@ -183,6 +198,42 @@ struct ProfileView: View {
                         )
                     }
                     
+                    // MARK: - Become Golf Trainer Button
+                    Button {
+                        showTrainerOnboarding = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "figure.golf")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Bli golftränare")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                
+                                Text("Erbjud lektioner och tjäna pengar")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .padding(16)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.green, Color.green.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(12)
+                    }
+                    
                     Divider()
                         .background(Color(.systemGray4))
                     
@@ -234,6 +285,9 @@ struct ProfileView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .sheet(isPresented: $showPaywall) {
+                PresentPaywallView()
+            }
             .sheet(isPresented: $showStatistics) {
                 StatisticsView()
             }
@@ -255,6 +309,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showEditProfile) {
                 EditProfileView()
+            }
+            .sheet(isPresented: $showTrainerOnboarding) {
+                TrainerOnboardingView()
             }
             .onAppear {
                 updatePersonalBestInfo()

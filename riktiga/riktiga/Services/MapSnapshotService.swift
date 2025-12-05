@@ -7,7 +7,7 @@ class MapSnapshotService {
     
     private init() {}
     
-    func generateRouteSnapshot(routeCoordinates: [CLLocationCoordinate2D], userLocation: CLLocationCoordinate2D?, completion: @escaping (UIImage?) -> Void) {
+    func generateRouteSnapshot(routeCoordinates: [CLLocationCoordinate2D], userLocation: CLLocationCoordinate2D?, activity: ActivityType? = nil, completion: @escaping (UIImage?) -> Void) {
         // Always create a snapshot, even if there are no coordinates
         let hasCoordinates = routeCoordinates.count > 1
         
@@ -62,8 +62,21 @@ class MapSnapshotService {
                 return
             }
             
+            // Determine if we should fill the polygon based on activity
+            let shouldFill: Bool
+            if let activity = activity {
+                switch activity {
+                case .running, .golf, .hiking, .skiing:
+                    shouldFill = true
+                default:
+                    shouldFill = false
+                }
+            } else {
+                shouldFill = false
+            }
+            
             // Draw the route on the snapshot
-            let image = self.drawRoute(on: snapshot, with: routeCoordinates)
+            let image = self.drawRoute(on: snapshot, with: routeCoordinates, shouldFill: shouldFill, activity: activity)
             completion(image)
         }
     }
@@ -92,7 +105,7 @@ class MapSnapshotService {
         return (center: center, latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
     }
     
-    private func drawRoute(on snapshot: MKMapSnapshotter.Snapshot, with coordinates: [CLLocationCoordinate2D]) -> UIImage {
+    private func drawRoute(on snapshot: MKMapSnapshotter.Snapshot, with coordinates: [CLLocationCoordinate2D], shouldFill: Bool, activity: ActivityType?) -> UIImage {
         let image = snapshot.image
         
         return image.withRenderer { context in
@@ -104,13 +117,57 @@ class MapSnapshotService {
                 return
             }
             
-            // Set up drawing attributes
+            // If filling polygon (territory mode)
+            if shouldFill {
+                let fillBaseColor = activity?.territoryUIColor ?? UIColor.systemGreen
+                context.saveGState()
+                
+                let fillPath = CGMutablePath()
+                
+                // Convert all coordinates to points
+                var points: [CGPoint] = []
+                for coordinate in coordinates {
+                    points.append(snapshot.point(for: coordinate))
+                }
+                
+                // Close the loop back to start for the fill
+                if let firstCoordinate = coordinates.first {
+                    points.append(snapshot.point(for: firstCoordinate))
+                }
+                
+                // Create path from points
+                if let first = points.first {
+                    fillPath.move(to: first)
+                    for point in points.dropFirst() {
+                        fillPath.addLine(to: point)
+                    }
+                    fillPath.closeSubpath()
+                }
+                
+                context.addPath(fillPath)
+                
+                // Fill with semi-transparent green
+                context.setFillColor(fillBaseColor.withAlphaComponent(0.3).cgColor)
+                context.fillPath()
+                
+                // Draw dashed border
+                context.addPath(fillPath)
+                context.setLineWidth(2)
+                context.setLineCap(.round)
+                context.setLineJoin(.round)
+                context.setStrokeColor(fillBaseColor.cgColor)
+                context.setLineDash(phase: 0, lengths: [5, 5])
+                context.strokePath()
+                
+                context.restoreGState()
+            }
+            
+            // Draw the actual route line (solid black)
             context.setLineWidth(4)
             context.setLineCap(.round)
             context.setLineJoin(.round)
-            context.setStrokeColor(UIColor.brandBlue.cgColor)
+            context.setStrokeColor(UIColor.black.cgColor)
             
-            // Draw the route line
             let path = CGMutablePath()
             
             for (index, coordinate) in coordinates.enumerated() {
@@ -131,10 +188,14 @@ class MapSnapshotService {
                 let startPoint = snapshot.point(for: firstCoordinate)
                 context.setFillColor(UIColor.green.cgColor)
                 context.fillEllipse(in: CGRect(x: startPoint.x - 6, y: startPoint.y - 6, width: 12, height: 12))
+                // White border for start point
+                context.setStrokeColor(UIColor.white.cgColor)
+                context.setLineWidth(2)
+                context.strokeEllipse(in: CGRect(x: startPoint.x - 6, y: startPoint.y - 6, width: 12, height: 12))
             }
             
-            // Draw end point (red)
-            if let lastCoordinate = coordinates.last {
+            // Draw end point (red) - only if not filling (if filling, the whole area is the focus)
+            if !shouldFill, let lastCoordinate = coordinates.last {
                 let endPoint = snapshot.point(for: lastCoordinate)
                 context.setFillColor(UIColor.red.cgColor)
                 context.fillEllipse(in: CGRect(x: endPoint.x - 6, y: endPoint.y - 6, width: 12, height: 12))
@@ -161,6 +222,23 @@ extension UIImage {
 extension UIColor {
     static var brandBlue: UIColor {
         return UIColor(red: 0.0, green: 0.478, blue: 1.0, alpha: 1.0)
+    }
+}
+
+extension ActivityType {
+    var territoryUIColor: UIColor {
+        switch self {
+        case .running:
+            return .systemOrange
+        case .golf:
+            return .systemBlue
+        case .skiing:
+            return .systemTeal
+        case .hiking:
+            return .systemBrown
+        case .walking:
+            return .systemRed
+        }
     }
 }
 

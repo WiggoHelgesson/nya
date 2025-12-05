@@ -12,6 +12,9 @@ final class NotificationService {
     func fetchNotifications(userId: String) async throws -> [AppNotification] {
         print("🔔 Fetching notifications for user: \(userId)")
         
+        // Ensure valid session for RLS
+        try await AuthSessionManager.shared.ensureValidSession()
+        
         let notifications: [AppNotification] = try await supabase
             .from("notifications")
             .select("*")
@@ -28,6 +31,9 @@ final class NotificationService {
     
     /// Get count of unread notifications
     func fetchUnreadCount(userId: String) async throws -> Int {
+        // Ensure valid session for RLS
+        try await AuthSessionManager.shared.ensureValidSession()
+        
         struct CountResponse: Decodable {
             let count: Int
         }
@@ -47,6 +53,9 @@ final class NotificationService {
     
     /// Mark a notification as read
     func markAsRead(notificationId: String) async throws {
+        // Ensure valid session for RLS
+        try await AuthSessionManager.shared.ensureValidSession()
+        
         try await supabase
             .from("notifications")
             .update(["is_read": true])
@@ -58,6 +67,9 @@ final class NotificationService {
     
     /// Mark all notifications as read
     func markAllAsRead(userId: String) async throws {
+        // Ensure valid session for RLS
+        try await AuthSessionManager.shared.ensureValidSession()
+        
         try await supabase
             .from("notifications")
             .update(["is_read": true])

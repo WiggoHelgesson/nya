@@ -856,6 +856,7 @@ struct ExerciseCard: View {
                     }
                 )
             }
+            .animation(.none, value: exercise.sets.count)
             
             // Add set button
             Button(action: onAddSet) {

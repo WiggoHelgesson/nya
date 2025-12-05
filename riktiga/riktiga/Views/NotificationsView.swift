@@ -7,6 +7,7 @@ struct NotificationsView: View {
     @State private var notifications: [AppNotification] = []
     @State private var selectedNotification: AppNotification?
     @State private var selectedProfileId: String?
+    @State private var errorMessage: String? // Added for error handling
     var onDismiss: (() -> Void)? = nil
     
     var body: some View {
@@ -18,6 +19,28 @@ struct NotificationsView: View {
                 if isLoading && notifications.isEmpty {
                     ProgressView()
                         .scaleEffect(1.5)
+                } else if let error = errorMessage {
+                    // Error State
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.orange)
+                        
+                        Text("Kunde inte ladda notiser")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text(error)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        Button("Försök igen") {
+                            Task { await loadNotifications() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 } else if notifications.isEmpty {
                     emptyStateView
                 } else {
@@ -74,8 +97,8 @@ struct NotificationsView: View {
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "bell.slash.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.gray)
+            .font(.system(size: 60))
+            .foregroundColor(.gray)
             
             Text("Inga notiser")
                 .font(.title2)
@@ -92,7 +115,10 @@ struct NotificationsView: View {
     private func loadNotifications() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        await MainActor.run { isLoading = true }
+        await MainActor.run { 
+            isLoading = true 
+            errorMessage = nil
+        }
         do {
             let fetched = try await notificationService.fetchNotifications(userId: userId)
             await MainActor.run {
@@ -101,7 +127,10 @@ struct NotificationsView: View {
             }
         } catch {
             print("❌ Error loading notifications: \(error)")
-            await MainActor.run { isLoading = false }
+            await MainActor.run { 
+                isLoading = false
+                errorMessage = error.localizedDescription
+            }
         }
     }
     
@@ -118,7 +147,10 @@ struct NotificationsView: View {
             }
             
             await MainActor.run {
-                selectedProfileId = notification.actorId
+                // Only navigate if we have a valid actorId (system notifications might not)
+                if !notification.actorId.isEmpty {
+                    selectedProfileId = notification.actorId
+                }
             }
         }
     }

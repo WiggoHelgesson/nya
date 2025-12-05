@@ -146,6 +146,21 @@ class HealthKitManager {
         healthStore.execute(query)
     }
 
+    func getStepsTotal(from startDate: Date, to endDate: Date, completion: @escaping (Int) -> Void) {
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        let query = HKStatisticsQuery(
+            quantityType: stepsType,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum
+        ) { _, result, _ in
+            let steps = Int(result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0)
+            DispatchQueue.main.async {
+                completion(steps)
+            }
+        }
+        healthStore.execute(query)
+    }
+
     // MARK: - Monthly steps total for current month
     func getCurrentMonthStepsTotal(completion: @escaping (Int) -> Void) {
         let calendar = Calendar.current

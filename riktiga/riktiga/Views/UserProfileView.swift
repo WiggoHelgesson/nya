@@ -75,7 +75,7 @@ struct UserProfileView: View {
                                             .font(.system(size: 14, weight: .semibold))
                                     }
                                     .frame(width: 96, height: 36)
-                                    .background(isFollowingUser ? Color(.systemGray5) : AppColors.brandBlue)
+                                    .background(isFollowingUser ? Color(.systemGray5) : Color.black)
                                     .foregroundColor(isFollowingUser ? .black : .white)
                                     .cornerRadius(10)
                                 }
