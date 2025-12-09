@@ -6,11 +6,17 @@
 //
 
 import SwiftUI
+import StripePaymentSheet
 
 @main
 struct UpAndDownApp: App {
     @StateObject var authViewModel = AuthViewModel()
     @State private var showSplash = true
+    
+    init() {
+        // Configure Stripe
+        StripeConfig.configure()
+    }
     
     var body: some Scene {
         WindowGroup {

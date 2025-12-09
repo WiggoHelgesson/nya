@@ -10,69 +10,164 @@ final class TerritoryStore: ObservableObject {
     @Published private(set) var activeSessionTerritories: [Territory] = []
     
     private let service = TerritoryService.shared
-    private let eligibleActivities: Set<ActivityType> = [.running, .golf, .hiking, .skiing]
+    private let eligibleActivities: Set<ActivityType> = [.running, .golf]
     private let localStorageKey = "LocalTerritories"
+    
+    // MARK: - Caching & Performance
+    private var cachedTerritoryIds: Set<UUID> = []
+    private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
+    private var lastFetchTime: Date = .distantPast
+    private let cacheValidityDuration: TimeInterval = 60 // 1 minute cache
+    private let boundsMargin: Double = 0.02 // Extra margin around viewport
+    
+    // Debounce
+    private var debounceTask: Task<Void, Never>?
+    private let debounceInterval: TimeInterval = 0.3 // 300ms debounce
     
     init() {
         loadLocalTerritories()
     }
     
-    func refresh() async {
-        print("🌍 ========== TERRITORY REFRESH START ==========")
-        print("🌍 TerritoryStore: Refreshing ALL territories from all users...")
+    // MARK: - Viewport-based Loading with Debounce
+    
+    /// Refresh territories within the visible map bounds with debouncing
+    func refreshForViewport(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ) {
+        // Cancel any pending debounce
+        debounceTask?.cancel()
+        
+        // Start new debounce task
+        debounceTask = Task { @MainActor in
+            // Wait for debounce interval
+            try? await Task.sleep(nanoseconds: UInt64(debounceInterval * 1_000_000_000))
+            
+            guard !Task.isCancelled else { return }
+            
+            // Check if we need to fetch (bounds changed significantly or cache expired)
+            let shouldFetch = shouldFetchForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+            
+            if shouldFetch {
+                await performViewportFetch(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+            }
+        }
+    }
+    
+    private func shouldFetchForBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) -> Bool {
+        // Always fetch if cache is old
+        if Date().timeIntervalSince(lastFetchTime) > cacheValidityDuration {
+            return true
+        }
+        
+        // Check if bounds changed significantly
+        guard let lastBounds = lastFetchBounds else {
+            return true
+        }
+        
+        // Calculate if new bounds are outside the cached bounds (with margin)
+        let expandedMinLat = lastBounds.minLat - boundsMargin
+        let expandedMaxLat = lastBounds.maxLat + boundsMargin
+        let expandedMinLon = lastBounds.minLon - boundsMargin
+        let expandedMaxLon = lastBounds.maxLon + boundsMargin
+        
+        // If new viewport is within expanded cached bounds, no need to fetch
+        if minLat >= expandedMinLat && maxLat <= expandedMaxLat &&
+           minLon >= expandedMinLon && maxLon <= expandedMaxLon {
+            return false
+        }
+        
+        return true
+    }
+    
+    private func performViewportFetch(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
+        #if DEBUG
+        // print("🗺️ Viewport fetch")
+        #endif
+        
+        // Add margin to fetch area (so we have data for nearby scrolling)
+        let fetchMinLat = minLat - boundsMargin
+        let fetchMaxLat = maxLat + boundsMargin
+        let fetchMinLon = minLon - boundsMargin
+        let fetchMaxLon = maxLon + boundsMargin
         
         do {
-            let remote = try await service.fetchTerritories()
-            print("🌍 TerritoryStore: Fetched \(remote.count) territories from backend")
-            
-            // Debug: Print each territory
-            for (index, feature) in remote.enumerated() {
-                print("🔍 Territory \(index + 1): ID=\(feature.id), Owner=\(feature.owner_id.prefix(8))..., Activity=\(feature.activity_type), Area=\(Int(feature.area_m2))m²")
-            }
+            let remote = try await service.fetchTerritoriesInBounds(
+                minLat: fetchMinLat,
+                maxLat: fetchMaxLat,
+                minLon: fetchMinLon,
+                maxLon: fetchMaxLon
+            )
             
             let mapped = remote.compactMap { $0.asTerritory() }
-            print("🌍 TerritoryStore: Mapped to \(mapped.count) Territory objects")
             
-            if mapped.count != remote.count {
-                print("⚠️ WARNING: \(remote.count - mapped.count) territories failed to map!")
+            await MainActor.run {
+                // Merge with existing territories (keep territories outside viewport)
+                let newIds = Set(mapped.map { $0.id })
+                
+                // Keep territories that are outside the new fetch area or in the new fetch
+                var updatedTerritories = self.territories.filter { territory in
+                    // Keep if not in the fetch area OR if it's in the new fetch
+                    if newIds.contains(territory.id) {
+                        return false // Will be replaced by new version
+                    }
+                    return true
+                }
+                
+                // Add newly fetched territories
+                updatedTerritories.append(contentsOf: mapped)
+                
+                // Add any pending local territories
+                let localTerritories = self.loadLocalTerritoriesSync()
+                let allIds = Set(updatedTerritories.map { $0.id })
+                let pendingLocal = localTerritories.filter { !allIds.contains($0.id) }
+                updatedTerritories.append(contentsOf: pendingLocal)
+                
+                self.territories = updatedTerritories
+                self.cachedTerritoryIds = Set(updatedTerritories.map { $0.id })
+                self.lastFetchBounds = (fetchMinLat, fetchMaxLat, fetchMinLon, fetchMaxLon)
+                self.lastFetchTime = Date()
+                
+                // Viewport loaded silently for performance
             }
-            
-            // Log unique owners
-            let uniqueOwners = Set(mapped.map { $0.ownerId })
-            print("🌍 TerritoryStore: Territories from \(uniqueOwners.count) different users")
-            for owner in uniqueOwners {
-                let count = mapped.filter { $0.ownerId == owner }.count
-                print("   👤 Owner \(owner.prefix(8))...: \(count) territories")
-            }
+        } catch {
+            print("❌ Viewport fetch failed: \(error)")
+        }
+    }
+    
+    /// Force invalidate cache (call when new territory is claimed)
+    func invalidateCache() {
+        lastFetchTime = .distantPast
+        lastFetchBounds = nil
+    }
+    
+    func refresh() async {
+        do {
+            let remote = try await service.fetchTerritories()
+            let mapped = remote.compactMap { $0.asTerritory() }
             
             await MainActor.run {
                 var allTerritories = mapped
                 
+                // Merge with local pending territories
                 let localTerritories = loadLocalTerritoriesSync()
-                print("🌍 TerritoryStore: Local territories: \(localTerritories.count)")
-                
                 let remoteIds = Set(mapped.map { $0.id })
                 let pendingLocal = localTerritories.filter { !remoteIds.contains($0.id) }
                 
                 if !pendingLocal.isEmpty {
-                    print("🌍 TerritoryStore: Adding \(pendingLocal.count) pending local territories")
                     allTerritories.append(contentsOf: pendingLocal)
                 }
                 
                 self.territories = allTerritories
-                print("🌍 ✅ FINAL: \(self.territories.count) territories to display")
-                print("🌍 ========== TERRITORY REFRESH END ==========")
             }
         } catch {
-            print("❌ ========== TERRITORY REFRESH FAILED ==========")
-            print("❌ Error: \(error)")
-            print("❌ Error type: \(type(of: error))")
-            
+            // Fallback to local territories on error
             await MainActor.run {
                 let localTerritories = loadLocalTerritoriesSync()
                 if !localTerritories.isEmpty && self.territories.isEmpty {
                     self.territories = localTerritories
-                    print("🌍 Using \(localTerritories.count) local territories as fallback")
                 }
             }
         }
@@ -90,50 +185,26 @@ final class TerritoryStore: ObservableObject {
         sessionDuration: Int? = nil,
         sessionPace: String? = nil
     ) {
-        print("🏁 TerritoryStore: finalizeTerritoryCapture")
-        print("   - Activity: \(activity.rawValue)")
-        print("   - Raw coordinates: \(routeCoordinates.count)")
-        print("   - UserId: \(userId)")
+        guard eligibleActivities.contains(activity) else { return }
+        guard routeCoordinates.count >= 3 else { return }
         
-        guard eligibleActivities.contains(activity) else {
-            print("❌ Activity not eligible")
-            return
-        }
-        guard routeCoordinates.count >= 3 else {
-            print("❌ Not enough points: \(routeCoordinates.count)")
-            return
-        }
+        // Close the polygon properly
+        let closed = ensureClosedLoop(routeCoordinates)
         
-        // Step 1: Close the polygon properly
-        var closed = ensureClosedLoop(routeCoordinates)
-        print("   - After closing: \(closed.count) points")
-        
-        // Step 2: Simplify to reduce self-intersections
+        // Simplify to reduce self-intersections
         let simplified = simplifyPolygon(closed, tolerance: 0.00005)
-        print("   - After simplify: \(simplified.count) points")
         
-        // Step 3: If still too complex, use convex hull as fallback
+        // Use convex hull for very complex routes
         let finalCoordinates: [CLLocationCoordinate2D]
         if simplified.count > 500 {
             finalCoordinates = convexHull(simplified)
-            print("   - Used convex hull: \(finalCoordinates.count) points")
         } else {
             finalCoordinates = simplified
         }
         
-        // Step 4: Ensure it's still closed after all operations
+        // Ensure polygon is closed
         let validPolygon = ensureClosedLoop(finalCoordinates)
-        print("   - Final polygon: \(validPolygon.count) points")
-        
-        // Log first and last point to verify closure
-        if let first = validPolygon.first, let last = validPolygon.last {
-            print("   - First: (\(first.latitude), \(first.longitude))")
-            print("   - Last: (\(last.latitude), \(last.longitude))")
-            print("   - Closed: \(first.latitude == last.latitude && first.longitude == last.longitude)")
-        }
-        
         let area = calculateArea(coordinates: validPolygon)
-        print("   - Calculated area: \(area) m²")
         
         let pendingTerritory = Territory(
             id: UUID(),
@@ -147,39 +218,29 @@ final class TerritoryStore: ObservableObject {
             createdAt: Date()
         )
         
-        // Save locally IMMEDIATELY
+        // Save locally
         saveLocalTerritory(pendingTerritory)
-        print("💾 Saved territory locally")
         
         DispatchQueue.main.async {
             self.activeSessionTerritories = [pendingTerritory]
             if !self.territories.contains(where: { $0.id == pendingTerritory.id }) {
                 self.territories.append(pendingTerritory)
             }
-            print("✅ Added to territories array. Total: \(self.territories.count)")
         }
         
-        // Try to save to backend (non-blocking)
+        // Save to backend (non-blocking)
         Task {
             do {
-                print("🚀 ========== SENDING TO SUPABASE ==========")
-                print("🚀 UserId: \(userId)")
-                print("🚀 Activity: \(activity.rawValue)")
-                print("🚀 Coordinates: \(validPolygon.count) points")
-                print("🚀 First coord: \(validPolygon.first?.latitude ?? 0), \(validPolygon.first?.longitude ?? 0)")
-                print("🚀 Last coord: \(validPolygon.last?.latitude ?? 0), \(validPolygon.last?.longitude ?? 0)")
-                
                 let feature = try await service.claimTerritory(
                     ownerId: userId,
                     activity: activity,
-                    coordinates: validPolygon
+                    coordinates: validPolygon,
+                    distance: sessionDistance,
+                    duration: sessionDuration,
+                    pace: sessionPace
                 )
-                print("✅ ========== BACKEND SAVE SUCCESS ==========")
-                print("✅ Territory ID: \(feature.id)")
-                print("✅ Area: \(feature.area_m2) m²")
                 
                 if let territory = feature.asTerritory() {
-                    // Add session data to the territory from backend
                     var updatedTerritory = territory
                     updatedTerritory.sessionDistance = sessionDistance
                     updatedTerritory.sessionDuration = sessionDuration
@@ -198,17 +259,7 @@ final class TerritoryStore: ObservableObject {
                     await self.refresh()
                 }
             } catch {
-                print("❌ ========== BACKEND SAVE FAILED ==========")
-                print("❌ Error: \(error)")
-                print("❌ Error type: \(type(of: error))")
-                print("❌ Localized: \(error.localizedDescription)")
-                if let nsError = error as NSError? {
-                    print("❌ NSError domain: \(nsError.domain)")
-                    print("❌ NSError code: \(nsError.code)")
-                    print("❌ NSError userInfo: \(nsError.userInfo)")
-                }
-                print("⚠️ Territory kept locally only - will NOT be visible to other users!")
-                print("❌ ==========================================")
+                // Territory kept locally as fallback
             }
         }
     }

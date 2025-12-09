@@ -7,7 +7,6 @@ struct SocialView: View {
     @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @State private var visiblePostCount = 5 // Start with 5 posts
     @State private var isLoadingMore = false
-    @State private var task: Task<Void, Never>?
     @State private var selectedPost: SocialWorkoutPost?
     @State private var recommendedUsers: [UserSearchResult] = []
     @State private var recommendedFollowingStatus: [String: Bool] = [:]
@@ -30,38 +29,30 @@ struct SocialView: View {
                             .foregroundColor(.gray)
                     }
                 } else if socialViewModel.posts.isEmpty {
-                    VStack(spacing: 20) {
-                        if !revenueCatManager.isPremium {
-                            proUpgradeBanner
-                                .padding(.horizontal, 16)
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // Empty state header
+                            VStack(spacing: 12) {
+                                Image(systemName: "person.2.badge.plus")
+                                    .font(.system(size: 56))
+                                    .foregroundColor(.gray)
+                                Text("Inga inlägg än")
+                                    .font(.system(size: 22, weight: .bold))
+                                Text("Följ andra användare för att se deras inlägg i ditt flöde")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                            }
+                            .padding(.top, 40)
+                            
+                            // Recommended friends section
+                            emptyStateRecommendedFriends
                         }
-                        Image(systemName: "person.2.badge.plus")
-                            .font(.system(size: 64))
-                            .foregroundColor(.gray)
-                        Text("Inga inlägg än")
-                            .font(.system(size: 20, weight: .semibold))
-                        Text("Skapa ett pass i Aktiviteter-tabben eller följ andra användare för att se deras inlägg")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                        
-                        // Debug info
-                        VStack(spacing: 4) {
-                            Text("Tips:")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.gray)
-                            Text("• Följ andra användare")
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray)
-                            Text("• Eller skapa ett eget pass")
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray)
-                        }
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-
+                    }
+                    .refreshable {
+                        await socialViewModel.refreshSocialFeed(userId: authViewModel.currentUser?.id ?? "")
+                        await loadRecommendedUsers(for: authViewModel.currentUser?.id ?? "")
                     }
                 } else {
                     ScrollView {
@@ -100,6 +91,12 @@ struct SocialView: View {
                                         Divider()
                                             .background(Color(.systemGray5))
                                     }
+                                    
+                                    if index == 6, postsToDisplay.count >= 8 {
+                                        bookLessonInlineSection
+                                        Divider()
+                                            .background(Color(.systemGray5))
+                                    }
                                 }
                                 
                                 if isLoadingMore {
@@ -129,27 +126,34 @@ struct SocialView: View {
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
             }
-            .task {
-                // Cancel any previous task
-                task?.cancel()
-                
+            .task(id: authViewModel.currentUser?.id) {
                 guard let userId = authViewModel.currentUser?.id else { return }
                 
-                // Create new task
-                task = Task {
-                    await socialViewModel.fetchSocialFeedAsync(userId: userId)
-                    await loadRecommendedUsers(for: userId)
+                // Ensure valid session before fetching
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid, cannot fetch feed")
+                    return
                 }
-            }
-            .onDisappear {
-                task?.cancel()
+                
+                await socialViewModel.fetchSocialFeedAsync(userId: userId)
+                await loadRecommendedUsers(for: userId)
             }
             .refreshable {
-                if let userId = authViewModel.currentUser?.id {
-                    visiblePostCount = 5 // Reset to 5 posts when refreshing
-                    await socialViewModel.refreshSocialFeed(userId: userId)
-                    await loadRecommendedUsers(for: userId)
+                guard let userId = authViewModel.currentUser?.id else { return }
+                
+                // Ensure valid session before refreshing
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid, cannot refresh")
+                    return
                 }
+                
+                visiblePostCount = 5 // Reset to 5 posts when refreshing
+                await socialViewModel.refreshSocialFeed(userId: userId)
+                await loadRecommendedUsers(for: userId)
             }
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
@@ -235,6 +239,59 @@ struct SocialView: View {
         .background(Color(.systemGray6))
     }
     
+    private var emptyStateRecommendedFriends: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rekommenderade att följa")
+                .font(.system(size: 20, weight: .bold))
+                .padding(.horizontal, 16)
+            
+            if isLoadingRecommended && recommendedUsers.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding(.vertical, 40)
+                    Spacer()
+                }
+            } else if recommendedUsers.isEmpty {
+                VStack(spacing: 8) {
+                    Text("Inga rekommendationer just nu")
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                    Text("Kom tillbaka senare för att hitta nya vänner")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                // Grid layout for empty state (more prominent)
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 12) {
+                    ForEach(recommendedUsers) { user in
+                        EmptyStateUserCard(
+                            user: user,
+                            isFollowing: recommendedFollowingStatus[user.id] ?? false,
+                            onFollowToggle: {
+                                toggleRecommendedFollow(for: user.id)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 16)
+        .onAppear {
+            if recommendedUsers.isEmpty {
+                Task {
+                    await loadRecommendedUsers(for: authViewModel.currentUser?.id ?? "")
+                }
+            }
+        }
+    }
+    
     private var brandSliderInlineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Varumärken")
@@ -274,51 +331,58 @@ struct SocialView: View {
         .background(Color.white)
     }
     
-    private var proUpgradeBanner: some View {
-        Button(action: {
-            showPaywall = true
-        }) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Uppgradera till Pro")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Få alla premiumfunktioner och bonus-XP.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.75))
+    private var bookLessonInlineSection: some View {
+        Button {
+            // Navigate to Lessons tab (index 3)
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
+        } label: {
+            HStack(spacing: 16) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.green.opacity(0.8), Color.green],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                    
+                    Image(systemName: "figure.golf")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
                 }
-                .foregroundColor(.white)
+                
+                // Text
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Boka en lektion")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.black)
+                    
+                    Text("Hitta en golftränare nära dig")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
                 
                 Spacer()
                 
-                Image("41")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 42, height: 42)
+                // Arrow
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.gray)
             }
-            .padding(.vertical, 14)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+            )
             .padding(.horizontal, 16)
-            .background(Color.black)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
         }
         .buttonStyle(.plain)
-    }
-    
-    private var proBadgeButton: some View {
-        Button(action: {
-            showPaywall = true
-        }) {
-            Image("41")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 36, height: 36)
-                .padding(10)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Uppgradera till Pro")
+        .padding(.vertical, 16)
+        .background(Color(.systemGray6))
     }
     
     private func toggleRecommendedFollow(for userId: String) {
@@ -401,7 +465,6 @@ struct SocialPostCard: View {
     @State private var showLikesList = false
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject var viewModel: SocialViewModel
-    @State private var loadLikersTask: Task<Void, Never>?
     
     init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, viewModel: SocialViewModel) {
         self.post = post
@@ -453,20 +516,11 @@ struct SocialPostCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
-        .onAppear {
-            // Cancel any existing task
-            loadLikersTask?.cancel()
-            
-            // Only fetch if we have likes to show
-            if likeCount > 0 {
-                loadLikersTask = Task {
-                    await loadTopLikers()
-                }
+        .task(id: post.id) {
+            // Only fetch if we have likes and haven't loaded yet
+            if likeCount > 0 && topLikers.isEmpty {
+                await loadTopLikers()
             }
-        }
-        .onDisappear {
-            loadLikersTask?.cancel()
-            loadLikersTask = nil
         }
         .onChange(of: post.likeCount) { newValue in
             likeCount = newValue ?? likeCount
@@ -1350,15 +1404,36 @@ class SocialViewModel: ObservableObject {
         }
     }
 
-    func loadPostsForUser(userId targetUserId: String, viewerId: String) async {
+    private var lastUserPostsLoad: Date?
+    private var lastUserPostsUserId: String?
+    private let userPostsThrottle: TimeInterval = 30
+    
+    func loadPostsForUser(userId targetUserId: String, viewerId: String, force: Bool = false) async {
         currentUserId = viewerId
-        isLoading = true
+        
+        // Use cached data if recent and same user
+        if !force,
+           let lastLoad = lastUserPostsLoad,
+           let lastUserId = lastUserPostsUserId,
+           lastUserId == targetUserId,
+           Date().timeIntervalSince(lastLoad) < userPostsThrottle,
+           !posts.isEmpty {
+            return
+        }
+        
+        // Only show loading if we have no data
+        if posts.isEmpty {
+            isLoading = true
+        }
+        
         do {
-            let posts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
+            let fetchedPosts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
             await MainActor.run {
-                self.posts = posts
+                self.posts = fetchedPosts
                 self.isLoading = false
-                self.prefetchAvatars(for: posts)
+                self.lastUserPostsLoad = Date()
+                self.lastUserPostsUserId = targetUserId
+                self.prefetchAvatars(for: fetchedPosts)
             }
         } catch is CancellationError {
             await MainActor.run { self.isLoading = false }
@@ -1369,16 +1444,7 @@ class SocialViewModel: ObservableObject {
     }
     
     func refreshPostsForUser(userId targetUserId: String, viewerId: String) async {
-        currentUserId = viewerId
-        do {
-            let posts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
-            await MainActor.run {
-                self.posts = posts
-                self.prefetchAvatars(for: posts)
-            }
-        } catch {
-            print("⚠️ Could not refresh posts for user \(targetUserId): \(error)")
-        }
+        await loadPostsForUser(userId: targetUserId, viewerId: viewerId, force: true)
     }
     
     private func enrichAuthorMetadataIfNeeded() async {
@@ -1800,6 +1866,50 @@ struct GymExercisesListView: View {
                 )
                 .clipped()
         }
+    }
+}
+
+// MARK: - Empty State User Card
+
+struct EmptyStateUserCard: View {
+    let user: UserSearchResult
+    let isFollowing: Bool
+    let onFollowToggle: () -> Void
+    @State private var isProcessing = false
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            NavigationLink(destination: UserProfileView(userId: user.id)) {
+                ProfileImage(url: user.avatarUrl, size: 70)
+            }
+            
+            Text(user.name)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.black)
+                .lineLimit(1)
+            
+            Button(action: {
+                guard !isProcessing else { return }
+                isProcessing = true
+                onFollowToggle()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isProcessing = false
+                }
+            }) {
+                Text(isFollowing ? "Följer" : "Följ")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isFollowing ? .gray : .white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(isFollowing ? Color(.systemGray5) : Color.black)
+                    .cornerRadius(10)
+            }
+            .disabled(isProcessing)
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
     }
 }
 

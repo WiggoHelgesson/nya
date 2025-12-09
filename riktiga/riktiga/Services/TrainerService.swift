@@ -30,6 +30,29 @@ final class TrainerService {
             throw error
         }
     }
+
+    // MARK: - Fetch Pending Trainers (for admin)
+    func fetchPendingTrainers() async throws -> [GolfTrainer] {
+        print("📥 Fetching pending trainer profiles...")
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            let result: [GolfTrainer] = try await supabase.database
+                .from("trainer_profiles")
+                .select()
+                .eq("is_active", value: false)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            print("✅ Fetched \(result.count) pending trainers")
+            return result
+        } catch {
+            print("❌ Failed to fetch pending trainers: \(error)")
+            throw error
+        }
+    }
     
     // MARK: - Create Trainer Profile
     
@@ -39,7 +62,9 @@ final class TrainerService {
         hourlyRate: Int,
         handicap: Int,
         latitude: Double,
-        longitude: Double
+        longitude: Double,
+        serviceRadiusKm: Double = 10.0,
+        isActive: Bool = false
     ) async throws -> GolfTrainer {
         print("🏌️ Creating trainer profile...")
         
@@ -48,6 +73,14 @@ final class TrainerService {
         }
         
         try await AuthSessionManager.shared.ensureValidSession()
+        
+        // Check if user already has a trainer profile
+        let existing: [GolfTrainer] = try await supabase.database
+            .from("trainer_profiles")
+            .select()
+            .eq("user_id", value: userId)
+            .execute()
+            .value
         
         // Get user's avatar URL
         let profile = try? await supabase.database
@@ -60,16 +93,47 @@ final class TrainerService {
         
         let avatarUrl = profile?["avatar_url"]
         
-        let params: [String: AnyEncodable] = [
-            "user_id": AnyEncodable(userId.uuidString),
-            "name": AnyEncodable(name),
-            "description": AnyEncodable(description),
-            "hourly_rate": AnyEncodable(hourlyRate),
-            "handicap": AnyEncodable(handicap),
-            "latitude": AnyEncodable(latitude),
-            "longitude": AnyEncodable(longitude),
-            "avatar_url": AnyEncodable(avatarUrl),
-            "is_active": AnyEncodable(true)
+        if let existingTrainer = existing.first {
+            // Update existing profile instead of creating new
+            print("📝 Updating existing trainer profile: \(existingTrainer.id)")
+            
+            let updateParams: [String: DynamicEncodable] = [
+                "name": DynamicEncodable(name),
+                "description": DynamicEncodable(description),
+                "hourly_rate": DynamicEncodable(hourlyRate),
+                "handicap": DynamicEncodable(handicap),
+                "latitude": DynamicEncodable(latitude),
+                "longitude": DynamicEncodable(longitude),
+                "avatar_url": DynamicEncodable(avatarUrl),
+                "is_active": DynamicEncodable(isActive),
+                "service_radius_km": DynamicEncodable(serviceRadiusKm)
+            ]
+            
+            let result: GolfTrainer = try await supabase.database
+                .from("trainer_profiles")
+                .update(updateParams)
+                .eq("id", value: existingTrainer.id)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            print("✅ Updated trainer profile: \(result.id)")
+            return result
+        }
+        
+        // Create new profile
+        let params: [String: DynamicEncodable] = [
+            "user_id": DynamicEncodable(userId.uuidString),
+            "name": DynamicEncodable(name),
+            "description": DynamicEncodable(description),
+            "hourly_rate": DynamicEncodable(hourlyRate),
+            "handicap": DynamicEncodable(handicap),
+            "latitude": DynamicEncodable(latitude),
+            "longitude": DynamicEncodable(longitude),
+            "avatar_url": DynamicEncodable(avatarUrl),
+            "is_active": DynamicEncodable(isActive),
+            "service_radius_km": DynamicEncodable(serviceRadiusKm)
         ]
         
         let result: GolfTrainer = try await supabase.database
@@ -100,15 +164,15 @@ final class TrainerService {
         
         try await AuthSessionManager.shared.ensureValidSession()
         
-        var params: [String: AnyEncodable] = [:]
+        var params: [String: DynamicEncodable] = [:]
         
-        if let name = name { params["name"] = AnyEncodable(name) }
-        if let description = description { params["description"] = AnyEncodable(description) }
-        if let hourlyRate = hourlyRate { params["hourly_rate"] = AnyEncodable(hourlyRate) }
-        if let handicap = handicap { params["handicap"] = AnyEncodable(handicap) }
-        if let latitude = latitude { params["latitude"] = AnyEncodable(latitude) }
-        if let longitude = longitude { params["longitude"] = AnyEncodable(longitude) }
-        if let isActive = isActive { params["is_active"] = AnyEncodable(isActive) }
+        if let name = name { params["name"] = DynamicEncodable(name) }
+        if let description = description { params["description"] = DynamicEncodable(description) }
+        if let hourlyRate = hourlyRate { params["hourly_rate"] = DynamicEncodable(hourlyRate) }
+        if let handicap = handicap { params["handicap"] = DynamicEncodable(handicap) }
+        if let latitude = latitude { params["latitude"] = DynamicEncodable(latitude) }
+        if let longitude = longitude { params["longitude"] = DynamicEncodable(longitude) }
+        if let isActive = isActive { params["is_active"] = DynamicEncodable(isActive) }
         
         try await supabase.database
             .from("trainer_profiles")
@@ -119,6 +183,15 @@ final class TrainerService {
         print("✅ Updated trainer profile")
     }
     
+    // MARK: - Approve / Reject Trainer (admin)
+    func approveTrainer(trainerId: UUID) async throws {
+        try await updateTrainerProfile(trainerId: trainerId, isActive: true)
+    }
+    
+    func rejectTrainer(trainerId: UUID) async throws {
+        try await updateTrainerProfile(trainerId: trainerId, isActive: false)
+    }
+
     // MARK: - Check if User is Trainer
     
     func isUserTrainer() async throws -> Bool {
@@ -128,10 +201,12 @@ final class TrainerService {
         
         try await AuthSessionManager.shared.ensureValidSession()
         
+        // Only return true if trainer profile exists AND is active
         let result: [GolfTrainer] = try await supabase.database
             .from("trainer_profiles")
             .select()
             .eq("user_id", value: userId)
+            .eq("is_active", value: true)
             .execute()
             .value
         
@@ -156,6 +231,194 @@ final class TrainerService {
         
         return result.first
     }
+    
+    // MARK: - Booking Functions
+    
+    func createBooking(trainerId: UUID, message: String) async throws -> UUID {
+        print("📅 Creating booking request...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        guard let userId = try? await supabase.auth.session.user.id else {
+            throw TrainerServiceError.notAuthenticated
+        }
+        
+        // Insert directly into trainer_bookings table
+        let bookingData: [String: String] = [
+            "trainer_id": trainerId.uuidString,
+            "student_id": userId.uuidString,
+            "message": message
+        ]
+        
+        let booking: TrainerBooking = try await supabase.database
+            .from("trainer_bookings")
+            .insert(bookingData)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        // Also insert first message
+        let messageData: [String: String] = [
+            "booking_id": booking.id.uuidString,
+            "sender_id": userId.uuidString,
+            "message": message
+        ]
+        
+        try await supabase.database
+            .from("booking_messages")
+            .insert(messageData)
+            .execute()
+        
+        print("✅ Booking created: \(booking.id)")
+        return booking.id
+    }
+    
+    func getBookingsForTrainer() async throws -> [TrainerBooking] {
+        print("📅 Fetching bookings for trainer...")
+        
+        guard let trainerProfile = try await getUserTrainerProfile() else {
+            return []
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerBooking] = try await supabase.database
+            .from("trainer_bookings_with_users")
+            .select()
+            .eq("trainer_id", value: trainerProfile.id)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        print("✅ Fetched \(result.count) bookings")
+        return result
+    }
+    
+    func getBookingsForStudent() async throws -> [TrainerBooking] {
+        print("📅 Fetching bookings for student...")
+        
+        guard let userId = try? await supabase.auth.session.user.id else {
+            return []
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerBooking] = try await supabase.database
+            .from("trainer_bookings_with_users")
+            .select()
+            .eq("student_id", value: userId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        print("✅ Fetched \(result.count) bookings")
+        return result
+    }
+    
+    func updateBookingStatus(bookingId: UUID, status: BookingStatus, response: String? = nil) async throws {
+        print("📅 Updating booking status to \(status.rawValue)...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var params: [String: DynamicEncodable] = [
+            "status": DynamicEncodable(status.rawValue)
+        ]
+        
+        if let response = response {
+            params["trainer_response"] = DynamicEncodable(response)
+        }
+        
+        try await supabase.database
+            .from("trainer_bookings")
+            .update(params)
+            .eq("id", value: bookingId)
+            .execute()
+        
+        print("✅ Booking status updated")
+    }
+    
+    func getPendingBookingsCount() async throws -> Int {
+        guard let trainerProfile = try await getUserTrainerProfile() else {
+            return 0
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerBooking] = try await supabase.database
+            .from("trainer_bookings")
+            .select()
+            .eq("trainer_id", value: trainerProfile.id)
+            .eq("status", value: "pending")
+            .execute()
+            .value
+        
+        return result.count
+    }
+    
+    // MARK: - Chat Functions
+    
+    func getMessagesForBooking(bookingId: UUID) async throws -> [BookingMessage] {
+        print("💬 Fetching messages for booking \(bookingId)...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [BookingMessage] = try await supabase.database
+            .from("booking_messages_with_users")
+            .select()
+            .eq("booking_id", value: bookingId)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+        
+        print("✅ Fetched \(result.count) messages")
+        return result
+    }
+    
+    func sendMessage(bookingId: UUID, message: String) async throws -> UUID {
+        print("💬 Sending message...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        guard let userId = try? await supabase.auth.session.user.id else {
+            throw TrainerServiceError.notAuthenticated
+        }
+        
+        // Insert directly into booking_messages table
+        let insertData: [String: String] = [
+            "booking_id": bookingId.uuidString,
+            "sender_id": userId.uuidString,
+            "message": message
+        ]
+        
+        let result: BookingMessage = try await supabase.database
+            .from("booking_messages")
+            .insert(insertData)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        print("✅ Message sent: \(result.id)")
+        return result.id
+    }
+    
+    func markMessagesAsRead(bookingId: UUID) async throws {
+        guard let userId = try? await supabase.auth.session.user.id else {
+            return
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase.database
+            .from("booking_messages")
+            .update(["is_read": true])
+            .eq("booking_id", value: bookingId)
+            .neq("sender_id", value: userId)
+            .execute()
+        
+        print("✅ Messages marked as read")
+    }
 }
 
 enum TrainerServiceError: Error, LocalizedError {
@@ -172,16 +435,550 @@ enum TrainerServiceError: Error, LocalizedError {
     }
 }
 
-// Helper for encoding any value
-struct AnyEncodable: Encodable {
-    private let _encode: (Encoder) throws -> Void
+enum BookingStatus: String, Codable {
+    case pending = "pending"
+    case accepted = "accepted"
+    case declined = "declined"
+    case cancelled = "cancelled"
     
-    init<T: Encodable>(_ wrapped: T) {
-        _encode = wrapped.encode
+    var displayName: String {
+        switch self {
+        case .pending: return "Väntar"
+        case .accepted: return "Godkänd"
+        case .declined: return "Nekad"
+        case .cancelled: return "Avbokad"
+        }
     }
     
-    func encode(to encoder: Encoder) throws {
-        try _encode(encoder)
+    var color: String {
+        switch self {
+        case .pending: return "orange"
+        case .accepted: return "green"
+        case .declined: return "red"
+        case .cancelled: return "gray"
+        }
+    }
+}
+
+struct TrainerBooking: Identifiable, Codable {
+    let id: UUID
+    let trainerId: UUID
+    let studentId: UUID
+    let message: String
+    let status: String
+    let trainerResponse: String?
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    // From view
+    let trainerUserID: UUID?
+    let trainerName: String?
+    let trainerAvatarUrl: String?
+    let hourlyRate: Int?
+    let studentUsername: String?
+    let studentAvatarUrl: String?
+    let unreadCount: Int?
+    
+    var bookingStatus: BookingStatus {
+        BookingStatus(rawValue: status) ?? .pending
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case trainerId = "trainer_id"
+        case studentId = "student_id"
+        case message
+        case status
+        case trainerResponse = "trainer_response"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case trainerUserID = "trainer_user_id"
+        case trainerName = "trainer_name"
+        case trainerAvatarUrl = "trainer_avatar_url"
+        case hourlyRate = "hourly_rate"
+        case studentUsername = "student_username"
+        case studentAvatarUrl = "student_avatar_url"
+        case unreadCount = "unread_count"
+    }
+}
+
+struct BookingMessage: Identifiable, Codable {
+    let id: UUID
+    let bookingId: UUID
+    let senderId: UUID
+    let message: String
+    let isRead: Bool
+    let createdAt: Date?
+    
+    // From view
+    let senderUsername: String?
+    let senderAvatarUrl: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case bookingId = "booking_id"
+        case senderId = "sender_id"
+        case message
+        case isRead = "is_read"
+        case createdAt = "created_at"
+        case senderUsername = "sender_username"
+        case senderAvatarUrl = "sender_avatar_url"
+    }
+}
+
+// MARK: - Extended Trainer Service
+
+extension TrainerService {
+    
+    // MARK: - Fetch Specialties Catalog
+    
+    func fetchSpecialtiesCatalog() async throws -> [TrainerSpecialty] {
+        print("🏌️ Fetching specialties catalog...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerSpecialty] = try await supabase
+            .from("trainer_specialties_catalog")
+            .select()
+            .execute()
+            .value
+        
+        print("✅ Fetched \(result.count) specialties")
+        return result
+    }
+    
+    // MARK: - Fetch Trainer's Specialties
+    
+    func fetchTrainerSpecialties(trainerId: UUID) async throws -> [TrainerSpecialty] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        struct SpecialtyJoin: Decodable {
+            let specialty_id: UUID
+            let trainer_specialties_catalog: TrainerSpecialty
+        }
+        
+        let result: [SpecialtyJoin] = try await supabase
+            .from("trainer_specialties")
+            .select("specialty_id, trainer_specialties_catalog(*)")
+            .eq("trainer_id", value: trainerId)
+            .execute()
+            .value
+        
+        return result.map { $0.trainer_specialties_catalog }
+    }
+    
+    // MARK: - Save Trainer Specialties
+    
+    func saveTrainerSpecialties(trainerId: UUID, specialtyIds: [UUID]) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        // Delete existing
+        try await supabase
+            .from("trainer_specialties")
+            .delete()
+            .eq("trainer_id", value: trainerId)
+            .execute()
+        
+        // Insert new
+        for specialtyId in specialtyIds {
+            let data: [String: String] = [
+                "trainer_id": trainerId.uuidString,
+                "specialty_id": specialtyId.uuidString
+            ]
+            try await supabase
+                .from("trainer_specialties")
+                .insert(data)
+                .execute()
+        }
+        
+        print("✅ Saved \(specialtyIds.count) specialties")
+    }
+    
+    // MARK: - Fetch Lesson Types
+    
+    func fetchLessonTypes(trainerId: UUID) async throws -> [TrainerLessonType] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerLessonType] = try await supabase
+            .from("trainer_lesson_types")
+            .select()
+            .eq("trainer_id", value: trainerId)
+            .eq("is_active", value: true)
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Save Lesson Type
+    
+    func saveLessonType(trainerId: UUID, name: String, description: String?, durationMinutes: Int, price: Int) async throws -> TrainerLessonType {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let data: [String: DynamicEncodable] = [
+            "trainer_id": DynamicEncodable(trainerId.uuidString),
+            "name": DynamicEncodable(name),
+            "description": DynamicEncodable(description ?? ""),
+            "duration_minutes": DynamicEncodable(durationMinutes),
+            "price": DynamicEncodable(price),
+            "is_active": DynamicEncodable(true)
+        ]
+        
+        let result: TrainerLessonType = try await supabase
+            .from("trainer_lesson_types")
+            .insert(data)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Delete Lesson Type
+    
+    func deleteLessonType(lessonTypeId: UUID) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("trainer_lesson_types")
+            .delete()
+            .eq("id", value: lessonTypeId)
+            .execute()
+    }
+    
+    // MARK: - Fetch Certifications
+    
+    func fetchCertifications(trainerId: UUID) async throws -> [TrainerCertification] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerCertification] = try await supabase
+            .from("trainer_certifications")
+            .select()
+            .eq("trainer_id", value: trainerId)
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Save Certification
+    
+    func saveCertification(trainerId: UUID, name: String, issuer: String?, yearObtained: Int?) async throws -> TrainerCertification {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var data: [String: DynamicEncodable] = [
+            "trainer_id": DynamicEncodable(trainerId.uuidString),
+            "name": DynamicEncodable(name)
+        ]
+        
+        if let issuer = issuer {
+            data["issuer"] = DynamicEncodable(issuer)
+        }
+        if let year = yearObtained {
+            data["year_obtained"] = DynamicEncodable(year)
+        }
+        
+        let result: TrainerCertification = try await supabase
+            .from("trainer_certifications")
+            .insert(data)
+            .select()
+            .single()
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Delete Certification
+    
+    func deleteCertification(certificationId: UUID) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("trainer_certifications")
+            .delete()
+            .eq("id", value: certificationId)
+            .execute()
+    }
+    
+    // MARK: - Fetch Reviews
+    
+    func fetchReviews(trainerId: UUID) async throws -> [TrainerReview] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerReview] = try await supabase
+            .from("trainer_reviews")
+            .select("*, profiles!reviewer_id(username, avatar_url)")
+            .eq("trainer_id", value: trainerId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Submit Review
+    
+    func submitReview(trainerId: UUID, bookingId: UUID?, rating: Int, title: String?, comment: String?) async throws {
+        guard let userId = try? await supabase.auth.session.user.id else {
+            throw TrainerServiceError.notAuthenticated
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var data: [String: DynamicEncodable] = [
+            "trainer_id": DynamicEncodable(trainerId.uuidString),
+            "reviewer_id": DynamicEncodable(userId.uuidString),
+            "rating": DynamicEncodable(rating),
+            "is_verified": DynamicEncodable(bookingId != nil)
+        ]
+        
+        if let bookingId = bookingId {
+            data["booking_id"] = DynamicEncodable(bookingId.uuidString)
+        }
+        if let title = title {
+            data["title"] = DynamicEncodable(title)
+        }
+        if let comment = comment {
+            data["comment"] = DynamicEncodable(comment)
+        }
+        
+        try await supabase
+            .from("trainer_reviews")
+            .insert(data)
+            .execute()
+        
+        print("✅ Review submitted")
+    }
+    
+    // MARK: - Fetch Golf Courses
+    
+    func fetchGolfCourses(nearLatitude: Double? = nil, nearLongitude: Double? = nil, limit: Int = 20) async throws -> [GolfCourse] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var query = supabase
+            .from("golf_courses")
+            .select()
+            .limit(limit)
+        
+        // TODO: Add distance sorting if coordinates provided
+        
+        let result: [GolfCourse] = try await query
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Search Trainers
+    
+    func searchTrainers(filter: TrainerSearchFilter) async throws -> [GolfTrainer] {
+        print("🔍 Searching trainers with filter...")
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        // Build filter query
+        var query = supabase
+            .from("trainer_profiles")
+            .select()
+            .eq("is_active", value: true)
+        
+        // Apply filters
+        if !filter.searchText.isEmpty {
+            query = query.or("name.ilike.%\(filter.searchText)%,city.ilike.%\(filter.searchText)%,club_affiliation.ilike.%\(filter.searchText)%")
+        }
+        
+        if let minPrice = filter.minPrice {
+            query = query.gte("hourly_rate", value: minPrice)
+        }
+        
+        if let maxPrice = filter.maxPrice {
+            query = query.lte("hourly_rate", value: maxPrice)
+        }
+        
+        if let minRating = filter.minRating {
+            query = query.gte("average_rating", value: minRating)
+        }
+        
+        if let city = filter.city, !city.isEmpty {
+            query = query.ilike("city", pattern: "%\(city)%")
+        }
+        
+        // Fetch all matching trainers
+        let allTrainers: [GolfTrainer] = try await query
+            .limit(100)
+            .execute()
+            .value
+        
+        // Sort in memory based on sortBy
+        var sortedTrainers = allTrainers
+        switch filter.sortBy {
+        case .rating:
+            sortedTrainers.sort { ($0.averageRating ?? 0) > ($1.averageRating ?? 0) }
+        case .price:
+            sortedTrainers.sort { $0.hourlyRate < $1.hourlyRate }
+        case .reviews:
+            sortedTrainers.sort { ($0.totalReviews ?? 0) > ($1.totalReviews ?? 0) }
+        case .nearest:
+            // Keep original order for now
+            break
+        }
+        
+        print("✅ Found \(sortedTrainers.count) trainers")
+        return Array(sortedTrainers.prefix(50))
+    }
+    
+    // MARK: - Fetch Availability
+    
+    func fetchAvailability(trainerId: UUID) async throws -> [TrainerAvailability] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TrainerAvailability] = try await supabase
+            .from("trainer_availability")
+            .select()
+            .eq("trainer_id", value: trainerId)
+            .eq("is_active", value: true)
+            .order("day_of_week", ascending: true)
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    // MARK: - Save Availability
+    
+    func saveAvailability(trainerId: UUID, dayOfWeek: Int, startTime: String, endTime: String) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let data: [String: DynamicEncodable] = [
+            "trainer_id": DynamicEncodable(trainerId.uuidString),
+            "day_of_week": DynamicEncodable(dayOfWeek),
+            "start_time": DynamicEncodable(startTime),
+            "end_time": DynamicEncodable(endTime),
+            "is_active": DynamicEncodable(true)
+        ]
+        
+        try await supabase
+            .from("trainer_availability")
+            .insert(data)
+            .execute()
+    }
+    
+    // MARK: - Delete Availability
+    
+    func deleteAvailability(availabilityId: UUID) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("trainer_availability")
+            .delete()
+            .eq("id", value: availabilityId)
+            .execute()
+    }
+    
+    // MARK: - Create Extended Booking
+    
+    func createExtendedBooking(
+        trainerId: UUID,
+        lessonTypeId: UUID,
+        scheduledDate: Date,
+        scheduledTime: String,
+        durationMinutes: Int,
+        price: Int,
+        locationType: BookingLocationType,
+        golfCourseId: UUID? = nil,
+        customLocationName: String? = nil,
+        customLocationLat: Double? = nil,
+        customLocationLng: Double? = nil,
+        message: String? = nil,
+        stripePaymentId: String? = nil
+    ) async throws -> UUID {
+        guard let userId = try? await supabase.auth.session.user.id else {
+            throw TrainerServiceError.notAuthenticated
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        var data: [String: DynamicEncodable] = [
+            "trainer_id": DynamicEncodable(trainerId.uuidString),
+            "student_id": DynamicEncodable(userId.uuidString),
+            "lesson_type_id": DynamicEncodable(lessonTypeId.uuidString),
+            "scheduled_date": DynamicEncodable(dateFormatter.string(from: scheduledDate)),
+            "scheduled_time": DynamicEncodable(scheduledTime),
+            "duration_minutes": DynamicEncodable(durationMinutes),
+            "price": DynamicEncodable(price),
+            "location_type": DynamicEncodable(locationType.rawValue),
+            "booking_status": DynamicEncodable("pending"),
+            "payment_status": DynamicEncodable(stripePaymentId != nil ? "paid" : "pending")
+        ]
+        
+        if let golfCourseId = golfCourseId {
+            data["golf_course_id"] = DynamicEncodable(golfCourseId.uuidString)
+        }
+        if let customLocationName = customLocationName {
+            data["custom_location_name"] = DynamicEncodable(customLocationName)
+        }
+        if let lat = customLocationLat {
+            data["custom_location_lat"] = DynamicEncodable(lat)
+        }
+        if let lng = customLocationLng {
+            data["custom_location_lng"] = DynamicEncodable(lng)
+        }
+        if let message = message {
+            data["message"] = DynamicEncodable(message)
+        }
+        if let stripePaymentId = stripePaymentId {
+            data["stripe_payment_id"] = DynamicEncodable(stripePaymentId)
+        }
+        
+        struct BookingResponse: Decodable {
+            let id: UUID
+        }
+        
+        let result: BookingResponse = try await supabase
+            .from("trainer_bookings")
+            .insert(data)
+            .select("id")
+            .single()
+            .execute()
+            .value
+        
+        print("✅ Extended booking created: \(result.id)")
+        return result.id
+    }
+    
+    // MARK: - Update Trainer Extended Profile
+    
+    func updateTrainerExtendedProfile(
+        trainerId: UUID,
+        city: String? = nil,
+        bio: String? = nil,
+        experienceYears: Int? = nil,
+        clubAffiliation: String? = nil
+    ) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var params: [String: DynamicEncodable] = [:]
+        
+        if let city = city { params["city"] = DynamicEncodable(city) }
+        if let bio = bio { params["bio"] = DynamicEncodable(bio) }
+        if let experienceYears = experienceYears { params["experience_years"] = DynamicEncodable(experienceYears) }
+        if let clubAffiliation = clubAffiliation { params["club_affiliation"] = DynamicEncodable(clubAffiliation) }
+        
+        guard !params.isEmpty else { return }
+        
+        try await supabase
+            .from("trainer_profiles")
+            .update(params)
+            .eq("id", value: trainerId)
+            .execute()
+        
+        print("✅ Updated extended profile")
     }
 }
 

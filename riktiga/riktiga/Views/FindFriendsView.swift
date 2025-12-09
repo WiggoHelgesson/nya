@@ -9,6 +9,7 @@ struct FindFriendsView: View {
     @State private var recommendedUsers: [UserSearchResult] = []
     @State private var isLoadingRecommended = false
     @State private var recommendedFollowingStatus: [String: Bool] = [:]
+    @State private var searchDebounceTask: Task<Void, Never>?
     
     var body: some View {
         NavigationStack {
@@ -20,13 +21,36 @@ struct FindFriendsView: View {
                     
                     TextField("Sök efter användare...", text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                         .onChange(of: searchText) { _, newValue in
-                            if newValue.count >= 3 {
-                                performSearch()
+                            // Cancel previous search task
+                            searchDebounceTask?.cancel()
+                            
+                            if newValue.count >= 2 {
+                                // Debounce: wait 300ms before searching
+                                searchDebounceTask = Task {
+                                    try? await Task.sleep(nanoseconds: 300_000_000)
+                                    if !Task.isCancelled {
+                                        await MainActor.run {
+                                            performSearch()
+                                        }
+                                    }
+                                }
                             } else {
                                 findFriendsViewModel.searchResults = []
                             }
                         }
+                    
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                            findFriendsViewModel.searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
                 }
                 .padding(12)
                 .background(Color(.systemGray6))
@@ -37,12 +61,12 @@ struct FindFriendsView: View {
                 // Results
                 if !searchText.isEmpty {
                     // Show search results when searching
-                    if findFriendsViewModel.isLoading {
+                    if findFriendsViewModel.isLoading && findFriendsViewModel.searchResults.isEmpty {
                         Spacer()
                         ProgressView("Söker...")
                             .foregroundColor(.gray)
                         Spacer()
-                    } else if findFriendsViewModel.searchResults.isEmpty {
+                    } else if findFriendsViewModel.searchResults.isEmpty && !findFriendsViewModel.isLoading {
                         Spacer()
                         VStack(spacing: 16) {
                             Image(systemName: "person.crop.circle.badge.questionmark")
@@ -56,30 +80,19 @@ struct FindFriendsView: View {
                         }
                         Spacer()
                     } else {
-                        // Show cache indicator if using cached data
-                        if findFriendsViewModel.isUsingCache {
-                            HStack {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .foregroundColor(.blue)
-                                Text("Visar sparad data")
-                                    .font(.caption)
-                                    .foregroundColor(.blue)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                        }
-                        
                         ScrollView {
                             LazyVStack(spacing: 12) {
                                 ForEach(findFriendsViewModel.searchResults) { user in
-                                    UserSearchCard(
-                                        user: user,
-                                        isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
-                                        onFollowToggle: {
-                                            toggleFollow(userId: user.id)
-                                        }
-                                    )
+                                    NavigationLink(destination: UserProfileView(userId: user.id)) {
+                                        UserSearchCard(
+                                            user: user,
+                                            isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
+                                            onFollowToggle: {
+                                                toggleFollow(userId: user.id)
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(16)
@@ -87,7 +100,7 @@ struct FindFriendsView: View {
                     }
                 } else {
                     // Show recommended users when search is empty
-                    if isLoadingRecommended {
+                    if isLoadingRecommended && recommendedUsers.isEmpty {
                         Spacer()
                         ProgressView("Laddar rekommendationer...")
                             .foregroundColor(.gray)
@@ -125,13 +138,16 @@ struct FindFriendsView: View {
                                 .padding(.bottom, 8)
                                 
                                 ForEach(recommendedUsers) { user in
-                                    UserSearchCard(
-                                        user: user,
-                                        isFollowing: recommendedFollowingStatus[user.id] ?? false,
-                                        onFollowToggle: {
-                                            toggleRecommendedFollow(userId: user.id)
-                                        }
-                                    )
+                                    NavigationLink(destination: UserProfileView(userId: user.id)) {
+                                        UserSearchCard(
+                                            user: user,
+                                            isFollowing: recommendedFollowingStatus[user.id] ?? false,
+                                            onFollowToggle: {
+                                                toggleRecommendedFollow(userId: user.id)
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(.bottom, 16)
@@ -148,29 +164,41 @@ struct FindFriendsView: View {
                     }
                 }
             }
-            .onAppear {
+            .task {
+                await loadFollowingIds()
                 loadRecommendedUsers()
             }
         }
+    }
+    
+    private func loadFollowingIds() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        await findFriendsViewModel.loadFollowingIds(userId: userId)
     }
     
     private func loadRecommendedUsers() {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         isLoadingRecommended = true
+        
+        // Load from cache immediately
         if let cached = AppCacheManager.shared.getCachedRecommendedUsers(userId: userId) {
             self.recommendedUsers = cached
+            // Update follow status from already loaded followingIds
+            for user in cached {
+                recommendedFollowingStatus[user.id] = findFriendsViewModel.followingIds.contains(user.id)
+            }
             self.isLoadingRecommended = false
         }
+        
         Task {
             do {
                 let recommended = try await SocialService.shared.getRecommendedUsers(userId: userId, limit: 8)
                 
-                // Check follow status for each recommended user
+                // Use already loaded followingIds for fast status check
                 var followStatus: [String: Bool] = [:]
                 for user in recommended {
-                    let isFollowing = try await SocialService.shared.isFollowing(followerId: userId, followingId: user.id)
-                    followStatus[user.id] = isFollowing
+                    followStatus[user.id] = findFriendsViewModel.followingIds.contains(user.id)
                 }
                 
                 await MainActor.run {
@@ -211,6 +239,15 @@ struct FindFriendsView: View {
         
         let isCurrentlyFollowing = recommendedFollowingStatus[userId] ?? false
         
+        // Optimistic update
+        recommendedFollowingStatus[userId] = !isCurrentlyFollowing
+        findFriendsViewModel.followingStatus[userId] = !isCurrentlyFollowing
+        if isCurrentlyFollowing {
+            findFriendsViewModel.followingIds.remove(userId)
+        } else {
+            findFriendsViewModel.followingIds.insert(userId)
+        }
+        
         Task {
             do {
                 if isCurrentlyFollowing {
@@ -218,11 +255,18 @@ struct FindFriendsView: View {
                 } else {
                     try await SocialService.shared.followUser(followerId: currentUserId, followingId: userId)
                 }
-                
-                await MainActor.run {
-                    recommendedFollowingStatus[userId] = !isCurrentlyFollowing
-                }
+                NotificationCenter.default.post(name: .profileStatsUpdated, object: nil)
             } catch {
+                // Revert on error
+                await MainActor.run {
+                    recommendedFollowingStatus[userId] = isCurrentlyFollowing
+                    findFriendsViewModel.followingStatus[userId] = isCurrentlyFollowing
+                    if isCurrentlyFollowing {
+                        findFriendsViewModel.followingIds.insert(userId)
+                    } else {
+                        findFriendsViewModel.followingIds.remove(userId)
+                    }
+                }
                 print("❌ Error toggling follow: \(error)")
             }
         }
@@ -243,57 +287,62 @@ struct UserSearchCard: View {
             
             // User Info
             VStack(alignment: .leading, spacing: 4) {
-                Text(user.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(user.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
+                    
+                    // Chevron to indicate tappable
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.gray.opacity(0.6))
+                }
                 
-                Text("Användare")
-                    .font(.system(size: 14))
+                Text("@\(user.name.lowercased().replacingOccurrences(of: " ", with: ""))")
+                    .font(.system(size: 13))
                     .foregroundColor(.gray)
                     .lineLimit(1)
             }
             
             Spacer()
             
-            // Follow Button
+            // Follow Button - prevent navigation when tapping
             Button(action: {
                 guard !isProcessing else { return }
                 isProcessing = true
                 onFollowToggle()
                 
                 // Reset processing state after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     isProcessing = false
                 }
             }) {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     if isProcessing {
                         ProgressView()
-                            .scaleEffect(0.8)
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Image(systemName: isFollowing ? "person.badge.minus" : "person.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
+                            .scaleEffect(0.7)
+                            .progressViewStyle(CircularProgressViewStyle(tint: isFollowing ? .gray : .white))
                     }
                     
-                    Text(isFollowing ? "Avfölj" : "Följ")
-                        .font(.system(size: 14, weight: .medium))
+                    Text(isFollowing ? "Följer" : "Följ")
+                        .font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(isFollowing ? .gray : .white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isFollowing ? Color(.systemGray4) : Color.black)
+                        .fill(isFollowing ? Color(.systemGray5) : Color.black)
                 )
             }
+            .buttonStyle(.borderless) // Prevents NavigationLink from triggering
             .disabled(isProcessing)
         }
-        .padding(16)
+        .padding(14)
         .background(Color.white)
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
     }
 }
 
@@ -301,30 +350,43 @@ class FindFriendsViewModel: ObservableObject {
     @Published var searchResults: [UserSearchResult] = []
     @Published var isLoading = false
     @Published var followingStatus: [String: Bool] = [:]
-    @Published var isUsingCache = false
+    @Published var followingIds: Set<String> = []
     
     private let cacheManager = AppCacheManager.shared
     
+    // Load all following IDs once for fast status checks
+    func loadFollowingIds(userId: String) async {
+        do {
+            let ids = try await SocialService.shared.getFollowing(userId: userId)
+            await MainActor.run {
+                self.followingIds = Set(ids)
+                print("✅ Loaded \(ids.count) following IDs")
+            }
+        } catch {
+            print("❌ Error loading following IDs: \(error)")
+        }
+    }
+    
     func searchUsers(query: String, currentUserId: String) {
-        print("🔍 FindFriendsViewModel: Starting search for '\(query)' with userId '\(currentUserId)'")
+        print("🔍 FindFriendsViewModel: Starting search for '\(query)'")
         isLoading = true
+        
+        let lowercasedQuery = query.lowercased()
         
         // First, try to load from cache for instant display
         if let cachedUsers = cacheManager.getCachedAllUsers() {
             let filteredUsers = cachedUsers.filter { user in
-                user.name.lowercased().contains(query.lowercased())
+                user.name.lowercased().contains(lowercasedQuery)
             }
             
             if !filteredUsers.isEmpty {
-                DispatchQueue.main.async {
-                    self.searchResults = filteredUsers
-                    self.isLoading = false
-                    self.isUsingCache = true
-                    print("✅ Loaded \(filteredUsers.count) users from cache")
-                    
-                    // Check follow status for each user
-                    self.checkFollowStatus(for: filteredUsers, currentUserId: currentUserId)
+                self.searchResults = filteredUsers
+                // Use pre-loaded followingIds for instant status
+                for user in filteredUsers {
+                    self.followingStatus[user.id] = self.followingIds.contains(user.id)
                 }
+                self.isLoading = false
+                print("✅ Loaded \(filteredUsers.count) users from cache")
             }
         }
         
@@ -335,47 +397,22 @@ class FindFriendsViewModel: ObservableObject {
                 
                 await MainActor.run {
                     print("🔍 FindFriendsViewModel: Got \(results.count) results")
-                    // Only update if we got new data or cache was empty
-                    if self.searchResults.isEmpty || !self.isUsingCache {
-                        self.searchResults = results
-                    }
-                    self.isLoading = false
-                    self.isUsingCache = false
+                    self.searchResults = results
                     
-                    // Check follow status for each user
-                    self.checkFollowStatus(for: results, currentUserId: currentUserId)
+                    // Use pre-loaded followingIds for instant status
+                    for user in results {
+                        self.followingStatus[user.id] = self.followingIds.contains(user.id)
+                    }
+                    
+                    self.isLoading = false
                     
                     // Save all users to cache for future searches
                     self.cacheManager.saveAllUsers(results)
                 }
             } catch {
                 await MainActor.run {
-                    print("❌ FindFriendsViewModel: Error occurred, clearing results")
-                    if !self.isUsingCache {
-                        self.searchResults = []
-                    }
+                    print("❌ FindFriendsViewModel: Error: \(error)")
                     self.isLoading = false
-                    self.isUsingCache = false
-                }
-                print("❌ FindFriendsViewModel: Error searching users: \(error)")
-            }
-        }
-    }
-    
-    private func checkFollowStatus(for users: [UserSearchResult], currentUserId: String) {
-        Task {
-            for user in users {
-                do {
-                    let isFollowing = try await SocialService.shared.isFollowing(
-                        followerId: currentUserId,
-                        followingId: user.id
-                    )
-                    
-                    await MainActor.run {
-                        self.followingStatus[user.id] = isFollowing
-                    }
-                } catch {
-                    print("Error checking follow status for user \(user.id): \(error)")
                 }
             }
         }
@@ -383,6 +420,14 @@ class FindFriendsViewModel: ObservableObject {
     
     func toggleFollow(followerId: String, followingId: String) {
         let isCurrentlyFollowing = followingStatus[followingId] ?? false
+        
+        // Optimistic update
+        followingStatus[followingId] = !isCurrentlyFollowing
+        if isCurrentlyFollowing {
+            followingIds.remove(followingId)
+        } else {
+            followingIds.insert(followingId)
+        }
         
         Task {
             do {
@@ -394,13 +439,18 @@ class FindFriendsViewModel: ObservableObject {
                     print("✅ Followed user \(followingId)")
                 }
                 
-                await MainActor.run {
-                    self.followingStatus[followingId] = !isCurrentlyFollowing
-                    
-                    // Notify that profile stats should be updated
-                    NotificationCenter.default.post(name: .profileStatsUpdated, object: nil)
-                }
+                // Notify that profile stats should be updated
+                NotificationCenter.default.post(name: .profileStatsUpdated, object: nil)
             } catch {
+                // Revert on error
+                await MainActor.run {
+                    self.followingStatus[followingId] = isCurrentlyFollowing
+                    if isCurrentlyFollowing {
+                        self.followingIds.insert(followingId)
+                    } else {
+                        self.followingIds.remove(followingId)
+                    }
+                }
                 print("❌ Error toggling follow: \(error)")
             }
         }

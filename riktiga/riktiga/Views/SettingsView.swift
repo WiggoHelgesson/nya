@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showSubscriptionView = false
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
+    @State private var showAdmin = false
     
     var body: some View {
         NavigationStack {
@@ -165,6 +166,27 @@ struct SettingsView: View {
                         .cornerRadius(12)
                     }
 
+                    // MARK: - ADMIN Section
+                    if isAdmin {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("ADMIN")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 8)
+                            
+                            VStack(spacing: 0) {
+                                SettingsRow(
+                                    title: "Admin (ansökningar)",
+                                    icon: "chevron.right",
+                                    action: { showAdmin = true }
+                                )
+                            }
+                            .background(Color.white)
+                            .cornerRadius(12)
+                        }
+                    }
+
                     // MARK: - Radera konto Button
                     Button(action: {
                         showDeleteAccountConfirmation = true
@@ -226,6 +248,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showSubscriptionView) {
                 PresentPaywallView()
             }
+            .sheet(isPresented: $showAdmin) {
+                AdminTrainerApprovalsView()
+            }
             .task {
                 // Only load if not already loaded or loading
                 await revenueCatManager.syncAndRefresh()
@@ -243,6 +268,12 @@ struct SettingsView: View {
         }
     }
     
+    private var isAdmin: Bool {
+        let adminEmails: Set<String> = ["admin@updown.app", "wiggohelgesson@gmail.com", "info@wiggio.se", "info@bylito.se"]
+        let email = authViewModel.currentUser?.email ?? ""
+        return adminEmails.contains(email.lowercased())
+    }
+
     private func deleteAccount() async {
         isDeletingAccount = true
         

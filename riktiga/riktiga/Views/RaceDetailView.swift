@@ -263,10 +263,10 @@ struct RaceDetailView: View {
                     .getPublicURL(path: fileName)
                 
                 // Save to database
-                let memoryData: [String: AnyEncodable] = [
-                    "user_id": AnyEncodable(currentUserId),
-                    "race_id": AnyEncodable(race.id),
-                    "image_url": AnyEncodable(publicURL.absoluteString)
+                let memoryData: [String: DynamicEncodable] = [
+                    "user_id": DynamicEncodable(currentUserId),
+                    "race_id": DynamicEncodable(race.id),
+                    "image_url": DynamicEncodable(publicURL.absoluteString)
                 ]
                 
                 try await supabase

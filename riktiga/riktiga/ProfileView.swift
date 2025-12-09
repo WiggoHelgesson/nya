@@ -18,15 +18,23 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showPaywall = false
     @State private var showTrainerOnboarding = false
+    @State private var showTrainerDashboard = false
+    @State private var isTrainer = false
+    @State private var pendingBookingsCount = 0
     @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
     @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
     @State private var lastActivityFetch: Date?
     @State private var isUsingCachedWeeklyData = false
     @State private var selectedPost: SocialWorkoutPost?
+    @State private var lastTrainerCheck: Date?
+    @State private var lastStatsLoad: Date?
+    @State private var isInitialLoad = true
     
     private let cacheManager = AppCacheManager.shared
     private let weeklyDataThrottle: TimeInterval = 120
+    private let trainerCheckThrottle: TimeInterval = 30
+    private let statsLoadThrottle: TimeInterval = 60
     
     private func updatePersonalBestInfo() {
         let fiveKm = authViewModel.currentUser?.pb5kmMinutes
@@ -171,66 +179,64 @@ struct ProfileView: View {
                     .cornerRadius(12)
                     .border(Color.black, width: 2)
                     
-                    // MARK: - Action Buttons (3x1)
-                    HStack(spacing: 12) {
-                        ActionButton(
+                    // MARK: - Action Buttons (3x1 top row)
+                    HStack(spacing: 10) {
+                        ProfileCardButton(
                             icon: "cart.fill",
                             label: "Mina köp",
-                            action: {
-                                showMyPurchases = true
-                            }
+                            action: { showMyPurchases = true }
                         )
                         
-                        ActionButton(
+                        ProfileCardButton(
                             icon: "chart.bar.fill",
                             label: "Statistik",
-                            action: {
-                                showStatistics = true
-                            }
+                            action: { showStatistics = true }
                         )
                         
-                        ActionButton(
+                        ProfileCardButton(
                             icon: "person.badge.plus.fill",
                             label: "Hitta vänner",
-                            action: {
-                                showFindFriends = true
-                            }
+                            action: { showFindFriends = true }
                         )
                     }
                     
-                    // MARK: - Become Golf Trainer Button
-                    Button {
-                        showTrainerOnboarding = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "figure.golf")
-                                .font(.title2)
-                                .foregroundColor(.white)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Bli golftränare")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white)
-                                
-                                Text("Erbjud lektioner och tjäna pengar")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
+                    // MARK: - Golf Section (List style)
+                    let showGolfTrainerFeature = true
+                    if showGolfTrainerFeature {
+                        VStack(spacing: 0) {
+                            // Mina lektioner
+                            NavigationLink(destination: MyBookingsView()) {
+                                ProfileListRow(
+                                    icon: "message.badge",
+                                    title: "Mina lektioner",
+                                    subtitle: "Se dina bokade lektioner"
+                                )
                             }
                             
-                            Spacer()
+                            Divider()
+                                .padding(.leading, 56)
                             
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
+                            // Bli golftränare OR Mina bokningar
+                            if isTrainer {
+                                Button { showTrainerDashboard = true } label: {
+                                    ProfileListRow(
+                                        icon: "calendar.badge.clock",
+                                        title: "Mina bokningar",
+                                        subtitle: "Hantera lektionsförfrågningar",
+                                        badgeCount: pendingBookingsCount
+                                    )
+                                }
+                            } else {
+                                Button { showTrainerOnboarding = true } label: {
+                                    ProfileListRow(
+                                        icon: "figure.golf",
+                                        title: "Bli golftränare",
+                                        subtitle: "Erbjud lektioner och tjäna pengar"
+                                    )
+                                }
+                            }
                         }
-                        .padding(16)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.green, Color.green.opacity(0.8)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .background(Color.white)
                         .cornerRadius(12)
                     }
                     
@@ -244,13 +250,6 @@ struct ProfileView: View {
                     if isUsingCachedWeeklyData {
                         cachedStatsIndicator
                     }
-                    
-                    Divider()
-                        .background(Color(.systemGray4))
-                    
-                    // MARK: - Trophy Case Section
-                    TrophyCaseView(activityCount: activityCount, personalBests: personalBestInfo)
-                        .equatable()
                     
                     Divider()
                         .background(Color(.systemGray4))
@@ -313,15 +312,26 @@ struct ProfileView: View {
             .sheet(isPresented: $showTrainerOnboarding) {
                 TrainerOnboardingView()
             }
-            .onAppear {
+            .sheet(isPresented: $showTrainerDashboard) {
+                TrainerDashboardView()
+                    .onDisappear {
+                        // Force refresh trainer status after dashboard closes (in case user deactivated)
+                        checkIfUserIsTrainer(force: true)
+                    }
+            }
+            .task {
+                // Ensure session is valid before loading data
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid")
+                }
+                
                 updatePersonalBestInfo()
                 loadProfileStats()
                 loadWeeklyActivityData()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
-                loadProfileStats()
-            }
-            .onAppear {
+                checkIfUserIsTrainer()
+                
                 // Lyssna på profilbild uppdateringar
                 profileObserver = NotificationCenter.default.addObserver(
                     forName: .profileImageUpdated,
@@ -330,9 +340,24 @@ struct ProfileView: View {
                 ) { notification in
                     if let newImageUrl = notification.object as? String {
                         print("🔄 Profile image updated in UI: \(newImageUrl)")
-                        // Trigga UI-uppdatering genom att uppdatera authViewModel
                         authViewModel.objectWillChange.send()
                     }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
+                loadProfileStats(force: true)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshTrainerStatus"))) { notification in
+                // Check if the notification has immediate status info
+                if let userInfo = notification.userInfo,
+                   let immediateStatus = userInfo["isTrainer"] as? Bool {
+                    // Immediately update the UI
+                    self.isTrainer = immediateStatus
+                    self.pendingBookingsCount = 0
+                    self.lastTrainerCheck = Date() // Mark as just checked
+                } else {
+                    // Force verify with server
+                    checkIfUserIsTrainer(force: true)
                 }
             }
             .onDisappear {
@@ -358,20 +383,57 @@ struct ProfileView: View {
         .cornerRadius(12)
     }
     
-    private func loadProfileStats() {
+    private func loadProfileStats(force: Bool = false) {
         guard let currentUserId = authViewModel.currentUser?.id else { return }
+        
+        // Throttle stats loading
+        if !force,
+           let lastLoad = lastStatsLoad,
+           Date().timeIntervalSince(lastLoad) < statsLoadThrottle {
+            return
+        }
         
         Task {
             do {
-                let followers = try await SocialService.shared.getFollowers(userId: currentUserId)
-                let following = try await SocialService.shared.getFollowing(userId: currentUserId)
+                try await AuthSessionManager.shared.ensureValidSession()
+                
+                // Load in parallel for better performance
+                async let followersTask = SocialService.shared.getFollowers(userId: currentUserId)
+                async let followingTask = SocialService.shared.getFollowing(userId: currentUserId)
+                
+                let (followers, following) = try await (followersTask, followingTask)
                 
                 await MainActor.run {
                     self.followersCount = followers.count
                     self.followingCount = following.count
+                    self.lastStatsLoad = Date()
                 }
             } catch {
-                print("❌ Error loading profile stats: \(error)")
+                print("Error loading profile stats: \(error)")
+            }
+        }
+    }
+    
+    private func checkIfUserIsTrainer(force: Bool = false) {
+        // Throttle trainer checks to avoid excessive API calls
+        if !force,
+           let lastCheck = lastTrainerCheck,
+           Date().timeIntervalSince(lastCheck) < trainerCheckThrottle {
+            return
+        }
+        
+        Task {
+            do {
+                let isTrainerResult = try await TrainerService.shared.isUserTrainer()
+                let pendingCount = isTrainerResult ? try await TrainerService.shared.getPendingBookingsCount() : 0
+                
+                await MainActor.run {
+                    self.isTrainer = isTrainerResult
+                    self.pendingBookingsCount = pendingCount
+                    self.lastTrainerCheck = Date()
+                }
+            } catch {
+                print("❌ Error checking trainer status: \(error)")
             }
         }
     }
@@ -657,9 +719,88 @@ struct ActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(16)
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
+            .background(Color.white)
+            .cornerRadius(12)
         }
+    }
+}
+
+// MARK: - Profile Card Button (VOI style top row)
+struct ProfileCardButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(.black)
+                
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.black)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 90)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
+            )
+        }
+    }
+}
+
+// MARK: - Profile List Row (VOI style list item)
+struct ProfileListRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var badgeCount: Int = 0
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            // Icon
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(.black)
+                .frame(width: 40, height: 40)
+            
+            // Text
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.black)
+                
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            // Badge or chevron
+            if badgeCount > 0 {
+                Text("\(badgeCount)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.red)
+                    .cornerRadius(10)
+            }
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }
 

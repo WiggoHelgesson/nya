@@ -20,6 +20,9 @@ nonisolated(unsafe) struct TerritoryClaimParams: Encodable, Sendable {
     let p_owner: UUID
     let p_activity: String
     let p_coordinates: [[Double]]
+    let p_distance_km: Double?
+    let p_duration_sec: Int?
+    let p_pace: String?
 }
 
 final class TerritoryService {
@@ -31,9 +34,12 @@ final class TerritoryService {
         let owner_id: String
         let activity_type: String
         let area_m2: Double
+        let session_distance_km: Double?
+        let session_duration_sec: Int?
+        let session_pace: String?
         let geojson: GeoJSONMultiPolygon
-        let created_at: String?  // Changed from Date? to avoid decoding issues
-        let updated_at: String?  // Changed from Date? to avoid decoding issues
+        let created_at: String?
+        let updated_at: String?
     }
     
     struct GeoJSONMultiPolygon: Decodable {
@@ -42,61 +48,67 @@ final class TerritoryService {
     }
     
     func fetchTerritories() async throws -> [TerritoryFeature] {
-        print("🌍 TerritoryService.fetchTerritories called")
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let result: [TerritoryFeature] = try await supabase.database
+            .from("territory_geojson")
+            .select()
+            .order("updated_at", ascending: false)
+            .execute()
+            .value
+        
+        return result
+    }
+    
+    /// Fetch territories within a bounding box (viewport-based loading)
+    func fetchTerritoriesInBounds(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ) async throws -> [TerritoryFeature] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let params: [String: Double] = [
+            "min_lat": minLat,
+            "max_lat": maxLat,
+            "min_lon": minLon,
+            "max_lon": maxLon
+        ]
         
         do {
-            try await AuthSessionManager.shared.ensureValidSession()
-            print("✅ Auth session valid for fetch")
-            
-            // Fetch ALL territories - no filter on owner
             let result: [TerritoryFeature] = try await supabase.database
-                .from("territory_geojson")
-                .select()
-                .order("updated_at", ascending: false)
+                .rpc("get_territories_in_bounds", params: params)
                 .execute()
                 .value
             
-            print("✅ Fetched \(result.count) territories from database")
-            
-            // Log details about each territory
-            let uniqueOwners = Set(result.map { $0.owner_id })
-            print("📊 Unique territory owners: \(uniqueOwners.count)")
-            for owner in uniqueOwners {
-                let count = result.filter { $0.owner_id == owner }.count
-                print("   - Owner \(owner.prefix(8))...: \(count) territories")
-            }
-            
             return result
         } catch {
-            print("❌ fetchTerritories FAILED: \(error)")
-            print("❌ Error details: \(String(describing: error))")
-            throw error
+            // Fallback to full fetch if RPC doesn't exist
+            return try await fetchTerritories()
         }
     }
     
     func claimTerritory(ownerId: String,
                         activity: ActivityType,
-                        coordinates: [CLLocationCoordinate2D]) async throws -> TerritoryFeature {
-        print("🚀 TerritoryService.claimTerritory called")
-        print("   - ownerId: \(ownerId)")
-        print("   - activity: \(activity.rawValue)")
-        print("   - coordinates count: \(coordinates.count)")
-        
+                        coordinates: [CLLocationCoordinate2D],
+                        distance: Double? = nil,
+                        duration: Int? = nil,
+                        pace: String? = nil) async throws -> TerritoryFeature {
         guard let ownerUUID = UUID(uuidString: ownerId) else {
-            print("❌ Invalid owner ID format: \(ownerId)")
             throw TerritoryServiceError.invalidOwnerId(ownerId)
         }
-        print("✅ Owner UUID parsed: \(ownerUUID)")
         
         try await AuthSessionManager.shared.ensureValidSession()
-        print("✅ Auth session valid")
         
         let payload = TerritoryClaimParams(
             p_owner: ownerUUID,
             p_activity: activity.rawValue,
-            p_coordinates: coordinates.map { [$0.latitude, $0.longitude] }
+            p_coordinates: coordinates.map { [$0.latitude, $0.longitude] },
+            p_distance_km: distance,
+            p_duration_sec: duration,
+            p_pace: pace
         )
-        print("📦 Payload created, sending to Supabase RPC...")
         
         do {
             let response: [TerritoryFeature] = try await supabase.database
@@ -137,12 +149,28 @@ extension TerritoryService.TerritoryFeature {
         
         guard !polygons.isEmpty else { return nil }
         
+        // Parse created_at date
+        var createdDate: Date? = nil
+        if let dateString = created_at {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            createdDate = formatter.date(from: dateString)
+            if createdDate == nil {
+                formatter.formatOptions = [.withInternetDateTime]
+                createdDate = formatter.date(from: dateString)
+            }
+        }
+        
         return Territory(
             id: id,
             ownerId: owner_id,
             activity: ActivityType(rawValue: activity_type),
             area: area_m2,
-            polygons: polygons
+            polygons: polygons,
+            sessionDistance: session_distance_km,
+            sessionDuration: session_duration_sec,
+            sessionPace: session_pace,
+            createdAt: createdDate
         )
     }
 }

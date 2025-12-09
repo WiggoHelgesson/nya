@@ -34,6 +34,7 @@ class SocialService {
     /// Safely follow a user - only adds if not already following
     func followUser(followerId: String, followingId: String) async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             // Check if already following to avoid duplicates
             let existingFollows: [Follow] = try await supabase
                 .from("user_follows")
@@ -86,6 +87,7 @@ class SocialService {
     /// Safely unfollow a user - only removes the specific follow relationship
     func unfollowUser(followerId: String, followingId: String) async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             _ = try await supabase
                 .from("user_follows")
                 .delete()
@@ -249,6 +251,7 @@ class SocialService {
     
     func likePost(postId: String, userId: String, postOwnerId: String? = nil, postTitle: String = "") async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let like = PostLike(postId: postId, userId: userId)
             _ = try await supabase
                 .from("workout_post_likes")
@@ -294,6 +297,7 @@ class SocialService {
     
     func unlikePost(postId: String, userId: String) async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             _ = try await supabase
                 .from("workout_post_likes")
                 .delete()
@@ -312,6 +316,7 @@ class SocialService {
     
     func getPostLikes(postId: String) async throws -> [PostLike] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let likes: [PostLike] = try await supabase
                 .from("workout_post_likes")
                 .select()
@@ -412,6 +417,7 @@ class SocialService {
                     postOwnerId: String? = nil,
                     postTitle: String = "") async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             let comment = PostComment(postId: postId,
                                       userId: userId,
                                       content: content,
@@ -477,6 +483,7 @@ class SocialService {
     
     func getPostComments(postId: String, currentUserId: String?) async throws -> [PostComment] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             // Fetch comments
             let comments: [PostComment] = try await supabase
                 .from("workout_post_comments")
@@ -565,6 +572,7 @@ class SocialService {
     func likeComment(commentId: String, userId: String) async throws {
         struct Payload: Encodable { let comment_id: String; let user_id: String }
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             try await supabase
                 .from("comment_likes")
                 .insert(Payload(comment_id: commentId, user_id: userId))
@@ -578,6 +586,7 @@ class SocialService {
     
     func unlikeComment(commentId: String, userId: String) async throws {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             try await supabase
                 .from("comment_likes")
                 .delete()
@@ -595,6 +604,7 @@ class SocialService {
     
     func getAllUsers() async throws -> [UserSearchResult] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             print("🔍 Getting all users from profiles table")
             
             let users: [UserSearchResult] = try await supabase
@@ -617,6 +627,7 @@ class SocialService {
     /// Get recommended users based on mutual friends (users that follow people you also follow)
     func getRecommendedUsers(userId: String, limit: Int = 15) async throws -> [UserSearchResult] {
         do {
+            try await AuthSessionManager.shared.ensureValidSession()
             print("🔍 Getting recommended users for user: \(userId)")
             
             // Get all users that the current user follows
@@ -711,7 +722,8 @@ class SocialService {
     
     func searchUsers(query: String, currentUserId: String) async throws -> [UserSearchResult] {
         do {
-            print("🔍 Searching for users with query: '\(query)', currentUserId: '\(currentUserId)'")
+            try await AuthSessionManager.shared.ensureValidSession()
+            print("🔍 Searching for users with query: '\(query)'")
             
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")

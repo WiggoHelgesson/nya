@@ -169,12 +169,12 @@ struct EditProfileView: View {
         
         let supabase = SupabaseConfig.supabase
         
-        var updateData: [String: AnyEncodable] = [
-            "username": AnyEncodable(username)
+        var updateData: [String: DynamicEncodable] = [
+            "username": DynamicEncodable(username)
         ]
         
         if let avatarUrl = avatarUrl {
-            updateData["avatar_url"] = AnyEncodable(avatarUrl)
+            updateData["avatar_url"] = DynamicEncodable(avatarUrl)
         }
         
         do {
@@ -194,11 +194,11 @@ struct EditProfileView: View {
         } catch {
             if ProfileService.shared.isMissingPersonalBestColumnsError(error) {
                 print("ℹ️ Personal best columns missing during update. Falling back to username/avatar only.")
-                var fallbackData: [String: AnyEncodable] = [
-                    "username": AnyEncodable(username)
+                var fallbackData: [String: DynamicEncodable] = [
+                    "username": DynamicEncodable(username)
                 ]
                 if let avatarUrl = avatarUrl {
-                    fallbackData["avatar_url"] = AnyEncodable(avatarUrl)
+                    fallbackData["avatar_url"] = DynamicEncodable(avatarUrl)
                 }
                 _ = try await supabase
                     .from("profiles")

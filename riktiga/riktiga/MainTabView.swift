@@ -7,9 +7,10 @@ import CoreLocation
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var sessionManager = SessionManager.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showStartSession = false
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem, 1=Zon krig, 2=Lektioner, 3=Belöningar, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem, 1=Zonkriget, 2=Belöningar, 3=Lektioner, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
@@ -29,21 +30,21 @@ struct MainTabView: View {
                         .tag(1)
                         .tabItem {
                             Image(systemName: "map.fill")
-                            Text("Zon krig")
-                        }
-                    
-                    LessonsView()
-                        .tag(2)
-                        .tabItem {
-                            Image(systemName: "figure.golf")
-                            Text("Lektioner")
+                            Text("Zonkriget")
                         }
                     
                     RewardsView()
-                        .tag(3)
+                        .tag(2)
                         .tabItem {
                             Image(systemName: "gift.fill")
                             Text("Belöningar")
+                        }
+                    
+                    LessonsView()
+                        .tag(3)
+                        .tabItem {
+                            Image(systemName: "figure.golf")
+                            Text("Lektioner")
                         }
                     
                     ProfileView()
@@ -58,8 +59,10 @@ struct MainTabView: View {
             }
             .enableSwipeBack()
             
-            // Floating Start Session Button
-            floatingStartButton
+            // Floating Start Session Button (hidden on Zone War tab)
+            if selectedTab != 1 {
+                floatingStartButton
+            }
         }
         .fullScreenCover(isPresented: $showStartSession) {
             GymSessionView()
@@ -96,6 +99,11 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
+            selectedTab = 2
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToLessons"))) { _ in
             selectedTab = 3
             showStartSession = false
             showResumeSession = false
@@ -119,6 +127,21 @@ struct MainTabView: View {
                 }
             } else {
                 autoPresentedActiveSession = false
+            }
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                // Refresh auth session when app becomes active
+                Task {
+                    do {
+                        try await AuthSessionManager.shared.ensureValidSession()
+                        print("✅ Auth session verified on app activation")
+                    } catch {
+                        print("⚠️ Could not verify auth session: \(error)")
+                        // If session is invalid, trigger re-authentication
+                        authViewModel.logout()
+                    }
+                }
             }
         }
     }

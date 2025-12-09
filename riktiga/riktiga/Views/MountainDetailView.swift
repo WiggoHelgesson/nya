@@ -263,10 +263,10 @@ struct MountainDetailView: View {
                     .getPublicURL(path: fileName)
                 
                 // Save to database
-                let memoryData: [String: AnyEncodable] = [
-                    "user_id": AnyEncodable(currentUserId),
-                    "mountain_id": AnyEncodable(mountain.id),
-                    "image_url": AnyEncodable(publicURL.absoluteString)
+                let memoryData: [String: DynamicEncodable] = [
+                    "user_id": DynamicEncodable(currentUserId),
+                    "mountain_id": DynamicEncodable(mountain.id),
+                    "image_url": DynamicEncodable(publicURL.absoluteString)
                 ]
                 
                 try await supabase

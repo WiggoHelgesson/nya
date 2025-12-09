@@ -24,31 +24,71 @@ struct TerritoryDetailView: View {
     @State private var isLoadingProfile = true
     @State private var showUserProfile = false
     @State private var locationName: String = "Sverige"
+    @State private var isInitialLoading = true
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Map showing territory - always visible immediately
-                TerritoryMapPreview(territory: territory)
-                    .frame(height: UIScreen.main.bounds.height * 0.45)
-                
-                // Info card at bottom - always visible
-                infoCard
-            }
-            .background(Color.black)
-            .ignoresSafeArea(edges: .top)
-            .onAppear {
-                // Load data in background without blocking UI
-                Task {
-                    await loadOwnerProfile()
+        ZStack {
+            // Background color - prevents white flash
+            Color.black.ignoresSafeArea()
+            
+            if isInitialLoading {
+                // Loading state
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .tint(.white)
+                    
+                    Text("Laddar...")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
                 }
-                Task {
-                    await loadLocationName()
+            } else {
+                // Main content
+                NavigationStack {
+                    VStack(spacing: 0) {
+                        // Close button at top
+                        HStack {
+                            Spacer()
+                            Button {
+                                dismiss()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.white.opacity(0.8), .black.opacity(0.3))
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
+                        }
+                        .zIndex(1)
+                        
+                        // Map showing territory
+                        TerritoryMapPreview(territory: territory)
+                            .frame(height: UIScreen.main.bounds.height * 0.4)
+                            .offset(y: -40)
+                        
+                        // Info card at bottom
+                        infoCard
+                            .offset(y: -40)
+                    }
+                    .background(Color.black)
+                    .navigationBarHidden(true)
+                    .navigationDestination(isPresented: $showUserProfile) {
+                        if let profile = ownerProfile {
+                            UserProfileView(userId: profile.id)
+                        }
+                    }
                 }
             }
-            .navigationDestination(isPresented: $showUserProfile) {
-                if let profile = ownerProfile {
-                    UserProfileView(userId: profile.id)
+        }
+        .task {
+            // Load data immediately
+            async let profileTask: () = loadOwnerProfile()
+            async let locationTask: () = loadLocationName()
+            _ = await (profileTask, locationTask)
+            
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isInitialLoading = false
                 }
             }
         }
@@ -136,7 +176,7 @@ struct TerritoryDetailView: View {
                 // Distance
                 StatItem(
                     value: formatDistance(territory.sessionDistance),
-                    label: "Distans",
+                    label: "Km",
                     color: .white
                 )
                 
@@ -150,14 +190,14 @@ struct TerritoryDetailView: View {
                 // Pace
                 StatItem(
                     value: formatPace(territory.sessionPace),
-                    label: "Snittempo",
+                    label: "Min/km",
                     color: .white
                 )
                 
                 // Territory area - always has data
                 StatItem(
                     value: formatArea(territory.area),
-                    label: "Zon area",
+                    label: "Km²",
                     color: .green
                 )
             }
@@ -189,7 +229,7 @@ struct TerritoryDetailView: View {
     
     private func formatDistance(_ distance: Double?) -> String {
         guard let distance = distance, distance > 0 else { return "--" }
-        return String(format: "%.2fKM", distance)
+        return String(format: "%.2f", distance)
     }
     
     private func formatDuration(_ seconds: Int?) -> String {
@@ -207,17 +247,17 @@ struct TerritoryDetailView: View {
     
     private func formatPace(_ pace: String?) -> String {
         guard let pace = pace, pace != "0:00", !pace.isEmpty else { return "--" }
-        return "\(pace)/KM"
+        return pace
     }
     
     private func formatArea(_ area: Double) -> String {
         let km2 = area / 1_000_000
         if km2 >= 1 {
-            return String(format: "%.2fKM²", km2)
-        } else if km2 >= 0.01 {
-            return String(format: "%.2fKM²", km2)
+            return String(format: "%.2f", km2)
+        } else if km2 >= 0.1 {
+            return String(format: "%.2f", km2)
         } else {
-            return String(format: "%.0fM²", area)
+            return String(format: "%.4f", km2)
         }
     }
     

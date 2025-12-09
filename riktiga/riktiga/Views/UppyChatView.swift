@@ -168,7 +168,7 @@ struct UppyChatView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(messages.filter { $0.role != .system }) { message in
-                        MessageBubble(
+                        UppyMessageBubble(
                             message: message,
                             isUser: message.role == .user,
                             userAvatarURL: authViewModel.currentUser?.avatarUrl
@@ -361,7 +361,7 @@ struct UppyChatView: View {
     }
 }
 
-private struct MessageBubble: View {
+private struct UppyMessageBubble: View {
     let message: UppyChatMessage
     let isUser: Bool
     let userAvatarURL: String?

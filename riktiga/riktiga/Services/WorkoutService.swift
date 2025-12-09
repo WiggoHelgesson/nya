@@ -4,7 +4,7 @@ import PostgREST
 import UIKit
 
 // Helper struct to make Any values encodable
-struct AnyEncodable: Encodable {
+struct DynamicEncodable: Encodable {
     let value: Any
     
     init(_ value: Any) {
@@ -22,7 +22,7 @@ struct AnyEncodable: Encodable {
             var container = encoder.container(keyedBy: DynamicCodingKeys.self)
             for (key, nestedValue) in dict {
                 if let codingKey = DynamicCodingKeys(stringValue: key) {
-                    try container.encode(AnyEncodable(nestedValue), forKey: codingKey)
+                    try container.encode(DynamicEncodable(nestedValue), forKey: codingKey)
                 }
             }
             return
@@ -31,7 +31,7 @@ struct AnyEncodable: Encodable {
         if let array = value as? [Any] {
             var container = encoder.unkeyedContainer()
             for element in array {
-                try container.encode(AnyEncodable(element))
+                try container.encode(DynamicEncodable(element))
             }
             return
         }
@@ -285,49 +285,49 @@ class WorkoutService {
         )
         
         do {
-            var minimalPost: [String: AnyEncodable] = [
-                "id": AnyEncodable(postToSave.id),
-                "user_id": AnyEncodable(postToSave.userId),
-                "activity_type": AnyEncodable(postToSave.activityType),
-                "title": AnyEncodable(postToSave.title),
-                "created_at": AnyEncodable(postToSave.createdAt)
+            var minimalPost: [String: DynamicEncodable] = [
+                "id": DynamicEncodable(postToSave.id),
+                "user_id": DynamicEncodable(postToSave.userId),
+                "activity_type": DynamicEncodable(postToSave.activityType),
+                "title": DynamicEncodable(postToSave.title),
+                "created_at": DynamicEncodable(postToSave.createdAt)
             ]
             
             if let description = postToSave.description, !description.isEmpty {
-                minimalPost["description"] = AnyEncodable(description)
+                minimalPost["description"] = DynamicEncodable(description)
             }
             
             if let imageUrl = postToSave.imageUrl, !imageUrl.isEmpty {
-                minimalPost["image_url"] = AnyEncodable(imageUrl)
+                minimalPost["image_url"] = DynamicEncodable(imageUrl)
                 print("✅ Saving post with route image URL: \(imageUrl)")
             }
             
             if let userImageUrl = postToSave.userImageUrl, !userImageUrl.isEmpty {
-                minimalPost["user_image_url"] = AnyEncodable(userImageUrl)
+                minimalPost["user_image_url"] = DynamicEncodable(userImageUrl)
                 print("✅ Saving post with user image URL: \(userImageUrl)")
             }
             
             if let distance = postToSave.distance {
-                minimalPost["distance"] = AnyEncodable(distance)
+                minimalPost["distance"] = DynamicEncodable(distance)
             }
             
             if let duration = postToSave.duration {
-                minimalPost["duration"] = AnyEncodable(duration)
+                minimalPost["duration"] = DynamicEncodable(duration)
             }
             
             if let elevationGain = postToSave.elevationGain {
-                minimalPost["elevation_gain"] = AnyEncodable(elevationGain)
+                minimalPost["elevation_gain"] = DynamicEncodable(elevationGain)
             }
             
             if let maxSpeed = postToSave.maxSpeed {
-                minimalPost["max_speed"] = AnyEncodable(maxSpeed)
+                minimalPost["max_speed"] = DynamicEncodable(maxSpeed)
             }
             if let splits = postToSave.splits, let splitPayload = encodeSplits(splits) {
-                minimalPost["split_data"] = AnyEncodable(splitPayload)
+                minimalPost["split_data"] = DynamicEncodable(splitPayload)
             }
             
             if let exercises = postToSave.exercises, let exercisesPayload = encodeExercises(exercises) {
-                minimalPost["exercises_data"] = AnyEncodable(exercisesPayload)
+                minimalPost["exercises_data"] = DynamicEncodable(exercisesPayload)
                 print("✅ Saving post with \(exercises.count) exercises")
             }
             

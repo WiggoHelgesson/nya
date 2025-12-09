@@ -5,6 +5,11 @@ struct ZoneWarLeaderboardView: View {
     let leaders: [TerritoryLeader]
     @Environment(\.dismiss) private var dismiss
     
+    // Sort leaders by total area (descending) - ensure correct sorting
+    private var sortedLeaders: [TerritoryLeader] {
+        leaders.sorted { $0.totalArea > $1.totalArea }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -13,7 +18,7 @@ struct ZoneWarLeaderboardView: View {
             // Leaderboard list
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(leaders.enumerated()), id: \.element.id) { index, leader in
+                    ForEach(Array(sortedLeaders.enumerated()), id: \.element.id) { index, leader in
                         LeaderboardRow(rank: index + 1, leader: leader)
                     }
                 }
@@ -132,15 +137,20 @@ struct LeaderboardRow: View {
     }
     
     private func formatArea(_ area: Double) -> String {
+        // Always display in km² for consistency in leaderboard
         let km2 = area / 1_000_000
-        if km2 >= 10 {
-            return String(format: "%.1fKM²", km2)
+        
+        if km2 >= 100 {
+            return String(format: "%.0f km²", km2)
+        } else if km2 >= 10 {
+            return String(format: "%.1f km²", km2)
         } else if km2 >= 1 {
-            return String(format: "%.2fKM²", km2)
-        } else if area >= 1000 {
-            return String(format: "%.2fKM²", km2)
+            return String(format: "%.2f km²", km2)
+        } else if km2 >= 0.001 {
+            return String(format: "%.4f km²", km2)
         } else {
-            return String(format: "%.0fM²", area)
+            // For extremely small areas, use scientific notation equivalent
+            return String(format: "%.6f km²", km2)
         }
     }
 }

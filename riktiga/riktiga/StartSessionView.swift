@@ -646,6 +646,8 @@ struct SessionMapView: View {
     @State private var showXpCelebration = false
     @State private var xpCelebrationPoints = 0
     @State private var showStreakCelebration = false
+    @State private var showTerritoryAnimation = false
+    @State private var territoryAnimationCoordinates: [CLLocationCoordinate2D] = []
     @State private var showSessionComplete = false
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
@@ -657,6 +659,16 @@ struct SessionMapView: View {
     @State private var lastSnapshotSourceCount: Int = 0
     @State private var liveTerritoryArea: Double = 0 // New state for live area
     private let maxRouteSnapshotPoints = 500 // Reduced from 1500 for better performance
+    
+    // Speed detection for anti-cheat
+    @State private var highSpeedStartTime: Date? = nil
+    @State private var hasShownSpeedWarning = false
+    @State private var showVehicleDetectedAlert = false
+    @State private var trackingStoppedDueToSpeed = false
+    private let maxSpeedRunning: Double = 25.0 // km/h
+    private let maxSpeedGolf: Double = 12.0 // km/h
+    private let highSpeedDurationThreshold: TimeInterval = 15.0 // seconds
+    
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -688,7 +700,8 @@ struct SessionMapView: View {
                             }
                             
                             // Live territory overlay: Close current route back to start
-                            if routeCoordinatesSnapshot.count > 2 {
+                            // Only show for running and golf (not skiing)
+                            if routeCoordinatesSnapshot.count > 2 && (activity == .running || activity == .golf) {
                                 Path { path in
                                     let points = routeCoordinatesSnapshot.map { convertToMapPoint($0, in: geometry.size) }
                                     if let first = points.first, let last = points.last {
@@ -818,8 +831,14 @@ struct SessionMapView: View {
                         centerMap(on: location, animated: true)
                     }
                 }
+                .onReceive(locationManager.$currentSpeedKmh) { speed in
+                    // Only check speed for running and golf during active session
+                    guard isRunning && !trackingStoppedDueToSpeed else { return }
+                    checkSpeedForCheating(currentSpeed: speed)
+                }
                 .overlay(alignment: .bottom) {
-                    if isRunning && activity != .walking { // Only show for outdoor activities
+                    // Only show territory capture overlay for running and golf (not skiing)
+                    if isRunning && (activity == .running || activity == .golf) {
                         VStack {
                             Text("Live Territory Capture")
                                 .font(.caption)
@@ -992,8 +1011,8 @@ struct SessionMapView: View {
                     } else {
                         // Running state
                         
-                        // Show area capture card
-                        if locationManager.distance > 0.01 {
+                        // Show area capture card (only for running and golf, not skiing)
+                        if locationManager.distance > 0.01 && (activity == .running || activity == .golf) {
                             VStack(spacing: 2) {
                                 Image(systemName: "wifi") // Placeholder for signal icon
                                     .font(.system(size: 12))
@@ -1082,6 +1101,14 @@ struct SessionMapView: View {
         } message: {
             Text("För att spåra din rutt när appen är stängd måste du välja 'Tillåt alltid' för platsåtkomst i Inställningar.")
         }
+        .alert("Fordon detekterat", isPresented: $showVehicleDetectedAlert) {
+            Button("OK") {
+                // User acknowledges - they can dismiss but session is paused
+                dismiss()
+            }
+        } message: {
+            Text("Tracking stoppas. Du verkar färdas med ett fordon, vilket inte är tillåtet under aktiviteter.")
+        }
         .onDisappear {
             // Save session state when view disappears, but DON'T stop timer
             // Timer continues in background
@@ -1093,8 +1120,31 @@ struct SessionMapView: View {
                 buttonTitle: "Fortsätt"
             ) {
                 showXpCelebration = false
-                showStreakCelebration = true
+                
+                // Check if this is an outdoor activity with enough route points for territory animation
+                // Territory animation only for running and golf (not skiing)
+                let isTerritoryActivity = activity == .running || activity == .golf
+                let hasEnoughPoints = territoryAnimationCoordinates.count >= 10
+                
+                if isTerritoryActivity && hasEnoughPoints {
+                    // Show cool territory animation instead of streak
+                    showTerritoryAnimation = true
+                } else {
+                    // Fall back to streak celebration for gym/hiking/skiing or short routes
+                    showStreakCelebration = true
+                }
             }
+        }
+        .fullScreenCover(isPresented: $showTerritoryAnimation) {
+            TerritoryCaptureAnimationView(
+                routeCoordinates: territoryAnimationCoordinates,
+                activityType: activity.rawValue,
+                earnedXP: earnedPoints,
+                onComplete: {
+                    showTerritoryAnimation = false
+                    showSessionComplete = true
+                }
+            )
         }
         .sheet(isPresented: $showStreakCelebration) {
             StreakCelebrationView(onDismiss: {
@@ -1195,6 +1245,61 @@ struct SessionMapView: View {
             earnedPoints = Int(Double(basePoints) * 1.5)
         } else {
             earnedPoints = basePoints
+        }
+    }
+    
+    // MARK: - Speed Detection for Anti-Cheat
+    
+    private func checkSpeedForCheating(currentSpeed: Double) {
+        // Only check for running and golf (not skiing or other activities)
+        guard activity == .running || activity == .golf else { return }
+        
+        // Get the appropriate speed limit for the activity
+        let maxSpeed = activity == .running ? maxSpeedRunning : maxSpeedGolf
+        
+        if currentSpeed > maxSpeed {
+            // Speed is above threshold
+            if highSpeedStartTime == nil {
+                // Start tracking high speed duration
+                highSpeedStartTime = Date()
+                print("⚠️ High speed detected: \(String(format: "%.1f", currentSpeed)) km/h (limit: \(maxSpeed) km/h)")
+            } else if let startTime = highSpeedStartTime {
+                // Check how long we've been at high speed
+                let duration = Date().timeIntervalSince(startTime)
+                
+                if duration >= highSpeedDurationThreshold {
+                    if !hasShownSpeedWarning {
+                        // Show warning first
+                        hasShownSpeedWarning = true
+                        print("⚠️ Speed warning shown after \(duration) seconds")
+                        // Give them a chance to slow down
+                    } else {
+                        // Already warned, now stop tracking
+                        print("🚗 Vehicle detected after sustained high speed - stopping tracking")
+                        stopTrackingDueToVehicle()
+                    }
+                }
+            }
+        } else {
+            // Speed is acceptable, reset the timer
+            if highSpeedStartTime != nil {
+                print("✅ Speed returned to normal: \(String(format: "%.1f", currentSpeed)) km/h")
+            }
+            highSpeedStartTime = nil
+            // Don't reset hasShownSpeedWarning - if they speed up again, we go straight to stop
+        }
+    }
+    
+    private func stopTrackingDueToVehicle() {
+        trackingStoppedDueToSpeed = true
+        showVehicleDetectedAlert = true
+        
+        // Stop the session
+        if isRunning {
+            stopTimer()
+            locationManager.stopTracking()
+            isRunning = false
+            isPaused = true
         }
     }
     
@@ -1353,6 +1458,8 @@ struct SessionMapView: View {
         showSessionComplete = false
         showXpCelebration = false
         showStreakCelebration = false
+        showTerritoryAnimation = false
+        territoryAnimationCoordinates = []
         forceNewSession = true
     }
 
@@ -1431,6 +1538,10 @@ struct SessionMapView: View {
             pace: currentPace
         )
         
+        // Store coordinates for territory animation
+        self.territoryAnimationCoordinates = finalRouteCoordinates
+        print("🗺️ Stored \(finalRouteCoordinates.count) coordinates for territory animation")
+        
         // Add small delay to ensure route image is generated before showing celebration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             print("✅ Showing XP celebration...")
@@ -1450,9 +1561,10 @@ struct SessionMapView: View {
     ) {
         print("🗺️ captureTerritoryFromRouteIfNeeded RECEIVED \(coordinates.count) coordinates")
         
-        let eligibleActivities: Set<ActivityType> = [.running, .golf, .hiking, .skiing]
+        // Only running and golf create territories (not skiing)
+        let eligibleActivities: Set<ActivityType> = [.running, .golf]
         guard eligibleActivities.contains(activity) else {
-            print("❌ Activity \(activity) not eligible for territory capture")
+            print("❌ Activity \(activity) not eligible for territory capture (only running and golf)")
             return
         }
         

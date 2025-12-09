@@ -154,13 +154,13 @@ class ProfileService {
         do {
             print("🔧 Creating profile for user: \(user.name)")
             
-            let profileData: [String: AnyEncodable] = [
-                "id": AnyEncodable(user.id),
-                "username": AnyEncodable(user.name),
-                "current_xp": AnyEncodable(0),
-                "current_level": AnyEncodable(1),
-                "is_pro_member": AnyEncodable(false),
-                "avatar_url": AnyEncodable(user.avatarUrl ?? "")
+            let profileData: [String: DynamicEncodable] = [
+                "id": DynamicEncodable(user.id),
+                "username": DynamicEncodable(user.name),
+                "current_xp": DynamicEncodable(0),
+                "current_level": DynamicEncodable(1),
+                "is_pro_member": DynamicEncodable(false),
+                "avatar_url": DynamicEncodable(user.avatarUrl ?? "")
             ]
             
             try await supabase
@@ -193,32 +193,32 @@ class ProfileService {
     }
     
     func applyOnboardingData(userId: String, data: OnboardingData) async -> String? {
-        var updates: [String: AnyEncodable] = [:]
+        var updates: [String: DynamicEncodable] = [:]
         if !data.trimmedUsername.isEmpty {
             let isAvailable = await isUsernameAvailable(data.trimmedUsername, excludingUserId: userId)
             if isAvailable {
-                updates["username"] = AnyEncodable(data.trimmedUsername)
+                updates["username"] = DynamicEncodable(data.trimmedUsername)
             } else {
                 print("⚠️ Username \(data.trimmedUsername) already taken. Skipping update for userId: \(userId)")
             }
         }
         if let golfHcp = data.golfHcp {
-            updates["golf_hcp"] = AnyEncodable(golfHcp)
+            updates["golf_hcp"] = DynamicEncodable(golfHcp)
         }
         if let pb5 = data.pb5kmMinutes {
-            updates["pb_5km_minutes"] = AnyEncodable(pb5)
+            updates["pb_5km_minutes"] = DynamicEncodable(pb5)
         }
         if let pb10h = data.pb10kmHours {
-            updates["pb_10km_hours"] = AnyEncodable(pb10h)
+            updates["pb_10km_hours"] = DynamicEncodable(pb10h)
         }
         if let pb10m = data.pb10kmMinutes {
-            updates["pb_10km_minutes"] = AnyEncodable(pb10m)
+            updates["pb_10km_minutes"] = DynamicEncodable(pb10m)
         }
         if let pbMaraH = data.pbMarathonHours {
-            updates["pb_marathon_hours"] = AnyEncodable(pbMaraH)
+            updates["pb_marathon_hours"] = DynamicEncodable(pbMaraH)
         }
         if let pbMaraM = data.pbMarathonMinutes {
-            updates["pb_marathon_minutes"] = AnyEncodable(pbMaraM)
+            updates["pb_marathon_minutes"] = DynamicEncodable(pbMaraM)
         }
         
         var newAvatarURL: String?
@@ -226,7 +226,7 @@ class ProfileService {
             do {
                 newAvatarURL = try await uploadAvatarImageData(imageData, userId: userId)
                 if let url = newAvatarURL {
-                    updates["avatar_url"] = AnyEncodable(url)
+                    updates["avatar_url"] = DynamicEncodable(url)
                 }
             } catch {
                 print("⚠️ Failed to upload onboarding profile image: \(error.localizedDescription)")

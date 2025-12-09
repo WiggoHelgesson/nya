@@ -107,31 +107,38 @@ class ImageCacheManager {
     }
     
     func prefetch(urls: [String]) {
-        for url in urls where !url.isEmpty {
-            if hasImage(for: url) { continue }
+        // Use DispatchQueue for thread-safe access instead of locks in async context
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
             
-            var shouldDownload = false
-            prefetchLock.lock()
-            if !prefetchingURLs.contains(url) {
-                prefetchingURLs.insert(url)
-                shouldDownload = true
-            }
-            prefetchLock.unlock()
-            
-            guard shouldDownload else { continue }
-            
-            Task.detached(priority: .utility) { [weak self] in
-                guard let self else { return }
-                defer {
-                    self.prefetchLock.lock()
-                    self.prefetchingURLs.remove(url)
-                    self.prefetchLock.unlock()
-                }
+            for url in urls where !url.isEmpty {
+                if self.hasImage(for: url) { continue }
                 
-                do {
-                    _ = try await self.downloadAndCacheImage(from: url)
-                } catch {
-                    // Ignore failures silently to avoid spamming the console
+                var shouldDownload = false
+                self.prefetchLock.lock()
+                if !self.prefetchingURLs.contains(url) {
+                    self.prefetchingURLs.insert(url)
+                    shouldDownload = true
+                }
+                self.prefetchLock.unlock()
+                
+                guard shouldDownload else { continue }
+                
+                Task.detached(priority: .utility) { [weak self] in
+                    guard let self else { return }
+                    defer {
+                        DispatchQueue.global(qos: .utility).async {
+                            self.prefetchLock.lock()
+                            self.prefetchingURLs.remove(url)
+                            self.prefetchLock.unlock()
+                        }
+                    }
+                    
+                    do {
+                        _ = try await self.downloadAndCacheImage(from: url)
+                    } catch {
+                        // Ignore failures silently
+                    }
                 }
             }
         }

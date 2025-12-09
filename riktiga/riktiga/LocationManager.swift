@@ -17,6 +17,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     // Skiing-specific metrics
     @Published var elevationGain: Double = 0.0 // meters
     @Published var maxSpeed: Double = 0.0 // m/s
+    @Published var currentSpeedKmh: Double = 0.0 // Current speed in km/h for UI
     
     private let locationManager = CLLocationManager()
     private var startLocation: CLLocation?
@@ -235,6 +236,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // Calculate speed (m/s)
             let timeDiff = location.timestamp.timeIntervalSince(lastLoc.timestamp)
             let speed = timeDiff > 0 ? newDistance / timeDiff : 0.0
+            
+            // Update current speed for UI (in km/h)
+            Task { @MainActor in
+                self.currentSpeedKmh = speed * 3.6 // Convert m/s to km/h
+            }
             
             // Track recent speeds for vehicle detection
             recentSpeeds.append(speed)
