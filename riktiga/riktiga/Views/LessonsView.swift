@@ -226,8 +226,8 @@ struct LessonsView: View {
     // MARK: - Map View (Optimized)
     
     private var trainerMapView: some View {
-        // Limit visible trainers to 15 for performance
-        Map(coordinateRegion: $region, annotationItems: Array(filteredTrainers.prefix(15))) { trainer in
+        // Limit visible trainers to reduce map load
+        Map(coordinateRegion: $region, annotationItems: Array(filteredTrainers.prefix(12))) { trainer in
             MapAnnotation(coordinate: trainer.coordinate) {
                 // Simplified pin for better performance
                 SimpleTrainerPin(trainer: trainer) {
@@ -620,6 +620,9 @@ struct TrainerDetailView: View {
                 // Quick Stats
                 quickStats
                 
+                // Book Button (moved up, above specialties)
+                bookButton
+                
                 // Specialties
                 if !viewModel.specialties.isEmpty {
                     specialtiesSection
@@ -638,9 +641,6 @@ struct TrainerDetailView: View {
                 
                 // Location
                 locationSection
-                
-                // Book Button
-                bookButton
             }
             .padding()
         }

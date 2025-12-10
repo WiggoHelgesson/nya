@@ -277,6 +277,8 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
+                    .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                    .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
             }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)

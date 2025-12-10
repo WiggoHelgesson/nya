@@ -16,6 +16,8 @@ struct AppNotification: Identifiable, Codable {
         case like
         case comment
         case follow
+        case newWorkout
+        case reply
         case unknown(String)
         
         init(rawValue: String) {
@@ -23,6 +25,8 @@ struct AppNotification: Identifiable, Codable {
             case "like": self = .like
             case "comment": self = .comment
             case "follow": self = .follow
+            case "new_workout": self = .newWorkout
+            case "reply": self = .reply
             default: self = .unknown(rawValue)
             }
         }
@@ -32,6 +36,8 @@ struct AppNotification: Identifiable, Codable {
             case .like: return "like"
             case .comment: return "comment"
             case .follow: return "follow"
+            case .newWorkout: return "new_workout"
+            case .reply: return "reply"
             case .unknown(let value): return value
             }
         }
@@ -118,6 +124,13 @@ struct AppNotification: Identifiable, Codable {
             return "\(actorUsername ?? "Någon") kommenterade på ditt inlägg"
         case .follow:
             return "\(actorUsername ?? "Någon") började följa dig"
+        case .newWorkout:
+            return "\(actorUsername ?? "Någon") har avslutat ett träningspass! 🏃"
+        case .reply:
+            if let text = commentText, !text.isEmpty {
+                return "\(actorUsername ?? "Någon") svarade: \"\(text)\""
+            }
+            return "\(actorUsername ?? "Någon") svarade på din kommentar"
         case .unknown:
             return "\(actorUsername ?? "Någon") skickade en ny notis"
         }
@@ -131,6 +144,10 @@ struct AppNotification: Identifiable, Codable {
             return "bubble.right.fill"
         case .follow:
             return "person.fill.badge.plus"
+        case .newWorkout:
+            return "figure.run"
+        case .reply:
+            return "arrowshape.turn.up.left.fill"
         case .unknown:
             return "bell.fill"
         }
@@ -144,6 +161,10 @@ struct AppNotification: Identifiable, Codable {
             return "blue"
         case .follow:
             return "green"
+        case .newWorkout:
+            return "orange"
+        case .reply:
+            return "purple"
         case .unknown:
             return "gray"
         }

@@ -153,12 +153,29 @@ SELECT
     tb.trainer_response,
     tb.created_at,
     tb.updated_at,
+    -- Extended booking fields
+    tb.lesson_type_id,
+    tb.scheduled_date,
+    tb.scheduled_time,
+    tb.duration_minutes,
+    tb.price,
+    tb.location_type,
+    tb.golf_course_id,
+    tb.custom_location_name,
+    tb.custom_location_lat,
+    tb.custom_location_lng,
+    tb.payment_status,
+    tb.stripe_payment_id,
+    -- Trainer info
     tp.user_id as trainer_user_id,
     tp.name as trainer_name,
     tp.avatar_url as trainer_avatar_url,
     tp.hourly_rate,
+    tp.city as trainer_city,
+    -- Student info
     p.username as student_username,
     p.avatar_url as student_avatar_url,
+    -- Unread count
     (
         SELECT COUNT(*) 
         FROM public.booking_messages bm 

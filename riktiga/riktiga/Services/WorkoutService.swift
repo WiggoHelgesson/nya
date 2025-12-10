@@ -343,6 +343,20 @@ class WorkoutService {
             }
             AppCacheManager.shared.clearCacheForUser(userId: post.userId)
             
+            // Notify followers about the new workout
+            Task {
+                // Get user profile for name and avatar
+                if let profile = try? await ProfileService.shared.fetchUserProfile(userId: post.userId) {
+                    await PushNotificationService.shared.notifyFollowersAboutWorkout(
+                        userId: post.userId,
+                        userName: profile.name,
+                        userAvatar: profile.avatarUrl,
+                        activityType: post.activityType,
+                        postId: post.id
+                    )
+                }
+            }
+            
         } catch {
             print("❌ Error saving workout post: \(error)")
             throw error

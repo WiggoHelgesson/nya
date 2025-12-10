@@ -4,6 +4,12 @@ import CoreLocation
 import Combine
 import UIKit
 
+// MARK: - XP Celebration Data Wrapper
+struct XpCelebrationData: Identifiable {
+    let id = UUID()
+    let points: Int
+}
+
 struct StartSessionView: View {
     private let initialActivity: ActivityType?
     @State private var showActivitySelection: Bool
@@ -643,8 +649,7 @@ struct SessionMapView: View {
     @State private var sessionStartTime: Date?
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
-    @State private var showXpCelebration = false
-    @State private var xpCelebrationPoints = 0
+    @State private var xpCelebrationData: XpCelebrationData? = nil
     @State private var showStreakCelebration = false
     @State private var showTerritoryAnimation = false
     @State private var territoryAnimationCoordinates: [CLLocationCoordinate2D] = []
@@ -1114,12 +1119,12 @@ struct SessionMapView: View {
             // Timer continues in background
             saveSessionState()
         }
-        .sheet(isPresented: $showXpCelebration) {
+        .sheet(item: $xpCelebrationData) { data in
             XpCelebrationView(
-                points: xpCelebrationPoints,
+                points: data.points,
                 buttonTitle: "Fortsätt"
             ) {
-                showXpCelebration = false
+                xpCelebrationData = nil
                 
                 // Check if this is an outdoor activity with enough route points for territory animation
                 // Territory animation only for running and golf (not skiing)
@@ -1456,7 +1461,7 @@ struct SessionMapView: View {
         locationManager.elevationGain = 0
         locationManager.maxSpeed = 0
         showSessionComplete = false
-        showXpCelebration = false
+        xpCelebrationData = nil
         showStreakCelebration = false
         showTerritoryAnimation = false
         territoryAnimationCoordinates = []
@@ -1546,9 +1551,9 @@ struct SessionMapView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             print("✅ Showing XP celebration...")
             self.updateEarnedPoints()
-            self.xpCelebrationPoints = self.earnedPoints
-            print("🎉 Celebration points: \(self.xpCelebrationPoints), Distance: \(self.locationManager.distance)")
-            self.showXpCelebration = true
+            let points = self.earnedPoints
+            print("🎉 Celebration points: \(points), Distance: \(self.locationManager.distance)")
+            self.xpCelebrationData = XpCelebrationData(points: points)
         }
     }
     

@@ -144,6 +144,8 @@ struct UserProfileView: View {
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
         }
+        .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+        .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
     
     private func loadData() async {

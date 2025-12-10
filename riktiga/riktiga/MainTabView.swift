@@ -4,9 +4,40 @@ import UIKit
 import MapKit
 import CoreLocation
 
+// MARK: - Navigation Depth Tracker
+class NavigationDepthTracker: ObservableObject {
+    static let shared = NavigationDepthTracker()
+    @Published var isAtRootView = true
+    
+    func setAtRoot(_ atRoot: Bool) {
+        DispatchQueue.main.async {
+            self.isAtRootView = atRoot
+        }
+    }
+}
+
+// MARK: - View Modifier for tracking navigation
+struct NavigationTrackingModifier: ViewModifier {
+    let isRoot: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                NavigationDepthTracker.shared.setAtRoot(isRoot)
+            }
+    }
+}
+
+extension View {
+    func trackNavigation(isRoot: Bool) -> some View {
+        modifier(NavigationTrackingModifier(isRoot: isRoot))
+    }
+}
+
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var navigationTracker = NavigationDepthTracker.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var showStartSession = false
     @State private var showResumeSession = false
@@ -59,8 +90,8 @@ struct MainTabView: View {
             }
             .enableSwipeBack()
             
-            // Floating Start Session Button (hidden on Zone War tab)
-            if selectedTab != 1 {
+            // Floating Start Session Button (only on Hem, Belöningar, Profil tabs and at root view)
+            if (selectedTab == 0 || selectedTab == 2 || selectedTab == 4) && navigationTracker.isAtRootView {
                 floatingStartButton
             }
         }
@@ -128,6 +159,10 @@ struct MainTabView: View {
             } else {
                 autoPresentedActiveSession = false
             }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            // Reset to root view when switching tabs
+            navigationTracker.setAtRoot(true)
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {

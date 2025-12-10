@@ -18,8 +18,7 @@ struct GymSessionView: View {
     @State private var didLoadSavedWorkouts = false
     @State private var hasInitializedSession = false
     @State private var lastPersistedElapsedSeconds: Int = 0
-    @State private var showXpCelebration = false
-    @State private var xpCelebrationPoints: Int = 0
+    @State private var xpCelebrationData: XpCelebrationData? = nil
     @State private var showStreakCelebration = false
     @State private var selectedOtherActivity: ActivityType?
     @FocusState private var focusedField: GymSessionInputField?
@@ -470,12 +469,12 @@ struct GymSessionView: View {
                     viewModel.addExercise(exercise)
                 }
             }
-            .sheet(isPresented: $showXpCelebration) {
+            .sheet(item: $xpCelebrationData) { data in
                 XpCelebrationView(
-                    points: xpCelebrationPoints,
+                    points: data.points,
                     buttonTitle: "Fortsätt"
                 ) {
-                    showXpCelebration = false
+                    xpCelebrationData = nil
                     showStreakCelebration = true
                 }
             }
@@ -584,8 +583,8 @@ struct GymSessionView: View {
         // Update streak
         StreakManager.shared.registerWorkoutCompletion()
         
-        xpCelebrationPoints = viewModel.sessionData?.earnedXP ?? 0
-        showXpCelebration = true
+        let points = viewModel.sessionData?.earnedXP ?? 0
+        xpCelebrationData = XpCelebrationData(points: points)
     }
     
     private func metricView(title: String, value: String) -> some View {

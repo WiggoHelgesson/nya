@@ -41,6 +41,7 @@ struct ZoneWarView: View {
     @State private var isLoading = false
     @State private var selectedTerritory: Territory?
     @State private var showLeaderboard = false
+    @State private var regionDebounceTask: DispatchWorkItem?
     
     // Area tracking
     @State private var currentAreaName: String = "Området"
@@ -71,18 +72,23 @@ struct ZoneWarView: View {
                         updateAreaName(for: region.center)
                         updateLeaderForVisibleArea(mapRect: mapRect)
                         
-                        // Viewport-based loading with debounce
-                        let minLat = region.center.latitude - region.span.latitudeDelta / 2
-                        let maxLat = region.center.latitude + region.span.latitudeDelta / 2
-                        let minLon = region.center.longitude - region.span.longitudeDelta / 2
-                        let maxLon = region.center.longitude + region.span.longitudeDelta / 2
-                        
-                        territoryStore.refreshForViewport(
-                            minLat: minLat,
-                            maxLat: maxLat,
-                            minLon: minLon,
-                            maxLon: maxLon
-                        )
+                        // Viewport-based loading with debounce to reduce churn on map moves
+                        regionDebounceTask?.cancel()
+                        let work = DispatchWorkItem { [center = region.center, span = region.span] in
+                            let minLat = center.latitude - span.latitudeDelta / 2
+                            let maxLat = center.latitude + span.latitudeDelta / 2
+                            let minLon = center.longitude - span.longitudeDelta / 2
+                            let maxLon = center.longitude + span.longitudeDelta / 2
+                            
+                            territoryStore.refreshForViewport(
+                                minLat: minLat,
+                                maxLat: maxLat,
+                                minLon: minLon,
+                                maxLon: maxLon
+                            )
+                        }
+                        regionDebounceTask = work
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
                     }
                 )
                 // Don't use ignoresSafeArea to keep tab bar visible

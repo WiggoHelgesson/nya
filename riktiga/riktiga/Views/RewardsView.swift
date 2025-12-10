@@ -711,6 +711,8 @@ struct CategoryRewardsListView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+        .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
 }
 
@@ -841,6 +843,8 @@ struct RewardDetailView: View {
         .sheet(isPresented: $showConfirmation) {
             ConfirmationView(reward: reward)
         }
+        .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+        .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
     
     private func getCompanyDescription(for brandName: String) -> String {

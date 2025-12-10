@@ -10,6 +10,7 @@ import StripePaymentSheet
 
 @main
 struct UpAndDownApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject var authViewModel = AuthViewModel()
     @State private var showSplash = true
     
@@ -32,6 +33,10 @@ struct UpAndDownApp: App {
             } else if authViewModel.isLoggedIn {
                 MainTabView()
                     .environmentObject(authViewModel)
+                    .onAppear {
+                        // Request push notification permission when logged in
+                        PushNotificationService.shared.requestPermissionAndRegister()
+                    }
             } else {
                 AuthenticationView()
                     .environmentObject(authViewModel)

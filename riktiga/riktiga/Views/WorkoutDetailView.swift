@@ -19,6 +19,8 @@ struct WorkoutDetailView: View {
         .navigationTitle(post.title)
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+        .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
     
     private var overviewSection: some View {

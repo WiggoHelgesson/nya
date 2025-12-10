@@ -125,6 +125,8 @@ struct SocialView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
+                    .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                    .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
             }
             .task(id: authViewModel.currentUser?.id) {
                 guard let userId = authViewModel.currentUser?.id else { return }

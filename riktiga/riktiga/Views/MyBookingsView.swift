@@ -15,19 +15,21 @@ struct MyBookingsView: View {
                 } else if viewModel.bookings.isEmpty {
                     emptyState
                 } else {
-                    // Active Bookings
-                    if !viewModel.activeBookings.isEmpty {
+                    // Paid Requests (pending - waiting for trainer to accept)
+                    if !viewModel.paidRequests.isEmpty {
                         bookingsSection(
-                            title: "Aktiva bokningar",
-                            bookings: viewModel.activeBookings
+                            title: "Betalda förfrågningar",
+                            subtitle: "Väntar på tränarens bekräftelse",
+                            bookings: viewModel.paidRequests
                         )
                     }
                     
-                    // Pending Bookings
-                    if !viewModel.pendingBookings.isEmpty {
+                    // Upcoming Bookings (accepted)
+                    if !viewModel.upcomingBookings.isEmpty {
                         bookingsSection(
-                            title: "Väntande förfrågningar",
-                            bookings: viewModel.pendingBookings
+                            title: "Kommande bokningar",
+                            subtitle: nil,
+                            bookings: viewModel.upcomingBookings
                         )
                     }
                     
@@ -35,6 +37,7 @@ struct MyBookingsView: View {
                     if !viewModel.pastBookings.isEmpty {
                         bookingsSection(
                             title: "Tidigare",
+                            subtitle: nil,
                             bookings: viewModel.pastBookings
                         )
                     }
@@ -83,11 +86,19 @@ struct MyBookingsView: View {
     
     // MARK: - Bookings Section
     
-    private func bookingsSection(title: String, bookings: [TrainerBooking]) -> some View {
+    private func bookingsSection(title: String, subtitle: String?, bookings: [TrainerBooking]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
             
             ForEach(bookings) { booking in
                 StudentBookingCard(booking: booking) {
@@ -133,7 +144,7 @@ struct StudentBookingCard: View {
                 }
                 
                 // Booking Info
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(booking.trainerName ?? "Tränare")
                             .font(.headline)
@@ -144,20 +155,47 @@ struct StudentBookingCard: View {
                         StudentStatusBadge(status: booking.bookingStatus)
                     }
                     
-                    if let rate = booking.hourlyRate {
-                        Text("\(rate) kr/h")
+                    // Scheduled date & time
+                    if let date = booking.formattedDate, let time = booking.formattedTime {
+                        HStack(spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "calendar")
+                                    .font(.caption)
+                                Text(date)
+                                    .font(.subheadline)
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                    .font(.caption)
+                                Text(time)
+                                    .font(.subheadline)
+                            }
+                        }
+                        .foregroundColor(.black)
+                    }
+                    
+                    // Price
+                    if let price = booking.price {
+                        Text("\(price) kr")
                             .font(.subheadline)
+                            .fontWeight(.semibold)
                             .foregroundColor(.black)
                     }
                     
-                    Text(booking.message)
-                        .font(.caption)
+                    // Location info
+                    if let city = booking.trainerCity {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.caption)
+                            Text(city)
+                                .font(.caption)
+                        }
                         .foregroundColor(.secondary)
-                        .lineLimit(1)
+                    }
                     
                     HStack {
                         if let date = booking.createdAt {
-                            Text(formatDate(date))
+                            Text("Bokad \(formatDate(date))")
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                         }
@@ -207,8 +245,8 @@ struct StudentStatusBadge: View {
     
     private var statusText: String {
         switch status {
-        case .pending: return "Väntar"
-        case .accepted: return "Godkänd"
+        case .pending: return "Betald"
+        case .accepted: return "Bekräftad"
         case .declined: return "Nekad"
         case .cancelled: return "Avbokad"
         }
@@ -217,7 +255,7 @@ struct StudentStatusBadge: View {
     private var statusColor: Color {
         switch status {
         case .pending: return .orange
-        case .accepted: return .black
+        case .accepted: return .green
         case .declined: return .red
         case .cancelled: return .gray
         }
@@ -233,14 +271,17 @@ class MyBookingsViewModel: ObservableObject {
     private var lastLoadTime: Date?
     private let cacheThrottle: TimeInterval = 15 // 15 seconds cache
     
-    var activeBookings: [TrainerBooking] {
-        bookings.filter { $0.bookingStatus == .accepted }
-    }
-    
-    var pendingBookings: [TrainerBooking] {
+    /// Betalda förfrågningar - Väntar på tränarens bekräftelse
+    var paidRequests: [TrainerBooking] {
         bookings.filter { $0.bookingStatus == .pending }
     }
     
+    /// Kommande bokningar - Accepterade av tränaren
+    var upcomingBookings: [TrainerBooking] {
+        bookings.filter { $0.bookingStatus == .accepted }
+    }
+    
+    /// Tidigare bokningar - Avslutade eller nekade
     var pastBookings: [TrainerBooking] {
         bookings.filter { $0.bookingStatus == .declined || $0.bookingStatus == .cancelled }
     }

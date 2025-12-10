@@ -470,17 +470,55 @@ struct TrainerBooking: Identifiable, Codable {
     let createdAt: Date?
     let updatedAt: Date?
     
-    // From view
+    // Extended booking fields
+    let lessonTypeId: UUID?
+    let scheduledDate: String?
+    let scheduledTime: String?
+    let durationMinutes: Int?
+    let price: Int?
+    let locationType: String?
+    let golfCourseId: UUID?
+    let customLocationName: String?
+    let customLocationLat: Double?
+    let customLocationLng: Double?
+    let paymentStatus: String?
+    let stripePaymentId: String?
+    
+    // From view - Trainer info
     let trainerUserID: UUID?
     let trainerName: String?
     let trainerAvatarUrl: String?
     let hourlyRate: Int?
+    let trainerCity: String?
+    
+    // From view - Student info
     let studentUsername: String?
     let studentAvatarUrl: String?
     let unreadCount: Int?
     
     var bookingStatus: BookingStatus {
         BookingStatus(rawValue: status) ?? .pending
+    }
+    
+    var formattedDate: String? {
+        guard let dateStr = scheduledDate else { return nil }
+        let inputFormatter = DateFormatter()
+        inputFormatter.dateFormat = "yyyy-MM-dd"
+        guard let date = inputFormatter.date(from: dateStr) else { return nil }
+        let outputFormatter = DateFormatter()
+        outputFormatter.locale = Locale(identifier: "sv_SE")
+        outputFormatter.dateFormat = "d MMMM yyyy"
+        return outputFormatter.string(from: date)
+    }
+    
+    var formattedTime: String? {
+        guard let timeStr = scheduledTime else { return nil }
+        // Time comes as HH:mm:ss, we want HH:mm
+        let components = timeStr.split(separator: ":")
+        if components.count >= 2 {
+            return "\(components[0]):\(components[1])"
+        }
+        return timeStr
     }
     
     enum CodingKeys: String, CodingKey {
@@ -492,10 +530,23 @@ struct TrainerBooking: Identifiable, Codable {
         case trainerResponse = "trainer_response"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case lessonTypeId = "lesson_type_id"
+        case scheduledDate = "scheduled_date"
+        case scheduledTime = "scheduled_time"
+        case durationMinutes = "duration_minutes"
+        case price
+        case locationType = "location_type"
+        case golfCourseId = "golf_course_id"
+        case customLocationName = "custom_location_name"
+        case customLocationLat = "custom_location_lat"
+        case customLocationLng = "custom_location_lng"
+        case paymentStatus = "payment_status"
+        case stripePaymentId = "stripe_payment_id"
         case trainerUserID = "trainer_user_id"
         case trainerName = "trainer_name"
         case trainerAvatarUrl = "trainer_avatar_url"
         case hourlyRate = "hourly_rate"
+        case trainerCity = "trainer_city"
         case studentUsername = "student_username"
         case studentAvatarUrl = "student_avatar_url"
         case unreadCount = "unread_count"
@@ -904,6 +955,9 @@ extension TrainerService {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
+        // Build default message if not provided
+        let bookingMessage = message ?? "Bokningsförfrågan för lektion"
+        
         var data: [String: DynamicEncodable] = [
             "trainer_id": DynamicEncodable(trainerId.uuidString),
             "student_id": DynamicEncodable(userId.uuidString),
@@ -913,8 +967,9 @@ extension TrainerService {
             "duration_minutes": DynamicEncodable(durationMinutes),
             "price": DynamicEncodable(price),
             "location_type": DynamicEncodable(locationType.rawValue),
-            "booking_status": DynamicEncodable("pending"),
-            "payment_status": DynamicEncodable(stripePaymentId != nil ? "paid" : "pending")
+            "status": DynamicEncodable("pending"),
+            "payment_status": DynamicEncodable(stripePaymentId != nil ? "paid" : "pending"),
+            "message": DynamicEncodable(bookingMessage)
         ]
         
         if let golfCourseId = golfCourseId {
@@ -928,9 +983,6 @@ extension TrainerService {
         }
         if let lng = customLocationLng {
             data["custom_location_lng"] = DynamicEncodable(lng)
-        }
-        if let message = message {
-            data["message"] = DynamicEncodable(message)
         }
         if let stripePaymentId = stripePaymentId {
             data["stripe_payment_id"] = DynamicEncodable(stripePaymentId)
