@@ -635,7 +635,7 @@ struct SessionMapView: View {
     let resumeSession: Bool
     @Binding var forceNewSession: Bool
     @ObservedObject private var locationManager = LocationManager.shared
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
     @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var territoryStore = TerritoryStore.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
@@ -1119,6 +1119,9 @@ struct SessionMapView: View {
             // Timer continues in background
             saveSessionState()
         }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
+        }
         .sheet(item: $xpCelebrationData) { data in
             XpCelebrationView(
                 points: data.points,
@@ -1246,7 +1249,7 @@ struct SessionMapView: View {
         let basePoints = Int((locationManager.distance * distancePointMultiplier()).rounded())
         
         // PRO-medlemmar får 1.5x poäng
-        if revenueCatManager.isPremium {
+        if isPremium {
             earnedPoints = Int(Double(basePoints) * 1.5)
         } else {
             earnedPoints = basePoints
@@ -1524,7 +1527,7 @@ struct SessionMapView: View {
         let basePoints = Int((locationManager.distance * distancePointMultiplier()).rounded())
         
         // PRO-medlemmar får 1.5x poäng
-        if revenueCatManager.isPremium {
+        if isPremium {
             earnedPoints = Int(Double(basePoints) * 1.5)
         } else {
             earnedPoints = basePoints

@@ -98,7 +98,8 @@ struct ShareActivityView: View {
                         background: selectedBackground,
                         size: CGSize(width: UIScreen.main.bounds.width - 48,
                                      height: (UIScreen.main.bounds.width - 48) * 1.25),
-                        coverImage: coverImage
+                        coverImage: coverImage,
+                        isPreview: true // Show checkerboard for preview
                     )
                     .tag(index)
                     .padding(.horizontal, 24)
@@ -156,12 +157,24 @@ struct ShareActivityView: View {
             insights: insightsLoader.insights,
             background: selectedBackground,
             size: exportSize,
-            coverImage: coverImage
+            coverImage: coverImage,
+            isPreview: false // Export with true transparency (no checkerboard)
         )
+        
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
-        renderer.isOpaque = selectedBackground != .transparent
-        return renderer.uiImage
+        
+        if selectedBackground == .transparent {
+            // For transparent images, we need special handling
+            renderer.isOpaque = false
+            
+            // Render to CGImage first for proper alpha channel
+            guard let cgImage = renderer.cgImage else { return nil }
+            return UIImage(cgImage: cgImage)
+        } else {
+            renderer.isOpaque = true
+            return renderer.uiImage
+        }
     }
     
     private func shareToInstagramStories() {
@@ -188,17 +201,73 @@ struct ShareActivityView: View {
             showAlert(message: "Kunde inte skapa bilden.")
             return
         }
- 
-        PHPhotoLibrary.requestAuthorization { status in
+        
+        // For transparent images, we need to save as PNG file first
+        // because Photos library might convert UIImage to JPEG (no transparency)
+        if selectedBackground == .transparent {
+            savePNGToPhotos(image: image)
+        } else {
+            saveImageToPhotos(image: image)
+        }
+    }
+    
+    private func savePNGToPhotos(image: UIImage) {
+        guard let pngData = image.pngData() else {
+            showAlert(message: "Kunde inte skapa PNG-bilden.")
+            return
+        }
+        
+        // Save PNG to temporary file
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("share_\(UUID().uuidString).png")
+        
+        do {
+            try pngData.write(to: tempURL)
+        } catch {
+            showAlert(message: "Kunde inte skapa temporär fil.")
+            return
+        }
+        
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
-                showAlert(message: "Ge åtkomst till foton i inställningar.")
+                DispatchQueue.main.async {
+                    self.showAlert(message: "Ge åtkomst till foton i inställningar.")
+                }
                 return
             }
-                PHPhotoLibrary.shared().performChanges({
-                        PHAssetChangeRequest.creationRequestForAsset(from: image)
+            
+            PHPhotoLibrary.shared().performChanges({
+                // Import PNG file directly - preserves transparency
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, fileURL: tempURL, options: nil)
+            }) { success, error in
+                // Clean up temp file
+                try? FileManager.default.removeItem(at: tempURL)
+                
+                DispatchQueue.main.async {
+                    if success {
+                        self.showAlert(message: "Bilden sparades som PNG med transparens.")
+                    } else {
+                        print("❌ PNG save error: \(error?.localizedDescription ?? "unknown")")
+                        self.showAlert(message: "Kunde inte spara bilden.")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func saveImageToPhotos(image: UIImage) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                DispatchQueue.main.async {
+                    self.showAlert(message: "Ge åtkomst till foton i inställningar.")
+                }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
             }) { success, _ in
                 DispatchQueue.main.async {
-                    showAlert(message: success ? "Bilden sparades i kamerarullen." : "Kunde inte spara bilden.")
+                    self.showAlert(message: success ? "Bilden sparades i kamerarullen." : "Kunde inte spara bilden.")
                 }
             }
         }
@@ -410,8 +479,9 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
     
     var preferredTextColor: Color {
         switch self {
-        case .white: return .black
-        default: return .white
+        case .transparent: return .white
+        case .white: return .white
+        case .black: return .white
         }
     }
 }
@@ -430,13 +500,15 @@ struct ShareCardView: View {
     let background: ShareBackgroundOption
     let size: CGSize
     let coverImage: UIImage?
+    var isPreview: Bool = false // true = show checkerboard, false = true transparency for export
     
     private var scale: CGFloat {
         size.width / 320
     }
     
     private var shouldShowCoverImage: Bool {
-        coverImage != nil && template == .stats
+        // Only show cover image when background is not transparent
+        background != .transparent && coverImage != nil && template == .stats
     }
     
     var body: some View {
@@ -445,35 +517,43 @@ struct ShareCardView: View {
             content
         }
         .frame(width: size.width, height: size.height)
+        .background(background == .transparent && !isPreview ? Color.clear : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 32 * scale, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 32 * scale, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 2)
+                .stroke(Color.white.opacity(background == .transparent ? 0 : 0.08), lineWidth: 2)
         )
+        .compositingGroup() // Ensures proper alpha compositing for transparency
     }
 
     private var backgroundView: some View {
         ZStack {
             if background == .transparent {
-                CheckerboardBackground()
+                // Preview: show checkerboard to indicate transparency
+                // Export: use Color.clear for true transparency
+                if isPreview {
+                    CheckerboardBackground()
+                } else {
+                    Color.clear
+                }
             } else {
                 background.color
-            }
-            
-            if shouldShowCoverImage, let coverImage {
-                Image(uiImage: coverImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size.width, height: size.height)
-                    .clipped()
-            }
-            
-            if shouldShowCoverImage {
-                LinearGradient(
-                    colors: background.overlayGradient,
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                
+                if shouldShowCoverImage, let coverImage {
+                    Image(uiImage: coverImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                }
+                
+                if shouldShowCoverImage {
+                    LinearGradient(
+                        colors: background.overlayGradient,
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
             }
         }
     }

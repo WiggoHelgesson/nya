@@ -907,8 +907,54 @@ class SocialService {
                     }
                     guard !workouts.isEmpty else { return [] }
                     let profile = try? await ProfileService.shared.fetchUserProfile(userId: targetId)
+                    
+                    // Fetch actual counts from database instead of relying on stale cache
+                    let postIds = workouts.map { $0.id }
+                    var countsMap: [String: (likeCount: Int, commentCount: Int)] = [:]
+                    
+                    do {
+                        try await AuthSessionManager.shared.ensureValidSession()
+                        
+                        // Fetch like counts
+                        struct LikeCountRow: Decodable {
+                            let workout_post_id: String
+                            let count: Int
+                        }
+                        
+                        // Use a simpler approach - fetch counts for each post
+                        for postId in postIds {
+                            // Get like count
+                            let likes: [[String: String]] = try await self.supabase
+                                .from("workout_post_likes")
+                                .select("workout_post_id")
+                                .eq("workout_post_id", value: postId)
+                                .execute()
+                                .value
+                            
+                            // Get comment count
+                            let comments: [[String: String]] = try await self.supabase
+                                .from("workout_post_comments")
+                                .select("workout_post_id")
+                                .eq("workout_post_id", value: postId)
+                                .execute()
+                                .value
+                            
+                            countsMap[postId] = (likeCount: likes.count, commentCount: comments.count)
+                            
+                            // Update cache with fresh counts
+                            self.postCountsCache[postId] = countsMap[postId]
+                        }
+                    } catch {
+                        print("⚠️ Could not fetch fresh counts in fallback feed: \(error)")
+                        // Fall back to cache if fresh fetch fails
+                        for postId in postIds {
+                            countsMap[postId] = self.postCountsCache[postId] ?? (likeCount: 0, commentCount: 0)
+                        }
+                    }
+                    
                     let mapped = workouts.map { post -> SocialWorkoutPost in
-                        SocialWorkoutPost(
+                        let counts = countsMap[post.id] ?? (likeCount: 0, commentCount: 0)
+                        return SocialWorkoutPost(
                             id: post.id,
                             userId: post.userId,
                             activityType: post.activityType,
@@ -924,8 +970,8 @@ class SocialService {
                             userIsPro: profile?.isProMember,
                             location: nil,
                             strokes: nil,
-                            likeCount: self.postCountsCache[post.id]?.likeCount ?? 0,
-                            commentCount: self.postCountsCache[post.id]?.commentCount ?? 0,
+                            likeCount: counts.likeCount,
+                            commentCount: counts.commentCount,
                             isLikedByCurrentUser: false,
                             splits: post.splits,
                             exercises: post.exercises

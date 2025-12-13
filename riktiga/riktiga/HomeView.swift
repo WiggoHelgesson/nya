@@ -26,7 +26,8 @@ struct BrandLogoItem: Identifiable {
 
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var statisticsService = StatisticsService.shared
+    @State private var isLoadingStats = StatisticsService.shared.isLoading
+    @State private var weeklyStats: WeeklyStats? = StatisticsService.shared.weeklyStats
     private let healthKitManager = HealthKitManager.shared
     @State private var showMonthlyPrize = false
     @State private var showStatistics = false
@@ -221,7 +222,7 @@ struct HomeView: View {
         .onAppear {
             if let userId = authViewModel.currentUser?.id {
                 Task {
-                    await statisticsService.fetchWeeklyStats(userId: userId)
+                    await StatisticsService.shared.fetchWeeklyStats(userId: userId)
                 }
             }
             
@@ -275,7 +276,7 @@ struct HomeView: View {
                 streakInfo = StreakManager.shared.getCurrentStreak()
                 if let userId = authViewModel.currentUser?.id {
                     Task {
-                        await statisticsService.fetchWeeklyStats(userId: userId)
+                        await StatisticsService.shared.fetchWeeklyStats(userId: userId)
                     }
                 }
                 loadMonthlyCalendarData(force: true)
@@ -294,6 +295,12 @@ struct HomeView: View {
                 NotificationCenter.default.removeObserver(observer)
             }
             observers.removeAll()
+        }
+        .onReceive(StatisticsService.shared.$isLoading) { newValue in
+            isLoadingStats = newValue
+        }
+        .onReceive(StatisticsService.shared.$weeklyStats) { newValue in
+            weeklyStats = newValue
         }
         .onReceive(NotificationCenter.default.publisher(for: .rewardCelebrationQueued)) { _ in
             presentNextRewardIfAvailable()
@@ -832,12 +839,12 @@ extension HomeView {
                 .padding(.horizontal, 20)
             
             VStack(spacing: 12) {
-                if statisticsService.isLoading {
+                if isLoadingStats {
                     ForEach(0..<7) { _ in
                         WeeklyStatRow(day: "---", distance: 0.0, isToday: false)
                     }
                 } else {
-                    let dailyStats = statisticsService.weeklyStats?.dailyStats ?? []
+                    let dailyStats = weeklyStats?.dailyStats ?? []
                     if dailyStats.isEmpty {
                         let days = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
                         ForEach(days, id: \.self) { day in

@@ -36,9 +36,9 @@ extension View {
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var navigationTracker = NavigationDepthTracker.shared
     @Environment(\.scenePhase) private var scenePhase
+    @State private var hasActiveSession = SessionManager.shared.hasActiveSession
     @State private var showStartSession = false
     @State private var showResumeSession = false
     @State private var selectedTab = 0  // 0=Hem, 1=Zonkriget, 2=Belöningar, 3=Lektioner, 4=Profil
@@ -60,7 +60,7 @@ struct MainTabView: View {
                     ZoneWarView()
                         .tag(1)
                         .tabItem {
-                            Image(systemName: "map.fill")
+                            Image(systemName: "flag.2.crossed.fill")
                             Text("Zonkriget")
                         }
                     
@@ -104,7 +104,7 @@ struct MainTabView: View {
                 .ignoresSafeArea()
         }
         .onAppear {
-            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession {
+            if hasActiveSession && !showStartSession && !showResumeSession {
                 autoPresentedActiveSession = true
                 showResumeSession = true
             }
@@ -150,7 +150,10 @@ struct MainTabView: View {
         .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
             PaywallAfterSignupView().environmentObject(authViewModel)
         }
-        .onChange(of: sessionManager.hasActiveSession) { _, newValue in
+        .onReceive(SessionManager.shared.$hasActiveSession) { newValue in
+            hasActiveSession = newValue
+        }
+        .onChange(of: hasActiveSession) { _, newValue in
             if newValue {
                 if !autoPresentedActiveSession && !showStartSession && !showResumeSession {
                     autoPresentedActiveSession = true
@@ -189,7 +192,7 @@ struct MainTabView: View {
             Task {
                 await TrackingPermissionManager.shared.requestPermissionIfNeeded()
                 await MainActor.run {
-                    if sessionManager.hasActiveSession {
+                    if hasActiveSession {
                         showResumeSession = true
                     } else {
                         showStartSession = true

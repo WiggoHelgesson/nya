@@ -11,47 +11,34 @@ struct TrainerDashboardView: View {
     @State private var showDeactivateConfirmation = false
     @State private var isDeactivating = false
     
+    // Stripe Connect states
+    @State private var stripeAccountId: String?
+    @State private var stripeStatus: StripeConnectService.AccountStatusResponse?
+    @State private var isLoadingStripe = false
+    @State private var stripeError: String?
+    @State private var showStripeOnboarding = false
+    @State private var lastStripeLoad: Date?
+    private let stripeLoadThrottle: TimeInterval = 60 // 1 minute cache for Stripe status
+    
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                LazyVStack(spacing: 20) {
+                    // Stripe Connect Section - Payouts
+                    stripeConnectSection
+                    
                     // Manage Ad Button
                     manageAdButton
-                    
-                    // Deactivate Account Button
-                    deactivateButton
                     
                     // Stats Overview
                     statsOverview
                     
-                    // Pending Bookings
-                    if !viewModel.pendingBookings.isEmpty {
-                        bookingsSection(
-                            title: "Väntande förfrågningar",
-                            bookings: viewModel.pendingBookings,
-                            emptyMessage: ""
-                        )
-                    }
-                    
-                    // Accepted Bookings
-                    bookingsSection(
-                        title: "Kommande lektioner",
-                        bookings: viewModel.acceptedBookings,
-                        emptyMessage: "Inga bokade lektioner"
-                    )
-                    
-                    // Past Bookings
-                    if !viewModel.pastBookings.isEmpty {
-                        bookingsSection(
-                            title: "Tidigare",
-                            bookings: viewModel.pastBookings,
-                            emptyMessage: ""
-                        )
-                    }
+                    // Deactivate Account Button
+                    deactivateButton
                 }
                 .padding()
             }
-            .navigationTitle("Mina bokningar")
+            .navigationTitle("Utbetalningar & info")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -62,14 +49,26 @@ struct TrainerDashboardView: View {
                 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task { await viewModel.refresh() }
+                        Task {
+                            // Force refresh both bookings and Stripe status
+                            lastStripeLoad = nil // Reset cache to force reload
+                            async let bookingsTask: () = viewModel.refresh()
+                            async let stripeTask: () = loadStripeStatus()
+                            _ = await (bookingsTask, stripeTask)
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
             }
             .task {
-                await viewModel.loadBookings()
+                // Load trainer ID first (needed for other operations)
+                await viewModel.loadTrainerIdIfNeeded()
+                
+                // Then load bookings and stripe status in parallel
+                async let bookingsTask: () = viewModel.loadBookings()
+                async let stripeTask: () = loadStripeStatus()
+                _ = await (bookingsTask, stripeTask)
             }
             .refreshable {
                 await viewModel.refresh()
@@ -140,6 +139,426 @@ struct TrainerDashboardView: View {
         }
     }
     
+    // MARK: - Stripe Connect Section
+    
+    private var stripeConnectSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "creditcard.fill")
+                    .foregroundColor(.black)
+                Text("Utbetalningar")
+                    .font(.system(size: 18, weight: .bold))
+                Spacer()
+            }
+            
+            if isLoadingStripe {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Laddar...")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            } else if let status = stripeStatus, status.isFullyOnboarded == true {
+                // Account is fully set up - show status and balance
+                stripeActiveAccountCard(status: status)
+            } else if stripeAccountId != nil {
+                // Account exists but not fully onboarded
+                stripeOnboardingRequiredCard
+            } else {
+                // No account - show setup button
+                stripeSetupCard
+            }
+            
+            if let error = stripeError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+    }
+    
+    private func stripeActiveAccountCard(status: StripeConnectService.AccountStatusResponse) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.black)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Konto aktivt")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Redo att ta emot betalningar")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+            }
+            
+            // Show balance if available
+            if let balance = status.balance {
+                Divider()
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tillgängligt")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        if let available = balance.available?.first {
+                            Text(StripeConnectService.formatBalance(available.amount, currency: available.currency))
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.black)
+                        } else {
+                            Text("0 SEK")
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Väntande")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        if let pending = balance.pending?.first {
+                            Text(StripeConnectService.formatBalance(pending.amount, currency: pending.currency))
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.gray)
+                        } else {
+                            Text("0 SEK")
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                    }
+                }
+            }
+            
+            // Link to Stripe Express dashboard
+            Button {
+                openStripeDashboard()
+            } label: {
+                HStack {
+                    Text("Öppna Stripe Dashboard")
+                        .font(.system(size: 14, weight: .medium))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12))
+                }
+                .foregroundColor(.black)
+            }
+            .padding(.top, 4)
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var stripeOnboardingRequiredCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundColor(.gray)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Slutför registrering")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(stripeStatus?.statusMessage ?? "Fyll i dina uppgifter för att ta emot betalningar")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+            }
+            
+            Button {
+                Task { await startStripeOnboarding() }
+            } label: {
+                HStack {
+                    if showStripeOnboarding {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.white)
+                    }
+                    Text("Slutför registrering")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+            .disabled(showStripeOnboarding)
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var stripeSetupCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(.black)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Koppla betalningar")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Ta emot betalningar direkt till ditt bankkonto")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+            }
+            
+            Button {
+                Task { await setupStripeAccount() }
+            } label: {
+                HStack {
+                    if isLoadingStripe {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.white)
+                    }
+                    Text("Kom igång med Stripe")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+            }
+            .disabled(isLoadingStripe)
+            
+            Text("15% går till plattformen, resten till dig")
+                .font(.caption2)
+                .foregroundColor(.gray)
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    // MARK: - Stripe Functions
+    
+    private func loadStripeStatus() async {
+        // Throttle Stripe status checks
+        if let lastLoad = lastStripeLoad,
+           Date().timeIntervalSince(lastLoad) < stripeLoadThrottle,
+           stripeStatus != nil || stripeAccountId != nil {
+            return
+        }
+        
+        // First check if trainer has a Stripe account
+        var trainerId = viewModel.trainerId
+        
+        // If trainerId not loaded yet, try to fetch it
+        if trainerId == nil {
+            guard let userId = AuthViewModel.shared.currentUser?.id else { return }
+            
+            do {
+                struct TrainerIdResponse: Decodable {
+                    let id: String
+                }
+                
+                let response: TrainerIdResponse = try await SupabaseConfig.supabase
+                    .from("trainer_profiles")
+                    .select("id")
+                    .eq("user_id", value: userId)
+                    .single()
+                    .execute()
+                    .value
+                
+                trainerId = response.id
+                await MainActor.run {
+                    viewModel.trainerId = response.id
+                }
+            } catch {
+                print("❌ Failed to load trainer ID for Stripe status: \(error)")
+                return
+            }
+        }
+        
+        guard let finalTrainerId = trainerId else { return }
+        
+        do {
+            // Fetch trainer profile to get stripe_account_id
+            let profile: TrainerProfileStripe = try await SupabaseConfig.supabase
+                .from("trainer_profiles")
+                .select("stripe_account_id")
+                .eq("id", value: finalTrainerId)
+                .single()
+                .execute()
+                .value
+            
+            guard let accountId = profile.stripe_account_id, !accountId.isEmpty else {
+                await MainActor.run {
+                    stripeAccountId = nil
+                    stripeStatus = nil
+                }
+                return
+            }
+            
+            await MainActor.run {
+                stripeAccountId = accountId
+                isLoadingStripe = true
+            }
+            
+            // Get status from Stripe
+            let status = try await StripeConnectService.shared.getAccountStatus(
+                stripeAccountId: accountId,
+                trainerId: finalTrainerId
+            )
+            
+            await MainActor.run {
+                stripeStatus = status
+                isLoadingStripe = false
+                stripeError = nil
+                lastStripeLoad = Date()
+            }
+            
+        } catch {
+            print("❌ Failed to load Stripe status: \(error)")
+            await MainActor.run {
+                isLoadingStripe = false
+                stripeError = error.localizedDescription
+            }
+        }
+    }
+    
+    private func setupStripeAccount() async {
+        // Try to get trainerId - if not loaded yet, fetch it
+        var trainerId = viewModel.trainerId
+        
+        if trainerId == nil {
+            // Fetch trainer ID directly
+            guard let userId = AuthViewModel.shared.currentUser?.id else {
+                stripeError = "Du måste vara inloggad"
+                return
+            }
+            
+            do {
+                struct TrainerIdResponse: Decodable {
+                    let id: String
+                }
+                
+                let response: TrainerIdResponse = try await SupabaseConfig.supabase
+                    .from("trainer_profiles")
+                    .select("id")
+                    .eq("user_id", value: userId)
+                    .single()
+                    .execute()
+                    .value
+                
+                trainerId = response.id
+                await MainActor.run {
+                    viewModel.trainerId = response.id
+                }
+            } catch {
+                stripeError = "Kunde inte hitta ditt tränarkonto"
+                return
+            }
+        }
+        
+        guard let finalTrainerId = trainerId,
+              let email = AuthViewModel.shared.currentUser?.email else {
+            stripeError = "Kunde inte hitta användarinformation"
+            return
+        }
+        
+        await MainActor.run {
+            isLoadingStripe = true
+            stripeError = nil
+        }
+        
+        do {
+            // Create the Connect account
+            let response = try await StripeConnectService.shared.createConnectAccount(
+                trainerId: finalTrainerId,
+                email: email
+            )
+            
+            guard let accountId = response.accountId else {
+                throw StripeConnectError.noAccountId
+            }
+            
+            await MainActor.run {
+                stripeAccountId = accountId
+            }
+            
+            // Now start onboarding
+            await startStripeOnboarding()
+            
+        } catch {
+            print("❌ Failed to setup Stripe account: \(error)")
+            await MainActor.run {
+                isLoadingStripe = false
+                // Show user-friendly error message
+                let errorMsg = error.localizedDescription
+                if errorMsg.contains("platform profile") || errorMsg.contains("questionnaire") {
+                    stripeError = "Stripe Connect konfigureras just nu. Försök igen om några minuter."
+                } else {
+                    stripeError = "Kunde inte ansluta till Stripe. Försök igen senare."
+                }
+            }
+        }
+    }
+    
+    private func startStripeOnboarding() async {
+        guard let accountId = stripeAccountId else {
+            stripeError = "Inget Stripe-konto hittat"
+            return
+        }
+        
+        await MainActor.run {
+            showStripeOnboarding = true
+            stripeError = nil
+        }
+        
+        do {
+            let response = try await StripeConnectService.shared.getOnboardingLink(
+                stripeAccountId: accountId
+            )
+            
+            if response.alreadyComplete == true {
+                // Already done - refresh status
+                await loadStripeStatus()
+                await MainActor.run {
+                    showStripeOnboarding = false
+                }
+                return
+            }
+            
+            guard let urlString = response.url, let url = URL(string: urlString) else {
+                throw StripeConnectError.apiError("Ingen onboarding-länk")
+            }
+            
+            // Open in Safari
+            await MainActor.run {
+                UIApplication.shared.open(url)
+                showStripeOnboarding = false
+                isLoadingStripe = false
+            }
+            
+        } catch {
+            print("❌ Failed to start Stripe onboarding: \(error)")
+            await MainActor.run {
+                showStripeOnboarding = false
+                stripeError = error.localizedDescription
+            }
+        }
+    }
+    
+    private func openStripeDashboard() {
+        // Stripe Express dashboard URL
+        if let url = URL(string: "https://dashboard.stripe.com/express") {
+            UIApplication.shared.open(url)
+        }
+    }
+    
     // MARK: - Manage Ad Button
     
     private var manageAdButton: some View {
@@ -168,13 +587,7 @@ struct TrainerDashboardView: View {
                     .foregroundColor(.white.opacity(0.7))
             }
             .padding(16)
-            .background(
-                LinearGradient(
-                    colors: [Color.blue, Color.blue.opacity(0.7)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .background(Color.black)
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
@@ -213,7 +626,7 @@ struct TrainerDashboardView: View {
                 }
             }
             .padding(16)
-            .background(Color.red.opacity(0.8))
+            .background(Color(.systemGray3))
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
@@ -228,7 +641,7 @@ struct TrainerDashboardView: View {
                 title: "Väntande",
                 value: "\(viewModel.pendingBookings.count)",
                 icon: "clock.fill",
-                color: .orange
+                color: .gray
             )
             
             StatCard(
@@ -242,7 +655,7 @@ struct TrainerDashboardView: View {
                 title: "Totalt",
                 value: "\(viewModel.allBookings.count)",
                 icon: "calendar.badge.plus",
-                color: .blue
+                color: .black
             )
         }
     }
@@ -309,79 +722,79 @@ struct BookingCard: View {
     let booking: TrainerBooking
     let onTap: () -> Void
     
+    // Static formatter for performance
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.unitsStyle = .short
+        return formatter
+    }()
+    
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Student Avatar with unread badge
-                ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: booking.studentAvatarUrl ?? "")) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                    
-                    if let unread = booking.unreadCount, unread > 0 {
-                        Text("\(unread)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(4)
-                            .background(Color.red)
-                            .clipShape(Circle())
-                            .offset(x: 4, y: -4)
-                    }
-                }
-                
-                // Booking Info
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(booking.studentUsername ?? "Okänd användare")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                        
-                        StatusBadge(status: booking.bookingStatus)
-                    }
-                    
-                    Text(booking.message)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                    
-                    HStack {
-                        if let date = booking.createdAt {
-                            Text(formatDate(date))
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+            cardContent
         }
         .buttonStyle(.plain)
     }
     
-    private func formatDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+    private var cardContent: some View {
+        HStack(spacing: 12) {
+            avatarSection
+            infoSection
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private var avatarSection: some View {
+        ZStack(alignment: .topTrailing) {
+            ProfileImage(url: booking.studentAvatarUrl, size: 50)
+            
+            if let unread = booking.unreadCount, unread > 0 {
+                Text("\(unread)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(4)
+                    .background(Color.black)
+                    .clipShape(Circle())
+                    .offset(x: 4, y: -4)
+            }
+        }
+    }
+    
+    private var infoSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(booking.studentUsername ?? "Okänd användare")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                StatusBadge(status: booking.bookingStatus)
+            }
+            
+            Text(booking.message)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+            
+            HStack {
+                if let date = booking.createdAt {
+                    Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
     }
 }
 
@@ -403,9 +816,9 @@ struct StatusBadge: View {
     
     private var statusColor: Color {
         switch status {
-        case .pending: return .orange
+        case .pending: return .gray
         case .accepted: return .black
-        case .declined: return .red
+        case .declined: return .black
         case .cancelled: return .gray
         }
     }
@@ -426,13 +839,7 @@ struct BookingResponseView: View {
             VStack(spacing: 20) {
                 // Student Info
                 HStack(spacing: 12) {
-                    AsyncImage(url: URL(string: booking.studentAvatarUrl ?? "")) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.circle.fill").resizable().foregroundColor(.gray)
-                    }
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
+                    ProfileImage(url: booking.studentAvatarUrl, size: 60)
                     
                     VStack(alignment: .leading) {
                         Text(booking.studentUsername ?? "Okänd användare")
@@ -490,7 +897,7 @@ struct BookingResponseView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.red)
+                        .background(Color(.systemGray3))
                         .cornerRadius(12)
                     }
                     .disabled(isProcessing)
@@ -530,22 +937,63 @@ struct BookingResponseView: View {
 // MARK: - View Model
 
 class TrainerDashboardViewModel: ObservableObject {
-    @Published var allBookings: [TrainerBooking] = []
+    @Published var allBookings: [TrainerBooking] = [] {
+        didSet {
+            // Update cached filtered arrays when bookings change
+            _pendingBookings = allBookings.filter { $0.bookingStatus == .pending }
+            _acceptedBookings = allBookings.filter { $0.bookingStatus == .accepted }
+            _pastBookings = allBookings.filter { $0.bookingStatus == .declined || $0.bookingStatus == .cancelled }
+        }
+    }
     @Published var isLoading = false
+    @Published var trainerId: String?
+    
+    // Cached filtered bookings to avoid recomputation
+    private var _pendingBookings: [TrainerBooking] = []
+    private var _acceptedBookings: [TrainerBooking] = []
+    private var _pastBookings: [TrainerBooking] = []
+    
+    var pendingBookings: [TrainerBooking] { _pendingBookings }
+    var acceptedBookings: [TrainerBooking] { _acceptedBookings }
+    var pastBookings: [TrainerBooking] { _pastBookings }
     
     private var lastLoadTime: Date?
+    private var lastTrainerIdLoad: Date?
     private let cacheThrottle: TimeInterval = 15 // 15 seconds cache
+    private let trainerIdCacheThrottle: TimeInterval = 300 // 5 minutes for trainer ID
     
-    var pendingBookings: [TrainerBooking] {
-        allBookings.filter { $0.bookingStatus == .pending }
-    }
+    // Don't load on init - let the view control when to load
+    init() {}
     
-    var acceptedBookings: [TrainerBooking] {
-        allBookings.filter { $0.bookingStatus == .accepted }
-    }
-    
-    var pastBookings: [TrainerBooking] {
-        allBookings.filter { $0.bookingStatus == .declined || $0.bookingStatus == .cancelled }
+    @MainActor
+    func loadTrainerIdIfNeeded() async {
+        // Return if we already have trainerId and it's recent
+        if trainerId != nil,
+           let lastLoad = lastTrainerIdLoad,
+           Date().timeIntervalSince(lastLoad) < trainerIdCacheThrottle {
+            return
+        }
+        
+        guard let userId = AuthViewModel.shared.currentUser?.id else { return }
+        
+        do {
+            struct TrainerIdResponse: Decodable {
+                let id: String
+            }
+            
+            let response: TrainerIdResponse = try await SupabaseConfig.supabase
+                .from("trainer_profiles")
+                .select("id")
+                .eq("user_id", value: userId)
+                .single()
+                .execute()
+                .value
+            
+            trainerId = response.id
+            lastTrainerIdLoad = Date()
+        } catch {
+            print("❌ Failed to load trainer ID: \(error)")
+        }
     }
     
     @MainActor
@@ -593,6 +1041,12 @@ class TrainerDashboardViewModel: ObservableObject {
             print("❌ Failed to update booking status: \(error)")
         }
     }
+}
+
+// MARK: - Helper Struct for Stripe
+
+private struct TrainerProfileStripe: Decodable {
+    let stripe_account_id: String?
 }
 
 #Preview {

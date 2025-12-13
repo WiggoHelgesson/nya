@@ -47,7 +47,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
 
 struct AuthenticationView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var locationManager = LocationManager.shared
+    @State private var locationAuthStatus: CLAuthorizationStatus = LocationManager.shared.authorizationStatus
     @State private var showLanding = true
     @State private var currentHeroIndex = 0
     @State private var onboardingStep: OnboardingStep? = nil
@@ -104,11 +104,14 @@ struct AuthenticationView: View {
                  profileImage = nil
              }
             
-            updateLocationAuthorizationState(locationManager.authorizationStatus)
+            updateLocationAuthorizationState(locationAuthStatus)
         scheduleUsernameAvailabilityCheck(for: onboardingData.username)
         }
-        .onChange(of: locationManager.authorizationStatus) { status in
+        .onChange(of: locationAuthStatus) { status in
             updateLocationAuthorizationState(status)
+        }
+        .onReceive(LocationManager.shared.$authorizationStatus) { newStatus in
+            locationAuthStatus = newStatus
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             let authorized = HealthKitManager.shared.isHealthDataAuthorized()
@@ -411,7 +414,7 @@ struct AuthenticationView: View {
                             .padding(.horizontal, 12)
                     }
                     
-                    if locationManager.authorizationStatus == .authorizedWhenInUse {
+                    if locationAuthStatus == .authorizedWhenInUse {
                         Button {
                             LocationManager.shared.requestBackgroundLocationPermission()
                         } label: {
@@ -426,7 +429,7 @@ struct AuthenticationView: View {
                         .padding(.horizontal, 12)
                     }
                     
-                    if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .authorizedWhenInUse {
+                    if locationAuthStatus == .denied || locationAuthStatus == .authorizedWhenInUse {
                         Button {
                             LocationManager.shared.openSettings()
                         } label: {
@@ -866,6 +869,11 @@ struct LoginFormView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
+    @State private var showForgotPassword = false
+    @State private var forgotPasswordEmail = ""
+    @State private var isResettingPassword = false
+    @State private var resetMessage = ""
+    @State private var resetSuccess = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
@@ -901,6 +909,19 @@ struct LoginFormView: View {
                 }
             }
             
+            // Forgot password link
+            HStack {
+                Spacer()
+                Button {
+                    forgotPasswordEmail = email // Pre-fill with entered email
+                    showForgotPassword = true
+                } label: {
+                    Text("Glömt lösenord?")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.black.opacity(0.7))
+                }
+            }
+            
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
                     .foregroundColor(.red)
@@ -924,6 +945,125 @@ struct LoginFormView: View {
             .foregroundColor(.white)
             .cornerRadius(10)
             .disabled(authViewModel.isLoading)
+        }
+        .sheet(isPresented: $showForgotPassword) {
+            ForgotPasswordSheet(
+                email: $forgotPasswordEmail,
+                isLoading: $isResettingPassword,
+                message: $resetMessage,
+                success: $resetSuccess,
+                onReset: {
+                    Task {
+                        isResettingPassword = true
+                        let result = await authViewModel.resetPassword(email: forgotPasswordEmail)
+                        await MainActor.run {
+                            resetMessage = result.message
+                            resetSuccess = result.success
+                            isResettingPassword = false
+                        }
+                    }
+                },
+                onDismiss: {
+                    showForgotPassword = false
+                    resetMessage = ""
+                    resetSuccess = false
+                }
+            )
+            .presentationDetents([.medium])
+        }
+    }
+}
+
+// MARK: - Forgot Password Sheet
+struct ForgotPasswordSheet: View {
+    @Binding var email: String
+    @Binding var isLoading: Bool
+    @Binding var message: String
+    @Binding var success: Bool
+    let onReset: () -> Void
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                VStack(spacing: 12) {
+                    Image(systemName: "envelope.badge")
+                        .font(.system(size: 50))
+                        .foregroundColor(.black)
+                    
+                    Text("Återställ lösenord")
+                        .font(.system(size: 24, weight: .bold))
+                    
+                    Text("Ange din e-postadress så skickar vi instruktioner för att återställa ditt lösenord.")
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .padding(.top, 20)
+                
+                TextField("E-postadress", text: $email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                    .padding(14)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 24)
+                
+                if !message.isEmpty {
+                    Text(message)
+                        .font(.system(size: 14))
+                        .foregroundColor(success ? .black : .red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                
+                if success {
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Text("Stäng")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Color.black)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 24)
+                } else {
+                    Button {
+                        onReset()
+                    } label: {
+                        if isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Skicka återställningslänk")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(email.isEmpty ? Color.gray : Color.black)
+                    .cornerRadius(12)
+                    .disabled(email.isEmpty || isLoading)
+                    .padding(.horizontal, 24)
+                }
+                
+                Spacer()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Avbryt") {
+                        onDismiss()
+                    }
+                    .foregroundColor(.black)
+                }
+            }
         }
     }
 }

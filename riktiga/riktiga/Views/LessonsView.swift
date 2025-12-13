@@ -623,6 +623,9 @@ struct TrainerDetailView: View {
                 // Book Button (moved up, above specialties)
                 bookButton
                 
+                // Service Area Map (right after book button)
+                serviceAreaSection
+                
                 // Specialties
                 if !viewModel.specialties.isEmpty {
                     specialtiesSection
@@ -638,9 +641,6 @@ struct TrainerDetailView: View {
                 
                 // Reviews
                 reviewsSection
-                
-                // Location
-                locationSection
             }
             .padding()
         }
@@ -860,6 +860,61 @@ struct TrainerDetailView: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
+    }
+    
+    // MARK: - Service Area Section (with circle)
+    
+    private var serviceAreaSection: some View {
+        let radiusKm = trainer.serviceRadiusKm ?? 10
+        let spanDelta = (radiusKm / 111.0) * 2.5
+        
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "mappin.and.ellipse")
+                    .foregroundColor(.black)
+                Text("Träningsområde")
+                    .font(.headline)
+            }
+            
+            Text("Tränaren kan hålla lektioner inom \(Int(radiusKm)) km radie")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            ZStack {
+                Map(coordinateRegion: .constant(MKCoordinateRegion(
+                    center: trainer.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: spanDelta, longitudeDelta: spanDelta)
+                )), interactionModes: []) // No interactions - fixed position
+                .cornerRadius(12)
+                
+                // Service area circle overlay
+                Circle()
+                    .stroke(Color.black, lineWidth: 2)
+                    .background(Circle().fill(Color.black.opacity(0.1)))
+                    .frame(width: serviceAreaCircleSize(radiusKm: radiusKm, spanDelta: spanDelta), 
+                           height: serviceAreaCircleSize(radiusKm: radiusKm, spanDelta: spanDelta))
+                    .allowsHitTesting(false)
+                
+                // Center pin
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.black)
+                    .allowsHitTesting(false)
+            }
+            .frame(height: 200)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private func serviceAreaCircleSize(radiusKm: Double, spanDelta: Double) -> CGFloat {
+        let degreesPerKm = 1.0 / 111.0
+        let radiusInDegrees = radiusKm * degreesPerKm
+        let mapHeight: CGFloat = 200
+        let pixelsPerDegree = mapHeight / spanDelta
+        return min(CGFloat(radiusInDegrees * 2 * pixelsPerDegree), mapHeight * 0.85)
     }
     
     // MARK: - Location Section

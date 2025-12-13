@@ -6,7 +6,7 @@ struct WeeklyActivityChart: View {
     @State private var selectedWeekIndex: Int? = nil
     @State private var showStatistics = false
     @State private var showPaywall = false
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
     
     enum ActivityType: String, CaseIterable {
         case run = "Löpning"
@@ -101,7 +101,7 @@ struct WeeklyActivityChart: View {
             
             // Statistics Button
             Button(action: {
-                if revenueCatManager.isPremium {
+                if isPremium {
                     showStatistics = true
                 } else {
                     showPaywall = true
@@ -128,6 +128,9 @@ struct WeeklyActivityChart: View {
         }
         .sheet(isPresented: $showPaywall) {
             PresentPaywallView()
+        }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
         }
     }
     

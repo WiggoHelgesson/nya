@@ -17,7 +17,7 @@ final class TerritoryStore: ObservableObject {
     private var cachedTerritoryIds: Set<UUID> = []
     private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private var lastFetchTime: Date = .distantPast
-    private let cacheValidityDuration: TimeInterval = 60 // 1 minute cache
+    private let cacheValidityDuration: TimeInterval = 15 // 15 seconds cache for faster sync
     private let boundsMargin: Double = 0.02 // Extra margin around viewport
     
     // Debounce

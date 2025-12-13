@@ -3,7 +3,7 @@ import RevenueCat
 
 struct SubscriptionView: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var offerings: Offerings? = RevenueCatManager.shared.offerings
     @State private var selectedPackage: Package?
     @State private var isProcessingPurchase = false
     @State private var showError = false
@@ -46,7 +46,7 @@ struct SubscriptionView: View {
                     .padding(.horizontal, 20)
                     
                     // Pricing options
-                    if let offerings = revenueCatManager.offerings,
+                    if let offerings = offerings,
                        let currentOffering = offerings.current {
                         VStack(spacing: 16) {
                             Text("Välj din plan")
@@ -134,8 +134,11 @@ struct SubscriptionView: View {
         }
         .onAppear {
             Task {
-                await revenueCatManager.loadOfferings()
+                await RevenueCatManager.shared.loadOfferings()
             }
+        }
+        .onReceive(RevenueCatManager.shared.$offerings) { newValue in
+            offerings = newValue
         }
     }
     
@@ -144,7 +147,7 @@ struct SubscriptionView: View {
         
         isProcessingPurchase = true
         
-        let success = await revenueCatManager.purchasePackage(package)
+        let success = await RevenueCatManager.shared.purchasePackage(package)
         
         if success {
             dismiss()
@@ -159,7 +162,7 @@ struct SubscriptionView: View {
     private func restorePurchases() async {
         isProcessingPurchase = true
         
-        let success = await revenueCatManager.restorePurchases()
+        let success = await RevenueCatManager.shared.restorePurchases()
         
         if success {
             dismiss()

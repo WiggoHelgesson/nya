@@ -6,8 +6,8 @@ import Combine
 // MARK: - Stripe Configuration
 
 enum StripeConfig {
-    // Publishable key (safe to include in app)
-    static let publishableKey = "pk_test_51SZ8AiDGa589KjR0xVDyspO7Uvet70EsdIMC4sERcpi67sRCsDfqtYlgzbPabtxgxQkvA5AXNM7HJc2HEYTUiZAk00nq6LUfLi"
+    // Publishable key (safe to include in app) - LIVE MODE
+    static let publishableKey = "pk_live_51SZ8AiDGa589KjR0jMkTAI5BfGNf65qPzajTPVHNVYWsdhmgCPNgFoT13BlQkuMOPfBwBYodLhv3wUPSWpfx0Q2x00WI8tmMXu"
     
     // Apple Pay merchant ID (configure in Apple Developer Portal)
     static let appleMerchantId = "merchant.com.upanddown.golf"

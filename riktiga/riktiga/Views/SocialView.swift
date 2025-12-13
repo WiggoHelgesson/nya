@@ -4,7 +4,7 @@ import Combine
 struct SocialView: View {
     @StateObject private var socialViewModel = SocialViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
     @State private var isLoadingMore = false
     @State private var selectedPost: SocialWorkoutPost?
@@ -12,7 +12,16 @@ struct SocialView: View {
     @State private var recommendedFollowingStatus: [String: Bool] = [:]
     @State private var isLoadingRecommended = false
     @State private var showPaywall = false
+    @State private var lastActiveTime: Date = Date()
+    @State private var showInviteSheet = false
+    @State private var showFindFriends = false
     private let brandLogos = BrandLogoItem.all
+    private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
+    
+    // Only show users with profile pictures
+    private var recommendedUsersWithPhoto: [UserSearchResult] {
+        recommendedUsers.filter { $0.avatarUrl != nil && !$0.avatarUrl!.isEmpty }
+    }
     
     var body: some View {
             NavigationStack {
@@ -29,30 +38,50 @@ struct SocialView: View {
                             .foregroundColor(.gray)
                     }
                 } else if socialViewModel.posts.isEmpty {
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            // Empty state header
-                            VStack(spacing: 12) {
-                                Image(systemName: "person.2.badge.plus")
-                                    .font(.system(size: 56))
-                                    .foregroundColor(.gray)
-                                Text("Inga inlägg än")
-                                    .font(.system(size: 22, weight: .bold))
-                                Text("Följ andra användare för att se deras inlägg i ditt flöde")
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 40)
-                            }
-                            .padding(.top, 40)
+                    // Centered empty state
+                    VStack(spacing: 24) {
+                        Spacer()
+                        
+                        // Empty state content
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.2.badge.plus")
+                                .font(.system(size: 64))
+                                .foregroundColor(.gray.opacity(0.6))
                             
-                            // Recommended friends section
-                            emptyStateRecommendedFriends
+                            Text("Inga inlägg än")
+                                .font(.system(size: 24, weight: .bold))
+                            
+                            Text("Följ andra användare för att se deras inlägg i ditt flöde")
+                                .font(.system(size: 15))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                            
+                            // Add friends button
+                            Button {
+                                showFindFriends = true
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Lägg till vänner")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
+                                .background(Color.black)
+                                .cornerRadius(25)
+                            }
+                            .padding(.top, 8)
                         }
+                        
+                        Spacer()
                     }
-                    .refreshable {
-                        await socialViewModel.refreshSocialFeed(userId: authViewModel.currentUser?.id ?? "")
-                        await loadRecommendedUsers(for: authViewModel.currentUser?.id ?? "")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .sheet(isPresented: $showFindFriends) {
+                        FindFriendsView()
+                            .environmentObject(authViewModel)
                     }
                 } else {
                     ScrollView {
@@ -67,7 +96,15 @@ struct SocialView: View {
                                         SocialPostCard(
                                             post: post,
                                             onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                                            viewModel: socialViewModel
+                                            onLikeChanged: { postId, isLiked, count in
+                                                socialViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                                            },
+                                            onCommentCountChanged: { postId, count in
+                                                socialViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                                            },
+                                            onPostDeleted: { postId in
+                                                socialViewModel.removePost(postId: postId)
+                                            }
                                         )
                                         Divider()
                                             .background(Color(.systemGray5))
@@ -161,6 +198,27 @@ struct SocialView: View {
                 PresentPaywallView()
             }
             .enableSwipeBack()
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .active {
+                    let inactiveTime = Date().timeIntervalSince(lastActiveTime)
+                    // Refresh feed if app was in background for 2+ minutes
+                    if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
+                        print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
+                        Task {
+                            guard let userId = authViewModel.currentUser?.id else { return }
+                            do {
+                                try await AuthSessionManager.shared.ensureValidSession()
+                                await socialViewModel.refreshSocialFeed(userId: userId)
+                            } catch {
+                                print("⚠️ Could not refresh feed on app active: \(error)")
+                            }
+                        }
+                    }
+                    lastActiveTime = Date()
+                } else if newPhase == .background {
+                    lastActiveTime = Date()
+                }
+            }
         }
     }
     
@@ -183,7 +241,7 @@ struct SocialView: View {
     }
     
     private var shouldShowRecommendedFriendsSection: Bool {
-        isLoadingRecommended || !recommendedUsers.isEmpty
+        isLoadingRecommended || !recommendedUsersWithPhoto.isEmpty
     }
     
     private var shouldShowBrandSlider: Bool {
@@ -204,7 +262,7 @@ struct SocialView: View {
             }
             .padding(.horizontal, 16)
             
-            if recommendedUsers.isEmpty {
+            if recommendedUsersWithPhoto.isEmpty {
                 if isLoadingRecommended {
                     HStack {
                         Spacer()
@@ -222,7 +280,7 @@ struct SocialView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(recommendedUsers) { user in
+                        ForEach(recommendedUsersWithPhoto) { user in
                             RecommendedFriendCard(
                                 user: user,
                                 isFollowing: recommendedFollowingStatus[user.id] ?? false,
@@ -254,24 +312,43 @@ struct SocialView: View {
                         .padding(.vertical, 40)
                     Spacer()
                 }
-            } else if recommendedUsers.isEmpty {
-                VStack(spacing: 8) {
-                    Text("Inga rekommendationer just nu")
-                        .font(.system(size: 15))
-                        .foregroundColor(.gray)
-                    Text("Kom tillbaka senare för att hitta nya vänner")
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray.opacity(0.8))
+            } else if recommendedUsersWithPhoto.isEmpty {
+                VStack(spacing: 16) {
+                    VStack(spacing: 8) {
+                        Text("Inga rekommendationer just nu")
+                            .font(.system(size: 15))
+                            .foregroundColor(.gray)
+                        Text("Bjud in dina vänner för att träna tillsammans!")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray.opacity(0.8))
+                    }
+                    
+                    // Invite friends button
+                    Button {
+                        showInviteSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.badge.plus")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Bjud in dina vänner")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.black)
+                        .cornerRadius(25)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
             } else {
-                // Grid layout for empty state (more prominent)
+                // Grid layout for empty state (more prominent) - only users with photos
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: 12) {
-                    ForEach(recommendedUsers) { user in
+                    ForEach(recommendedUsersWithPhoto) { user in
                         EmptyStateUserCard(
                             user: user,
                             isFollowing: recommendedFollowingStatus[user.id] ?? false,
@@ -282,6 +359,25 @@ struct SocialView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                
+                // Invite button below recommendations
+                Button {
+                    showInviteSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("Bjud in fler vänner")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(20)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
         }
         .padding(.vertical, 16)
@@ -291,6 +387,9 @@ struct SocialView: View {
                     await loadRecommendedUsers(for: authViewModel.currentUser?.id ?? "")
                 }
             }
+        }
+        .sheet(isPresented: $showInviteSheet) {
+            InviteFriendsSheet()
         }
     }
     
@@ -455,6 +554,9 @@ struct SocialView: View {
 struct SocialPostCard: View {
     let post: SocialWorkoutPost
     let onOpenDetail: (SocialWorkoutPost) -> Void
+    let onLikeChanged: (String, Bool, Int) -> Void
+    let onCommentCountChanged: (String, Int) -> Void
+    let onPostDeleted: (String) -> Void
     @State private var showComments = false
     @State private var isLiked: Bool
     @State private var likeCount: Int
@@ -466,12 +568,13 @@ struct SocialPostCard: View {
     @State private var showShareSheet = false
     @State private var showLikesList = false
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject var viewModel: SocialViewModel
     
-    init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, viewModel: SocialViewModel) {
+    init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, onLikeChanged: @escaping (String, Bool, Int) -> Void, onCommentCountChanged: @escaping (String, Int) -> Void, onPostDeleted: @escaping (String) -> Void) {
         self.post = post
         self.onOpenDetail = onOpenDetail
-        self.viewModel = viewModel
+        self.onLikeChanged = onLikeChanged
+        self.onCommentCountChanged = onCommentCountChanged
+        self.onPostDeleted = onPostDeleted
         _isLiked = State(initialValue: post.isLikedByCurrentUser ?? false)
         _likeCount = State(initialValue: post.likeCount ?? 0)
         _commentCount = State(initialValue: post.commentCount ?? 0)
@@ -536,7 +639,7 @@ struct SocialPostCard: View {
         .sheet(isPresented: $showComments) {
             CommentsView(postId: post.id) {
                 commentCount += 1
-                viewModel.updatePostCommentCount(postId: post.id, commentCount: commentCount)
+                onCommentCountChanged(post.id, commentCount)
             }
         }
         .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
@@ -770,7 +873,7 @@ struct SocialPostCard: View {
                 print("✅ Post deleted successfully")
                 // Remove post from the list immediately
                 await MainActor.run {
-                    viewModel.posts.removeAll { $0.id == post.id }
+                    onPostDeleted(post.id)
                 }
             } catch {
                 print("❌ Error deleting post: \(error)")
@@ -823,8 +926,8 @@ struct SocialPostCard: View {
                 
                 await MainActor.run {
                     likeInProgress = false
+                    onLikeChanged(post.id, isLiked, likeCount)
                 }
-                viewModel.updatePostLikeStatus(postId: post.id, isLiked: isLiked, likeCount: likeCount)
             } catch {
                 print("❌ Error toggling like: \(error)")
                 // Rollback on error
@@ -1590,6 +1693,13 @@ class SocialViewModel: ObservableObject {
             }
         }
     }
+    
+    func removePost(postId: String) {
+        posts.removeAll { $0.id == postId }
+        if let uid = currentUserId {
+            AppCacheManager.shared.saveSocialFeed(posts, userId: uid)
+        }
+    }
 }
 
 struct CommentThread: Identifiable {
@@ -1912,6 +2022,122 @@ struct EmptyStateUserCard: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+    }
+}
+
+// MARK: - Invite Friends Sheet
+
+struct InviteFriendsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    private let appStoreLink = "https://apps.apple.com/app/id6745013790" // App Store link
+    private let inviteMessage = "Utmana mig i Zonkriget (:"
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.black)
+                    
+                    Text("Bjud in dina vänner")
+                        .font(.system(size: 24, weight: .bold))
+                    
+                    Text("Träna tillsammans med dina vänner och tävla om territorier i Zonkriget!")
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                .padding(.top, 40)
+                
+                Spacer()
+                
+                // Share options
+                VStack(spacing: 16) {
+                    // Share via Messages/SMS
+                    ShareLink(
+                        item: URL(string: appStoreLink)!,
+                        subject: Text("Träna med mig!"),
+                        message: Text(inviteMessage)
+                    ) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "message.fill")
+                                .font(.system(size: 20))
+                            Text("Dela via meddelande")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .foregroundColor(.black)
+                        .padding(16)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                    
+                    // Copy link
+                    Button {
+                        UIPasteboard.general.string = appStoreLink
+                        // Visual feedback could be added here
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "link")
+                                .font(.system(size: 20))
+                            Text("Kopiera länk")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .foregroundColor(.black)
+                        .padding(16)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                    
+                    // Share via other apps
+                    ShareLink(item: URL(string: appStoreLink)!) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 20))
+                            Text("Dela via andra appar")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .foregroundColor(.black)
+                        .padding(16)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Info text
+                Text("Ju fler vänner, desto roligare träning! 🎉")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .padding(.bottom, 20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Stäng") {
+                        dismiss()
+                    }
+                    .foregroundColor(.black)
+                }
+            }
+        }
     }
 }
 

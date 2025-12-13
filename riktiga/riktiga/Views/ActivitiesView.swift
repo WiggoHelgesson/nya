@@ -185,17 +185,27 @@ struct ActivitiesView: View {
                             // MARK: - Aktiviteter
                             LazyVStack(spacing: 0) {
                                 ForEach(userPostsViewModel.posts) { post in
-                                    SocialPostCard(
-                                        post: post,
-                                        onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                                        viewModel: userPostsViewModel
-                                    )
-                                    Divider()
-                                        .background(Color(.systemGray5))
+                                    VStack(spacing: 0) {
+                                        SocialPostCard(
+                                            post: post,
+                                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                            onLikeChanged: { postId, isLiked, count in
+                                                userPostsViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                                            },
+                                            onCommentCountChanged: { postId, count in
+                                                userPostsViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                                            },
+                                            onPostDeleted: { postId in
+                                                userPostsViewModel.removePost(postId: postId)
+                                            }
+                                        )
+                                        Divider()
+                                            .background(Color(.systemGray5))
+                                    }
                                 }
                             }
                         }
-                        .padding(.vertical, 16)
+                        .padding(.top, 16)
                     }
                 }
             }

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import UserNotifications
 import Supabase
+import Functions
 
 final class PushNotificationService: NSObject {
     static let shared = PushNotificationService()
@@ -50,7 +51,6 @@ final class PushNotificationService: NSObject {
         struct TokenPayload: Encodable {
             let user_id: String
             let token: String
-            let platform: String
             let updated_at: String
         }
         
@@ -58,7 +58,6 @@ final class PushNotificationService: NSObject {
         let payload = TokenPayload(
             user_id: userId.uuidString,
             token: token,
-            platform: "ios",
             updated_at: formatter.string(from: Date())
         )
         
@@ -109,12 +108,13 @@ final class PushNotificationService: NSObject {
             
             print("🔔 Notifying \(followers.count) followers about new workout")
             
-            // Create in-app notification for each follower
+            // Create in-app notification AND send push for each follower
             for followerId in followers {
                 // Don't notify yourself
                 guard followerId != userId else { continue }
                 
                 do {
+                    // 1. Create in-app notification
                     try await createWorkoutNotification(
                         forUserId: followerId,
                         fromUserId: userId,
@@ -123,14 +123,58 @@ final class PushNotificationService: NSObject {
                         activityType: activityType,
                         postId: postId
                     )
+                    
+                    // 2. Send real iOS push notification via Edge Function
+                    await sendRealPushNotification(
+                        toUserId: followerId,
+                        title: "Nytt träningspass! 💪",
+                        body: "\(userName) har slutfört ett \(activityType.lowercased())-pass",
+                        data: ["type": "new_workout", "post_id": postId, "actor_id": userId]
+                    )
                 } catch {
                     print("⚠️ Failed to notify follower \(followerId): \(error)")
                 }
             }
             
-            print("✅ All followers notified")
+            print("✅ All followers notified with push notifications")
         } catch {
             print("❌ Failed to get followers for notification: \(error)")
+        }
+    }
+    
+    // MARK: - Send Real iOS Push via Edge Function
+    
+    func sendRealPushNotification(
+        toUserId userId: String,
+        title: String,
+        body: String,
+        data: [String: String]? = nil
+    ) async {
+        do {
+            struct PushPayload: Encodable {
+                let user_id: String
+                let title: String
+                let body: String
+                let data: [String: String]?
+            }
+            
+            let payload = PushPayload(
+                user_id: userId,
+                title: title,
+                body: body,
+                data: data
+            )
+            
+            // Call the Edge Function to send real iOS push
+            try await SupabaseConfig.supabase.functions.invoke(
+                "send-push-notification",
+                options: FunctionInvokeOptions(body: payload)
+            )
+            
+            print("✅ Real push notification sent to user: \(userId)")
+        } catch {
+            print("⚠️ Failed to send real push notification: \(error)")
+            // Don't throw - push failures shouldn't block the main flow
         }
     }
     

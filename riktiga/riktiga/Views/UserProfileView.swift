@@ -127,7 +127,15 @@ struct UserProfileView: View {
                                     SocialPostCard(
                                         post: post,
                                         onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                                        viewModel: profilePostsViewModel
+                                        onLikeChanged: { postId, isLiked, count in
+                                            profilePostsViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                                        },
+                                        onCommentCountChanged: { postId, count in
+                                            profilePostsViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                                        },
+                                        onPostDeleted: { postId in
+                                            profilePostsViewModel.removePost(postId: postId)
+                                        }
                                     )
                                     Divider()
                                         .background(Color(.systemGray5))

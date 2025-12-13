@@ -3,7 +3,7 @@ import Combine
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
     @State private var showSettings = false
@@ -26,7 +26,6 @@ struct ProfileView: View {
     @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
     @State private var lastActivityFetch: Date?
     @State private var isUsingCachedWeeklyData = false
-    @State private var selectedPost: SocialWorkoutPost?
     @State private var lastTrainerCheck: Date?
     @State private var lastStatsLoad: Date?
     @State private var isInitialLoad = true
@@ -51,10 +50,10 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: 16) {
                     // MARK: - Profile Header Card with Settings button in top right
                     HStack {
-                        if !revenueCatManager.isPremium {
+                        if !isPremium {
                             Button(action: {
                                 showPaywall = true
                             }) {
@@ -204,26 +203,26 @@ struct ProfileView: View {
                     let showGolfTrainerFeature = true
                     if showGolfTrainerFeature {
                         VStack(spacing: 0) {
-                            // Mina lektioner
+                            // Mina bokningar (student's view of their bookings)
                             NavigationLink(destination: MyBookingsView()) {
                                 ProfileListRow(
-                                    icon: "message.badge",
-                                    title: "Mina lektioner",
-                                    subtitle: "Se dina bokade lektioner"
+                                    icon: "calendar.badge.clock",
+                                    title: "Mina bokningar",
+                                    subtitle: "Se dina bokade lektioner",
+                                    badgeCount: pendingBookingsCount
                                 )
                             }
                             
                             Divider()
                                 .padding(.leading, 56)
                             
-                            // Bli golftränare OR Mina bokningar
+                            // Bli golftränare OR Utbetalningar & info
                             if isTrainer {
                                 Button { showTrainerDashboard = true } label: {
                                     ProfileListRow(
-                                        icon: "calendar.badge.clock",
-                                        title: "Mina bokningar",
-                                        subtitle: "Hantera lektionsförfrågningar",
-                                        badgeCount: pendingBookingsCount
+                                        icon: "creditcard",
+                                        title: "Utbetalningar & info",
+                                        subtitle: "Hantera din tränarinfo"
                                     )
                                 }
                             } else {
@@ -251,35 +250,11 @@ struct ProfileView: View {
                         cachedStatsIndicator
                     }
                     
-                    Divider()
-                        .background(Color(.systemGray4))
-                    
-                    // MARK: - Aktiviteter Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Aktiviteter")
-                                .font(.system(size: 18, weight: .bold))
-                            Spacer()
-                        }
-                        
-                        if let userId = authViewModel.currentUser?.id {
-                            UserActivitiesView(userId: userId) { post in
-                                selectedPost = post
-                            }
-                        }
-                    }
-                    
                     Spacer()
                 }
                 .padding(16)
             }
-            .navigationTitle("Inställningar")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(item: $selectedPost) { post in
-                WorkoutDetailView(post: post)
-                    .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
-                    .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
-            }
+            .navigationBarHidden(true)
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
@@ -322,6 +297,9 @@ struct ProfileView: View {
                     }
             }
             .task {
+                // Update premium status
+                isPremium = RevenueCatManager.shared.isPremium
+                
                 // Ensure session is valid before loading data
                 do {
                     try await AuthSessionManager.shared.ensureValidSession()
@@ -345,6 +323,9 @@ struct ProfileView: View {
                         authViewModel.objectWillChange.send()
                     }
                 }
+            }
+            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+                isPremium = newValue
             }
             .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
                 loadProfileStats(force: true)
@@ -647,58 +628,6 @@ private extension ProfileView {
             activityCount: activities.count,
             benchMaxKg: benchValue
         )
-    }
-}
-
-struct UserActivitiesView: View {
-    let userId: String
-    var onSelectPost: (SocialWorkoutPost) -> Void
-    
-    @StateObject private var postsViewModel = SocialViewModel()
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            if postsViewModel.isLoading && postsViewModel.posts.isEmpty {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Laddar aktiviteter...")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else if postsViewModel.posts.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "figure.run")
-                        .font(.title2)
-                        .foregroundColor(.gray)
-                    Text("Inga aktiviteter än")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(postsViewModel.posts) { post in
-                        SocialPostCard(
-                            post: post,
-                            onOpenDetail: { onSelectPost($0) },
-                            viewModel: postsViewModel
-                        )
-                        Divider()
-                            .background(Color(.systemGray5))
-                    }
-                }
-            }
-        }
-        .task {
-            await postsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
-        }
-        .refreshable {
-            await postsViewModel.refreshPostsForUser(userId: userId, viewerId: userId)
-        }
     }
 }
 

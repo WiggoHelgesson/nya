@@ -18,70 +18,74 @@ struct BookingChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Status header
+                // Status header - always show immediately
                 statusHeader
                 
-                // Content
-                if viewModel.isLoading && viewModel.messages.isEmpty {
-                    Spacer()
-                    ProgressView("Laddar...")
-                    Spacer()
-                } else if let error = viewModel.errorMessage {
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundColor(.orange)
-                        Text(error)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        Button("Försök igen") {
-                            Task { await viewModel.loadMessages() }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .padding()
-                    Spacer()
-                } else {
-                    // Messages
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                if viewModel.messages.isEmpty {
-                                    Text("Inga meddelanden ännu.\nSkriv något för att starta chatten!")
+                // Messages area - show content or loading inline
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            if viewModel.isLoading && viewModel.messages.isEmpty {
+                                // Inline loading - not a blank screen
+                                VStack(spacing: 12) {
+                                    ProgressView()
+                                        .scaleEffect(1.2)
+                                    Text("Laddar chatt...")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 80)
+                            } else if let error = viewModel.errorMessage {
+                                VStack(spacing: 12) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.largeTitle)
+                                        .foregroundColor(.orange)
+                                    Text(error)
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.center)
-                                        .padding(.top, 50)
-                                } else {
-                                    ForEach(viewModel.messages) { message in
-                                        BookingMessageBubble(
-                                            message: message,
-                                            isCurrentUser: message.senderId == viewModel.currentUserId
-                                        )
-                                        .id(message.id)
+                                    Button("Försök igen") {
+                                        Task { await viewModel.loadMessages() }
                                     }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.black)
+                                }
+                                .padding(.top, 50)
+                            } else if viewModel.messages.isEmpty {
+                                Text("Inga meddelanden ännu.\nSkriv något för att starta chatten!")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 50)
+                            } else {
+                                ForEach(viewModel.messages) { message in
+                                    BookingMessageBubble(
+                                        message: message,
+                                        isCurrentUser: message.senderId == viewModel.currentUserId
+                                    )
+                                    .id(message.id)
                                 }
                             }
-                            .padding()
                         }
-                        .onChange(of: viewModel.messages.count) { _ in
-                            if let lastMessage = viewModel.messages.last {
-                                withAnimation {
-                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                                }
+                        .padding()
+                    }
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
                     }
                 }
                 
-                // Input bar
+                // Input bar - always show if booking is active
                 if booking.bookingStatus != .declined && booking.bookingStatus != .cancelled {
                     inputBar
                 }
             }
-            .navigationTitle(viewModel.isTrainer ? (booking.studentUsername ?? "Kund") : (booking.trainerName ?? "Tränare"))
+            .background(Color(.systemBackground))
+            .navigationTitle(booking.trainerName ?? "Chatt")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -265,23 +269,32 @@ class BookingChatViewModel: ObservableObject {
         return currentUserId == trainerUserID
     }
     
+    // Static cache for current user ID to avoid repeated fetches
+    private static var cachedUserId: UUID?
+    
     init(booking: TrainerBooking) {
         self.booking = booking
+        // Use cached user ID immediately if available
+        if let cached = Self.cachedUserId {
+            self.currentUserId = cached
+        }
     }
     
     @MainActor
     func initialize() async {
-        // Get current user ID first
-        do {
-            let session = try await SupabaseConfig.supabase.auth.session
-            self.currentUserId = session.user.id
-            print("✅ Current user ID: \(session.user.id)")
-        } catch {
-            print("❌ Failed to get user session: \(error)")
-            self.errorMessage = "Kunde inte hämta användarsession"
+        // Get current user ID if not cached
+        if currentUserId == nil {
+            do {
+                let session = try await SupabaseConfig.supabase.auth.session
+                self.currentUserId = session.user.id
+                Self.cachedUserId = session.user.id
+            } catch {
+                print("❌ Failed to get user session: \(error)")
+                // Don't show error for this - still load messages
+            }
         }
         
-        // Then load messages
+        // Load messages in parallel
         await loadMessages()
     }
     

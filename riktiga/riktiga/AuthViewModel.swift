@@ -106,6 +106,28 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Password Reset
+    
+    func resetPassword(email: String) async -> (success: Bool, message: String) {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedEmail.isEmpty else {
+            return (false, "Ange din e-postadress")
+        }
+        
+        guard trimmedEmail.range(of: #"^\S+@\S+\.\S+$"#, options: .regularExpression) != nil else {
+            return (false, "Ogiltig e-postadress")
+        }
+        
+        do {
+            try await supabase.auth.resetPasswordForEmail(trimmedEmail)
+            return (true, "Vi har skickat ett mejl till \(trimmedEmail) med instruktioner för att återställa ditt lösenord.")
+        } catch {
+            print("❌ Password reset failed: \(error)")
+            return (false, "Kunde inte skicka återställningsmejl. Kontrollera att e-postadressen är korrekt.")
+        }
+    }
+    
     func login(email: String, password: String) {
         isLoading = true
         errorMessage = ""

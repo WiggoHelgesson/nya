@@ -211,16 +211,22 @@ struct BookingFlowView: View {
                         }
                         .padding()
                     } else if viewModel.availableSlots.isEmpty {
-                        Text("Välj önskad tid")
-                            .foregroundColor(.secondary)
-                        
-                        // Manual time picker as fallback
-                        DatePicker(
-                            "Tid",
-                            selection: $viewModel.selectedTime,
-                            displayedComponents: .hourAndMinute
-                        )
-                        .labelsHidden()
+                        VStack(spacing: 12) {
+                            Image(systemName: "calendar.badge.exclamationmark")
+                                .font(.largeTitle)
+                                .foregroundColor(.orange)
+                            
+                            Text("Tränaren är inte tillgänglig denna dag")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("Välj en annan dag i kalendern ovan")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
                     } else {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                             ForEach(viewModel.availableSlots, id: \.self) { slot in
@@ -270,133 +276,40 @@ struct BookingFlowView: View {
         }
     }
     
-    // MARK: - Step 3: Location
+    // MARK: - Step 3: Location (Only within trainer's service area)
     
     private var step3Location: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Välj plats")
+                Text("Välj plats för lektionen")
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                // Location type picker
-                VStack(spacing: 12) {
-                    LocationOptionCard(
-                        icon: "flag.fill",
-                        title: "Golfbana",
-                        subtitle: "Välj en golfbana nära dig",
-                        isSelected: viewModel.locationType == .course
-                    ) {
-                        viewModel.locationType = .course
-                    }
-                    
-                    LocationOptionCard(
-                        icon: "mappin.circle.fill",
-                        title: "Inom tränarens område",
-                        subtitle: "Välj en plats inom \(Int(trainer.serviceRadiusKm ?? 10)) km radie",
-                        isSelected: viewModel.locationType == .trainerLocation
-                    ) {
-                        viewModel.locationType = .trainerLocation
-                    }
-                    
-                    LocationOptionCard(
-                        icon: "location.circle.fill",
-                        title: "Egen plats",
-                        subtitle: "Ange en egen adress",
-                        isSelected: viewModel.locationType == .custom
-                    ) {
-                        viewModel.locationType = .custom
-                    }
-                }
+                Text("Placera pinen inom tränarens täckningsområde")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
                 
-                // Location details based on type
-                if viewModel.locationType == .course {
-                    courseSelector
-                } else if viewModel.locationType == .custom {
-                    customLocationInput
-                } else {
-                    serviceAreaPicker
-                }
+                // Service area map - only option
+                serviceAreaPicker
             }
             .padding()
         }
-    }
-    
-    private var courseSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Välj golfbana")
-                .font(.headline)
-            
-            if viewModel.isLoadingCourses {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            } else {
-                ForEach(viewModel.golfCourses) { course in
-                    Button {
-                        viewModel.selectedCourse = course
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(course.name)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.primary)
-                                
-                                if let city = course.city {
-                                    Text(city)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            if viewModel.selectedCourse?.id == course.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.black)
-                            }
-                        }
-                        .padding()
-                        .background(viewModel.selectedCourse?.id == course.id ? Color.black.opacity(0.1) : Color(.systemGray6))
-                        .cornerRadius(12)
-                    }
-                }
-            }
+        .onAppear {
+            // Force location type to trainer location
+            viewModel.locationType = .trainerLocation
         }
-        .padding()
-        .background(Color(.systemGray6).opacity(0.5))
-        .cornerRadius(12)
-    }
-    
-    private var customLocationInput: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Ange plats")
-                .font(.headline)
-            
-            TextField("Adress eller platsnamn", text: $viewModel.customLocationName)
-                .textFieldStyle(RoundedTextFieldStyle())
-            
-            // Map for custom location
-            Map(coordinateRegion: $viewModel.customLocationRegion)
-                .frame(height: 150)
-                .cornerRadius(12)
-                .overlay(
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title)
-                        .foregroundColor(.black)
-                )
-        }
-        .padding()
-        .background(Color(.systemGray6).opacity(0.5))
-        .cornerRadius(12)
     }
     
     private var serviceAreaPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Välj plats inom tränarens område")
-                .font(.headline)
+            HStack {
+                Image(systemName: "mappin.and.ellipse")
+                    .foregroundColor(.black)
+                Text("Tränarens täckningsområde (\(Int(trainer.serviceRadiusKm ?? 10)) km)")
+                    .font(.headline)
+            }
             
-            Text("Flytta kartan för att välja en plats där du vill ha lektionen")
+            Text("Flytta kartan för att välja var du vill ha lektionen")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -405,50 +318,59 @@ struct BookingFlowView: View {
                 Map(coordinateRegion: $viewModel.serviceAreaRegion)
                     .cornerRadius(12)
                 
-                // Service area circle (visual overlay)
+                // Service area circle (visual overlay) - shows allowed area
                 Circle()
-                    .stroke(Color.black.opacity(0.5), lineWidth: 2)
-                    .background(Circle().fill(Color.black.opacity(0.05)))
+                    .stroke(viewModel.isLocationWithinServiceArea ? Color.green : Color.red, lineWidth: 3)
+                    .background(Circle().fill(viewModel.isLocationWithinServiceArea ? Color.green.opacity(0.1) : Color.red.opacity(0.1)))
                     .frame(width: serviceAreaCircleSize, height: serviceAreaCircleSize)
+                    .allowsHitTesting(false)
                 
-                // Center pin
+                // Center pin - changes color based on validity
                 VStack(spacing: 0) {
                     Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(.green)
+                        .font(.system(size: 36))
+                        .foregroundColor(viewModel.isLocationWithinServiceArea ? .green : .red)
                     
                     Image(systemName: "arrowtriangle.down.fill")
                         .font(.system(size: 12))
-                        .foregroundColor(.green)
+                        .foregroundColor(viewModel.isLocationWithinServiceArea ? .green : .red)
                         .offset(y: -5)
                 }
+                .allowsHitTesting(false)
             }
-            .frame(height: 220)
+            .frame(height: 250)
             
-            // Selected location indicator
+            // Status indicator
             if viewModel.isLocationWithinServiceArea {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Plats vald inom tränarens område")
+                    Text("Perfekt! Platsen är inom tränarens område")
                         .font(.subheadline)
                         .foregroundColor(.green)
                 }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
             } else {
                 HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Välj en plats inom det markerade området")
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.red)
+                    Text("Flytta pinen innanför cirkeln")
                         .font(.subheadline)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.red)
                 }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(12)
             }
         }
         .padding()
-        .background(Color(.systemGray6).opacity(0.5))
+        .background(Color(.systemGray6))
         .cornerRadius(12)
         .onAppear {
-            // Initialize the region to trainer's location
             viewModel.initializeServiceAreaRegion(trainer: trainer)
         }
     }
@@ -601,7 +523,7 @@ struct BookingFlowView: View {
         case 0:
             return true // Lesson type selected or default
         case 1:
-            return true // Date always has default
+            return viewModel.selectedTimeSlot != nil || !viewModel.availableSlots.isEmpty // Must have selected a time
         case 2:
             return viewModel.hasValidLocation
         case 3:
@@ -796,25 +718,16 @@ class BookingFlowViewModel: ObservableObject {
     }
     
     var locationDescription: String {
-        switch locationType {
-        case .course:
-            return selectedCourse?.name ?? "Golfbana"
-        case .trainerLocation:
-            return trainer.city ?? "Tränarens plats"
-        case .custom:
-            return customLocationName.isEmpty ? "Egen plats" : customLocationName
+        // Location within trainer's service area
+        if let city = trainer.city {
+            return "Inom \(city)-området"
         }
+        return "Inom tränarens område"
     }
     
     var hasValidLocation: Bool {
-        switch locationType {
-        case .course:
-            return selectedCourse != nil
-        case .trainerLocation:
-            return isLocationWithinServiceArea
-        case .custom:
-            return !customLocationName.isEmpty
-        }
+        // Only allow locations within trainer's service area
+        return isLocationWithinServiceArea
     }
     
     var isLocationWithinServiceArea: Bool {
@@ -866,21 +779,53 @@ class BookingFlowViewModel: ObservableObject {
     
     func loadAvailableSlots() async {
         isLoadingSlots = true
-        // For now, generate some default slots
-        // In production, this would call TrainerService.fetchAvailability
+        
         var slots: [TimeSlot] = []
         let calendar = Calendar.current
         let baseDate = calendar.startOfDay(for: selectedDate)
+        let dayOfWeek = calendar.component(.weekday, from: selectedDate) - 1 // Convert to 0=Sunday
         
-        for hour in 8..<18 {
-            if let start = calendar.date(byAdding: .hour, value: hour, to: baseDate),
-               let end = calendar.date(byAdding: .minute, value: selectedLessonType?.durationMinutes ?? 60, to: start) {
-                slots.append(TimeSlot(startTime: start, endTime: end))
+        do {
+            // Fetch trainer's availability from database
+            let availability = try await TrainerService.shared.fetchAvailability(trainerId: trainer.id)
+            
+            // Find availability for selected day
+            if let dayAvailability = availability.first(where: { $0.dayOfWeek == dayOfWeek && $0.isActive }) {
+                // Parse start and end times
+                let startHour = parseHour(from: dayAvailability.startTime)
+                let endHour = parseHour(from: dayAvailability.endTime)
+                
+                let lessonDuration = selectedLessonType?.durationMinutes ?? 60
+                
+                // Generate slots within availability window
+                var currentHour = startHour
+                while currentHour < endHour {
+                    if let start = calendar.date(byAdding: .hour, value: currentHour, to: baseDate),
+                       let end = calendar.date(byAdding: .minute, value: lessonDuration, to: start) {
+                        // Only add slot if it ends before trainer's end time
+                        let slotEndHour = currentHour + (lessonDuration / 60)
+                        if slotEndHour <= endHour {
+                            slots.append(TimeSlot(startTime: start, endTime: end))
+                        }
+                    }
+                    currentHour += 1
+                }
             }
+            // If no availability found for this day, slots will be empty
+        } catch {
+            print("❌ Failed to load availability: \(error)")
+            // Fallback: show no slots if we can't load availability
         }
         
         availableSlots = slots
+        selectedTimeSlot = slots.first
         isLoadingSlots = false
+    }
+    
+    private func parseHour(from timeString: String) -> Int {
+        // Parse "HH:mm:ss" format
+        let components = timeString.split(separator: ":")
+        return Int(components.first ?? "9") ?? 9
     }
     
     func createBooking(stripePaymentId: String?) async {

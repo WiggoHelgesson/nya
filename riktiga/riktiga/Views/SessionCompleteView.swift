@@ -16,7 +16,7 @@ struct SessionCompleteView: View {
     let onDelete: () -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
     
     @State private var title: String = ""
     @State private var description: String = ""
@@ -39,7 +39,7 @@ struct SessionCompleteView: View {
         // To show what "regular" points would be, we divide by 1.5.
         // But for the comparison view (showing what you COULD get), 
         // if user is NOT PRO, we want to show (earned * 1.5).
-        if revenueCatManager.isPremium {
+        if isPremium {
              return earnedPoints 
         } else {
              return Int(Double(earnedPoints) * 1.5)
@@ -73,7 +73,7 @@ struct SessionCompleteView: View {
                             duration: duration, 
                             earnedPoints: earnedPoints,
                             proPoints: proPoints,
-                            isPro: revenueCatManager.isPremium,
+                            isPro: isPremium,
                             elevationGain: elevationGain,
                             maxSpeed: maxSpeed
                         )
@@ -256,28 +256,6 @@ struct SessionCompleteView: View {
                 }
             }
             
-            if showSaveSuccess {
-                VStack {
-                    Spacer()
-                    Text("Du är gryym!")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 18)
-                        .background(
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .fill(Color.white)
-                                .shadow(color: Color.black.opacity(0.15), radius: 18, x: 0, y: 10)
-                        )
-                        .scaleEffect(successScale)
-                        .opacity(successOpacity)
-                        .transition(.scale.combined(with: .opacity))
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white.opacity(0.0001)) // capture taps
-                .allowsHitTesting(false)
-            }
         }
         .sheet(isPresented: $showSaveTemplateSheet, onDismiss: {
             if templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -328,6 +306,9 @@ struct SessionCompleteView: View {
                     }
                 }
             }
+        }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
         }
         .fullScreenCover(isPresented: $showShareGallery, onDismiss: {
             pendingSharePost = nil

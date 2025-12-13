@@ -80,9 +80,8 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       ...data,
     }
     
-    // Use production URL for App Store apps, sandbox for development
+    // Production APNs URL for App Store
     const apnsUrl = `https://api.push.apple.com/3/device/${deviceToken}`
-    // For development: https://api.sandbox.push.apple.com/3/device/${deviceToken}
     
     const response = await fetch(apnsUrl, {
       method: 'POST',

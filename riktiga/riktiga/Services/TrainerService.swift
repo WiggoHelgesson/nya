@@ -699,6 +699,20 @@ extension TrainerService {
             .execute()
     }
     
+    // MARK: - Delete All Lesson Types for Trainer
+    
+    func deleteAllLessonTypes(trainerId: UUID) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("trainer_lesson_types")
+            .delete()
+            .eq("trainer_id", value: trainerId)
+            .execute()
+        
+        print("✅ Deleted all lesson types for trainer \(trainerId)")
+    }
+    
     // MARK: - Fetch Certifications
     
     func fetchCertifications(trainerId: UUID) async throws -> [TrainerCertification] {
@@ -927,6 +941,20 @@ extension TrainerService {
             .delete()
             .eq("id", value: availabilityId)
             .execute()
+    }
+    
+    // MARK: - Delete All Availability for Trainer
+    
+    func deleteAllAvailability(trainerId: UUID) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("trainer_availability")
+            .delete()
+            .eq("trainer_id", value: trainerId)
+            .execute()
+        
+        print("✅ Deleted all availability for trainer \(trainerId)")
     }
     
     // MARK: - Create Extended Booking

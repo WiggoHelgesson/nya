@@ -8,7 +8,7 @@ struct MyBookingsView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            LazyVStack(spacing: 16) {
                 if viewModel.isLoading {
                     ProgressView()
                         .padding(.top, 50)
@@ -16,42 +16,45 @@ struct MyBookingsView: View {
                     emptyState
                 } else {
                     // Paid Requests (pending - waiting for trainer to accept)
-                    if !viewModel.paidRequests.isEmpty {
+                    let paidRequests = viewModel.paidRequests
+                    if !paidRequests.isEmpty {
                         bookingsSection(
                             title: "Betalda förfrågningar",
                             subtitle: "Väntar på tränarens bekräftelse",
-                            bookings: viewModel.paidRequests
+                            bookings: paidRequests
                         )
                     }
                     
                     // Upcoming Bookings (accepted)
-                    if !viewModel.upcomingBookings.isEmpty {
+                    let upcomingBookings = viewModel.upcomingBookings
+                    if !upcomingBookings.isEmpty {
                         bookingsSection(
                             title: "Kommande bokningar",
                             subtitle: nil,
-                            bookings: viewModel.upcomingBookings
+                            bookings: upcomingBookings
                         )
                     }
                     
                     // Past Bookings
-                    if !viewModel.pastBookings.isEmpty {
+                    let pastBookings = viewModel.pastBookings
+                    if !pastBookings.isEmpty {
                         bookingsSection(
                             title: "Tidigare",
                             subtitle: nil,
-                            bookings: viewModel.pastBookings
+                            bookings: pastBookings
                         )
                     }
                 }
             }
             .padding()
         }
-        .navigationTitle("Mina lektioner")
+        .navigationTitle("Mina bokningar")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadBookings()
         }
         .refreshable {
-            await viewModel.loadBookings()
+            await viewModel.loadBookings(force: true)
         }
         .sheet(isPresented: $showChat) {
             if let booking = selectedBooking {
@@ -101,10 +104,10 @@ struct MyBookingsView: View {
             .padding(.horizontal, 4)
             
             ForEach(bookings) { booking in
-                StudentBookingCard(booking: booking) {
+                StudentBookingCard(booking: booking, onChatTap: {
                     selectedBooking = booking
                     showChat = true
-                }
+                })
             }
         }
     }
@@ -114,116 +117,107 @@ struct MyBookingsView: View {
 
 struct StudentBookingCard: View {
     let booking: TrainerBooking
-    let onTap: () -> Void
+    let onChatTap: () -> Void
     
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Trainer Avatar
-                ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: booking.trainerAvatarUrl ?? "")) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .foregroundColor(.gray)
-                    }
-                    .frame(width: 56, height: 56)
-                    .clipShape(Circle())
-                    
-                    if let unread = booking.unreadCount, unread > 0 {
-                        Text("\(unread)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(5)
-                            .background(Color.red)
-                            .clipShape(Circle())
-                            .offset(x: 4, y: -4)
-                    }
-                }
-                
-                // Booking Info
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(booking.trainerName ?? "Tränare")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                        
-                        StudentStatusBadge(status: booking.bookingStatus)
-                    }
-                    
-                    // Scheduled date & time
-                    if let date = booking.formattedDate, let time = booking.formattedTime {
-                        HStack(spacing: 8) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "calendar")
-                                    .font(.caption)
-                                Text(date)
-                                    .font(.subheadline)
-                            }
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock")
-                                    .font(.caption)
-                                Text(time)
-                                    .font(.subheadline)
-                            }
-                        }
-                        .foregroundColor(.black)
-                    }
-                    
-                    // Price
-                    if let price = booking.price {
-                        Text("\(price) kr")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.black)
-                    }
-                    
-                    // Location info
-                    if let city = booking.trainerCity {
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.caption)
-                            Text(city)
-                                .font(.caption)
-                        }
-                        .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        if let date = booking.createdAt {
-                            Text("Bokad \(formatDate(date))")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "message")
-                                .font(.caption2)
-                            Text("Chatta")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.blue)
-                    }
-                }
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(16)
-        }
-        .buttonStyle(.plain)
-    }
-    
-    private func formatDate(_ date: Date) -> String {
+    // Static formatter for performance - created once, reused
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
         formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return formatter
+    }()
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Main card content
+            HStack(spacing: 12) {
+                avatarSection
+                infoSection
+            }
+            
+            // Chat button - prominent
+            Button(action: onChatTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "message.fill")
+                    Text("Chatta med \(booking.trainerName ?? "tränaren")")
+                        .fontWeight(.semibold)
+                }
+                .font(.subheadline)
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(.systemGray5))
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
+    }
+    
+    private var avatarSection: some View {
+        ZStack(alignment: .topTrailing) {
+            ProfileImage(url: booking.trainerAvatarUrl, size: 56)
+            
+            if let unread = booking.unreadCount, unread > 0 {
+                Text("\(unread)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Color.black)
+                    .clipShape(Circle())
+                    .offset(x: 4, y: -4)
+            }
+        }
+    }
+    
+    private var infoSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header row
+            HStack {
+                Text(booking.trainerName ?? "Tränare")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                StudentStatusBadge(status: booking.bookingStatus)
+            }
+            
+            // Scheduled date & time
+            if let date = booking.formattedDate, let time = booking.formattedTime {
+                HStack(spacing: 8) {
+                    Label(date, systemImage: "calendar")
+                    Label(time, systemImage: "clock")
+                }
+                .font(.subheadline)
+                .foregroundColor(.black)
+            }
+            
+            // Price
+            if let price = booking.price {
+                Text("\(price) kr")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.black)
+            }
+            
+            // Location info
+            if let city = booking.trainerCity {
+                Label(city, systemImage: "mappin.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Booked date
+            if let date = booking.createdAt {
+                Text("Bokad \(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+        }
     }
 }
 
@@ -254,9 +248,9 @@ struct StudentStatusBadge: View {
     
     private var statusColor: Color {
         switch status {
-        case .pending: return .orange
-        case .accepted: return .green
-        case .declined: return .red
+        case .pending: return .gray
+        case .accepted: return .black
+        case .declined: return .black
         case .cancelled: return .gray
         }
     }
@@ -265,26 +259,27 @@ struct StudentStatusBadge: View {
 // MARK: - View Model
 
 class MyBookingsViewModel: ObservableObject {
-    @Published var bookings: [TrainerBooking] = []
+    @Published var bookings: [TrainerBooking] = [] {
+        didSet {
+            // Update cached filtered arrays when bookings change
+            _paidRequests = bookings.filter { $0.bookingStatus == .pending }
+            _upcomingBookings = bookings.filter { $0.bookingStatus == .accepted }
+            _pastBookings = bookings.filter { $0.bookingStatus == .declined || $0.bookingStatus == .cancelled }
+        }
+    }
     @Published var isLoading = false
+    
+    // Cached filtered bookings to avoid recomputation
+    private var _paidRequests: [TrainerBooking] = []
+    private var _upcomingBookings: [TrainerBooking] = []
+    private var _pastBookings: [TrainerBooking] = []
+    
+    var paidRequests: [TrainerBooking] { _paidRequests }
+    var upcomingBookings: [TrainerBooking] { _upcomingBookings }
+    var pastBookings: [TrainerBooking] { _pastBookings }
     
     private var lastLoadTime: Date?
     private let cacheThrottle: TimeInterval = 15 // 15 seconds cache
-    
-    /// Betalda förfrågningar - Väntar på tränarens bekräftelse
-    var paidRequests: [TrainerBooking] {
-        bookings.filter { $0.bookingStatus == .pending }
-    }
-    
-    /// Kommande bokningar - Accepterade av tränaren
-    var upcomingBookings: [TrainerBooking] {
-        bookings.filter { $0.bookingStatus == .accepted }
-    }
-    
-    /// Tidigare bokningar - Avslutade eller nekade
-    var pastBookings: [TrainerBooking] {
-        bookings.filter { $0.bookingStatus == .declined || $0.bookingStatus == .cancelled }
-    }
     
     @MainActor
     func loadBookings(force: Bool = false) async {

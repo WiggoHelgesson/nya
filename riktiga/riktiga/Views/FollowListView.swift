@@ -66,15 +66,18 @@ struct FollowListView: View {
                     
                     List {
                         ForEach(viewModel.users, id: \.id) { user in
-                            UserFollowRow(
-                                user: user,
-                                currentUserId: authViewModel.currentUser?.id ?? "",
-                                onFollowToggle: { userId, isFollowing in
-                                    Task {
-                                        await viewModel.toggleFollow(followerId: authViewModel.currentUser?.id ?? "", followingId: userId, isFollowing: isFollowing)
+                            NavigationLink(destination: UserProfileView(userId: user.id)) {
+                                UserFollowRow(
+                                    user: user,
+                                    currentUserId: authViewModel.currentUser?.id ?? "",
+                                    onFollowToggle: { userId, isFollowing in
+                                        Task {
+                                            await viewModel.toggleFollow(followerId: authViewModel.currentUser?.id ?? "", followingId: userId, isFollowing: isFollowing)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .listStyle(PlainListStyle())

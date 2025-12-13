@@ -3,7 +3,9 @@ import RevenueCat
 
 struct ProManagementView: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isLoadingPremium = RevenueCatManager.shared.isLoading
+    @State private var customerInfo: CustomerInfo? = RevenueCatManager.shared.customerInfo
     @State private var showSubscriptionView = false
     @State private var isRestoring = false
     @State private var showAlert = false
@@ -27,19 +29,19 @@ struct ProManagementView: View {
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
                             
-                            if revenueCatManager.isLoading {
+                            if isLoadingPremium {
                                 VStack(spacing: 8) {
                                     ProgressView()
                                         .scaleEffect(0.8)
                                         .frame(height: 16)
                                 }
-                            } else if revenueCatManager.isPremium {
+                            } else if isPremium {
                                 VStack(spacing: 8) {
                                     Text("Aktiv prenumeration")
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundColor(.green)
                                     
-                                    if let customerInfo = revenueCatManager.customerInfo,
+                                    if let customerInfo = customerInfo,
                                        let entitlement = customerInfo.entitlements["premium"] {
                                         Text("Förnyas: \(formatDate(entitlement.expirationDate))")
                                             .font(.system(size: 14))
@@ -90,7 +92,7 @@ struct ProManagementView: View {
                         
                         // MARK: - Action Buttons
                         VStack(spacing: 16) {
-                            if revenueCatManager.isPremium {
+                            if isPremium {
                                 // Premium user actions
                                 Button(action: {
                                     // Open App Store subscription management
@@ -199,9 +201,18 @@ struct ProManagementView: View {
         }
         .task {
             // Only load if not already loaded or loading
-            if !revenueCatManager.isLoading && revenueCatManager.customerInfo == nil {
-                await revenueCatManager.loadCustomerInfo()
+            if !isLoadingPremium && customerInfo == nil {
+                await RevenueCatManager.shared.loadCustomerInfo()
             }
+        }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
+        }
+        .onReceive(RevenueCatManager.shared.$isLoading) { newValue in
+            isLoadingPremium = newValue
+        }
+        .onReceive(RevenueCatManager.shared.$customerInfo) { newValue in
+            customerInfo = newValue
         }
     }
     
@@ -210,7 +221,7 @@ struct ProManagementView: View {
             isRestoring = true
         }
         
-        let success = await revenueCatManager.restorePurchases()
+        let success = await RevenueCatManager.shared.restorePurchases()
         
         await MainActor.run {
             if success {

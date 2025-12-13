@@ -6,12 +6,13 @@ import UIKit
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
-    @ObservedObject private var purchaseService = PurchaseService.shared
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isLoadingPremium = RevenueCatManager.shared.isLoading
     @State private var showSubscriptionView = false
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
     @State private var showAdmin = false
+    @State private var hasLoadedOnce = false
     
     var body: some View {
         NavigationStack {
@@ -37,12 +38,12 @@ struct SettingsView: View {
                                         .font(.system(size: 16))
                                         .foregroundColor(.black)
                                     
-                                    if revenueCatManager.isLoading {
+                                    if isLoadingPremium {
                                         ProgressView()
                                             .scaleEffect(0.7)
                                             .frame(height: 16)
                                     } else {
-                                        if revenueCatManager.isPremium {
+                                        if isPremium {
                                             Text("Aktiv prenumeration")
                                                 .font(.system(size: 12))
                                                 .foregroundColor(.green)
@@ -56,8 +57,8 @@ struct SettingsView: View {
                                 
                                 Spacer()
                                 
-                                if !revenueCatManager.isLoading {
-                                    if revenueCatManager.isPremium {
+                                if !isLoadingPremium {
+                                    if isPremium {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 16))
                                             .foregroundColor(.green)
@@ -70,7 +71,7 @@ struct SettingsView: View {
                             }
                             .padding(16)
                             .onTapGesture {
-                                if !revenueCatManager.isLoading && !revenueCatManager.isPremium {
+                                if !isLoadingPremium && !isPremium {
                                     showSubscriptionView = true
                                 }
                             }
@@ -79,7 +80,7 @@ struct SettingsView: View {
                                 .padding(.leading, 16)
                             
                             // Upgrade to PRO Row (only show if not premium)
-                            if !revenueCatManager.isLoading && !revenueCatManager.isPremium {
+                            if !isLoadingPremium && !isPremium {
                                 SettingsRow(
                                     title: "Uppgradera till PRO",
                                     icon: "chevron.right",
@@ -252,8 +253,20 @@ struct SettingsView: View {
                 AdminTrainerApprovalsView()
             }
             .task {
-                // Only load if not already loaded or loading
-                await revenueCatManager.syncAndRefresh()
+                // Only sync once per view instance to avoid lag
+                guard !hasLoadedOnce else { return }
+                hasLoadedOnce = true
+                
+                // Don't sync if already premium or loading
+                if !isPremium && !isLoadingPremium {
+                    await RevenueCatManager.shared.syncAndRefresh()
+                }
+            }
+            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+                isPremium = newValue
+            }
+            .onReceive(RevenueCatManager.shared.$isLoading) { newValue in
+                isLoadingPremium = newValue
             }
             .confirmationDialog("Radera konto", isPresented: $showDeleteAccountConfirmation, titleVisibility: .visible) {
                 Button("Radera konto", role: .destructive) {

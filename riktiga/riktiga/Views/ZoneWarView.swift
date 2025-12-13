@@ -10,8 +10,28 @@ struct TerritoryEventRow: Decodable {
     let territory_id: UUID
     let actor_id: String
     let event_type: String
-    let metadata: String?
+    let metadata: [String: AnyCodable]?  // JSON object, not string
     let created_at: Date?
+}
+
+// Helper for decoding arbitrary JSON values
+struct AnyCodable: Decodable {
+    let value: Any
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let double = try? container.decode(Double.self) {
+            value = double
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else {
+            value = ""
+        }
+    }
 }
 
 struct ProfileInfo: Decodable {
@@ -54,10 +74,21 @@ struct ZoneWarView: View {
     @State private var selectedMenuTab: Int = 0 // 0 = Topplista, 1 = Events
     @State private var territoryEvents: [TerritoryEvent] = []
     
+    // Prize list
+    @State private var isPrizeListExpanded = false
+    
     // Cache for profiles
     private static var cachedLeaders: [TerritoryLeader] = []
     private static var lastCacheTime: Date = .distantPast
     private static let cacheValidityDuration: TimeInterval = 300 // 5 minutes
+    
+    // Cache for events
+    private static var cachedEvents: [TerritoryEvent] = []
+    private static var lastEventsCacheTime: Date = .distantPast
+    
+    // Geocoding throttle
+    @State private var lastGeocodingTime: Date = .distantPast
+    private let geocodingThrottle: TimeInterval = 2.0
     
     var body: some View {
         NavigationStack {
@@ -136,6 +167,11 @@ struct ZoneWarView: View {
             }
             .overlay(alignment: .top) {
                 kingOfAreaHeader
+            }
+            .overlay(alignment: .topTrailing) {
+                prizeListBox
+                    .padding(.top, 120) // Below the king header
+                    .padding(.trailing, 12)
             }
             .sheet(item: $selectedTerritory) { territory in
                 TerritoryDetailView(territory: territory)
@@ -233,6 +269,90 @@ struct ZoneWarView: View {
         .buttonStyle(.plain)
     }
     
+    // MARK: - Prize List Box
+    
+    private var prizeListBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header - tappable to expand
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isPrizeListExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("🏆 PRISER")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundColor(.yellow)
+                    
+                    Image(systemName: isPrizeListExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.yellow.opacity(0.7))
+                }
+            }
+            .buttonStyle(.plain)
+            
+            // Prize list - show 3 or all 5
+            let displayedPrizes = isPrizeListExpanded ? prizes : Array(prizes.prefix(3))
+            
+            ForEach(displayedPrizes.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    // Company logo in circle with black border
+                    Image(displayedPrizes[index].logoImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 24, height: 24)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.black, lineWidth: 2)
+                        )
+                    
+                    // Rank number
+                    Text("\(index + 1).")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 16, alignment: .leading)
+                    
+                    // Company name and prize
+                    Text(displayedPrizes[index].text)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            
+            // "Show more" hint when collapsed
+            if !isPrizeListExpanded {
+                Text("Tryck för att se alla")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(width: 195) // Fixed width to fit longer text
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.black.opacity(0.85))
+        )
+        .onTapGesture {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isPrizeListExpanded.toggle()
+            }
+        }
+    }
+    
+    // Prize data model
+    private var prizes: [(logoImage: String, text: String)] {
+        [
+            ("35", "FUSE ENERGY 1500kr"),
+            ("22", "Zenenergy 500kr"),
+            ("21", "Pumplab 1000kr"),
+            ("14", "Loengolf 1000kr"),
+            ("15", "Pliktgolf 1500kr")
+        ]
+    }
+    
     // MARK: - Bottom Menu Bar
     
     private var bottomMenuBar: some View {
@@ -309,6 +429,15 @@ struct ZoneWarView: View {
     private func loadTerritoryEvents() async {
         guard let currentUserId = AuthViewModel.shared.currentUser?.id else { return }
         
+        // Check cache first
+        let now = Date()
+        if !Self.cachedEvents.isEmpty && now.timeIntervalSince(Self.lastEventsCacheTime) < Self.cacheValidityDuration {
+            await MainActor.run {
+                self.territoryEvents = Self.cachedEvents
+            }
+            return
+        }
+        
         do {
             // Fetch territory events where the current user's territory was taken over
             let response: [TerritoryEventRow] = try await SupabaseConfig.supabase
@@ -323,32 +452,31 @@ struct ZoneWarView: View {
             var events: [TerritoryEvent] = []
             
             // Get unique actor IDs to fetch profiles
-            let actorIds = Set(response.map { $0.actor_id })
+            let actorIds = Array(Set(response.map { $0.actor_id }))
             var profilesMap: [String: (name: String, avatarUrl: String?)] = [:]
             
-            // Fetch profiles for all actors
-            for actorId in actorIds {
-                if let profile: ProfileInfo = try? await SupabaseConfig.supabase
+            // Batch fetch all profiles at once for better performance
+            if !actorIds.isEmpty {
+                if let profiles: [ProfileInfo] = try? await SupabaseConfig.supabase
                     .from("profiles")
                     .select("id, username, avatar_url")
-                    .eq("id", value: actorId)
-                    .limit(1)
-                    .single()
+                    .in("id", values: actorIds)
                     .execute()
                     .value {
-                    profilesMap[actorId] = (profile.username ?? "Okänd", profile.avatar_url)
+                    for profile in profiles {
+                        profilesMap[profile.id] = (profile.username ?? "Okänd", profile.avatar_url)
+                    }
                 }
             }
             
             for item in response {
-                // Parse metadata JSON
+                // Parse metadata - now it's already a dictionary
                 var areaName = "Okänt område"
                 var previousOwnerId: String? = nil
                 
-                if let metadataData = item.metadata?.data(using: .utf8),
-                   let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any] {
-                    areaName = metadata["area_name"] as? String ?? "Okänt område"
-                    previousOwnerId = metadata["previous_owner_id"] as? String
+                if let metadata = item.metadata {
+                    areaName = (metadata["area_name"]?.value as? String) ?? "Okänt område"
+                    previousOwnerId = metadata["previous_owner_id"]?.value as? String
                 }
                 
                 // Check if this was a takeover of current user's territory
@@ -368,6 +496,10 @@ struct ZoneWarView: View {
                     ))
                 }
             }
+            
+            // Cache and update
+            Self.cachedEvents = events
+            Self.lastEventsCacheTime = Date()
             
             await MainActor.run {
                 self.territoryEvents = events
@@ -397,6 +529,11 @@ struct ZoneWarView: View {
     }
     
     private func updateAreaName(for coordinate: CLLocationCoordinate2D) {
+        // Throttle geocoding to reduce API calls
+        let now = Date()
+        guard now.timeIntervalSince(lastGeocodingTime) >= geocodingThrottle else { return }
+        lastGeocodingTime = now
+        
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let geocoder = CLGeocoder()
         
@@ -446,9 +583,13 @@ struct ZoneWarView: View {
     }
     
     private func loadAllLeaders() async {
-        // Check cache first
+        // Check cache first - but only if cache has valid profiles (not all "Okänd")
         let now = Date()
-        if !Self.cachedLeaders.isEmpty && now.timeIntervalSince(Self.lastCacheTime) < Self.cacheValidityDuration {
+        let cacheHasValidProfiles = Self.cachedLeaders.contains { $0.name != "Okänd" }
+        
+        if !Self.cachedLeaders.isEmpty && 
+           cacheHasValidProfiles &&
+           now.timeIntervalSince(Self.lastCacheTime) < Self.cacheValidityDuration {
             await MainActor.run {
                 self.allLeaders = Self.cachedLeaders
                 if let first = Self.cachedLeaders.first {
@@ -458,11 +599,21 @@ struct ZoneWarView: View {
             return
         }
         
-        // Ensure valid session first
+        // Ensure valid session first - MUST succeed before fetching profiles
         do {
             try await AuthSessionManager.shared.ensureValidSession()
         } catch {
             print("❌ Failed to ensure valid session for leaders: \(error)")
+            // If session fails, use existing cache even if stale
+            if !Self.cachedLeaders.isEmpty && cacheHasValidProfiles {
+                await MainActor.run {
+                    self.allLeaders = Self.cachedLeaders
+                    if let first = Self.cachedLeaders.first {
+                        self.areaLeader = first
+                    }
+                }
+            }
+            return
         }
         
         // Group territories by owner and calculate total area
@@ -481,27 +632,40 @@ struct ZoneWarView: View {
         let ownerIds = sortedOwners.map { $0.key }
         var profilesMap: [String: TerritoryOwnerProfile] = [:]
         
-        do {
-            let profiles: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
-                .from("profiles")
-                .select("id, username, avatar_url, is_pro")
-                .in("id", values: ownerIds)
-                .execute()
-                .value
-            
-            print("Fetched \(profiles.count) profiles for \(ownerIds.count) owners")
-            
-            for profile in profiles {
-                profilesMap[profile.id] = profile
+        // Try up to 3 times to fetch profiles
+        for attempt in 1...3 {
+            do {
+                // Re-ensure session is valid on retry
+                if attempt > 1 {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                }
+                
+                let profiles: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
+                    .from("profiles")
+                    .select("id, username, avatar_url, is_pro")
+                    .in("id", values: ownerIds)
+                    .execute()
+                    .value
+                
+                print("✅ Fetched \(profiles.count) profiles for \(ownerIds.count) owners (attempt \(attempt))")
+                
+                for profile in profiles {
+                    profilesMap[profile.id] = profile
+                }
+                break // Success, exit retry loop
+            } catch {
+                print("❌ Failed to fetch profiles (attempt \(attempt)): \(error)")
+                if attempt < 3 {
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay before retry
+                }
             }
-        } catch {
-            print("Failed to fetch profiles in batch: \(error)")
         }
         
-        // Fallback: fetch any missing profiles in smaller chunks to avoid showing \"Okänd\"
+        // Fallback: fetch any missing profiles in smaller chunks
         let missingIds = ownerIds.filter { profilesMap[$0] == nil }
         if !missingIds.isEmpty {
-            for chunk in missingIds.chunked(into: 25) {
+            print("⚠️ Missing \(missingIds.count) profiles, fetching in chunks...")
+            for chunk in missingIds.chunked(into: 10) {
                 do {
                     let extra: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
                         .from("profiles")
@@ -552,15 +716,20 @@ struct ZoneWarView: View {
         // Prefetch all avatar images
         ImageCacheManager.shared.prefetch(urls: avatarUrls.map { $0.absoluteString })
         
-        // Update cache
-        Self.cachedLeaders = leaders
-        Self.lastCacheTime = now
+        // Only update cache if we got valid profiles
+        let newCacheHasValidProfiles = leaders.contains { $0.name != "Okänd" }
+        if newCacheHasValidProfiles || Self.cachedLeaders.isEmpty {
+            Self.cachedLeaders = leaders
+            Self.lastCacheTime = now
+        }
         
         await MainActor.run {
-            self.allLeaders = leaders
-            // Set initial leader
-            if let first = leaders.first {
-                self.areaLeader = first
+            // Use new leaders only if we got valid profiles, otherwise keep old
+            if newCacheHasValidProfiles || self.allLeaders.isEmpty {
+                self.allLeaders = leaders
+                if let first = leaders.first {
+                    self.areaLeader = first
+                }
             }
         }
         
@@ -756,7 +925,8 @@ struct ZoneWarMapView: UIViewRepresentable {
                 hasCentered = true
                 
                 // Trigger initial region callback
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    guard let self = self else { return }
                     self.onRegionChanged(mapView.region, mapView.visibleMapRect)
                 }
             }
@@ -816,6 +986,15 @@ struct ZoneWarMenuView: View {
     let areaName: String
     @Environment(\.dismiss) private var dismiss
     
+    // Leaderboard type toggle
+    @State private var isShowingSwedenLeaderboard = false
+    @State private var swedenLeaders: [TerritoryLeader] = []
+    @State private var isLoadingSwedenLeaders = false
+    
+    // Navigation state
+    @State private var selectedUserId: String?
+    @State private var showUserProfile = false
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -871,7 +1050,7 @@ struct ZoneWarMenuView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(selectedTab == 0 ? "Topplista - \(areaName)" : "Events")
+                    Text(selectedTab == 0 ? "Topplista" : "Events")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -887,6 +1066,11 @@ struct ZoneWarMenuView: View {
             }
             .toolbarBackground(Color(red: 0.12, green: 0.12, blue: 0.14), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .navigationDestination(isPresented: $showUserProfile) {
+                if let userId = selectedUserId {
+                    UserProfileView(userId: userId)
+                }
+            }
         }
     }
     
@@ -894,74 +1078,264 @@ struct ZoneWarMenuView: View {
     
     private var leaderboardView: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(leaders.sorted { $0.totalArea > $1.totalArea }.enumerated()), id: \.element.id) { index, leader in
-                    HStack(spacing: 14) {
-                        // Rank badge
-                        ZStack {
-                            Circle()
-                                .fill(rankColor(for: index + 1))
-                                .frame(width: 36, height: 36)
-                            Text("\(index + 1)")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(index < 3 ? .black : .white)
+            VStack(spacing: 0) {
+                // Area toggle picker
+                HStack(spacing: 0) {
+                    // Local area button
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isShowingSwedenLeaderboard = false
                         }
-                        
-                        // Profile image
-                        ProfileImage(url: leader.avatarUrl, size: 48)
-                        
-                        // Name
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(leader.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 14))
+                            Text(areaName)
+                                .font(.system(size: 14, weight: .semibold))
                                 .lineLimit(1)
-                            
-                            if index == 0 {
-                                HStack(spacing: 4) {
-                                    Text("👑")
-                                        .font(.system(size: 10))
-                                    Text("KUNG AV OMRÅDET")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.yellow)
+                        }
+                        .foregroundColor(!isShowingSwedenLeaderboard ? .black : .gray)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(!isShowingSwedenLeaderboard ? Color.yellow : Color.clear)
+                        .cornerRadius(20)
+                    }
+                    
+                    // Sweden button
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isShowingSwedenLeaderboard = true
+                        }
+                        if swedenLeaders.isEmpty {
+                            loadSwedenLeaders()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("🇸🇪")
+                                .font(.system(size: 14))
+                            Text("Hela Sverige")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(isShowingSwedenLeaderboard ? .black : .gray)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(isShowingSwedenLeaderboard ? Color.yellow : Color.clear)
+                        .cornerRadius(20)
+                    }
+                }
+                .padding(4)
+                .background(Color(red: 0.2, green: 0.2, blue: 0.22))
+                .cornerRadius(24)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                
+                // Leaderboard content
+                let displayLeaders = isShowingSwedenLeaderboard ? swedenLeaders : leaders.sorted { $0.totalArea > $1.totalArea }
+                let maxCount = isShowingSwedenLeaderboard ? 20 : displayLeaders.count
+                
+                if isLoadingSwedenLeaders && isShowingSwedenLeaderboard {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .padding(.top, 40)
+                } else {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(displayLeaders.prefix(maxCount).enumerated()), id: \.element.id) { index, leader in
+                            Button {
+                                selectedUserId = leader.id
+                                showUserProfile = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    // Rank badge
+                                    ZStack {
+                                        Circle()
+                                            .fill(rankColor(for: index + 1))
+                                            .frame(width: 36, height: 36)
+                                        Text("\(index + 1)")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(index < 3 ? .black : .white)
+                                    }
+                                    
+                                    // Profile image
+                                    ProfileImage(url: leader.avatarUrl, size: 48)
+                                    
+                                    // Name
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(leader.name)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .lineLimit(1)
+                                            
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.gray.opacity(0.6))
+                                        }
+                                        
+                                        if index == 0 {
+                                            HStack(spacing: 4) {
+                                                Text("👑")
+                                                    .font(.system(size: 10))
+                                                Text(isShowingSwedenLeaderboard ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.yellow)
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Area
+                                    Text(formatArea(leader.totalArea))
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundColor(.gray)
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(index == 0 ? Color.yellow.opacity(0.1) : Color.clear)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            if index < min(maxCount, displayLeaders.count) - 1 {
+                                Divider()
+                                    .background(Color.gray.opacity(0.2))
+                                    .padding(.leading, 66)
                             }
                         }
                         
-                        Spacer()
+                        if displayLeaders.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "trophy")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.gray)
+                                Text("Ingen topplista än")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Text("Var först med att erövra ett område!")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.top, 60)
+                        }
                         
-                        // Area
-                        Text(formatArea(leader.totalArea))
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.gray)
+                        // Prize disclaimer text
+                        if !displayLeaders.isEmpty {
+                            Text(isShowingSwedenLeaderboard 
+                                ? "🏆 Denna topplistan gäller för de priser vi ger ut"
+                                : "ℹ️ Denna topplistan ingår inte i de priser vi ger ut")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isShowingSwedenLeaderboard ? .yellow : .gray)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(index == 0 ? Color.yellow.opacity(0.1) : Color.clear)
-                    
-                    if index < leaders.count - 1 {
-                        Divider()
-                            .background(Color.gray.opacity(0.2))
-                            .padding(.leading, 66)
-                    }
-                }
-                
-                if leaders.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "trophy")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("Ingen topplista än")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                        Text("Var först med att erövra ett område!")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.top, 60)
                 }
             }
             .padding(.top, 8)
+        }
+    }
+    
+    private func loadSwedenLeaders() {
+        isLoadingSwedenLeaders = true
+        
+        Task {
+            do {
+                // Fetch all territories and aggregate by owner
+                try await AuthSessionManager.shared.ensureValidSession()
+                
+                struct TerritoryOwnerArea: Decodable {
+                    let owner_id: UUID  // UUID type to match database
+                    let area_m2: Double
+                }
+                
+                print("📊 Fetching all territories for Sweden leaderboard...")
+                
+                // Fetch ALL territories without any limit
+                let territories: [TerritoryOwnerArea] = try await SupabaseConfig.supabase
+                    .from("territories")
+                    .select("owner_id, area_m2")
+                    .order("area_m2", ascending: false)
+                    .execute()
+                    .value
+                
+                print("📊 Fetched \(territories.count) territories total")
+                
+                // Debug: Show total area and breakdown
+                let totalArea = territories.reduce(0.0) { $0 + $1.area_m2 }
+                print("📊 Total area in database: \(totalArea / 1_000_000) km²")
+                
+                // Aggregate by owner - use LOWERCASE for consistency with Supabase
+                var ownerAreas: [String: Double] = [:]
+                var ownerTerritoryCount: [String: Int] = [:]
+                for t in territories {
+                    // IMPORTANT: Use lowercased() to match Supabase's UUID format
+                    let ownerId = t.owner_id.uuidString.lowercased()
+                    ownerAreas[ownerId, default: 0] += t.area_m2
+                    ownerTerritoryCount[ownerId, default: 0] += 1
+                }
+                
+                print("📊 Found \(ownerAreas.count) unique owners")
+                
+                // Debug: Log top owners with their territory counts
+                let topOwners = ownerAreas.sorted { $0.value > $1.value }.prefix(5)
+                for (i, owner) in topOwners.enumerated() {
+                    let count = ownerTerritoryCount[owner.key] ?? 0
+                    print("📊 #\(i+1): \(owner.key) has \(count) territories, total \(owner.value / 1_000_000) km²")
+                }
+                
+                // Sort and take top 20
+                let top20 = ownerAreas.sorted { $0.value > $1.value }.prefix(20)
+                let ownerIds = top20.map { $0.key }
+                
+                print("📊 Top 20 owner IDs: \(ownerIds)")
+                
+                // Fetch profiles
+                var profilesMap: [String: (name: String, avatarUrl: String?, isPro: Bool)] = [:]
+                
+                if !ownerIds.isEmpty {
+                    let profiles: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
+                        .from("profiles")
+                        .select("id, username, avatar_url, is_pro")
+                        .in("id", values: ownerIds)
+                        .execute()
+                        .value
+                    
+                    print("📊 Fetched \(profiles.count) profiles for \(ownerIds.count) owner IDs")
+                    
+                    for profile in profiles {
+                        // Store with lowercased ID for consistent lookup
+                        profilesMap[profile.id.lowercased()] = (profile.name, profile.avatarUrl, profile.isPro ?? false)
+                    }
+                    
+                    print("📊 Profile map has \(profilesMap.count) entries")
+                }
+                
+                // Build leaders list
+                var newLeaders: [TerritoryLeader] = []
+                for (ownerId, area) in top20 {
+                    let profile = profilesMap[ownerId.lowercased()]
+                    newLeaders.append(TerritoryLeader(
+                        id: ownerId,
+                        name: profile?.name ?? "Okänd",
+                        avatarUrl: profile?.avatarUrl,
+                        totalArea: area,
+                        isPro: profile?.isPro ?? false
+                    ))
+                }
+                
+                print("📊 Built \(newLeaders.count) leaders for Sweden leaderboard")
+                print("📊 Leaders with names: \(newLeaders.filter { $0.name != "Okänd" }.count)")
+                
+                await MainActor.run {
+                    self.swedenLeaders = newLeaders.sorted { $0.totalArea > $1.totalArea }
+                    self.isLoadingSwedenLeaders = false
+                }
+            } catch {
+                print("❌ Failed to load Sweden leaders: \(error)")
+                await MainActor.run {
+                    self.isLoadingSwedenLeaders = false
+                }
+            }
         }
     }
     

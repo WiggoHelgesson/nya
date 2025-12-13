@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MyPurchasesView: View {
-    @ObservedObject private var purchaseService = PurchaseService.shared
+    @State private var purchases: [Purchase] = PurchaseService.shared.purchases
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
@@ -10,7 +10,7 @@ struct MyPurchasesView: View {
                 Color(.systemBackground)
                     .ignoresSafeArea()
                 
-                if purchaseService.purchases.isEmpty {
+                if purchases.isEmpty {
                     // Empty state
                     VStack(spacing: 16) {
                         Image(systemName: "cart")
@@ -30,7 +30,7 @@ struct MyPurchasesView: View {
                     // Purchases list
                     ScrollView {
                         LazyVStack(spacing: 16) {
-                            ForEach(purchaseService.purchases) { purchase in
+                            ForEach(purchases) { purchase in
                                 PurchaseCard(purchase: purchase)
                             }
                         }
@@ -43,9 +43,12 @@ struct MyPurchasesView: View {
             .onAppear {
                 if let userId = authViewModel.currentUser?.id {
                     Task {
-                        try? await purchaseService.fetchUserPurchases(userId: userId)
+                        try? await PurchaseService.shared.fetchUserPurchases(userId: userId)
                     }
                 }
+            }
+            .onReceive(PurchaseService.shared.$purchases) { newValue in
+                purchases = newValue
             }
         }
     }

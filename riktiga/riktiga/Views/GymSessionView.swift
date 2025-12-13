@@ -9,8 +9,8 @@ struct GymSessionView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @ObservedObject private var sessionManager = SessionManager.shared
-    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var activeSession: SessionManager.ActiveSession? = SessionManager.shared.activeSession
+    @State private var isPremium = RevenueCatManager.shared.isPremium
     @StateObject private var viewModel = GymSessionViewModel()
     @State private var showExercisePicker = false
     @State private var showCompleteSession = false
@@ -544,6 +544,12 @@ struct GymSessionView: View {
                     persistSession(force: true)
                 }
             }
+            .onReceive(SessionManager.shared.$activeSession) { newValue in
+                activeSession = newValue
+            }
+            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+                isPremium = newValue
+            }
             .alert("UPPY", isPresented: $showGeneratorResultAlert, presenting: generatorResultMessage) { _ in
                 Button("Okej", role: .cancel) {}
             } message: { message in
@@ -577,7 +583,7 @@ struct GymSessionView: View {
         focusedField = nil
         persistSession(force: true)
         let duration = viewModel.elapsedSeconds
-        let isPro = revenueCatManager.isPremium
+        let isPro = isPremium
         viewModel.completeSession(duration: duration, isPro: isPro)
         
         // Update streak
@@ -618,18 +624,18 @@ extension GymSessionView {
             }
         }
 
-        if let activeSession = sessionManager.activeSession,
+        if let activeSession = activeSession,
            activeSession.activityType == ActivityType.walking.rawValue {
             let startTime = activeSession.startTime
             let exercises = activeSession.gymExercises ?? []
-            sessionManager.beginSession()
+            SessionManager.shared.beginSession()
             viewModel.restoreSession(exercises: exercises, startTime: startTime)
             viewModel.startTimer(startTime: startTime)
             lastPersistedElapsedSeconds = viewModel.elapsedSeconds
             return
         }
 
-        sessionManager.beginSession()
+        SessionManager.shared.beginSession()
         viewModel.resetSession()
         let now = Date()
         viewModel.startTimer(startTime: now)
@@ -645,7 +651,7 @@ extension GymSessionView {
             return
         }
 
-        sessionManager.saveActiveSession(
+        SessionManager.shared.saveActiveSession(
             activityType: ActivityType.walking.rawValue,
             startTime: startTime,
             isPaused: false,
@@ -661,7 +667,7 @@ extension GymSessionView {
 
     private func finalizeSessionAndDismiss() {
         focusedField = nil
-        sessionManager.finalizeSession()
+        SessionManager.shared.finalizeSession()
         viewModel.resetSession()
         showCompleteSession = false
         dismiss()

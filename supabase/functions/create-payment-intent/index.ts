@@ -7,6 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Platform fee percentage (15%)
+const PLATFORM_FEE_PERCENT = 15;
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -36,10 +39,10 @@ serve(async (req) => {
 
     const { trainer_id, amount } = await req.json()
 
-    // Get trainer info
+    // Get trainer info INCLUDING Stripe account
     const { data: trainer, error: trainerError } = await supabaseClient
       .from('trainer_profiles')
-      .select('name, hourly_rate, user_id')
+      .select('name, hourly_rate, user_id, stripe_account_id, stripe_charges_enabled')
       .eq('id', trainer_id)
       .single()
 
@@ -49,6 +52,11 @@ serve(async (req) => {
 
     // Calculate amount (trainer's hourly rate in öre/cents)
     const paymentAmount = amount || trainer.hourly_rate * 100
+
+    // Calculate platform fee (15%)
+    const platformFee = Math.round(paymentAmount * (PLATFORM_FEE_PERCENT / 100));
+    
+    console.log(`Payment: ${paymentAmount} öre, Platform fee: ${platformFee} öre, Trainer gets: ${paymentAmount - platformFee} öre`);
 
     // Create or get Stripe customer
     let customerId: string
@@ -82,8 +90,8 @@ serve(async (req) => {
       { apiVersion: '2023-10-16' }
     )
 
-    // Create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Build payment intent options
+    const paymentIntentOptions: Stripe.PaymentIntentCreateParams = {
       amount: paymentAmount,
       currency: 'sek',
       customer: customerId,
@@ -91,11 +99,26 @@ serve(async (req) => {
         trainer_id: trainer_id,
         student_id: user.id,
         trainer_name: trainer.name,
+        platform_fee_percent: String(PLATFORM_FEE_PERCENT),
       },
       automatic_payment_methods: {
         enabled: true,
       },
-    })
+    };
+
+    // If trainer has Stripe Connect account, use destination charges
+    if (trainer.stripe_account_id && trainer.stripe_charges_enabled) {
+      console.log(`Using destination charges to trainer account: ${trainer.stripe_account_id}`);
+      paymentIntentOptions.application_fee_amount = platformFee;
+      paymentIntentOptions.transfer_data = {
+        destination: trainer.stripe_account_id,
+      };
+    } else {
+      console.log('Trainer has no Stripe Connect account - payment goes to platform');
+    }
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentOptions)
 
     // Save pending payment
     await supabaseClient
@@ -114,7 +137,7 @@ serve(async (req) => {
         paymentIntent: paymentIntent.client_secret,
         ephemeralKey: ephemeralKey.secret,
         customer: customerId,
-        publishableKey: 'pk_test_51SZ8AiDGa589KjR0xVDyspO7Uvet70EsdIMC4sERcpi67sRCsDfqtYlgzbPabtxgxQkvA5AXNM7HJc2HEYTUiZAk00nq6LUfLi',
+        publishableKey: 'pk_live_51SZ8AiDGa589KjR0jMkTAI5BfGNf65qPzajTPVHNVYWsdhmgCPNgFoT13BlQkuMOPfBwBYodLhv3wUPSWpfx0Q2x00WI8tmMXu',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

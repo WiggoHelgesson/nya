@@ -10,7 +10,9 @@ struct TrainerOnboardingView: View {
     
     @State private var currentStep = 0
     @State private var name = ""
-    @State private var description = ""
+    // Structured description fields
+    @State private var backgroundExperience = ""
+    @State private var trainingPhilosophy = ""
     @State private var hourlyRate = ""
     @State private var handicap = ""
     @State private var city = ""
@@ -43,7 +45,14 @@ struct TrainerOnboardingView: View {
     @State private var errorMessage: String?
     @State private var createdTrainerId: UUID?
     
-    private let totalSteps = 6
+    // Availability state
+    @State private var weeklyAvailability: [WeekDayAvailability] = WeekDayAvailability.defaultWeek()
+    
+    // Location map state
+    @State private var isMapLocked = false
+    @State private var isAdjustingZoomProgrammatically = false
+    
+    private let totalSteps = 7
     
     private var hasProfilePicture: Bool {
         profileImage != nil || (authViewModel.currentUser?.avatarUrl != nil && !authViewModel.currentUser!.avatarUrl!.isEmpty)
@@ -55,16 +64,19 @@ struct TrainerOnboardingView: View {
                 // Progress indicator
                 progressIndicator
                 
-                // Content
-                TabView(selection: $currentStep) {
-                    step1NameDescription.tag(0)
-                    step2PriceHandicap.tag(1)
-                    step3Specialties.tag(2)
-                    step4LessonTypes.tag(3)
-                    step5Location.tag(4)
-                    step6Review.tag(5)
+                // Content - No swiping allowed, only button navigation
+                Group {
+                    switch currentStep {
+                    case 0: step1NameDescription
+                    case 1: step2Availability
+                    case 2: step3PriceHandicap
+                    case 3: step4Specialties
+                    case 4: step5LessonTypes
+                    case 5: step6Location
+                    case 6: step7Review
+                    default: step1NameDescription
+                    }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: currentStep)
                 
                 // Navigation buttons
@@ -99,6 +111,7 @@ struct TrainerOnboardingView: View {
                 TrainerApplicationConfirmationView { dismiss() }
             }
         }
+        .interactiveDismissDisabled() // Prevent swipe-down to dismiss
     }
     
     private func loadSpecialties() async {
@@ -136,15 +149,19 @@ struct TrainerOnboardingView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Beskriv dig själv")
-                        .font(.headline)
+                    HStack {
+                        Image(systemName: "person.text.rectangle")
+                            .foregroundColor(.black)
+                        Text("Din bakgrund")
+                            .font(.headline)
+                    }
                     
-                    Text("Berätta om din erfarenhet, vad du kan hjälpa med och varför elever ska välja dig.")
+                    Text("Berätta kort om din erfarenhet som golftränare")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    TextEditor(text: $description)
-                        .frame(height: 150)
+                    TextEditor(text: $backgroundExperience)
+                        .frame(height: 100)
                         .padding(8)
                         .background(Color(.systemGray6))
                         .cornerRadius(12)
@@ -152,6 +169,49 @@ struct TrainerOnboardingView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color.gray.opacity(0.3))
                         )
+                        .overlay(alignment: .topLeading) {
+                            if backgroundExperience.isEmpty {
+                                Text("Ex: Jag har tränat golf i 10 år och är PGA-certifierad...")
+                                    .font(.body)
+                                    .foregroundColor(.gray.opacity(0.5))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 16)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "lightbulb")
+                            .foregroundColor(.black)
+                        Text("Din träningsfilosofi")
+                            .font(.headline)
+                    }
+                    
+                    Text("Hur brukar du lägga upp träningen?")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    TextEditor(text: $trainingPhilosophy)
+                        .frame(height: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.3))
+                        )
+                        .overlay(alignment: .topLeading) {
+                            if trainingPhilosophy.isEmpty {
+                                Text("Ex: Jag fokuserar på grundteknik och anpassar mig efter elevens nivå...")
+                                    .font(.body)
+                                    .foregroundColor(.gray.opacity(0.5))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 16)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                 }
                 
                 Spacer()
@@ -160,9 +220,51 @@ struct TrainerOnboardingView: View {
         }
     }
     
-    // MARK: - Step 2: Price & Handicap
+    // MARK: - Step 2: Availability
     
-    private var step2PriceHandicap: some View {
+    private var step2Availability: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("När är du tillgänglig?")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Välj vilka dagar och tider du kan ta emot bokningar.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                VStack(spacing: 12) {
+                    ForEach($weeklyAvailability) { $day in
+                        AvailabilityDayRow(day: $day)
+                    }
+                }
+                
+                // Tips
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "lightbulb.fill")
+                            .foregroundColor(.yellow)
+                        Text("Tips")
+                            .font(.headline)
+                    }
+                    
+                    Text("Du kan alltid ändra dina tider senare i inställningarna. Elever kan bara boka under de tider du angivit.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.yellow.opacity(0.1))
+                .cornerRadius(12)
+                
+                Spacer()
+            }
+            .padding()
+        }
+    }
+    
+    // MARK: - Step 3: Price & Handicap
+    
+    private var step3PriceHandicap: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -236,9 +338,9 @@ struct TrainerOnboardingView: View {
         }
     }
     
-    // MARK: - Step 3: Specialties
+    // MARK: - Step 4: Specialties
     
-    private var step3Specialties: some View {
+    private var step4Specialties: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Text("Vad är du bra på?")
@@ -293,9 +395,9 @@ struct TrainerOnboardingView: View {
         }
     }
     
-    // MARK: - Step 4: Lesson Types
+    // MARK: - Step 5: Lesson Types
     
-    private var step4LessonTypes: some View {
+    private var step5LessonTypes: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Text("Vilka lektioner erbjuder du?")
@@ -306,47 +408,19 @@ struct TrainerOnboardingView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
-                // Default lesson types suggestion
-                if lessonTypes.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Förslag på lektionstyper:")
-                            .font(.headline)
-                        
-                        ForEach(DefaultLessonTypes.types, id: \.name) { type in
-                            Button {
-                                let basePrice = Int(hourlyRate) ?? 500
-                                let price = Int(Double(basePrice) * type.priceMultiplier)
-                                lessonTypes.append(NewLessonType(
-                                    name: type.name,
-                                    description: type.description,
-                                    duration: type.duration,
-                                    price: price
-                                ))
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(type.name)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                        Text("\(type.duration) min")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "plus.circle.fill")
-                                        .foregroundColor(.black)
-                                }
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                            }
-                            .foregroundColor(.primary)
-                        }
+                // Add custom lesson type button - FIRST
+                Button {
+                    showAddLessonType = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Lägg till egen lektionstyp")
                     }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.black.opacity(0.1))
+                    .background(Color.black)
                     .cornerRadius(12)
                 }
                 
@@ -383,20 +457,52 @@ struct TrainerOnboardingView: View {
                     }
                 }
                 
-                Button {
-                    showAddLessonType = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Lägg till egen lektionstyp")
+                // Default lesson types suggestion
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Förslag på lektionstyper:")
+                        .font(.headline)
+                    
+                    ForEach(DefaultLessonTypes.types, id: \.name) { type in
+                        let alreadyAdded = lessonTypes.contains { $0.name == type.name }
+                        
+                        Button {
+                            if !alreadyAdded {
+                                let basePrice = Int(hourlyRate) ?? 500
+                                let price = Int(Double(basePrice) * type.priceMultiplier)
+                                lessonTypes.append(NewLessonType(
+                                    name: type.name,
+                                    description: type.description,
+                                    duration: type.duration,
+                                    price: price
+                                ))
+                            }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(type.name)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Text("\(type.duration) min")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: alreadyAdded ? "checkmark.circle.fill" : "plus.circle.fill")
+                                    .foregroundColor(alreadyAdded ? .green : .black)
+                            }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                        }
+                        .foregroundColor(.primary)
+                        .disabled(alreadyAdded)
                     }
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.black.opacity(0.15))
-                    .cornerRadius(12)
                 }
+                .padding()
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(12)
                 
                 Spacer()
             }
@@ -404,39 +510,119 @@ struct TrainerOnboardingView: View {
         }
     }
     
-    // MARK: - Step 5: Location with Service Area
+    // MARK: - Step 6: Location with Service Area
     
-    private var step5Location: some View {
+    private var step6Location: some View {
         VStack(spacing: 16) {
             Text("Var kan du hålla lektioner?")
                 .font(.headline)
             
-            Text("Flytta kartan för att välja centrum, justera sedan radien")
+            Text(isMapLocked ? "Pin placerad! Justera radien nedan." : "Flytta kartan för att välja centrum")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
-            // Simple Map with SwiftUI
+            // Map with lock/unlock functionality
             ZStack {
-                Map(coordinateRegion: $region)
+                Map(coordinateRegion: $region, interactionModes: isMapLocked ? [] : [.pan, .zoom])
                     .cornerRadius(12)
                     .onChange(of: region.center.latitude) { _ in
-                        // Auto-update selected location when map moves
-                        selectedLocation = region.center
+                        if !isMapLocked {
+                            selectedLocation = region.center
+                        }
+                    }
+                    .onChange(of: region.span.latitudeDelta) { newSpan in
+                        // When user zooms in manually (not from slider), adjust radius if circle would be too big
+                        if !isMapLocked && !isAdjustingZoomProgrammatically {
+                            adjustRadiusToFitScreen(mapSpan: newSpan)
+                        }
                     }
                 
-                // Circle overlay (visual only - drawn on top)
+                // Circle overlay (visual only - drawn on top, passes touches through)
                 Circle()
                     .stroke(Color.black, lineWidth: 2)
                     .background(Circle().fill(Color.black.opacity(0.1)))
                     .frame(width: circleSize, height: circleSize)
+                    .allowsHitTesting(false)
                 
-                // Center pin
-                Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(.black)
+                // Center pin (passes touches through to map)
+                VStack(spacing: 0) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(isMapLocked ? .green : .black)
+                    
+                    if !isMapLocked {
+                        Image(systemName: "arrowtriangle.down.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.black)
+                            .offset(y: -5)
+                    }
+                }
+                .allowsHitTesting(false)
+                
+                // Lock indicator overlay
+                if isMapLocked {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.fill")
+                                Text("Låst")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.green)
+                            .cornerRadius(8)
+                            .padding(8)
+                        }
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                }
             }
             .frame(height: 280)
+            
+            // Lock/Unlock buttons
+            HStack(spacing: 12) {
+                if isMapLocked {
+                    Button {
+                        withAnimation {
+                            isMapLocked = false
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "pencil")
+                            Text("Ändra")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemGray5))
+                        .cornerRadius(12)
+                    }
+                } else {
+                    Button {
+                        withAnimation {
+                            isMapLocked = true
+                            selectedLocation = region.center
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "mappin.and.ellipse")
+                            Text("Sätt ut pin")
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
+                        .cornerRadius(12)
+                    }
+                }
+            }
             
             // Radius slider
             VStack(spacing: 8) {
@@ -456,6 +642,10 @@ struct TrainerOnboardingView: View {
                     
                     Slider(value: $serviceRadiusKm, in: 1...50, step: 1)
                         .accentColor(.black)
+                        .onChange(of: serviceRadiusKm) { newValue in
+                            // Auto-zoom map to fit the circle
+                            adjustMapZoomForRadius(newValue)
+                        }
                     
                     Text("50")
                         .font(.caption)
@@ -467,16 +657,29 @@ struct TrainerOnboardingView: View {
             .cornerRadius(12)
             
             // Status indicator
-            HStack {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                Text("Täckningsområde: \(Int(serviceRadiusKm)) km radie")
-                    .font(.subheadline)
+            if isMapLocked {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Täckningsområde: \(Int(serviceRadiusKm)) km radie")
+                        .font(.subheadline)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+            } else {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.orange)
+                    Text("Flytta kartan och tryck \"Sätt ut pin\"")
+                        .font(.subheadline)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(12)
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.green.opacity(0.1))
-            .cornerRadius(12)
             
             Spacer()
         }
@@ -485,14 +688,48 @@ struct TrainerOnboardingView: View {
             if let userLocation = locationManager.userLocation {
                 region.center = userLocation
             }
-            // Auto-set location on appear
             selectedLocation = region.center
+            // Set initial zoom based on default radius
+            adjustMapZoomForRadius(serviceRadiusKm)
+        }
+    }
+    
+    // Adjust map zoom to fit the service radius circle
+    private func adjustMapZoomForRadius(_ radiusKm: Double) {
+        let degreesPerKm = 1.0 / 111.0
+        // Make span 2.5x the radius diameter to ensure circle fits with padding
+        let spanDelta = radiusKm * degreesPerKm * 2.5
+        
+        // Set flag to prevent feedback loop
+        isAdjustingZoomProgrammatically = true
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            region = MKCoordinateRegion(
+                center: region.center,
+                span: MKCoordinateSpan(latitudeDelta: spanDelta, longitudeDelta: spanDelta)
+            )
+        }
+        
+        // Reset flag after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isAdjustingZoomProgrammatically = false
+        }
+    }
+    
+    // Adjust radius when user zooms in to keep circle on screen
+    private func adjustRadiusToFitScreen(mapSpan: Double) {
+        let degreesPerKm = 1.0 / 111.0
+        // Calculate max radius that fits in current zoom (with padding)
+        let maxRadiusKm = (mapSpan / 2.5) / degreesPerKm
+        
+        // If current radius is too big for the zoom level, shrink it
+        if serviceRadiusKm > maxRadiusKm && maxRadiusKm >= 1 {
+            serviceRadiusKm = max(1, floor(maxRadiusKm))
         }
     }
     
     // Calculate circle size based on radius and current map zoom
     private var circleSize: CGFloat {
-        // Approximate: at zoom level showing ~0.1 degree, 10km ≈ 100px
         let degreesPerKm = 1.0 / 111.0
         let radiusInDegrees = serviceRadiusKm * degreesPerKm
         let mapWidthInDegrees = region.span.latitudeDelta
@@ -501,9 +738,9 @@ struct TrainerOnboardingView: View {
         return min(CGFloat(radiusInDegrees * 2 * pixelsPerDegree), screenWidth * 0.9)
     }
     
-    // MARK: - Step 6: Review
+    // MARK: - Step 7: Review
     
-    private var step6Review: some View {
+    private var step7Review: some View {
         ScrollView {
             VStack(spacing: 20) {
                 Text("Granska din profil")
@@ -554,11 +791,11 @@ struct TrainerOnboardingView: View {
                         StatBadge(icon: "clock", value: "\(hourlyRate.isEmpty ? "?" : hourlyRate) kr/h")
                     }
                     
-                    Text(description.isEmpty ? "Din beskrivning..." : description)
+                    Text(combinedDescription.isEmpty ? "Din beskrivning..." : combinedDescription)
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
-                        .lineLimit(3)
+                        .lineLimit(5)
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -568,7 +805,9 @@ struct TrainerOnboardingView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ChecklistItem(text: "Profilbild", isComplete: hasProfilePicture)
                     ChecklistItem(text: "Namn", isComplete: !name.isEmpty)
-                    ChecklistItem(text: "Beskrivning", isComplete: !description.isEmpty)
+                    ChecklistItem(text: "Bakgrund", isComplete: !backgroundExperience.isEmpty)
+                    ChecklistItem(text: "Träningsfilosofi", isComplete: !trainingPhilosophy.isEmpty)
+                    ChecklistItem(text: "Tillgänglighet", isComplete: hasAtLeastOneAvailableDay)
                     ChecklistItem(text: "Pris", isComplete: !hourlyRate.isEmpty)
                     ChecklistItem(text: "Handicap", isComplete: !handicap.isEmpty)
                     ChecklistItem(text: "Plats", isComplete: selectedLocation != nil)
@@ -607,6 +846,9 @@ struct TrainerOnboardingView: View {
             }
             
             Button {
+                // Dismiss keyboard before transitioning
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                
                 if currentStep < totalSteps - 1 {
                     withAnimation {
                         currentStep += 1
@@ -637,16 +879,39 @@ struct TrainerOnboardingView: View {
         .padding()
     }
     
+    // Combined description from structured fields
+    private var combinedDescription: String {
+        var parts: [String] = []
+        if !backgroundExperience.isEmpty {
+            parts.append("📋 Bakgrund: \(backgroundExperience)")
+        }
+        if !trainingPhilosophy.isEmpty {
+            parts.append("💡 Träningsfilosofi: \(trainingPhilosophy)")
+        }
+        return parts.joined(separator: "\n\n")
+    }
+    
+    private var hasAtLeastOneAvailableDay: Bool {
+        weeklyAvailability.contains { $0.isEnabled }
+    }
+    
     private var canProceed: Bool {
         switch currentStep {
-        case 0: return !name.isEmpty && !description.isEmpty
-        case 1: return !hourlyRate.isEmpty && !handicap.isEmpty
-        case 2: return !selectedSpecialties.isEmpty
-        case 3: return true // Lesson types är valfritt
-        case 4: return selectedLocation != nil
-        case 5: return hasProfilePicture && !name.isEmpty && !description.isEmpty && !hourlyRate.isEmpty && !handicap.isEmpty && selectedLocation != nil
+        case 0: return !name.isEmpty && !backgroundExperience.isEmpty && !trainingPhilosophy.isEmpty
+        case 1: return hasAtLeastOneAvailableDay // Availability
+        case 2: return !hourlyRate.isEmpty && !handicap.isEmpty
+        case 3: return !selectedSpecialties.isEmpty
+        case 4: return true // Lesson types är valfritt
+        case 5: return isMapLocked && selectedLocation != nil // Must lock pin
+        case 6: return hasProfilePicture && !name.isEmpty && !backgroundExperience.isEmpty && !trainingPhilosophy.isEmpty && !hourlyRate.isEmpty && !handicap.isEmpty && selectedLocation != nil && hasAtLeastOneAvailableDay && isMapLocked
         default: return true
         }
+    }
+    
+    private func formatTimeForDB(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
     }
     
     private func submitProfile() {
@@ -664,7 +929,7 @@ struct TrainerOnboardingView: View {
                 // 1. Create trainer profile
                 let trainer = try await TrainerService.shared.createTrainerProfile(
                     name: name,
-                    description: description,
+                    description: combinedDescription,
                     hourlyRate: rate,
                     handicap: hcp,
                     latitude: location.latitude,
@@ -691,7 +956,8 @@ struct TrainerOnboardingView: View {
                     )
                 }
                 
-                // 4. Save lesson types
+                // 4. Clear old lesson types first, then save new ones
+                try await TrainerService.shared.deleteAllLessonTypes(trainerId: trainer.id)
                 for lessonType in lessonTypes {
                     _ = try await TrainerService.shared.saveLessonType(
                         trainerId: trainer.id,
@@ -699,6 +965,19 @@ struct TrainerOnboardingView: View {
                         description: lessonType.description,
                         durationMinutes: lessonType.duration,
                         price: lessonType.price
+                    )
+                }
+                
+                // 5. Clear old availability first, then save new ones
+                try await TrainerService.shared.deleteAllAvailability(trainerId: trainer.id)
+                for day in weeklyAvailability where day.isEnabled {
+                    let startTimeString = formatTimeForDB(day.startTime)
+                    let endTimeString = formatTimeForDB(day.endTime)
+                    try await TrainerService.shared.saveAvailability(
+                        trainerId: trainer.id,
+                        dayOfWeek: day.dayOfWeek,
+                        startTime: startTimeString,
+                        endTime: endTimeString
                     )
                 }
                 
@@ -726,7 +1005,83 @@ struct NewLessonType: Identifiable {
     var price: Int
 }
 
-// MARK: - Day Availability Model
+// MARK: - Weekly Availability Model (for onboarding)
+
+struct WeekDayAvailability: Identifiable {
+    let id = UUID()
+    let dayOfWeek: Int // 0=Sunday, 6=Saturday
+    let dayName: String
+    var isEnabled: Bool
+    var startTime: Date
+    var endTime: Date
+    
+    static func defaultWeek() -> [WeekDayAvailability] {
+        let days = ["Söndag", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"]
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let defaultStart = calendar.date(byAdding: .hour, value: 9, to: today)!
+        let defaultEnd = calendar.date(byAdding: .hour, value: 17, to: today)!
+        
+        return days.enumerated().map { index, name in
+            WeekDayAvailability(
+                dayOfWeek: index,
+                dayName: name,
+                isEnabled: index >= 1 && index <= 5, // Mon-Fri enabled by default
+                startTime: defaultStart,
+                endTime: defaultEnd
+            )
+        }
+    }
+}
+
+// MARK: - Availability Day Row View
+
+struct AvailabilityDayRow: View {
+    @Binding var day: WeekDayAvailability
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Toggle(isOn: $day.isEnabled) {
+                    Text(day.dayName)
+                        .font(.headline)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .black))
+            }
+            
+            if day.isEnabled {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Från")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        DatePicker("", selection: $day.startTime, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                    
+                    Image(systemName: "arrow.right")
+                        .foregroundColor(.secondary)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Till")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        DatePicker("", selection: $day.endTime, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.leading, 8)
+            }
+        }
+        .padding()
+        .background(day.isEnabled ? Color.black.opacity(0.05) : Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Day Availability Model (legacy, keep for compatibility)
 
 struct DayAvailability: Identifiable {
     let id = UUID()
