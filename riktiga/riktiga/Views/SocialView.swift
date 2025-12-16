@@ -1367,6 +1367,11 @@ class SocialViewModel: ObservableObject {
     private var isFetching = false
     private var currentUserId: String?
     private var hasLoggedFetchCancelled = false
+    private var lastSuccessfulFetch: Date?
+    private let refetchThreshold: TimeInterval = 30 // Don't refetch within 30 seconds
+    
+    // CRITICAL: Store the "known good" counts that should never be replaced with 0
+    private var knownGoodCounts: [String: (likeCount: Int, commentCount: Int)] = [:]
     
     private struct AuthorMetadata {
         let name: String?
@@ -1422,90 +1427,212 @@ class SocialViewModel: ObservableObject {
     
     func fetchSocialFeedAsync(userId: String) async {
         currentUserId = userId
+        
+        // CRITICAL: Don't refetch if we just fetched recently (within 30 seconds)
+        // This prevents data from being replaced when navigating back
+        if let lastFetch = lastSuccessfulFetch, 
+           Date().timeIntervalSince(lastFetch) < refetchThreshold,
+           !posts.isEmpty {
+            print("📱 Skipping refetch - fetched \(Int(Date().timeIntervalSince(lastFetch)))s ago")
+            return
+        }
+        
         // Prevent duplicate fetches
         if isFetching { return }
         
         isFetching = true
-        isLoading = true
         
-        // Try to load from cache first (ensure stable order); keep loading state until network finishes
-        if let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
-            posts = sortedByDateDesc(cachedPosts)
-            prefetchAvatars(for: posts)
-            Task { await self.enrichAuthorMetadataIfNeeded() }
+        // STEP 1: Load from cache IMMEDIATELY and show it
+        let cachedPosts = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true)
+        
+        // Store known good counts from cache AND current posts
+        if let cached = cachedPosts {
+            for post in cached {
+                let likeCount = post.likeCount ?? 0
+                let commentCount = post.commentCount ?? 0
+                // Only store if counts are non-zero
+                if likeCount > 0 || commentCount > 0 {
+                    knownGoodCounts[post.id] = (likeCount: likeCount, commentCount: commentCount)
+                }
+            }
+        }
+        // Also preserve current posts' counts
+        for post in posts {
+            let likeCount = post.likeCount ?? 0
+            let commentCount = post.commentCount ?? 0
+            if likeCount > 0 || commentCount > 0 {
+                // Keep the higher value
+                if let existing = knownGoodCounts[post.id] {
+                    knownGoodCounts[post.id] = (
+                        likeCount: max(existing.likeCount, likeCount),
+                        commentCount: max(existing.commentCount, commentCount)
+                    )
+                } else {
+                    knownGoodCounts[post.id] = (likeCount: likeCount, commentCount: commentCount)
+                }
+            }
         }
         
+        // Show cached posts immediately if we have them
+        if let cached = cachedPosts, !cached.isEmpty {
+            // Apply known good counts to cached posts before showing
+            let enhancedCached = applyKnownGoodCounts(to: cached)
+            posts = sortedByDateDesc(enhancedCached)
+            prefetchAvatars(for: posts)
+            isLoading = false
+            Task { await self.enrichAuthorMetadataIfNeeded() }
+        } else {
+            isLoading = true
+        }
+        
+        // STEP 2: Fetch from network in background
         do {
-            let fetchedPosts = try await SocialService.shared.getReliableSocialFeed(userId: userId)
+            var fetchedPosts = try await SocialService.shared.getReliableSocialFeed(userId: userId)
             
-            // Debug: Show all posts with their exercises status
-            print("📋 Fetched posts:")
+            // CRITICAL: Apply known good counts - NEVER show 0 if we know better
+            fetchedPosts = applyKnownGoodCounts(to: fetchedPosts)
+            
+            // Update known good counts with any new non-zero values
             for post in fetchedPosts {
-                print("  - \(post.id): \(post.activityType) | exercises: \(post.exercises?.count ?? 0)")
+                let likeCount = post.likeCount ?? 0
+                let commentCount = post.commentCount ?? 0
+                if likeCount > 0 || commentCount > 0 {
+                    if let existing = knownGoodCounts[post.id] {
+                        knownGoodCounts[post.id] = (
+                            likeCount: max(existing.likeCount, likeCount),
+                            commentCount: max(existing.commentCount, commentCount)
+                        )
+                    } else {
+                        knownGoodCounts[post.id] = (likeCount: likeCount, commentCount: commentCount)
+                    }
+                }
             }
             
             posts = sortedByDateDesc(fetchedPosts)
             prefetchAvatars(for: posts)
             isLoading = false
             isFetching = false
+            lastSuccessfulFetch = Date()
             
-            // Debug: Show posts after assignment
-            print("✨ Posts in ViewModel after assignment:")
-            for post in posts {
-                print("  - \(post.id): \(post.activityType) | exercises: \(post.exercises?.count ?? 0)")
-            }
-            
-            // Persist to cache for offline use (sorted to keep order consistent)
+            // Persist to cache
             AppCacheManager.shared.saveSocialFeed(posts, userId: userId)
             Task { await self.enrichAuthorMetadataIfNeeded() }
-        } catch is CancellationError {
-            if !hasLoggedFetchCancelled {
-                print("⚠️ Fetch was cancelled")
-                hasLoggedFetchCancelled = true
-            }
             
-            if posts.isEmpty,
-               let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true) {
-                posts = sortedByDateDesc(cached)
-                prefetchAvatars(for: posts)
+        } catch is CancellationError {
+            // Request was cancelled (user navigated away) - just keep current posts
+            if !hasLoggedFetchCancelled {
+                print("⚠️ Fetch was cancelled - keeping current posts")
+                hasLoggedFetchCancelled = true
             }
             isLoading = false
             isFetching = false
+            // Don't clear posts on cancellation!
+            
         } catch {
-            print("Error fetching social feed: \(error)")
+            print("❌ Error fetching social feed: \(error)")
+            // On error, keep existing posts
             isLoading = false
             isFetching = false
         }
     }
     
+    /// Apply known good counts to posts - never let counts go to 0 if we know they should be higher
+    private func applyKnownGoodCounts(to posts: [SocialWorkoutPost]) -> [SocialWorkoutPost] {
+        return posts.map { post in
+            let knownCounts = knownGoodCounts[post.id]
+            let currentLikeCount = post.likeCount ?? 0
+            let currentCommentCount = post.commentCount ?? 0
+            
+            // Use the higher of: current value OR known good value
+            let finalLikeCount = max(currentLikeCount, knownCounts?.likeCount ?? 0)
+            let finalCommentCount = max(currentCommentCount, knownCounts?.commentCount ?? 0)
+            
+            // Only create new post if we need to update counts
+            if finalLikeCount != currentLikeCount || finalCommentCount != currentCommentCount {
+                return SocialWorkoutPost(
+                    id: post.id,
+                    userId: post.userId,
+                    activityType: post.activityType,
+                    title: post.title,
+                    description: post.description,
+                    distance: post.distance,
+                    duration: post.duration,
+                    imageUrl: post.imageUrl,
+                    userImageUrl: post.userImageUrl,
+                    createdAt: post.createdAt,
+                    userName: post.userName,
+                    userAvatarUrl: post.userAvatarUrl,
+                    userIsPro: post.userIsPro,
+                    location: post.location,
+                    strokes: post.strokes,
+                    likeCount: finalLikeCount,
+                    commentCount: finalCommentCount,
+                    isLikedByCurrentUser: post.isLikedByCurrentUser,
+                    splits: post.splits,
+                    exercises: post.exercises
+                )
+            }
+            return post
+        }
+    }
+    
     func refreshSocialFeed(userId: String) async {
+        // Preserve current posts' counts in known good counts
+        for post in posts {
+            let likeCount = post.likeCount ?? 0
+            let commentCount = post.commentCount ?? 0
+            if likeCount > 0 || commentCount > 0 {
+                if let existing = knownGoodCounts[post.id] {
+                    knownGoodCounts[post.id] = (
+                        likeCount: max(existing.likeCount, likeCount),
+                        commentCount: max(existing.commentCount, commentCount)
+                    )
+                } else {
+                    knownGoodCounts[post.id] = (likeCount: likeCount, commentCount: commentCount)
+                }
+            }
+        }
+        
         do {
-            // Use retry helper for better network resilience
-            let fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
+            var fetchedPosts = try await RetryHelper.shared.retry(maxRetries: 3, delay: 0.5) {
                 return try await SocialService.shared.getReliableSocialFeed(userId: userId)
             }
             
-            // Only update posts if we got new data, don't replace with empty array
             if !fetchedPosts.isEmpty {
+                // Apply known good counts - NEVER let counts go to 0
+                fetchedPosts = applyKnownGoodCounts(to: fetchedPosts)
+                
+                // Update known good counts with new non-zero values
+                for post in fetchedPosts {
+                    let likeCount = post.likeCount ?? 0
+                    let commentCount = post.commentCount ?? 0
+                    if likeCount > 0 || commentCount > 0 {
+                        if let existing = knownGoodCounts[post.id] {
+                            knownGoodCounts[post.id] = (
+                                likeCount: max(existing.likeCount, likeCount),
+                                commentCount: max(existing.commentCount, commentCount)
+                            )
+                        } else {
+                            knownGoodCounts[post.id] = (likeCount: likeCount, commentCount: commentCount)
+                        }
+                    }
+                }
+                
                 let sorted = sortedByDateDesc(fetchedPosts)
                 posts = sorted
                 prefetchAvatars(for: posts)
+                lastSuccessfulFetch = Date()
                 AppCacheManager.shared.saveSocialFeed(sorted, userId: userId)
                 Task { await self.enrichAuthorMetadataIfNeeded() }
             } else {
                 print("⚠️ Refresh returned empty array, keeping existing posts")
             }
         } catch is CancellationError {
-            // Cancelled refresh - don't update posts or log as error
-            print("⚠️ Refresh was cancelled")
+            print("⚠️ Refresh was cancelled - keeping current posts")
+            // Don't modify posts on cancellation
         } catch {
-            print("❌ Error refreshing social feed after retries: \(error)")
-            if let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true),
-               posts.isEmpty {
-                posts = sortedByDateDesc(cached)
-                prefetchAvatars(for: posts)
-                Task { await self.enrichAuthorMetadataIfNeeded() }
-            }
+            print("❌ Error refreshing social feed: \(error)")
+            // On error, keep existing posts with their counts intact
         }
     }
 
@@ -1630,9 +1757,17 @@ class SocialViewModel: ObservableObject {
     }
     
     func updatePostLikeStatus(postId: String, isLiked: Bool, likeCount: Int) {
+        // ALWAYS update known good counts when user explicitly likes/unlikes
+        if likeCount > 0 {
+            if let existing = knownGoodCounts[postId] {
+                knownGoodCounts[postId] = (likeCount: likeCount, commentCount: existing.commentCount)
+            } else {
+                knownGoodCounts[postId] = (likeCount: likeCount, commentCount: 0)
+            }
+        }
+        
         if let index = posts.firstIndex(where: { $0.id == postId }) {
             var updatedPost = posts[index]
-            // Only change like-related fields; keep all media fields intact
             updatedPost = SocialWorkoutPost(
                 id: updatedPost.id,
                 userId: updatedPost.userId,
@@ -1663,6 +1798,15 @@ class SocialViewModel: ObservableObject {
     }
     
     func updatePostCommentCount(postId: String, commentCount: Int) {
+        // ALWAYS update known good counts when comment is added
+        if commentCount > 0 {
+            if let existing = knownGoodCounts[postId] {
+                knownGoodCounts[postId] = (likeCount: existing.likeCount, commentCount: commentCount)
+            } else {
+                knownGoodCounts[postId] = (likeCount: 0, commentCount: commentCount)
+            }
+        }
+        
         if let index = posts.firstIndex(where: { $0.id == postId }) {
             var updatedPost = posts[index]
             updatedPost = SocialWorkoutPost(

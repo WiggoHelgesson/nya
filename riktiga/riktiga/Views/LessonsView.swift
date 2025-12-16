@@ -15,10 +15,15 @@ struct LessonsView: View {
     
     // Search & Filter
     @State private var searchText = ""
+    @State private var debouncedSearchText = "" // For debounced search
     @State private var showFilterSheet = false
     @State private var showListView = false
     @State private var filter = TrainerSearchFilter()
     @State private var specialtiesCatalog: [TrainerSpecialty] = []
+    @State private var cachedFilteredTrainers: [GolfTrainer] = [] // Cache filtered results
+    
+    // Debounce timer
+    @State private var searchDebounceTask: Task<Void, Never>?
     
     var body: some View {
         if showFullFeature {
@@ -82,6 +87,22 @@ struct LessonsView: View {
             .task {
                 await viewModel.fetchTrainers()
                 await loadSpecialties()
+                updateFilteredTrainers()
+            }
+            .onChange(of: searchText) { _, newValue in
+                // Debounce search
+                searchDebounceTask?.cancel()
+                searchDebounceTask = Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        debouncedSearchText = newValue
+                        updateFilteredTrainers()
+                    }
+                }
+            }
+            .onChange(of: viewModel.trainers) { _, _ in
+                updateFilteredTrainers()
             }
             .sheet(item: $selectedTrainer) { trainer in
                 TrainerDetailView(trainer: trainer)
@@ -226,8 +247,9 @@ struct LessonsView: View {
     // MARK: - Map View (Optimized)
     
     private var trainerMapView: some View {
-        // Limit visible trainers to reduce map load
-        Map(coordinateRegion: $region, annotationItems: Array(filteredTrainers.prefix(12))) { trainer in
+        // Use cached trainers and limit visible to reduce map load
+        let trainersToShow = cachedFilteredTrainers.isEmpty ? filteredTrainers : cachedFilteredTrainers
+        return Map(coordinateRegion: $region, annotationItems: Array(trainersToShow.prefix(15))) { trainer in
             MapAnnotation(coordinate: trainer.coordinate) {
                 // Simplified pin for better performance
                 SimpleTrainerPin(trainer: trainer) {
@@ -238,7 +260,7 @@ struct LessonsView: View {
         .ignoresSafeArea(edges: .top)
     }
     
-    // MARK: - List View
+    // MARK: - List View (Optimized)
     
     private var trainerListView: some View {
         ScrollView {
@@ -246,10 +268,11 @@ struct LessonsView: View {
                 // Spacer for header
                 Color.clear.frame(height: 180)
                 
-                ForEach(filteredTrainers) { trainer in
+                ForEach(cachedFilteredTrainers.isEmpty ? filteredTrainers : cachedFilteredTrainers) { trainer in
                     TrainerListCard(trainer: trainer) {
                         selectedTrainer = trainer
                     }
+                    .id(trainer.id) // Stable identity for better diffing
                 }
                 
                 if filteredTrainers.isEmpty && !viewModel.isLoading {
@@ -275,11 +298,19 @@ struct LessonsView: View {
     // MARK: - Computed Properties
     
     private var filteredTrainers: [GolfTrainer] {
+        // Use cached results if available
+        if !cachedFilteredTrainers.isEmpty && debouncedSearchText == searchText {
+            return cachedFilteredTrainers
+        }
+        return computeFilteredTrainers()
+    }
+    
+    private func computeFilteredTrainers() -> [GolfTrainer] {
         var trainers = viewModel.trainers
         
         // Apply search text locally if not empty
-        if !searchText.isEmpty {
-            let search = searchText.lowercased()
+        if !debouncedSearchText.isEmpty {
+            let search = debouncedSearchText.lowercased()
             trainers = trainers.filter { trainer in
                 trainer.name.lowercased().contains(search) ||
                 (trainer.city?.lowercased().contains(search) ?? false) ||
@@ -288,6 +319,10 @@ struct LessonsView: View {
         }
         
         return trainers
+    }
+    
+    private func updateFilteredTrainers() {
+        cachedFilteredTrainers = computeFilteredTrainers()
     }
     
     // MARK: - Functions
@@ -387,6 +422,7 @@ struct TrainerListCard: View {
             .background(Color(.systemBackground))
             .cornerRadius(16)
             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+            .drawingGroup() // Flatten for better scroll performance
         }
         .buttonStyle(.plain)
     }
@@ -1295,14 +1331,37 @@ class LessonsViewModel: ObservableObject {
     @Published var trainers: [GolfTrainer] = []
     @Published var isLoading = false
     
+    // Cache for trainers - increased duration for better performance
+    private static var cachedTrainers: [GolfTrainer] = []
+    private static var lastFetchTime: Date = .distantPast
+    private static let cacheValidDuration: TimeInterval = 300 // 5 minutes (increased from 2)
+    
     @MainActor
-    func fetchTrainers() async {
-        isLoading = true
+    func fetchTrainers(forceRefresh: Bool = false) async {
+        // Check cache first
+        let cacheValid = Date().timeIntervalSince(Self.lastFetchTime) < Self.cacheValidDuration
+        
+        if !forceRefresh && cacheValid && !Self.cachedTrainers.isEmpty {
+            trainers = Self.cachedTrainers
+            return
+        }
+        
+        // Show loading only if no cached data
+        if trainers.isEmpty {
+            isLoading = true
+        }
         
         do {
-            trainers = try await TrainerService.shared.fetchTrainers()
+            let fetchedTrainers = try await TrainerService.shared.fetchTrainers()
+            Self.cachedTrainers = fetchedTrainers
+            Self.lastFetchTime = Date()
+            trainers = fetchedTrainers
         } catch {
             print("❌ Failed to fetch trainers: \(error)")
+            // Use cache on error
+            if !Self.cachedTrainers.isEmpty {
+                trainers = Self.cachedTrainers
+            }
         }
         
         isLoading = false
@@ -1316,17 +1375,27 @@ class LessonsViewModel: ObservableObject {
             trainers = try await TrainerService.shared.searchTrainers(filter: filter)
         } catch {
             print("❌ Failed to search trainers: \(error)")
-            // Fallback to all trainers
-            await fetchTrainers()
+            // Fallback to cached trainers
+            if !Self.cachedTrainers.isEmpty {
+                trainers = Self.cachedTrainers
+            } else {
+                await fetchTrainers()
+            }
         }
         
         isLoading = false
+    }
+    
+    // Invalidate cache when needed
+    static func invalidateCache() {
+        cachedTrainers = []
+        lastFetchTime = .distantPast
     }
 }
 
 // MARK: - Golf Trainer Model
 
-struct GolfTrainer: Identifiable, Codable {
+struct GolfTrainer: Identifiable, Codable, Equatable {
     let id: UUID
     let userId: String
     let name: String

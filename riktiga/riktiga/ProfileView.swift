@@ -29,6 +29,8 @@ struct ProfileView: View {
     @State private var lastTrainerCheck: Date?
     @State private var lastStatsLoad: Date?
     @State private var isInitialLoad = true
+    @StateObject private var myPostsViewModel = SocialViewModel()
+    @State private var selectedPost: SocialWorkoutPost?
     
     private let cacheManager = AppCacheManager.shared
     private let weeklyDataThrottle: TimeInterval = 120
@@ -250,11 +252,71 @@ struct ProfileView: View {
                         cachedStatsIndicator
                     }
                     
+                    Divider()
+                        .background(Color(.systemGray4))
+                        .padding(.top, 8)
+                    
+                    // MARK: - My Posts Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Mina aktiviteter")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 4)
+                        
+                        if myPostsViewModel.isLoading && myPostsViewModel.posts.isEmpty {
+                            VStack(spacing: 12) {
+                                ProgressView().tint(AppColors.brandBlue)
+                                Text("Hämtar inlägg...")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else if myPostsViewModel.posts.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "figure.run")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.gray)
+                                Text("Inga aktiviteter än")
+                                    .font(.headline)
+                                Text("Dina sparade pass kommer visas här.")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else {
+                            LazyVStack(spacing: 0) {
+                                ForEach(myPostsViewModel.posts) { post in
+                                    SocialPostCard(
+                                        post: post,
+                                        onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                        onLikeChanged: { postId, isLiked, count in
+                                            myPostsViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                                        },
+                                        onCommentCountChanged: { postId, count in
+                                            myPostsViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                                        },
+                                        onPostDeleted: { postId in
+                                            myPostsViewModel.removePost(postId: postId)
+                                        }
+                                    )
+                                    .id(post.id) // Stable identity for better diffing
+                                    Divider()
+                                        .background(Color(.systemGray5))
+                                }
+                            }
+                        }
+                    }
+                    
                     Spacer()
                 }
                 .padding(16)
             }
             .navigationBarHidden(true)
+            .navigationDestination(item: $selectedPost) { post in
+                WorkoutDetailView(post: post)
+            }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
@@ -300,19 +362,10 @@ struct ProfileView: View {
                 // Update premium status
                 isPremium = RevenueCatManager.shared.isPremium
                 
-                // Ensure session is valid before loading data
-                do {
-                    try await AuthSessionManager.shared.ensureValidSession()
-                } catch {
-                    print("❌ Session invalid")
-                }
-                
+                // Update local state immediately (non-blocking)
                 updatePersonalBestInfo()
-                loadProfileStats()
-                loadWeeklyActivityData()
-                checkIfUserIsTrainer()
                 
-                // Lyssna på profilbild uppdateringar
+                // Load profile observer first (non-async)
                 profileObserver = NotificationCenter.default.addObserver(
                     forName: .profileImageUpdated,
                     object: nil,
@@ -321,6 +374,32 @@ struct ProfileView: View {
                     if let newImageUrl = notification.object as? String {
                         print("🔄 Profile image updated in UI: \(newImageUrl)")
                         authViewModel.objectWillChange.send()
+                    }
+                }
+                
+                // Ensure session is valid before loading data
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid")
+                }
+                
+                // Load data in parallel for faster loading
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { @MainActor in
+                        self.loadProfileStats()
+                    }
+                    group.addTask { @MainActor in
+                        self.loadWeeklyActivityData()
+                    }
+                    group.addTask { @MainActor in
+                        self.checkIfUserIsTrainer()
+                    }
+                    group.addTask {
+                        // Load user's own posts
+                        if let userId = await self.authViewModel.currentUser?.id {
+                            await self.myPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
+                        }
                     }
                 }
             }

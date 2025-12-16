@@ -24,6 +24,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var totalDistance: Double = 0.0
     private var lastLocation: CLLocation?
     
+    /// Restore distance when resuming a session (prevents distance from resetting to 0)
+    func restoreDistance(_ distanceInKm: Double) {
+        totalDistance = distanceInKm * 1000.0 // Convert km back to meters
+        distance = distanceInKm
+        print("📍 Restored totalDistance: \(totalDistance)m (\(distanceInKm) km)")
+    }
+    
     // For lift detection (skiing)
     private var speedHistory: [Double] = [] // Last 10 speed readings
     private var isOnLift: Bool = false

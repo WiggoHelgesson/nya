@@ -381,25 +381,19 @@ struct RewardsView: View {
                         .foregroundColor(.black)
                         .padding(.horizontal, 4)
                     
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 20) {
-                                ForEach(Array(rewards.enumerated()), id: \.element.id) { index, reward in
-                                    NavigationLink(destination: RewardDetailView(reward: reward)) {
-                                        FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .id(index)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 20) {
+                            ForEach(rewards) { reward in
+                                NavigationLink {
+                                    RewardDetailView(reward: reward)
+                                } label: {
+                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 4)
-                            .scrollTargetLayout()
                         }
-                        .scrollTargetBehavior(.viewAligned)
-                        .onAppear {
-                            proxy.scrollTo(0, anchor: .center)
-                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
                     }
                 }
                 .padding(.vertical, 28)
@@ -491,7 +485,7 @@ struct RewardsView: View {
                     .background(Color(.systemBackground))
                     
                     ScrollView {
-                        VStack(spacing: 24) {
+                        LazyVStack(spacing: 24) {
                             heroBannerSection
                             categoriesSection
                             sliderSection(title: "Gym", category: "Gym")
@@ -530,6 +524,7 @@ struct HeroBannerCard: View {
             .frame(height: 200)
             .clipped()
             .cornerRadius(12)
+            .drawingGroup() // Rasterize for smoother transitions
     }
 }
 
@@ -598,6 +593,11 @@ struct FullScreenRewardCard: View {
     }
     
     var body: some View {
+        cardContent
+            .drawingGroup() // Rasterize for smoother scrolling
+    }
+    
+    private var cardContent: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 Image(reward.imageName)
@@ -696,9 +696,11 @@ struct CategoryRewardsListView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            LazyVStack(spacing: 20) {
                 ForEach(rewards, id: \.id) { reward in
-                    NavigationLink(destination: RewardDetailView(reward: reward)) {
+                    NavigationLink {
+                        RewardDetailView(reward: reward)
+                    } label: {
                         FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -720,6 +722,7 @@ struct RewardDetailView: View {
     let reward: RewardCard
     @State private var showCheckout = false
     @State private var showConfirmation = false
+    @State private var isImageLoaded = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
     private var hasEnoughPoints: Bool {
@@ -734,12 +737,13 @@ struct RewardDetailView: View {
             
             ScrollView {
                 VStack(spacing: 0) {
-                    // 1. Cover image
+                    // 1. Cover image - optimized
                     Image(reward.imageName)
                         .resizable()
                         .scaledToFill()
                         .frame(height: 250)
                         .clipped()
+                        .drawingGroup() // Rasterize for better performance
                     
                     VStack(spacing: 24) {
                         // 2. Discount text and title
@@ -1427,6 +1431,7 @@ struct AllRewardsCard: View {
         .background(Color.white)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .drawingGroup() // Rasterize for better scroll performance
     }
     
     private func getBrandLogo(for imageName: String) -> String {

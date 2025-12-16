@@ -8,6 +8,10 @@ struct TrainerOnboardingView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var locationManager = OnboardingLocationManager()
     
+    // Edit mode support
+    var isEditMode: Bool = false
+    var existingTrainerId: UUID? = nil
+    
     @State private var currentStep = 0
     @State private var name = ""
     // Structured description fields
@@ -52,6 +56,9 @@ struct TrainerOnboardingView: View {
     @State private var isMapLocked = false
     @State private var isAdjustingZoomProgrammatically = false
     
+    // Loading state for edit mode
+    @State private var isLoadingExistingProfile = false
+    
     private let totalSteps = 7
     
     private var hasProfilePicture: Bool {
@@ -60,29 +67,48 @@ struct TrainerOnboardingView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Progress indicator
-                progressIndicator
-                
-                // Content - No swiping allowed, only button navigation
-                Group {
-                    switch currentStep {
-                    case 0: step1NameDescription
-                    case 1: step2Availability
-                    case 2: step3PriceHandicap
-                    case 3: step4Specialties
-                    case 4: step5LessonTypes
-                    case 5: step6Location
-                    case 6: step7Review
-                    default: step1NameDescription
+            ZStack {
+                VStack(spacing: 0) {
+                    // Progress indicator
+                    progressIndicator
+                    
+                    // Content - No swiping allowed, only button navigation
+                    Group {
+                        switch currentStep {
+                        case 0: step1NameDescription
+                        case 1: step2Availability
+                        case 2: step3PriceHandicap
+                        case 3: step4Specialties
+                        case 4: step5LessonTypes
+                        case 5: step6Location
+                        case 6: step7Review
+                        default: step1NameDescription
+                        }
                     }
+                    .animation(.easeInOut, value: currentStep)
+                    
+                    // Navigation buttons
+                    navigationButtons
                 }
-                .animation(.easeInOut, value: currentStep)
                 
-                // Navigation buttons
-                navigationButtons
+                // Loading overlay for edit mode
+                if isLoadingExistingProfile {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Laddar din profil...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(24)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(16)
+                }
             }
-            .navigationTitle("Bli golftränare")
+            .navigationTitle(isEditMode ? "Hantera annons" : "Bli golftränare")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -93,6 +119,9 @@ struct TrainerOnboardingView: View {
             }
             .task {
                 await loadSpecialties()
+                if isEditMode {
+                    await loadExistingProfile()
+                }
             }
             .alert("Fel", isPresented: .init(
                 get: { errorMessage != nil },
@@ -119,6 +148,64 @@ struct TrainerOnboardingView: View {
             allSpecialties = try await TrainerService.shared.fetchSpecialtiesCatalog()
         } catch {
             print("❌ Failed to load specialties: \(error)")
+        }
+    }
+    
+    // MARK: - Load Existing Profile (Edit Mode)
+    
+    private func loadExistingProfile() async {
+        isLoadingExistingProfile = true
+        
+        do {
+            if let profile = try await TrainerService.shared.getUserTrainerProfile() {
+                await MainActor.run {
+                    // Pre-fill all fields with existing data
+                    self.name = profile.name
+                    self.hourlyRate = "\(profile.hourlyRate)"
+                    self.handicap = "\(profile.handicap)"
+                    
+                    // Parse bio into structured fields if possible
+                    if let bio = profile.bio {
+                        // Try to extract structured data, fallback to full bio
+                        self.backgroundExperience = bio
+                    } else {
+                        self.backgroundExperience = profile.description
+                    }
+                    
+                    // Location
+                    self.selectedLocation = profile.coordinate
+                    self.region.center = profile.coordinate
+                    
+                    // Optional fields
+                    if let cityVal = profile.city {
+                        self.city = cityVal
+                    }
+                    if let club = profile.clubAffiliation {
+                        self.clubAffiliation = club
+                    }
+                    if let years = profile.experienceYears {
+                        self.experienceYears = "\(years)"
+                    }
+                    if let radius = profile.serviceRadiusKm {
+                        self.serviceRadiusKm = radius
+                    }
+                    
+                    // Store trainer ID for update
+                    self.createdTrainerId = profile.id
+                    
+                    self.isLoadingExistingProfile = false
+                }
+            } else {
+                await MainActor.run {
+                    self.errorMessage = "Kunde inte hitta din tränarprofil"
+                    self.isLoadingExistingProfile = false
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Fel vid laddning: \(error.localizedDescription)"
+                self.isLoadingExistingProfile = false
+            }
         }
     }
     
@@ -926,22 +1013,43 @@ struct TrainerOnboardingView: View {
         
         Task {
             do {
-                // 1. Create trainer profile
-                let trainer = try await TrainerService.shared.createTrainerProfile(
-                    name: name,
-                    description: combinedDescription,
-                    hourlyRate: rate,
-                    handicap: hcp,
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                    serviceRadiusKm: serviceRadiusKm
-                )
+                let trainerId: UUID
                 
-                createdTrainerId = trainer.id
+                if isEditMode, let existingId = createdTrainerId ?? existingTrainerId {
+                    // UPDATE existing profile
+                    trainerId = existingId
+                    
+                    try await TrainerService.shared.updateTrainerProfile(
+                        trainerId: existingId,
+                        name: name,
+                        description: combinedDescription,
+                        hourlyRate: rate,
+                        handicap: hcp,
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        isActive: true
+                    )
+                    
+                    print("✅ Updated existing trainer profile")
+                } else {
+                    // CREATE new profile
+                    let trainer = try await TrainerService.shared.createTrainerProfile(
+                        name: name,
+                        description: combinedDescription,
+                        hourlyRate: rate,
+                        handicap: hcp,
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        serviceRadiusKm: serviceRadiusKm
+                    )
+                    trainerId = trainer.id
+                    createdTrainerId = trainer.id
+                    print("✅ Created new trainer profile")
+                }
                 
                 // 2. Update extended profile fields
                 try await TrainerService.shared.updateTrainerExtendedProfile(
-                    trainerId: trainer.id,
+                    trainerId: trainerId,
                     city: city.isEmpty ? nil : city,
                     bio: nil,
                     experienceYears: Int(experienceYears),
@@ -951,16 +1059,16 @@ struct TrainerOnboardingView: View {
                 // 3. Save specialties
                 if !selectedSpecialties.isEmpty {
                     try await TrainerService.shared.saveTrainerSpecialties(
-                        trainerId: trainer.id,
+                        trainerId: trainerId,
                         specialtyIds: Array(selectedSpecialties)
                     )
                 }
                 
                 // 4. Clear old lesson types first, then save new ones
-                try await TrainerService.shared.deleteAllLessonTypes(trainerId: trainer.id)
+                try await TrainerService.shared.deleteAllLessonTypes(trainerId: trainerId)
                 for lessonType in lessonTypes {
                     _ = try await TrainerService.shared.saveLessonType(
-                        trainerId: trainer.id,
+                        trainerId: trainerId,
                         name: lessonType.name,
                         description: lessonType.description,
                         durationMinutes: lessonType.duration,
@@ -969,12 +1077,12 @@ struct TrainerOnboardingView: View {
                 }
                 
                 // 5. Clear old availability first, then save new ones
-                try await TrainerService.shared.deleteAllAvailability(trainerId: trainer.id)
+                try await TrainerService.shared.deleteAllAvailability(trainerId: trainerId)
                 for day in weeklyAvailability where day.isEnabled {
                     let startTimeString = formatTimeForDB(day.startTime)
                     let endTimeString = formatTimeForDB(day.endTime)
                     try await TrainerService.shared.saveAvailability(
-                        trainerId: trainer.id,
+                        trainerId: trainerId,
                         dayOfWeek: day.dayOfWeek,
                         startTime: startTimeString,
                         endTime: endTimeString
@@ -983,7 +1091,12 @@ struct TrainerOnboardingView: View {
                 
                 await MainActor.run {
                     isSubmitting = false
-                    showConfirmation = true
+                    if isEditMode {
+                        // For edit mode, just dismiss with success
+                        dismiss()
+                    } else {
+                        showConfirmation = true
+                    }
                 }
             } catch {
                 await MainActor.run {

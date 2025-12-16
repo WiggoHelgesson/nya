@@ -156,7 +156,7 @@ struct LeaderboardRow: View {
 }
 
 // Model for leaderboard
-struct TerritoryLeader: Identifiable {
+struct TerritoryLeader: Identifiable, Equatable {
     let id: String
     let name: String
     let avatarUrl: String?

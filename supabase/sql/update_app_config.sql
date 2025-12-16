@@ -52,3 +52,4 @@ GRANT SELECT ON public.app_config TO authenticated;
 
 
 
+analysera varför notiser inte funkar när man slutför ett träningspass. jag vill att alla ens vänner ska få en riktig ios push notis när man slutför ett pass

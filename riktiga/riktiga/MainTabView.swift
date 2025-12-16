@@ -3,6 +3,7 @@ import Combine
 import UIKit
 import MapKit
 import CoreLocation
+import Supabase
 
 // MARK: - Navigation Depth Tracker
 class NavigationDepthTracker: ObservableObject {
@@ -40,8 +41,9 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var hasActiveSession = SessionManager.shared.hasActiveSession
     @State private var showStartSession = false
+    @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem, 1=Zonkriget, 2=Belöningar, 3=Lektioner, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem(Zonkriget), 1=Socialt, 2=Belöningar, 3=Lektioner, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
@@ -50,18 +52,18 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             NavigationStack {
                 TabView(selection: $selectedTab) {
-                    SocialView()
+                    ZoneWarView()
                         .tag(0)
                         .tabItem {
                             Image(systemName: "house.fill")
                             Text("Hem")
                         }
                     
-                    ZoneWarView()
+                    SocialView()
                         .tag(1)
                         .tabItem {
-                            Image(systemName: "flag.2.crossed.fill")
-                            Text("Zonkriget")
+                            Image(systemName: "person.2.fill")
+                            Text("Socialt")
                         }
                     
                     RewardsView()
@@ -90,13 +92,15 @@ struct MainTabView: View {
             }
             .enableSwipeBack()
             
-            // Floating Start Session Button (only on Hem, Belöningar, Profil tabs and at root view)
-            if (selectedTab == 0 || selectedTab == 2 || selectedTab == 4) && navigationTracker.isAtRootView {
+            // Floating Start Session Button (now also on Hem (0) och Lektioner (3))
+            if (selectedTab == 0 || selectedTab == 1 || selectedTab == 2 || selectedTab == 3 || selectedTab == 4)
+                && navigationTracker.isAtRootView {
                 floatingStartButton
             }
         }
         .fullScreenCover(isPresented: $showStartSession) {
-            GymSessionView()
+            StartSessionView(initialActivity: startActivityType ?? .running)
+                .id(startActivityType ?? .running)
                 .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showResumeSession) {
@@ -121,9 +125,23 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 0
+            selectedTab = 1
             showStartSession = false
             showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchActivity"))) { note in
+            // Check userInfo first, then object for backwards compatibility
+            if let userInfo = note.userInfo,
+               let name = userInfo["activity"] as? String,
+               let activity = ActivityType(rawValue: name) {
+                startActivityType = activity
+            } else if let name = note.object as? String, let activity = ActivityType(rawValue: name) {
+                startActivityType = activity
+            } else {
+                startActivityType = .running
+            }
+            showResumeSession = false
+            showStartSession = true
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseStartSession"))) { _ in
             showStartSession = false
@@ -169,15 +187,37 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
-                // Refresh auth session when app becomes active
+                // Reset failure counter and refresh auth session when app becomes active
+                AuthSessionManager.shared.resetFailureCounter()
+                
                 Task {
                     do {
                         try await AuthSessionManager.shared.ensureValidSession()
                         print("✅ Auth session verified on app activation")
+                    } catch let authError as AuthError {
+                        // Only logout on true auth errors (session missing), not network issues
+                        if case .sessionMissing = authError {
+                            print("❌ Session truly missing - logging out")
+                            authViewModel.logout()
+                        } else {
+                            print("⚠️ Auth error but not logging out: \(authError)")
+                        }
                     } catch {
-                        print("⚠️ Could not verify auth session: \(error)")
-                        // If session is invalid, trigger re-authentication
-                        authViewModel.logout()
+                        // Network/other errors - don't logout, just log
+                        print("⚠️ Session check failed (network?): \(error) - NOT logging out")
+                    }
+                }
+            }
+        }
+        .onReceive(Timer.publish(every: 600, on: .main, in: .common).autoconnect()) { _ in
+            // Periodic session refresh every 10 minutes while app is active
+            if scenePhase == .active {
+                Task {
+                    do {
+                        try await AuthSessionManager.shared.ensureValidSession()
+                        print("✅ Periodic session refresh successful")
+                    } catch {
+                        print("⚠️ Periodic session refresh failed: \(error)")
                     }
                 }
             }
@@ -195,6 +235,7 @@ struct MainTabView: View {
                     if hasActiveSession {
                         showResumeSession = true
                     } else {
+                        startActivityType = .running
                         showStartSession = true
                     }
                 }

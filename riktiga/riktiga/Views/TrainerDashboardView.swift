@@ -8,6 +8,7 @@ struct TrainerDashboardView: View {
     @State private var selectedBooking: TrainerBooking?
     @State private var showChatSheet = false
     @State private var showEditProfile = false
+    @State private var showFullEditFlow = false
     @State private var showDeactivateConfirmation = false
     @State private var isDeactivating = false
     
@@ -80,6 +81,10 @@ struct TrainerDashboardView: View {
             }
             .sheet(isPresented: $showEditProfile) {
                 EditTrainerProfileView()
+            }
+            .fullScreenCover(isPresented: $showFullEditFlow) {
+                TrainerOnboardingView(isEditMode: true)
+                    .environmentObject(AuthViewModel.shared)
             }
             .alert("Avaktivera tränarkonto", isPresented: $showDeactivateConfirmation) {
                 Button("Avbryt", role: .cancel) {}
@@ -559,38 +564,48 @@ struct TrainerDashboardView: View {
         }
     }
     
-    // MARK: - Manage Ad Button
+    // MARK: - Manage Ad Section
     
     private var manageAdButton: some View {
-        Button {
-            showEditProfile = true
-        } label: {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
                 Image(systemName: "megaphone.fill")
-                    .font(.title2)
-                    .foregroundColor(.white)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Hantera annons")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("Andra pris, plats och beskrivning")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                
+                    .foregroundColor(.black)
+                Text("Hantera annons")
+                    .font(.system(size: 18, weight: .bold))
                 Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
             }
-            .padding(16)
-            .background(Color.black)
-            .cornerRadius(12)
+            
+            Text("Redigera din annons och gå igenom hela flödet med din befintliga information förifyld.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Button {
+                showFullEditFlow = true
+            } label: {
+                HStack {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title3)
+                    
+                    Text("Redigera annons")
+                        .font(.system(size: 15, weight: .semibold))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+                .foregroundColor(.white)
+                .padding(14)
+                .background(Color.black)
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
     }
     
     // MARK: - Deactivate Button

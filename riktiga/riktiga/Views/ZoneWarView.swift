@@ -5,6 +5,12 @@ import Supabase
 
 // MARK: - Territory Event Models
 
+// Params struct moved to nonisolated context
+nonisolated(unsafe) struct TakeoverEventParams: Encodable {
+    let p_user_id: String
+    let p_limit: Int
+}
+
 struct TerritoryEventRow: Decodable {
     let id: UUID
     let territory_id: UUID
@@ -62,11 +68,13 @@ struct ZoneWarView: View {
     @State private var selectedTerritory: Territory?
     @State private var showLeaderboard = false
     @State private var regionDebounceTask: DispatchWorkItem?
+    @State private var localStatsDebounceTask: Task<Void, Never>?
     
     // Area tracking
     @State private var currentAreaName: String = "Området"
     @State private var areaLeader: TerritoryLeader?
     @State private var allLeaders: [TerritoryLeader] = []
+    @State private var localLeaders: [TerritoryLeader] = [] // Calculated from visible tiles
     @State private var visibleMapRect: MKMapRect = MKMapRect.world
     
     // Bottom menu
@@ -76,6 +84,22 @@ struct ZoneWarView: View {
     
     // Prize list
     @State private var isPrizeListExpanded = false
+    
+    // Pro membership
+    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var showPaywall = false
+    
+    // New territory celebration
+    @State private var showNewTerritoryCelebration = false
+    @State private var celebrationTerritory: Territory?
+    @State private var targetMapRegion: MKCoordinateRegion?
+    
+    // Lottery stats
+    @State private var myLotteryTickets: Int = 0
+    @State private var totalLotteryTickets: Int = 0
+    @State private var isLotteryExpanded: Bool = false
+    @State private var showLotteryInfoPopup: Bool = false
+    @EnvironmentObject private var authViewModel: AuthViewModel
     
     // Cache for profiles
     private static var cachedLeaders: [TerritoryLeader] = []
@@ -94,18 +118,19 @@ struct ZoneWarView: View {
         NavigationStack {
             ZStack {
                 ZoneWarMapView(
-                    territories: territoryStore.territories,
+                    territories: [], // Only use tiles for grid-based system
+                    tiles: territoryStore.tiles,
                     onTerritoryTapped: { territory in
                         selectedTerritory = territory
                     },
                     onRegionChanged: { region, mapRect in
                         visibleMapRect = mapRect
                         updateAreaName(for: region.center)
-                        updateLeaderForVisibleArea(mapRect: mapRect)
+                        // updateLeaderForVisibleArea(mapRect: mapRect) // Replaced by calculateLocalStats
                         
                         // Viewport-based loading with debounce to reduce churn on map moves
                         regionDebounceTask?.cancel()
-                        let work = DispatchWorkItem { [center = region.center, span = region.span] in
+                        let work = DispatchWorkItem { [center = region.center, span = region.span, mapRect] in
                             let minLat = center.latitude - span.latitudeDelta / 2
                             let maxLat = center.latitude + span.latitudeDelta / 2
                             let minLon = center.longitude - span.longitudeDelta / 2
@@ -117,12 +142,29 @@ struct ZoneWarView: View {
                                 minLon: minLon,
                                 maxLon: maxLon
                             )
+                            
+                            // Load tiles for current viewport (separate throttle inside)
+                            let topLeft = MKMapPoint(x: mapRect.origin.x, y: mapRect.origin.y)
+                            let bottomRight = MKMapPoint(x: mapRect.maxX, y: mapRect.maxY)
+                            let minLonTiles = min(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
+                            let maxLonTiles = max(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
+                            let minLatTiles = min(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
+                            let maxLatTiles = max(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
+                            Task {
+                                await territoryStore.loadTilesInBounds(
+                                    minLat: minLatTiles,
+                                    maxLat: maxLatTiles,
+                                    minLon: minLonTiles,
+                                    maxLon: maxLonTiles
+                                )
+                            }
                         }
                         regionDebounceTask = work
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
-                    }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work) // Increased debounce to reduce flicker
+                    },
+                    targetRegion: $targetMapRegion
                 )
-                // Don't use ignoresSafeArea to keep tab bar visible
+                .ignoresSafeArea(edges: .top) // Map covers full screen including top
                 
                 if isLoading {
                     ProgressView()
@@ -132,19 +174,41 @@ struct ZoneWarView: View {
                         .cornerRadius(10)
                 }
                 
-                // Bottom menu bar
-                VStack {
-                    Spacer()
-                    bottomMenuBar
+                // New territory celebration overlay
+                if showNewTerritoryCelebration, let territory = celebrationTerritory {
+                    NewTerritoryCelebrationView(
+                        territory: territory,
+                        onComplete: {
+                            showNewTerritoryCelebration = false
+                            celebrationTerritory = nil
+                            territoryStore.pendingCelebrationTerritory = nil
+                        },
+                        onFocusMap: { region in
+                            targetMapRegion = region
+                        }
+                    )
+                    .transition(.opacity)
+                    .zIndex(100)
                 }
+                
             }
             .task {
-                // Show cached data immediately if available
+                // Check for pending territory celebration
+                if let pendingTerritory = territoryStore.pendingCelebrationTerritory {
+                    celebrationTerritory = pendingTerritory
+                    // Slight delay to let the view appear first
+                    try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                    withAnimation {
+                        showNewTerritoryCelebration = true
+                    }
+                }
+                
+                // Show cached data immediately if available (instant UI)
                 if !Self.cachedLeaders.isEmpty {
                     allLeaders = Self.cachedLeaders
-                    if let first = Self.cachedLeaders.first {
-                        areaLeader = first
-                    }
+                }
+                if !Self.cachedEvents.isEmpty {
+                    territoryEvents = Self.cachedEvents
                 }
                 
                 isLoading = Self.cachedLeaders.isEmpty
@@ -152,26 +216,115 @@ struct ZoneWarView: View {
                 // First sync any local territories to backend
                 await territoryStore.syncLocalTerritoriesToBackend()
                 
-                // Then refresh to get all territories
-                await territoryStore.refresh()
-                await loadAllLeaders()
-                await loadTerritoryEvents()
+                // Then refresh and load data in parallel for faster loading
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await self.territoryStore.refresh()
+                    }
+                    group.addTask {
+                        await self.loadLotteryStats()
+                    }
+                    group.addTask {
+                        await self.loadAllLeaders()
+                    }
+                    group.addTask {
+                        await self.loadTerritoryEvents()
+                    }
+                }
                 isLoading = false
             }
             .refreshable {
-                // Sync local territories first, then refresh
+                // Force clear cache and refetch everything
+                territoryStore.forceRefresh()
                 await territoryStore.syncLocalTerritoriesToBackend()
                 await territoryStore.refresh()
                 await loadAllLeaders()
                 await loadTerritoryEvents()
             }
-            .overlay(alignment: .top) {
-                kingOfAreaHeader
+            // Recalculate local stats whenever tiles update (debounced)
+            .onChange(of: territoryStore.tiles) { _ in
+                // Debounce to prevent excessive recalculations during rapid updates
+                localStatsDebounceTask?.cancel()
+                localStatsDebounceTask = Task {
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { calculateLocalStats() }
+                }
             }
-            .overlay(alignment: .topTrailing) {
-                prizeListBox
-                    .padding(.top, 120) // Below the king header
-                    .padding(.trailing, 12)
+            // Recalculate local stats whenever global leaders update (to get profile info)
+            .onChange(of: allLeaders) { _ in
+                calculateLocalStats()
+            }
+            // Floating refresh button that clears cache and reloads - bottom right
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    Task {
+                        territoryStore.forceRefresh()
+                        await territoryStore.refresh()
+                        await loadAllLeaders()
+                        await loadTerritoryEvents()
+                        await loadLotteryStats()
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.7))
+                    .clipShape(Circle())
+                    .shadow(radius: 6)
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 140) // Above tab bar and bottom menu
+                .accessibilityLabel("Uppdatera kartan")
+            }
+            .overlay(alignment: .top) {
+                VStack(spacing: 0) {
+                    kingOfAreaHeader
+                    
+                    // Prizes box and Lottery - below king of area, aligned right
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            prizeListBox
+                            
+                            // Info button
+                            Button {
+                                showLotteryInfoPopup = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("Hur får jag lotter?")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.white)
+                                    Image(systemName: "questionmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.yellow)
+                                }
+                                .frame(width: 195)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.black.opacity(0.85))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            
+                            lotteryCard
+                        }
+                        .padding(.trailing, 12)
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(.top, 4)
+            }
+            .overlay(alignment: .bottom) {
+                bottomMenuBar
+                    .padding(.bottom, 8)
+            }
+            .alert("Så får du lotter 🎰", isPresented: $showLotteryInfoPopup) {
+                Button("Förstått!", role: .cancel) { }
+            } message: {
+                Text("• 1 km² = 1 lott\n• Gympass med 5000kg+ = 1 lott\n• Boka en lektion = 5 lotter\n• Bli PRO-medlem för 2x lotter\n\nDet mest effektiva sättet är att ta över områden via Zonkriget!\n\n— Så funkar det —\n\nGenom att utföra olika handlingar i Up&Down får du lotter som ökar dina chanser att vinna priserna som visas på Zonkriget-sidan. Vill du ha större chans att vinna? Skaffa så mycket lotter du bara kan!")
             }
             .sheet(item: $selectedTerritory) { territory in
                 TerritoryDetailView(territory: territory)
@@ -180,25 +333,41 @@ struct ZoneWarView: View {
             .sheet(isPresented: $showLeaderboard) {
                 ZoneWarMenuView(
                     selectedTab: $selectedMenuTab,
-                    leaders: allLeaders,
+                    leaders: localLeaders,
                     events: territoryEvents,
-                    areaName: currentAreaName
+                    areaName: currentAreaName,
+                    onRefresh: {
+                        // Refresh all data
+                        territoryStore.forceRefresh()
+                        await territoryStore.refresh()
+                        await loadAllLeaders()
+                        await loadTerritoryEvents()
+                    }
                 )
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .presentationDragIndicator(.hidden) // Hide drag indicator
+                .interactiveDismissDisabled() // Disable swipe to dismiss
                 .onAppear {
-                    selectedMenuTab = 0 // Start on leaderboard when opening from header
+                    selectedMenuTab = 0
                 }
             }
             .sheet(isPresented: $showBottomMenu) {
                 ZoneWarMenuView(
                     selectedTab: $selectedMenuTab,
-                    leaders: allLeaders,
+                    leaders: localLeaders,
                     events: territoryEvents,
-                    areaName: currentAreaName
+                    areaName: currentAreaName,
+                    onRefresh: {
+                        // Refresh all data
+                        territoryStore.forceRefresh()
+                        await territoryStore.refresh()
+                        await loadAllLeaders()
+                        await loadTerritoryEvents()
+                    }
                 )
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .presentationDragIndicator(.hidden) // Hide drag indicator
+                .interactiveDismissDisabled() // Disable swipe to dismiss
             }
         }
     }
@@ -207,66 +376,139 @@ struct ZoneWarView: View {
     
     private var kingOfAreaHeader: some View {
         Button {
-            showLeaderboard = true
+            if isPremium {
+                showLeaderboard = true
+            } else {
+                showPaywall = true
+            }
         } label: {
-            VStack(spacing: 4) {
-                // Leader info
-                if let leader = areaLeader {
-                    HStack(spacing: 10) {
-                        // Profile image
-                        ProfileImage(url: leader.avatarUrl, size: 36)
-                        
-                        // Name and area
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(leader.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                            
-                            HStack(spacing: 4) {
-                                Text("👑")
-                                    .font(.caption)
-                                Text("KING OF THE AREA")
-                                    .font(.system(size: 10, weight: .bold))
+            VStack(spacing: 0) {
+                // Main blurred content
+                ZStack {
+                    VStack(spacing: 4) {
+                        // Leader info
+                        if let leader = areaLeader {
+                            HStack(spacing: 10) {
+                                // Profile image with PRO badge for non-premium
+                                ZStack(alignment: .bottomTrailing) {
+                                    ProfileImage(url: leader.avatarUrl, size: 36)
+                                    
+                                    if !isPremium {
+                                        Text("PRO")
+                                            .font(.system(size: 8, weight: .black))
+                                            .foregroundColor(.yellow)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule()
+                                                    .fill(Color.black.opacity(0.9))
+                                            )
+                                            .offset(x: 4, y: 4)
+                                    }
+                                }
+                                
+                                // Name and area
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(leader.name)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white)
+                                    
+                                    // This row shows different content based on premium
+                                    if isPremium {
+                                        HStack(spacing: 4) {
+                                            Text("👑")
+                                                .font(.caption)
+                                            Text("KING OF THE AREA")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.yellow)
+                                            Text("👑")
+                                                .font(.caption)
+                                        }
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                // Total area
+                                Text(formatArea(leader.totalArea))
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        } else {
+                            // No leader yet
+                            HStack {
+                                Image(systemName: "crown.fill")
                                     .foregroundColor(.yellow)
-                                Text("👑")
-                                    .font(.caption)
+                                Text("Ingen kung än")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
+                                Spacer()
                             }
                         }
                         
-                        Spacer()
-                        
-                        // Total area
-                        Text(formatArea(leader.totalArea))
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.white)
+                        // Area name subtitle - only for premium
+                        if isPremium {
+                            Text("Kungen av \(currentAreaName)")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     }
-                } else {
-                    // No leader yet
-                    HStack {
-                        Image(systemName: "crown.fill")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .blur(radius: isPremium ? 0 : 6)
+                    
+                    // PRO text for non-premium
+                    if !isPremium {
+                        Text("PRO")
+                            .font(.system(size: 14, weight: .black))
                             .foregroundColor(.yellow)
-                        Text("Ingen kung än")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                        Spacer()
                     }
                 }
+                .background(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: isPremium ? 16 : 0,
+                        bottomTrailingRadius: isPremium ? 16 : 0,
+                        topTrailingRadius: 16,
+                        style: .continuous
+                    )
+                    .fill(Color.black.opacity(0.85))
+                )
                 
-                // Area name subtitle
-                Text("Kungen av \(currentAreaName)")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.8))
+                // Bottom section with unlock text for non-premium
+                if !isPremium {
+                    HStack(spacing: 6) {
+                        Text("👑")
+                            .font(.system(size: 14))
+                        Text("KING OF THE AREA")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("👑")
+                            .font(.system(size: 14))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 16,
+                            bottomTrailingRadius: 16,
+                            topTrailingRadius: 0,
+                            style: .continuous
+                        )
+                        .fill(Color.black.opacity(0.75))
+                    )
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black.opacity(0.85))
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
         }
         .buttonStyle(.plain)
+        .sheet(isPresented: $showPaywall) {
+            PresentPaywallView()
+        }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
+        }
     }
     
     // MARK: - Prize List Box
@@ -342,61 +584,105 @@ struct ZoneWarView: View {
         }
     }
     
+    // MARK: - Lottery Card
+    
+    private var lotteryCard: some View {
+        LotteryTicketCard(
+            myTickets: myLotteryTickets,
+            totalTickets: totalLotteryTickets,
+            drawDate: "1 april",
+            isExpanded: $isLotteryExpanded
+        )
+        .frame(width: 195)
+    }
+    
+    private func loadLotteryStats() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            // Struct matching the SQL function return type
+            struct LotteryStats: Decodable {
+                let my_tickets: Int
+                let total_tickets: Int
+                let my_percentage: Double
+                let territory_tickets: Int
+                let gym_tickets: Int
+                let booking_tickets: Int
+            }
+            
+            let stats: [LotteryStats] = try await SupabaseConfig.supabase
+                .rpc("get_lottery_stats", params: ["p_user_id": userId])
+                .execute()
+                .value
+            
+            if let stat = stats.first {
+                await MainActor.run {
+                    myLotteryTickets = stat.my_tickets
+                    totalLotteryTickets = stat.total_tickets
+                    print("🎫 Lottery stats loaded:")
+                    print("   - My tickets: \(stat.my_tickets) (Territory: \(stat.territory_tickets), Gym: \(stat.gym_tickets), Bookings: \(stat.booking_tickets))")
+                    print("   - Total tickets: \(stat.total_tickets)")
+                    print("   - My percentage: \(String(format: "%.1f", stat.my_percentage))%")
+                }
+            }
+        } catch {
+            print("❌ Failed to load lottery stats: \(error)")
+            // Fallback: Calculate from tiles (PRO multiplier applied locally)
+            await MainActor.run {
+                let isPro = authViewModel.currentUser?.isProMember ?? false
+                let multiplier = isPro ? 2.0 : 1.0
+                
+                // Calculate from tiles
+                let myTiles = territoryStore.tiles.filter { $0.ownerId == userId }
+                // Each tile is ~625 m² (25m x 25m), 1600 tiles = 1 km²
+                let myAreaKm2 = Double(myTiles.count) * 625.0 / 1_000_000.0
+                let totalAreaKm2 = Double(territoryStore.tiles.count) * 625.0 / 1_000_000.0
+                
+                myLotteryTickets = Int(myAreaKm2 * multiplier)
+                totalLotteryTickets = max(Int(totalAreaKm2), myLotteryTickets)
+            }
+        }
+    }
+    
     // Prize data model
     private var prizes: [(logoImage: String, text: String)] {
         [
             ("35", "FUSE ENERGY 1500kr"),
-            ("22", "Zenenergy 500kr"),
-            ("21", "Pumplab 1000kr"),
-            ("14", "Loengolf 1000kr"),
-            ("15", "Pliktgolf 1500kr")
+            ("14", "Lonegolf 1000kr")
         ]
     }
     
     // MARK: - Bottom Menu Bar
     
     private var bottomMenuBar: some View {
-        HStack(spacing: 16) {
-            // Topplista button
+        HStack(spacing: 0) {
             Button {
                 selectedMenuTab = 0
                 showBottomMenu = true
             } label: {
-                Text("Topplista")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(selectedMenuTab == 0 ? .white : .gray)
-            }
-            
-            // Events button
-            Button {
-                selectedMenuTab = 1
-                showBottomMenu = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Events")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(selectedMenuTab == 1 ? .white : .gray)
-                    
-                    // Show badge if there are events
-                    if !territoryEvents.isEmpty {
-                        Text("\(territoryEvents.count)")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Color.red)
-                            .clipShape(Capsule())
-                    }
-                }
+                Text("TOPPLISTA")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color(red: 0.15, green: 0.15, blue: 0.17))
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.9),
+                            Color.gray.opacity(0.55)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
         )
-        .padding(.horizontal, 100)
+        .padding(.horizontal, 90)
         .padding(.bottom, 60) // Above tab bar
     }
     
@@ -439,62 +725,42 @@ struct ZoneWarView: View {
         }
         
         do {
-            // Fetch territory events where the current user's territory was taken over
-            let response: [TerritoryEventRow] = try await SupabaseConfig.supabase
-                .from("territory_events")
-                .select("id, territory_id, actor_id, event_type, metadata, created_at")
-                .eq("event_type", value: "claim")
-                .order("created_at", ascending: false)
-                .limit(50)
+            // Use the RPC function to get takeover events for current user
+            struct TakeoverEventRow: Decodable {
+                let event_id: UUID
+                let actor_id: UUID
+                let actor_name: String
+                let actor_avatar: String?
+                let event_type: String
+                let tile_count: Int
+                let created_at: Date?
+            }
+            
+            let response: [TakeoverEventRow] = try await SupabaseConfig.supabase
+                .rpc("get_my_takeover_events", params: TakeoverEventParams(
+                    p_user_id: currentUserId,
+                    p_limit: 50
+                ))
                 .execute()
                 .value
             
             var events: [TerritoryEvent] = []
             
-            // Get unique actor IDs to fetch profiles
-            let actorIds = Array(Set(response.map { $0.actor_id }))
-            var profilesMap: [String: (name: String, avatarUrl: String?)] = [:]
-            
-            // Batch fetch all profiles at once for better performance
-            if !actorIds.isEmpty {
-                if let profiles: [ProfileInfo] = try? await SupabaseConfig.supabase
-                    .from("profiles")
-                    .select("id, username, avatar_url")
-                    .in("id", values: actorIds)
-                    .execute()
-                    .value {
-                    for profile in profiles {
-                        profilesMap[profile.id] = (profile.username ?? "Okänd", profile.avatar_url)
-                    }
-                }
-            }
-            
             for item in response {
-                // Parse metadata - now it's already a dictionary
-                var areaName = "Okänt område"
-                var previousOwnerId: String? = nil
+                // Create area description based on tile count
+                let tileCount = item.tile_count
+                let areaDescription = tileCount > 1 ? "\(tileCount) rutor" : "1 ruta"
                 
-                if let metadata = item.metadata {
-                    areaName = (metadata["area_name"]?.value as? String) ?? "Okänt område"
-                    previousOwnerId = metadata["previous_owner_id"]?.value as? String
-                }
-                
-                // Check if this was a takeover of current user's territory
-                let isMyTerritoryTakeover = previousOwnerId == currentUserId && item.actor_id != currentUserId
-                
-                if isMyTerritoryTakeover {
-                    let profile = profilesMap[item.actor_id]
-                    events.append(TerritoryEvent(
-                        id: item.id,
-                        type: .takeover,
-                        actorId: item.actor_id,
-                        actorName: profile?.name ?? "Okänd",
-                        actorAvatarUrl: profile?.avatarUrl,
-                        territoryId: item.territory_id,
-                        areaName: areaName,
-                        timestamp: item.created_at ?? Date()
-                    ))
-                }
+                events.append(TerritoryEvent(
+                    id: item.event_id,
+                    type: .takeover,
+                    actorId: item.actor_id.uuidString,
+                    actorName: item.actor_name,
+                    actorAvatarUrl: item.actor_avatar,
+                    territoryId: item.event_id, // Use event_id as placeholder
+                    areaName: areaDescription,
+                    timestamp: item.created_at ?? Date()
+                ))
             }
             
             // Cache and update
@@ -504,12 +770,183 @@ struct ZoneWarView: View {
             await MainActor.run {
                 self.territoryEvents = events
             }
+            
+            print("📢 Loaded \(events.count) takeover events")
         } catch {
             print("❌ Error loading territory events: \(error)")
+            
+            // Fallback: Try direct table query if RPC doesn't exist yet
+            do {
+                let response: [TerritoryEventRow] = try await SupabaseConfig.supabase
+                    .from("territory_events")
+                    .select("id, territory_id, actor_id, event_type, metadata, created_at")
+                    .eq("victim_id", value: currentUserId)
+                    .eq("event_type", value: "takeover")
+                    .order("created_at", ascending: false)
+                    .limit(50)
+                    .execute()
+                    .value
+                
+                var events: [TerritoryEvent] = []
+                let actorIds = Array(Set(response.map { $0.actor_id }))
+                var profilesMap: [String: (name: String, avatarUrl: String?)] = [:]
+                
+                if !actorIds.isEmpty {
+                    if let profiles: [ProfileInfo] = try? await SupabaseConfig.supabase
+                        .from("profiles")
+                        .select("id, username, avatar_url")
+                        .in("id", values: actorIds)
+                        .execute()
+                        .value {
+                        for profile in profiles {
+                            profilesMap[profile.id] = (profile.username ?? "Okänd", profile.avatar_url)
+                        }
+                    }
+                }
+                
+                for item in response {
+                    let profile = profilesMap[item.actor_id]
+                    let tileCount = (item.metadata?["tile_count"]?.value as? Int) ?? 1
+                    
+                    events.append(TerritoryEvent(
+                        id: item.id,
+                        type: .takeover,
+                        actorId: item.actor_id,
+                        actorName: profile?.name ?? "Okänd",
+                        actorAvatarUrl: profile?.avatarUrl,
+                        territoryId: item.territory_id,
+                        areaName: tileCount > 1 ? "\(tileCount) rutor" : "1 ruta",
+                        timestamp: item.created_at ?? Date()
+                    ))
+                }
+                
+                Self.cachedEvents = events
+                Self.lastEventsCacheTime = Date()
+                
+                await MainActor.run {
+                    self.territoryEvents = events
+                }
+            } catch {
+                print("❌ Fallback event loading also failed: \(error)")
+            }
         }
     }
     
     // MARK: - Helper Functions
+    
+    // Profile cache for local lookups - ensures consistent ID-to-profile mapping
+    @State private var profileCache: [String: TerritoryOwnerProfile] = [:]
+    
+    private func calculateLocalStats() {
+        // Trigger async fetch from database instead of counting local tiles
+        Task {
+            await loadLocalLeadersFromDatabase()
+        }
+    }
+    
+    private func loadLocalLeadersFromDatabase() async {
+        // Get bounding box from visible map rect
+        let topLeft = MKMapPoint(x: visibleMapRect.origin.x, y: visibleMapRect.origin.y)
+        let bottomRight = MKMapPoint(x: visibleMapRect.maxX, y: visibleMapRect.maxY)
+        
+        let minLat = min(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
+        let maxLat = max(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
+        let minLon = min(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
+        let maxLon = max(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
+        
+        // Add margin to capture more area
+        let margin = 0.01 // ~1km margin
+        let expandedMinLat = minLat - margin
+        let expandedMaxLat = maxLat + margin
+        let expandedMinLon = minLon - margin
+        let expandedMaxLon = maxLon + margin
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            struct LocalLeaderRow: Decodable {
+                let owner_id: UUID
+                let area_m2: Double
+                let username: String?
+                let avatar_url: String?
+                let is_pro: Bool?
+            }
+            
+            let results: [LocalLeaderRow] = try await SupabaseConfig.supabase
+                .rpc("get_leaderboard_in_bounds", params: [
+                    "min_lat": expandedMinLat,
+                    "min_lon": expandedMinLon,
+                    "max_lat": expandedMaxLat,
+                    "max_lon": expandedMaxLon,
+                    "limit_count": 20
+                ])
+                .execute()
+                .value
+            
+            await MainActor.run {
+                let leaders = results.map { row in
+                    TerritoryLeader(
+                        id: row.owner_id.uuidString.lowercased(),
+                        name: row.username ?? "Användare",
+                        avatarUrl: row.avatar_url,
+                        totalArea: row.area_m2,
+                        isPro: row.is_pro ?? false
+                    )
+                }
+                
+                self.localLeaders = leaders
+                
+                // Update Area Leader (King of the visible area)
+                if let first = leaders.first {
+                    self.areaLeader = first
+                } else {
+                    self.areaLeader = nil
+                }
+                
+                #if DEBUG
+                print("📊 Local leaderboard from DB: \(leaders.count) leaders in bounds")
+                #endif
+            }
+        } catch {
+            print("❌ Failed to load local leaderboard: \(error)")
+        }
+    }
+    
+    private func fetchMissingProfiles(ownerIds: [String]) async {
+        guard !ownerIds.isEmpty else { return }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            // Fetch profiles for the missing IDs
+            let profiles: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
+                .from("profiles")
+                .select("id, username, avatar_url, is_pro")
+                .in("id", values: ownerIds)
+                .execute()
+                .value
+            
+            // Update cache and trigger recalculation
+            await MainActor.run {
+                for profile in profiles {
+                    self.profileCache[profile.id.lowercased()] = profile
+                }
+                
+                // Prefetch avatar images
+                let avatarUrls = profiles.compactMap { $0.avatarUrl }
+                ImageCacheManager.shared.prefetch(urls: avatarUrls)
+                
+                // Recalculate with new profile data
+                if !profiles.isEmpty {
+                    self.calculateLocalStats()
+                }
+            }
+            
+            print("✅ Fetched \(profiles.count) missing profiles for local leaderboard")
+        } catch {
+            print("❌ Failed to fetch missing profiles: \(error)")
+        }
+    }
     
     private func formatArea(_ area: Double) -> String {
         // Always display in km² for consistency
@@ -553,35 +990,6 @@ struct ZoneWarView: View {
         }
     }
     
-    private func updateLeaderForVisibleArea(mapRect: MKMapRect) {
-        // Calculate which territories are visible and sum up area per owner
-        var ownerVisibleAreas: [String: Double] = [:]
-        
-        for territory in territoryStore.territories {
-            // Check if territory intersects with visible rect
-            for polygon in territory.polygons {
-                guard polygon.count >= 3 else { continue }
-                
-                let mkPolygon = MKPolygon(coordinates: polygon, count: polygon.count)
-                if mapRect.intersects(mkPolygon.boundingMapRect) {
-                    ownerVisibleAreas[territory.ownerId, default: 0] += territory.area
-                    break // Count each territory only once per owner
-                }
-            }
-        }
-        
-        // Find the leader (most visible area)
-        if let topOwner = ownerVisibleAreas.max(by: { $0.value < $1.value }) {
-            // Find the leader in our cached list and use their TOTAL area (not just visible)
-            if let leader = allLeaders.first(where: { $0.id == topOwner.key }) {
-                DispatchQueue.main.async {
-                    // Use the leader's total area from allLeaders, not just visible area
-                    self.areaLeader = leader
-                }
-            }
-        }
-    }
-    
     private func loadAllLeaders() async {
         // Check cache first - but only if cache has valid profiles (not all "Okänd")
         let now = Date()
@@ -592,9 +1000,7 @@ struct ZoneWarView: View {
            now.timeIntervalSince(Self.lastCacheTime) < Self.cacheValidityDuration {
             await MainActor.run {
                 self.allLeaders = Self.cachedLeaders
-                if let first = Self.cachedLeaders.first {
-                    self.areaLeader = first
-                }
+                // Note: areaLeader is calculated from localLeaders only, not Sweden-wide
             }
             return
         }
@@ -608,9 +1014,7 @@ struct ZoneWarView: View {
             if !Self.cachedLeaders.isEmpty && cacheHasValidProfiles {
                 await MainActor.run {
                     self.allLeaders = Self.cachedLeaders
-                    if let first = Self.cachedLeaders.first {
-                        self.areaLeader = first
-                    }
+                    // Note: areaLeader is calculated from localLeaders only
                 }
             }
             return
@@ -651,6 +1055,8 @@ struct ZoneWarView: View {
                 
                 for profile in profiles {
                     profilesMap[profile.id] = profile
+                    // Also add to local profile cache for consistent lookups
+                    self.profileCache[profile.id.lowercased()] = profile
                 }
                 break // Success, exit retry loop
             } catch {
@@ -675,6 +1081,7 @@ struct ZoneWarView: View {
                         .value
                     for profile in extra {
                         profilesMap[profile.id] = profile
+                        self.profileCache[profile.id.lowercased()] = profile
                     }
                 } catch {
                     print("Fallback profile fetch failed for chunk \(chunk.count): \(error)")
@@ -727,9 +1134,9 @@ struct ZoneWarView: View {
             // Use new leaders only if we got valid profiles, otherwise keep old
             if newCacheHasValidProfiles || self.allLeaders.isEmpty {
                 self.allLeaders = leaders
-                if let first = leaders.first {
-                    self.areaLeader = first
-                }
+                
+                // Trigger local recalculation now that we have profiles
+                calculateLocalStats()
             }
         }
         
@@ -776,8 +1183,10 @@ enum TerritoryColors {
 
 struct ZoneWarMapView: UIViewRepresentable {
     let territories: [Territory]
+    let tiles: [Tile]
     let onTerritoryTapped: (Territory) -> Void
     let onRegionChanged: (MKCoordinateRegion, MKMapRect) -> Void
+    var targetRegion: Binding<MKCoordinateRegion?>?
     
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -797,13 +1206,48 @@ struct ZoneWarMapView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: MKMapView, context: Context) {
-        context.coordinator.territories = territories
+        // Only update coordinator data (lightweight)
         context.coordinator.onTerritoryTapped = onTerritoryTapped
         context.coordinator.onRegionChanged = onRegionChanged
         
-        DispatchQueue.main.async {
-            context.coordinator.updateMap(uiView, with: self.territories)
+        // Check if data actually changed before triggering expensive map update
+        let tilesChanged = tiles.count != context.coordinator.tiles.count ||
+                          Set(tiles.map { $0.id }) != Set(context.coordinator.tiles.map { $0.id }) ||
+                          tilesHaveOwnershipChanges(old: context.coordinator.tiles, new: tiles)
+        let territoriesChanged = territories.count != context.coordinator.territories.count ||
+                                Set(territories.map { $0.id }) != Set(context.coordinator.territories.map { $0.id })
+        
+        if tilesChanged || territoriesChanged {
+            context.coordinator.territories = territories
+            context.coordinator.tiles = tiles
+            
+            // Debounce map updates to prevent rapid redraws
+            context.coordinator.pendingMapUpdate?.cancel()
+            let workItem = DispatchWorkItem { [tiles, territories] in
+                context.coordinator.updateMap(uiView, territories: territories, tiles: tiles)
+            }
+            context.coordinator.pendingMapUpdate = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
         }
+        
+        // Animate to target region if set
+        if let targetRegion = targetRegion?.wrappedValue {
+            DispatchQueue.main.async {
+                uiView.setRegion(targetRegion, animated: true)
+                // Clear the target after animating
+                self.targetRegion?.wrappedValue = nil
+            }
+        }
+    }
+    
+    private func tilesHaveOwnershipChanges(old: [Tile], new: [Tile]) -> Bool {
+        let oldMap = Dictionary(uniqueKeysWithValues: old.map { ($0.id, $0.ownerId) })
+        for tile in new {
+            if oldMap[tile.id] != tile.ownerId {
+                return true
+            }
+        }
+        return false
     }
     
     func makeCoordinator() -> Coordinator {
@@ -816,16 +1260,22 @@ struct ZoneWarMapView: UIViewRepresentable {
     
     final class Coordinator: NSObject, MKMapViewDelegate {
         var territories: [Territory]
+        var tiles: [Tile] = []
         var onTerritoryTapped: (Territory) -> Void
+        var onTileTapped: ((Tile) -> Void)?
         var onRegionChanged: (MKCoordinateRegion, MKMapRect) -> Void
         private var hasCentered = false
         private var currentTerritoryIds: Set<UUID> = []
+        private var currentTileIds: Set<Int64> = []
         private var polygonToTerritory: [MKPolygon: Territory] = [:]
+        private var polygonToTile: [MKPolygon: Tile] = [:]
+        private var polygonIsTile: Set<MKPolygon> = []
         
         // Throttling for region changes
         private var lastRegionChangeTime: Date = .distantPast
-        private let regionChangeThrottleInterval: TimeInterval = 0.5 // 500ms throttle
+        private let regionChangeThrottleInterval: TimeInterval = 1.0 // 1s throttle (increased to reduce flickering)
         private var pendingRegionChange: DispatchWorkItem?
+        var pendingMapUpdate: DispatchWorkItem?
         
         init(
             territories: [Territory],
@@ -851,36 +1301,72 @@ struct ZoneWarMapView: UIViewRepresentable {
                 let polygonViewPoint = renderer.point(for: mapPoint)
                 
                 if renderer.path?.contains(polygonViewPoint) == true {
+                    // Check if it's a territory
                     if let territory = polygonToTerritory[polygon] {
                         onTerritoryTapped(territory)
+                        return
+                    }
+                    // Check if it's a tile - create a temporary Territory for display
+                    if let tile = polygonToTile[polygon], let ownerId = tile.ownerId {
+                        let tempTerritory = Territory(
+                            id: UUID(),
+                            ownerId: ownerId,
+                            activity: nil,
+                            area: 625, // ~25m x 25m tile
+                            polygons: [tile.coordinates]
+                        )
+                        onTerritoryTapped(tempTerritory)
                         return
                     }
                 }
             }
         }
         
-        func updateMap(_ mapView: MKMapView, with territories: [Territory]) {
-            // Quick check to avoid unnecessary updates
-            let newIds = Set(territories.map { $0.id })
-            if newIds == currentTerritoryIds {
+        func updateMap(_ mapView: MKMapView, territories: [Territory], tiles: [Tile]) {
+            // Create a signature that includes both ID and owner to detect ownership changes
+            let newTerritoryIds = Set(territories.map { $0.id })
+            let newTileSignatures = Set(tiles.map { "\($0.id)_\($0.ownerId ?? "")" })
+            let currentTileSignatures = Set(currentTileIds.map { id -> String in
+                // Find the tile with this ID in the current mapping
+                if let tile = polygonToTile.values.first(where: { $0.id == id }) {
+                    return "\(tile.id)_\(tile.ownerId ?? "")"
+                }
+                return "\(id)_"
+            })
+            
+            // If both territories and tiles (including owners) are unchanged, skip
+            if newTerritoryIds == currentTerritoryIds && newTileSignatures == currentTileSignatures && !currentTileIds.isEmpty {
                 return
             }
+            currentTerritoryIds = newTerritoryIds
+            currentTileIds = Set(tiles.map { $0.id })
             
-            currentTerritoryIds = newIds
-            
-            // Remove old overlays efficiently
+            // Use batch operations to minimize flickering
             let existingOverlays = mapView.overlays
-            if !existingOverlays.isEmpty {
-                mapView.removeOverlays(existingOverlays)
-            }
+            
             polygonToTerritory.removeAll(keepingCapacity: true)
+            polygonToTile.removeAll(keepingCapacity: true)
+            polygonIsTile.removeAll(keepingCapacity: true)
             
-            // Pre-allocate array
             var allPolygons: [MKPolygon] = []
-            allPolygons.reserveCapacity(territories.count * 2)
+            allPolygons.reserveCapacity(territories.count * 2 + tiles.count)
             
+            // Tiles first (so territories draw above if needed)
+            for tile in tiles {
+                guard tile.coordinates.count >= 3 else { continue }
+                var coords = tile.coordinates
+                if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
+                    coords.append(first)
+                }
+                let poly = MKPolygon(coordinates: coords, count: coords.count)
+                poly.title = tile.ownerId ?? "" // empty means neutral
+                polygonIsTile.insert(poly)
+                polygonToTile[poly] = tile // Map for tap handling
+                allPolygons.append(poly)
+            }
+            
+            // Territories (union per owner)
             for territory in territories {
-                
                 for (ringIndex, ring) in territory.polygons.enumerated() {
                     guard ring.count >= 3 else {
                         print("⚠️   Ring \(ringIndex) has only \(ring.count) coords, skipping")
@@ -901,9 +1387,15 @@ struct ZoneWarMapView: UIViewRepresentable {
                 }
             }
             
-            // Add all overlays at once for better performance
+            // Batch update: Add new overlays first, then remove old ones
+            // This minimizes flickering by ensuring new content appears before old is removed
             if !allPolygons.isEmpty {
                 mapView.addOverlays(allPolygons)
+            }
+            
+            // Remove old overlays after new ones are added
+            if !existingOverlays.isEmpty {
+                mapView.removeOverlays(existingOverlays)
             }
             
             if !hasCentered {
@@ -964,13 +1456,29 @@ struct ZoneWarMapView: UIViewRepresentable {
             
             let renderer = MKPolygonRenderer(polygon: polygon)
             
-            // Get color based on owner ID stored in title
+            // Tile vs Territory styling
+            let isTile = polygonIsTile.contains(polygon)
             let ownerId = polygon.title ?? ""
-            let color = TerritoryColors.colorForUser(ownerId)
             
-            renderer.fillColor = color.withAlphaComponent(0.4)
-            renderer.strokeColor = color
-            renderer.lineWidth = 2.5
+            if isTile {
+                // Neutral tile = grå; owned tile = färg
+                if ownerId.isEmpty {
+                    renderer.fillColor = UIColor.gray.withAlphaComponent(0.12)
+                    renderer.strokeColor = UIColor.gray.withAlphaComponent(0.25)
+                    renderer.lineWidth = 0.5
+                } else {
+                    let color = TerritoryColors.colorForUser(ownerId)
+                    renderer.fillColor = color.withAlphaComponent(0.18)
+                    renderer.strokeColor = color.withAlphaComponent(0.5)
+                    renderer.lineWidth = 1.0
+                }
+            } else {
+                // Territories (union per ägare)
+                let color = TerritoryColors.colorForUser(ownerId)
+                renderer.fillColor = color.withAlphaComponent(0.35)
+                renderer.strokeColor = color
+                renderer.lineWidth = 2.5
+            }
             
             return renderer
         }
@@ -984,16 +1492,24 @@ struct ZoneWarMenuView: View {
     let leaders: [TerritoryLeader]
     let events: [TerritoryEvent]
     let areaName: String
+    var onRefresh: (() async -> Void)? = nil // Callback for pull-to-refresh
     @Environment(\.dismiss) private var dismiss
     
-    // Leaderboard type toggle
-    @State private var isShowingSwedenLeaderboard = false
+    // Pro membership
+    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var showPaywall = false
+    
+    // Leaderboard type toggle - Non-Pro users default to Sweden, Pro users default to local
+    @State private var isShowingSwedenLeaderboard = !RevenueCatManager.shared.isPremium
     @State private var swedenLeaders: [TerritoryLeader] = []
     @State private var isLoadingSwedenLeaders = false
     
     // Navigation state
     @State private var selectedUserId: String?
     @State private var showUserProfile = false
+    
+    // Refresh state
+    @State private var isRefreshing = false
     
     var body: some View {
         NavigationStack {
@@ -1045,6 +1561,9 @@ struct ZoneWarMenuView: View {
                 } else {
                     eventsView
                 }
+                
+                // Sponsors section
+                sponsorsSection
             }
             .background(Color(red: 0.12, green: 0.12, blue: 0.14))
             .navigationBarTitleDisplayMode(.inline)
@@ -1069,6 +1588,18 @@ struct ZoneWarMenuView: View {
             .navigationDestination(isPresented: $showUserProfile) {
                 if let userId = selectedUserId {
                     UserProfileView(userId: userId)
+                }
+            }
+            .sheet(isPresented: $showPaywall) {
+                PresentPaywallView()
+            }
+            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+                isPremium = newValue
+            }
+            .task {
+                // Load Sweden leaders immediately for non-Pro users (always refresh)
+                if !isPremium {
+                    loadSwedenLeaders()
                 }
             }
         }
@@ -1106,9 +1637,8 @@ struct ZoneWarMenuView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isShowingSwedenLeaderboard = true
                         }
-                        if swedenLeaders.isEmpty {
-                            loadSwedenLeaders()
-                        }
+                        // Always reload Sweden leaders to get fresh data
+                        loadSwedenLeaders()
                     } label: {
                         HStack(spacing: 6) {
                             Text("🇸🇪")
@@ -1138,62 +1668,45 @@ struct ZoneWarMenuView: View {
                         .scaleEffect(1.2)
                         .padding(.top, 40)
                 } else {
+                    // Check if local leaderboard should be blurred (non-Pro viewing local)
+                    let shouldBlurLocal = !isPremium && !isShowingSwedenLeaderboard
+                    
                     LazyVStack(spacing: 0) {
                         ForEach(Array(displayLeaders.prefix(maxCount).enumerated()), id: \.element.id) { index, leader in
-                            Button {
-                                selectedUserId = leader.id
-                                showUserProfile = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    // Rank badge
-                                    ZStack {
-                                        Circle()
-                                            .fill(rankColor(for: index + 1))
-                                            .frame(width: 36, height: 36)
-                                        Text("\(index + 1)")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(index < 3 ? .black : .white)
-                                    }
-                                    
-                                    // Profile image
-                                    ProfileImage(url: leader.avatarUrl, size: 48)
-                                    
-                                    // Name
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 6) {
-                                            Text(leader.name)
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(.white)
-                                                .lineLimit(1)
-                                            
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 12, weight: .medium))
-                                                .foregroundColor(.gray.opacity(0.6))
-                                        }
-                                        
-                                        if index == 0 {
-                                            HStack(spacing: 4) {
-                                                Text("👑")
-                                                    .font(.system(size: 10))
-                                                Text(isShowingSwedenLeaderboard ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.yellow)
+                            if shouldBlurLocal {
+                                // Blurred row for non-Pro users on local leaderboard
+                                Button {
+                                    showPaywall = true
+                                } label: {
+                                    leaderboardRow(index: index, leader: leader)
+                                        .blur(radius: 6)
+                                        .overlay(
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "lock.fill")
+                                                    .font(.system(size: 14, weight: .bold))
+                                                Text("PRO")
+                                                    .font(.system(size: 14, weight: .black))
                                             }
-                                        }
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Area
-                                    Text(formatArea(leader.totalArea))
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundColor(.gray)
+                                            .foregroundColor(.yellow)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(
+                                                Capsule()
+                                                    .fill(Color.black.opacity(0.8))
+                                            )
+                                        )
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                                .background(index == 0 ? Color.yellow.opacity(0.1) : Color.clear)
+                                .buttonStyle(.plain)
+                            } else {
+                                // Normal row for Pro users or Sweden leaderboard
+                                Button {
+                                    selectedUserId = leader.id
+                                    showUserProfile = true
+                                } label: {
+                                    leaderboardRow(index: index, leader: leader)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                             
                             if index < min(maxCount, displayLeaders.count) - 1 {
                                 Divider()
@@ -1216,123 +1729,159 @@ struct ZoneWarMenuView: View {
                             }
                             .padding(.top, 60)
                         }
-                        
-                        // Prize disclaimer text
-                        if !displayLeaders.isEmpty {
-                            Text(isShowingSwedenLeaderboard 
-                                ? "🏆 Denna topplistan gäller för de priser vi ger ut"
-                                : "ℹ️ Denna topplistan ingår inte i de priser vi ger ut")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(isShowingSwedenLeaderboard ? .yellow : .gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                        }
                     }
                 }
             }
             .padding(.top, 8)
         }
+        .refreshable {
+            // Pull to refresh - reload Sweden leaders
+            loadSwedenLeaders()
+            // Call parent refresh callback
+            await onRefresh?()
+        }
+    }
+    
+    // Helper view for leaderboard row
+    @ViewBuilder
+    private func leaderboardRow(index: Int, leader: TerritoryLeader) -> some View {
+        HStack(spacing: 14) {
+            // Rank badge
+            ZStack {
+                Circle()
+                    .fill(rankColor(for: index + 1))
+                    .frame(width: 36, height: 36)
+                Text("\(index + 1)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(index < 3 ? .black : .white)
+            }
+            
+            // Profile image
+            ProfileImage(url: leader.avatarUrl, size: 48)
+            
+            // Name
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(leader.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.gray.opacity(0.6))
+                }
+                
+                if index == 0 {
+                    HStack(spacing: 4) {
+                        Text("👑")
+                            .font(.system(size: 10))
+                        Text(isShowingSwedenLeaderboard ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.yellow)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // Area
+            Text(formatArea(leader.totalArea))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(index == 0 ? Color.yellow.opacity(0.1) : Color.clear)
     }
     
     private func loadSwedenLeaders() {
         isLoadingSwedenLeaders = true
         
         Task {
+            await MainActor.run {
+                isLoadingSwedenLeaders = true
+            }
+            
+            // Ensure session is valid before fetching
             do {
-                // Fetch all territories and aggregate by owner
                 try await AuthSessionManager.shared.ensureValidSession()
-                
-                struct TerritoryOwnerArea: Decodable {
-                    let owner_id: UUID  // UUID type to match database
+            } catch {
+                print("⚠️ Session check failed before loading Sweden leaders: \(error)")
+            }
+            
+            do {
+                // Use the RPC function that aggregates from territory_tiles
+                struct LeaderboardEntry: Decodable {
+                    let owner_id: UUID
                     let area_m2: Double
+                    let username: String?
+                    let avatar_url: String?
+                    let is_pro: Bool?
                 }
                 
-                print("📊 Fetching all territories for Sweden leaderboard...")
+                print("📊 Fetching Sweden leaderboard via RPC...")
                 
-                // Fetch ALL territories without any limit
-                let territories: [TerritoryOwnerArea] = try await SupabaseConfig.supabase
-                    .from("territories")
-                    .select("owner_id, area_m2")
-                    .order("area_m2", ascending: false)
+                let result: [LeaderboardEntry] = try await SupabaseConfig.supabase.database
+                    .rpc("get_leaderboard", params: ["limit_count": 20])
                     .execute()
                     .value
                 
-                print("📊 Fetched \(territories.count) territories total")
+                print("📊 Fetched \(result.count) leaders from RPC")
                 
-                // Debug: Show total area and breakdown
-                let totalArea = territories.reduce(0.0) { $0 + $1.area_m2 }
-                print("📊 Total area in database: \(totalArea / 1_000_000) km²")
-                
-                // Aggregate by owner - use LOWERCASE for consistency with Supabase
-                var ownerAreas: [String: Double] = [:]
-                var ownerTerritoryCount: [String: Int] = [:]
-                for t in territories {
-                    // IMPORTANT: Use lowercased() to match Supabase's UUID format
-                    let ownerId = t.owner_id.uuidString.lowercased()
-                    ownerAreas[ownerId, default: 0] += t.area_m2
-                    ownerTerritoryCount[ownerId, default: 0] += 1
-                }
-                
-                print("📊 Found \(ownerAreas.count) unique owners")
-                
-                // Debug: Log top owners with their territory counts
-                let topOwners = ownerAreas.sorted { $0.value > $1.value }.prefix(5)
-                for (i, owner) in topOwners.enumerated() {
-                    let count = ownerTerritoryCount[owner.key] ?? 0
-                    print("📊 #\(i+1): \(owner.key) has \(count) territories, total \(owner.value / 1_000_000) km²")
-                }
-                
-                // Sort and take top 20
-                let top20 = ownerAreas.sorted { $0.value > $1.value }.prefix(20)
-                let ownerIds = top20.map { $0.key }
-                
-                print("📊 Top 20 owner IDs: \(ownerIds)")
-                
-                // Fetch profiles
-                var profilesMap: [String: (name: String, avatarUrl: String?, isPro: Bool)] = [:]
-                
-                if !ownerIds.isEmpty {
-                    let profiles: [TerritoryOwnerProfile] = try await SupabaseConfig.supabase
-                        .from("profiles")
-                        .select("id, username, avatar_url, is_pro")
-                        .in("id", values: ownerIds)
+                // Check if all names are null - might indicate session issue
+                let allNullNames = result.allSatisfy { $0.username == nil }
+                if allNullNames && !result.isEmpty {
+                    print("⚠️ All usernames are null - possible session/RLS issue. Retrying...")
+                    await AuthSessionManager.shared.recoverSession()
+                    
+                    // Retry once
+                    let retryResult: [LeaderboardEntry] = try await SupabaseConfig.supabase.database
+                        .rpc("get_leaderboard", params: ["limit_count": 20])
                         .execute()
                         .value
                     
-                    print("📊 Fetched \(profiles.count) profiles for \(ownerIds.count) owner IDs")
-                    
-                    for profile in profiles {
-                        // Store with lowercased ID for consistent lookup
-                        profilesMap[profile.id.lowercased()] = (profile.name, profile.avatarUrl, profile.isPro ?? false)
+                    let retryLeaders = retryResult.map { entry in
+                        TerritoryLeader(
+                            id: entry.owner_id.uuidString.lowercased(),
+                            name: entry.username ?? "Användare",
+                            avatarUrl: entry.avatar_url,
+                            totalArea: entry.area_m2,
+                            isPro: entry.is_pro ?? false
+                        )
                     }
                     
-                    print("📊 Profile map has \(profilesMap.count) entries")
+                    await MainActor.run {
+                        self.swedenLeaders = retryLeaders
+                        self.isLoadingSwedenLeaders = false
+                    }
+                    return
                 }
                 
-                // Build leaders list
-                var newLeaders: [TerritoryLeader] = []
-                for (ownerId, area) in top20 {
-                    let profile = profilesMap[ownerId.lowercased()]
-                    newLeaders.append(TerritoryLeader(
-                        id: ownerId,
-                        name: profile?.name ?? "Okänd",
-                        avatarUrl: profile?.avatarUrl,
-                        totalArea: area,
-                        isPro: profile?.isPro ?? false
-                    ))
+                let newLeaders = result.map { entry in
+                    TerritoryLeader(
+                        id: entry.owner_id.uuidString.lowercased(),
+                        name: entry.username ?? "Användare", // Better fallback than "Okänd"
+                        avatarUrl: entry.avatar_url,
+                        totalArea: entry.area_m2,
+                        isPro: entry.is_pro ?? false
+                    )
                 }
-                
-                print("📊 Built \(newLeaders.count) leaders for Sweden leaderboard")
-                print("📊 Leaders with names: \(newLeaders.filter { $0.name != "Okänd" }.count)")
                 
                 await MainActor.run {
-                    self.swedenLeaders = newLeaders.sorted { $0.totalArea > $1.totalArea }
+                    self.swedenLeaders = newLeaders
                     self.isLoadingSwedenLeaders = false
                 }
             } catch {
                 print("❌ Failed to load Sweden leaders: \(error)")
+                // Try to recover session for next time
+                await AuthSessionManager.shared.recoverSession()
+                
                 await MainActor.run {
+                    // Keep existing data if we have it
+                    if self.swedenLeaders.isEmpty {
+                        self.swedenLeaders = []
+                    }
                     self.isLoadingSwedenLeaders = false
                 }
             }
@@ -1432,6 +1981,52 @@ struct ZoneWarMenuView: View {
             }
             .padding(.top, 8)
         }
+        .refreshable {
+            // Pull to refresh events
+            await onRefresh?()
+        }
+    }
+    
+    // MARK: - Sponsors Section
+    
+    private var sponsorsSection: some View {
+        VStack(spacing: 16) {
+            Text("Zonkriget sponsras av")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.gray)
+            
+            HStack(spacing: 16) {
+                ForEach(sponsors, id: \.name) { sponsor in
+                    VStack(spacing: 6) {
+                        Image(sponsor.imageName)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 50, height: 50)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        Text(sponsor.name)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color(red: 0.08, green: 0.08, blue: 0.1))
+    }
+    
+    private var sponsors: [(name: String, imageName: String)] {
+        [
+            ("Fuse Energy", "35"),
+            ("Lonegolf", "14")
+        ]
     }
     
     // MARK: - Helpers

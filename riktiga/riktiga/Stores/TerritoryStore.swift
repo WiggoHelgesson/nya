@@ -8,6 +8,8 @@ final class TerritoryStore: ObservableObject {
     
     @Published private(set) var territories: [Territory] = []
     @Published private(set) var activeSessionTerritories: [Territory] = []
+    @Published private(set) var tiles: [Tile] = []
+    @Published var pendingCelebrationTerritory: Territory?
     
     private let service = TerritoryService.shared
     private let eligibleActivities: Set<ActivityType> = [.running, .golf]
@@ -18,14 +20,42 @@ final class TerritoryStore: ObservableObject {
     private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private var lastFetchTime: Date = .distantPast
     private let cacheValidityDuration: TimeInterval = 15 // 15 seconds cache for faster sync
-    private let boundsMargin: Double = 0.02 // Extra margin around viewport
+    private let boundsMargin: Double = 0.1 // Extra margin around viewport (increased significantly)
+    
+    // Tiles cache - use dictionary for O(1) lookups and stable updates
+    private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
+    private var lastTileFetchTime: Date = .distantPast
+    private var lastTileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
+    private let tileCacheValidity: TimeInterval = 60 // 60 seconds - tiles rarely change
+    private var isFetchingTiles: Bool = false // Prevent concurrent fetches
     
     // Debounce
     private var debounceTask: Task<Void, Never>?
-    private let debounceInterval: TimeInterval = 0.3 // 300ms debounce
+    private let debounceInterval: TimeInterval = 0.5 // 500ms debounce (increased)
     
     init() {
-        loadLocalTerritories()
+        // We do NOT load local territories anymore. Server is truth.
+        // loadLocalTerritories() 
+    }
+    
+    /// Approximate area per tile (25m x 25m = 625m²)
+    let tileAreaApprox: Double = 625.0
+    
+    /// Force clear all caches and refetch territories
+    func forceRefresh() {
+        lastFetchTime = .distantPast
+        lastFetchBounds = nil
+        lastTileFetchTime = .distantPast
+        lastTileBounds = nil
+        cachedTerritoryIds.removeAll()
+        territories.removeAll()
+        tileCache.removeAll()
+        tiles.removeAll()
+        
+        // Clear local storage (cleanup)
+        UserDefaults.standard.removeObject(forKey: localStorageKey)
+        
+        print("🔄 Territory cache forcefully cleared")
     }
     
     // MARK: - Viewport-based Loading with Debounce
@@ -119,11 +149,7 @@ final class TerritoryStore: ObservableObject {
                 // Add newly fetched territories
                 updatedTerritories.append(contentsOf: mapped)
                 
-                // Add any pending local territories
-                let localTerritories = self.loadLocalTerritoriesSync()
-                let allIds = Set(updatedTerritories.map { $0.id })
-                let pendingLocal = localTerritories.filter { !allIds.contains($0.id) }
-                updatedTerritories.append(contentsOf: pendingLocal)
+                // We do NOT add local territories anymore. Grid is truth.
                 
                 self.territories = updatedTerritories
                 self.cachedTerritoryIds = Set(updatedTerritories.map { $0.id })
@@ -141,6 +167,8 @@ final class TerritoryStore: ObservableObject {
     func invalidateCache() {
         lastFetchTime = .distantPast
         lastFetchBounds = nil
+        lastTileFetchTime = .distantPast // Also invalidate tiles
+        lastTileBounds = nil
     }
     
     func refresh() async {
@@ -149,28 +177,101 @@ final class TerritoryStore: ObservableObject {
             let mapped = remote.compactMap { $0.asTerritory() }
             
             await MainActor.run {
-                var allTerritories = mapped
-                
-                // Merge with local pending territories
-                let localTerritories = loadLocalTerritoriesSync()
-                let remoteIds = Set(mapped.map { $0.id })
-                let pendingLocal = localTerritories.filter { !remoteIds.contains($0.id) }
-                
-                if !pendingLocal.isEmpty {
-                    allTerritories.append(contentsOf: pendingLocal)
-                }
-                
-                self.territories = allTerritories
+                // Strictly server authoritative
+                self.territories = mapped
             }
         } catch {
-            // Fallback to local territories on error
+            print("❌ Territory refresh failed: \(error)")
+            // No fallback to local anymore
+        }
+    }
+
+    // MARK: - Tiles
+    func loadTilesInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
+        // Prevent concurrent fetches that cause flickering
+        guard !isFetchingTiles else { return }
+        
+        // Throttle tile fetches - only fetch if cache expired OR bounds are outside cached area
+        let now = Date()
+        let cacheValid = now.timeIntervalSince(lastTileFetchTime) < tileCacheValidity
+        let boundsWithinCache: Bool = {
+            guard let last = lastTileBounds else { return false }
+            return minLat >= last.minLat - boundsMargin &&
+                   maxLat <= last.maxLat + boundsMargin &&
+                   minLon >= last.minLon - boundsMargin &&
+                   maxLon <= last.maxLon + boundsMargin
+        }()
+        
+        if cacheValid && boundsWithinCache {
+            return // Use existing cached tiles
+        }
+        
+        await MainActor.run { isFetchingTiles = true }
+        defer { Task { @MainActor in isFetchingTiles = false } }
+        
+        // Expand fetch bounds significantly for smoother scrolling
+        let expandedMinLat = minLat - boundsMargin * 2
+        let expandedMaxLat = maxLat + boundsMargin * 2
+        let expandedMinLon = minLon - boundsMargin * 2
+        let expandedMaxLon = maxLon + boundsMargin * 2
+
+        do {
+            let result = try await service.fetchTilesInBounds(
+                minLat: expandedMinLat,
+                maxLat: expandedMaxLat,
+                minLon: expandedMinLon,
+                maxLon: expandedMaxLon
+            )
+            
             await MainActor.run {
-                let localTerritories = loadLocalTerritoriesSync()
-                if !localTerritories.isEmpty && self.territories.isEmpty {
-                    self.territories = localTerritories
+                // MERGE tiles instead of replacing - prevents flickering
+                var updatedCache = self.tileCache
+                
+                for feature in result {
+                    let ring = feature.geom.coordinates.first ?? []
+                    let coords = ring.compactMap { pair -> CLLocationCoordinate2D? in
+                        guard pair.count == 2 else { return nil }
+                        return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+                    }
+                    
+                    let tile = Tile(
+                        id: feature.tile_id,
+                        ownerId: feature.owner_id,
+                        coordinates: coords,
+                        lastUpdatedAt: feature.last_updated_at
+                    )
+                    
+                    // Update or insert tile
+                    updatedCache[feature.tile_id] = tile
                 }
+                
+                // Only update published array if there are actual changes
+                let newTiles = Array(updatedCache.values)
+                if newTiles.count != self.tiles.count || 
+                   Set(newTiles.map { $0.id }) != Set(self.tiles.map { $0.id }) ||
+                   self.tilesHaveOwnershipChanges(old: self.tiles, new: newTiles) {
+                    self.tileCache = updatedCache
+                    self.tiles = newTiles
+                }
+                
+                self.lastTileFetchTime = now
+                self.lastTileBounds = (expandedMinLat, expandedMaxLat, expandedMinLon, expandedMaxLon)
+            }
+        } catch {
+            print("❌ Failed to load tiles in bounds: \(error)")
+            // Don't clear tiles on error - keep showing cached
+        }
+    }
+    
+    /// Check if any tiles have ownership changes
+    private func tilesHaveOwnershipChanges(old: [Tile], new: [Tile]) -> Bool {
+        let oldMap = Dictionary(uniqueKeysWithValues: old.map { ($0.id, $0.ownerId) })
+        for tile in new {
+            if oldMap[tile.id] != tile.ownerId {
+                return true
             }
         }
+        return false
     }
     
     func resetSession() {
@@ -218,48 +319,64 @@ final class TerritoryStore: ObservableObject {
             createdAt: Date()
         )
         
-        // Save locally
-        saveLocalTerritory(pendingTerritory)
+        // Spara lokalt och visa i session-UI tills servern svarar
+        // Vi sparar INTE till 'territories' för att undvika overlap i kartan. Grid är sanningen.
+        // saveLocalTerritory(pendingTerritory)
         
         DispatchQueue.main.async {
+            // Endast för session-feedback, sparas ej permanent
             self.activeSessionTerritories = [pendingTerritory]
-            if !self.territories.contains(where: { $0.id == pendingTerritory.id }) {
-                self.territories.append(pendingTerritory)
-            }
+            // Vi lägger INTE till i main 'territories' längre
+            self.pendingCelebrationTerritory = pendingTerritory
         }
         
-        // Save to backend (non-blocking)
+        // Save to backend (non-blocking) using tile-based claim
         Task {
             do {
-                let feature = try await service.claimTerritory(
+                print("🎯 Starting tile claim for user: \(userId)")
+                print("   Polygon points: \(validPolygon.count)")
+                print("   Area: \(area) m²")
+                
+                // Use a generated activityId to tag the claim (not critical)
+                let activityId = UUID()
+                try await service.claimTiles(
                     ownerId: userId,
-                    activity: activity,
-                    coordinates: validPolygon,
-                    distance: sessionDistance,
-                    duration: sessionDuration,
-                    pace: sessionPace
+                    activityId: activityId,
+                    coordinates: validPolygon
                 )
                 
-                if let territory = feature.asTerritory() {
-                    var updatedTerritory = territory
-                    updatedTerritory.sessionDistance = sessionDistance
-                    updatedTerritory.sessionDuration = sessionDuration
-                    updatedTerritory.sessionPace = sessionPace
-                    
-                    removeLocalTerritory(id: pendingTerritory.id)
-                    saveLocalTerritory(updatedTerritory)
-                    
-                    await MainActor.run {
-                        self.activeSessionTerritories = [updatedTerritory]
-                        self.territories.removeAll { $0.id == pendingTerritory.id }
-                        if !self.territories.contains(where: { $0.id == updatedTerritory.id }) {
-                            self.territories.append(updatedTerritory)
-                        }
-                    }
-                    await self.refresh()
+                print("✅ Tile claim RPC completed successfully!")
+                
+                // After successful claim, refresh from backend union view
+                // Vi tar bort lokala placeholders
+                await MainActor.run {
+                    self.activeSessionTerritories.removeAll()
+                    // pendingCelebrationTerritory rensas i UI när modalen stängs
+                    self.invalidateCache()
                 }
+                
+                print("🔄 Refreshing territories from server...")
+                await self.refresh()
+                print("   Territories count after refresh: \(self.territories.count)")
+                
+                // Also force refresh tiles to update local stats immediately
+                if let lastBounds = self.lastTileBounds {
+                    print("🔄 Refreshing tiles in bounds...")
+                    await self.loadTilesInBounds(
+                        minLat: lastBounds.minLat,
+                        maxLat: lastBounds.maxLat,
+                        minLon: lastBounds.minLon,
+                        maxLon: lastBounds.maxLon
+                    )
+                    print("   Tiles count after refresh: \(self.tiles.count)")
+                }
+                
+                print("🎉 Territory capture complete!")
+                
             } catch {
-                // Territory kept locally as fallback
+                print("❌ Tile claim failed: \(error)")
+                print("   Error details: \(String(describing: error))")
+                // Keep local territory as fallback? No, grid is truth.
             }
         }
     }
@@ -416,8 +533,9 @@ final class TerritoryStore: ObservableObject {
     // MARK: - Local Storage
     
     private func loadLocalTerritories() {
-        territories = loadLocalTerritoriesSync()
-        print("🌍 TerritoryStore: Loaded \(territories.count) territories from local storage")
+        // Disabling local loading to enforce server-side truth
+        // territories = loadLocalTerritoriesSync()
+        // print("🌍 TerritoryStore: Loaded \(territories.count) territories from local storage")
     }
     
     private func loadLocalTerritoriesSync() -> [Territory] {
@@ -557,6 +675,19 @@ struct Territory: Identifiable {
     var createdAt: Date?
 }
 
+struct Tile: Identifiable, Equatable {
+    let id: Int64
+    let ownerId: String?
+    let coordinates: [CLLocationCoordinate2D]
+    let lastUpdatedAt: String?
+    
+    static func == (lhs: Tile, rhs: Tile) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.ownerId == rhs.ownerId &&
+               lhs.lastUpdatedAt == rhs.lastUpdatedAt
+    }
+}
+
 extension MKPolygon {
     var activityColor: UIColor {
         guard let title = title, let activity = ActivityType(rawValue: title) else {
@@ -583,4 +714,3 @@ extension Territory {
         }
     }
 }
-

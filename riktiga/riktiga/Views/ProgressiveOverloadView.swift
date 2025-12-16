@@ -9,6 +9,11 @@ struct ProgressiveOverloadView: View {
     @State private var errorMessage: String?
     @State private var exerciseHistories: [ExerciseHistory] = []
     
+    // Pro membership
+    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var showPaywall = false
+    private let freeExerciseLimit = 3
+    
     // Static cache for computed histories to avoid recomputing
     private static var cachedHistories: [ExerciseHistory] = []
     private static var cacheUserId: String?
@@ -86,7 +91,7 @@ struct ProgressiveOverloadView: View {
                                         .scaleEffect(0.7)
                                 }
                             }
-                            Text("Spåra din estimated 1RM över tid. Tryck på en övning för att se graf och detaljerad historik.")
+                            Text("Spåra ditt personbästa över tid. Tryck på en övning för att se graf och detaljerad historik.")
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -102,13 +107,41 @@ struct ProgressiveOverloadView: View {
                         
                         // Exercise list
                         LazyVStack(spacing: 12) {
-                            ForEach(exerciseHistories) { history in
-                                NavigationLink {
-                                    ExerciseHistoryDetailView(history: history, dateFormatter: Self.dateFormatter, shortDateFormatter: Self.shortDateFormatter)
-                                } label: {
-                                    ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter)
+                            ForEach(Array(exerciseHistories.enumerated()), id: \.element.id) { index, history in
+                                if isPremium || index < freeExerciseLimit {
+                                    // Full access for Pro or first 3 exercises
+                                    NavigationLink {
+                                        ExerciseHistoryDetailView(history: history, dateFormatter: Self.dateFormatter, shortDateFormatter: Self.shortDateFormatter)
+                                    } label: {
+                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter)
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    // Blurred row for non-Pro users
+                                    Button {
+                                        showPaywall = true
+                                    } label: {
+                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter)
+                                            .blur(radius: 6)
+                                            .overlay(
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "lock.fill")
+                                                        .font(.system(size: 14, weight: .bold))
+                                                    Text("PRO")
+                                                        .font(.system(size: 14, weight: .black))
+                                                }
+                                                .foregroundColor(.black)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(Color.white)
+                                                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                                )
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -121,6 +154,12 @@ struct ProgressiveOverloadView: View {
         .background(Color(.systemGroupedBackground))
         .task { await loadExercises(forceRefresh: false) }
         .refreshable { await loadExercises(forceRefresh: true) }
+        .sheet(isPresented: $showPaywall) {
+            PresentPaywallView()
+        }
+        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            isPremium = newValue
+        }
     }
     
     private func loadExercises(forceRefresh: Bool) async {
@@ -281,12 +320,12 @@ private struct ExerciseHistory: Identifiable {
             return TrendInfo(type: .needsMoreData, slope: 0, r2: 0, message: "Behöver mer data")
         }
         
-        let firstRM = history.first?.estimated1RM ?? 0
-        let lastRM = history.last?.estimated1RM ?? 0
-        let percentChange = firstRM > 0 ? ((lastRM - firstRM) / firstRM) * 100 : 0
+        let firstWeight = history.first?.bestSet.weight ?? 0
+        let lastWeight = history.last?.bestSet.weight ?? 0
+        let percentChange = firstWeight > 0 ? ((lastWeight - firstWeight) / firstWeight) * 100 : 0
         
         // Simple slope approximation
-        let simpleSlope = history.count > 1 ? (lastRM - firstRM) / Double(history.count - 1) : 0
+        let simpleSlope = history.count > 1 ? (lastWeight - firstWeight) / Double(history.count - 1) : 0
         
         let trendType: TrendType
         let message: String
@@ -318,12 +357,12 @@ private struct ExerciseHistory: Identifiable {
         }
         
         let n = Double(history.count)
-        let oneRMs = history.map { $0.estimated1RM }
+        let weights = history.map { $0.bestSet.weight }
         let indices = history.indices.map { Double($0) }
         
         // Calculate means
         let meanX = indices.reduce(0, +) / n
-        let meanY = oneRMs.reduce(0, +) / n
+        let meanY = weights.reduce(0, +) / n
         
         // Calculate slope and intercept (linear regression)
         var numerator: Double = 0
@@ -331,7 +370,7 @@ private struct ExerciseHistory: Identifiable {
         
         for i in 0..<history.count {
             let xDiff = Double(i) - meanX
-            let yDiff = oneRMs[i] - meanY
+            let yDiff = weights[i] - meanY
             numerator += xDiff * yDiff
             denominator += xDiff * xDiff
         }
@@ -345,8 +384,8 @@ private struct ExerciseHistory: Identifiable {
         
         for i in 0..<history.count {
             let predicted = intercept + slope * Double(i)
-            ssRes += pow(oneRMs[i] - predicted, 2)
-            ssTot += pow(oneRMs[i] - meanY, 2)
+            ssRes += pow(weights[i] - predicted, 2)
+            ssTot += pow(weights[i] - meanY, 2)
         }
         
         let r2 = ssTot != 0 ? 1 - (ssRes / ssTot) : 0
@@ -356,9 +395,9 @@ private struct ExerciseHistory: Identifiable {
         let message: String
         
         // Calculate percentage increase from first to last
-        let firstRM = history.first?.estimated1RM ?? 0
-        let lastRM = history.last?.estimated1RM ?? 0
-        let percentChange = firstRM > 0 ? ((lastRM - firstRM) / firstRM) * 100 : 0
+        let firstWeight = history.first?.bestSet.weight ?? 0
+        let lastWeight = history.last?.bestSet.weight ?? 0
+        let percentChange = firstWeight > 0 ? ((lastWeight - firstWeight) / firstWeight) * 100 : 0
         
         if history.count < 3 {
             if slope > 0.5 {
@@ -394,6 +433,11 @@ private struct ExerciseHistory: Identifiable {
     /// Personal best 1RM
     var personalBest1RM: Double {
         history.map { $0.estimated1RM }.max() ?? 0
+    }
+    
+    /// Personal best weight (max weight lifted in any set)
+    var personalBestWeight: Double? {
+        history.flatMap { $0.sets }.map { $0.weight }.max()
     }
 }
 
@@ -459,13 +503,13 @@ private struct ExerciseHistoryRow: View {
                 
                 Spacer()
                 
-                // Show estimated 1RM instead of just weight
+                // Show personal best (max weight lifted)
                 VStack(alignment: .trailing, spacing: 2) {
-                    if let latest = history.latestSnapshot {
-                        Text("\(String(format: "%.0f", latest.estimated1RM)) kg")
+                    if let bestWeight = history.personalBestWeight {
+                        Text("\(String(format: "%.0f", bestWeight)) kg")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.black)
-                        Text("Est. 1RM")
+                        Text("Personbästa")
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
                     }
@@ -562,20 +606,20 @@ private struct ExerciseHistoryDetailView: View {
             
             // Stats row
             HStack(spacing: 0) {
-                // Current 1RM
+                // Latest weight
                 VStack(spacing: 4) {
-                    Text("\(String(format: "%.0f", history.latestSnapshot?.estimated1RM ?? 0))")
+                    Text("\(String(format: "%.0f", history.latestSnapshot?.bestSet.weight ?? 0))")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.black)
-                    Text("Nuvarande 1RM")
+                    Text("Senaste vikt")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                 }
                 .frame(maxWidth: .infinity)
                 
-                // Personal best
+                // Personal best weight
                 VStack(spacing: 4) {
-                    Text("\(String(format: "%.0f", history.personalBest1RM))")
+                    Text("\(String(format: "%.0f", history.personalBestWeight ?? 0))")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.green)
                     Text("Personbästa")
@@ -622,11 +666,11 @@ private struct ExerciseHistoryDetailView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.black)
             
-            // Build chart data
+            // Build chart data (personal best weight per session)
             let chartData = history.history.map { snapshot in
                 ChartDataPoint(
                     date: snapshot.date,
-                    value: snapshot.estimated1RM,
+                    value: snapshot.bestSet.weight,
                     label: shortDateFormatter.string(from: snapshot.date)
                 )
             }
@@ -690,7 +734,7 @@ private struct ExerciseHistoryDetailView: View {
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
                 }
             }
-            .chartYAxisLabel("Est. 1RM (kg)")
+            .chartYAxisLabel("Vikt (kg)")
             .chartYAxis {
                 AxisMarks(position: .leading)
             }
@@ -702,7 +746,7 @@ private struct ExerciseHistoryDetailView: View {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 10, height: 10)
-                    Text("Est. 1RM")
+                    Text("Max vikt")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                 }
@@ -749,13 +793,13 @@ private struct ExerciseHistoryDetailView: View {
                         Spacer()
                         
                         VStack(alignment: .trailing, spacing: 4) {
-                            Text("\(String(format: "%.0f", snapshot.estimated1RM)) kg")
+                            Text("\(String(format: "%.0f", snapshot.bestSet.weight)) kg")
                                 .font(.system(size: 17, weight: .bold))
                                 .foregroundColor(.black)
                             
                             // Change from previous
                             if let prev = previousSnapshot {
-                                let delta = snapshot.estimated1RM - prev.estimated1RM
+                                let delta = snapshot.bestSet.weight - prev.bestSet.weight
                                 let sign = delta >= 0 ? "+" : ""
                                 Text("\(sign)\(String(format: "%.1f", delta)) kg")
                                     .font(.system(size: 13, weight: .semibold))

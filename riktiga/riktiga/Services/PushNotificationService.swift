@@ -50,21 +50,18 @@ final class PushNotificationService: NSObject {
         
         struct TokenPayload: Encodable {
             let user_id: String
-            let token: String
-            let updated_at: String
+            let device_token: String
         }
         
-        let formatter = ISO8601DateFormatter()
         let payload = TokenPayload(
             user_id: userId.uuidString,
-            token: token,
-            updated_at: formatter.string(from: Date())
+            device_token: token
         )
         
         // Upsert - insert or update if exists
         try await SupabaseConfig.supabase
             .from("device_tokens")
-            .upsert(payload, onConflict: "user_id,token")
+            .upsert(payload, onConflict: "user_id,device_token")
             .execute()
     }
     

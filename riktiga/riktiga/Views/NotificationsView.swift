@@ -97,8 +97,8 @@ struct NotificationsView: View {
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "bell.slash.fill")
-            .font(.system(size: 60))
-            .foregroundColor(.gray)
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
             
             Text("Inga notiser")
                 .font(.title2)

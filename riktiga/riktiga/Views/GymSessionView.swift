@@ -20,7 +20,6 @@ struct GymSessionView: View {
     @State private var lastPersistedElapsedSeconds: Int = 0
     @State private var xpCelebrationData: XpCelebrationData? = nil
     @State private var showStreakCelebration = false
-    @State private var selectedOtherActivity: ActivityType?
     @FocusState private var focusedField: GymSessionInputField?
     @State private var showWorkoutGenerator = false
     @State private var generatorPrompt: String = ""
@@ -34,70 +33,6 @@ struct GymSessionView: View {
     
     private let generatorWordLimit = 100
     
-    @ViewBuilder
-    private var otherActivitiesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Andra aktiviteter")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 16)
-            
-            HStack(spacing: 12) {
-                Button {
-                    selectedOtherActivity = .running
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: "figure.run")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.black)
-                        Text("Löpning")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                Button {
-                    selectedOtherActivity = .golf
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: "figure.golf")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.black)
-                        Text("Golf")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                Button {
-                    selectedOtherActivity = .skiing
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: "figure.skiing.downhill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.black)
-                        Text("Skidåkning")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.top, 8)
-    }
     
     private var uppyGeneratorButton: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -360,7 +295,6 @@ struct GymSessionView: View {
                             
                             // Scrollable sections below
                             VStack(spacing: 24) {
-                                otherActivitiesSection
                                 savedWorkoutsSection
                             }
                             .padding(.bottom, 100)
@@ -512,10 +446,6 @@ struct GymSessionView: View {
                     )
                     .environmentObject(authViewModel)
                 }
-            }
-            .fullScreenCover(item: $selectedOtherActivity) { activity in
-                StartSessionView(initialActivity: activity)
-                    .ignoresSafeArea()
             }
             .onAppear {
                 initializeSessionIfNeeded()

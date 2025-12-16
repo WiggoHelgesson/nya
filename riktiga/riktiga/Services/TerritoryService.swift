@@ -25,10 +25,32 @@ nonisolated(unsafe) struct TerritoryClaimParams: Encodable, Sendable {
     let p_pace: String?
 }
 
+/// Tile-based claim params (no overlap)
+nonisolated(unsafe) struct TileClaimParams: Encodable, Sendable {
+    let p_owner: UUID
+    let p_activity: UUID
+    let p_coords: [[Double]]
+}
+
+    struct TileFeature: Decodable {
+        let tile_id: Int64
+        let owner_id: String?
+        let geom: GeoJSONPolygon
+        let last_updated_at: String?
+    }
+
+    struct GeoJSONPolygon: Decodable {
+        let type: String
+        let coordinates: [[[Double]]] // Polygon -> Ring -> [lon, lat]
+    }
+
 final class TerritoryService {
     static let shared = TerritoryService()
     private let supabase = SupabaseConfig.supabase
     
+    // MARK: - Models
+    
+    /// Legacy polygon feature (kept for backwards compatibility)
     struct TerritoryFeature: Decodable {
         let id: UUID
         let owner_id: String
@@ -42,18 +64,32 @@ final class TerritoryService {
         let updated_at: String?
     }
     
+    /// Tile-unioned owner feature (no overlap)
+    struct OwnerTerritoryFeature: Decodable {
+        let owner_id: String
+        let area_m2: Double
+        let geom: GeoJSONMultiPolygon
+        let last_claim: String?
+    }
+    
     struct GeoJSONMultiPolygon: Decodable {
         let type: String
         let coordinates: [[[[Double]]]] // MultiPolygon -> Polygon -> Ring -> [lon, lat]
     }
     
-    func fetchTerritories() async throws -> [TerritoryFeature] {
+    // MARK: - Fetch unioned territories (preferred)
+    func fetchTerritories() async throws -> [OwnerTerritoryFeature] {
         try await AuthSessionManager.shared.ensureValidSession()
         
-        let result: [TerritoryFeature] = try await supabase.database
-            .from("territory_geojson")
-            .select()
-            .order("updated_at", ascending: false)
+        // View: territory_owners (owner_id, area_m2, geom, last_claim)
+        let result: [OwnerTerritoryFeature] = try await supabase.database
+            .from("territory_owners")
+            .select("""
+                owner_id,
+                area_m2,
+                geom,
+                last_claim
+            """)
             .execute()
             .value
         
@@ -66,7 +102,7 @@ final class TerritoryService {
         maxLat: Double,
         minLon: Double,
         maxLon: Double
-    ) async throws -> [TerritoryFeature] {
+    ) async throws -> [OwnerTerritoryFeature] {
         try await AuthSessionManager.shared.ensureValidSession()
         
         let params: [String: Double] = [
@@ -77,8 +113,8 @@ final class TerritoryService {
         ]
         
         do {
-            let result: [TerritoryFeature] = try await supabase.database
-                .rpc("get_territories_in_bounds", params: params)
+            let result: [OwnerTerritoryFeature] = try await supabase.database
+                .rpc("get_territory_owners_in_bounds", params: params)
                 .execute()
                 .value
             
@@ -88,7 +124,29 @@ final class TerritoryService {
             return try await fetchTerritories()
         }
     }
+
+    /// Fetch tiles in bounds (for grid rendering)
+    func fetchTilesInBounds(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ) async throws -> [TileFeature] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        let params: [String: Double] = [
+            "min_lat": minLat,
+            "min_lon": minLon,
+            "max_lat": maxLat,
+            "max_lon": maxLon
+        ]
+        let tiles: [TileFeature] = try await supabase.database
+            .rpc("get_tiles_in_bounds", params: params)
+            .execute()
+            .value
+        return tiles
+    }
     
+    /// Legacy polygon claim (still available if needed)
     func claimTerritory(ownerId: String,
                         activity: ActivityType,
                         coordinates: [CLLocationCoordinate2D],
@@ -134,6 +192,33 @@ final class TerritoryService {
             throw error
         }
     }
+
+    /// Tile-based claim (no overlap)
+    func claimTiles(ownerId: String,
+                    activityId: UUID,
+                    coordinates: [CLLocationCoordinate2D]) async throws {
+        guard let ownerUUID = UUID(uuidString: ownerId) else {
+            throw TerritoryServiceError.invalidOwnerId(ownerId)
+        }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let payload = TileClaimParams(
+            p_owner: ownerUUID,
+            p_activity: activityId,
+            p_coords: coordinates.map { [$0.latitude, $0.longitude] }
+        )
+        
+        do {
+            _ = try await supabase.database
+                .rpc("claim_tiles", params: payload)
+                .execute()
+            print("✅ Tiles claimed successfully for owner: \(ownerId)")
+        } catch {
+            print("❌ claim_tiles failed: \(error)")
+            throw error
+        }
+    }
 }
 
 extension TerritoryService.TerritoryFeature {
@@ -170,6 +255,45 @@ extension TerritoryService.TerritoryFeature {
             sessionDistance: session_distance_km,
             sessionDuration: session_duration_sec,
             sessionPace: session_pace,
+            createdAt: createdDate
+        )
+    }
+}
+
+extension TerritoryService.OwnerTerritoryFeature {
+    func asTerritory() -> Territory? {
+        let polygons = geom.coordinates.compactMap { polygon -> [CLLocationCoordinate2D]? in
+            guard let exteriorRing = polygon.first else { return nil }
+            let coords = exteriorRing.compactMap { pair -> CLLocationCoordinate2D? in
+                guard pair.count == 2 else { return nil }
+                return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+            }
+            return coords.isEmpty ? nil : coords
+        }
+        
+        guard !polygons.isEmpty else { return nil }
+        
+        // Parse last_claim date if present
+        var createdDate: Date? = nil
+        if let dateString = last_claim {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            createdDate = formatter.date(from: dateString)
+            if createdDate == nil {
+                formatter.formatOptions = [.withInternetDateTime]
+                createdDate = formatter.date(from: dateString)
+            }
+        }
+        
+        return Territory(
+            id: UUID(), // union has no stable id; use ephemeral
+            ownerId: owner_id,
+            activity: nil,
+            area: area_m2,
+            polygons: polygons,
+            sessionDistance: nil,
+            sessionDuration: nil,
+            sessionPace: nil,
             createdAt: createdDate
         )
     }

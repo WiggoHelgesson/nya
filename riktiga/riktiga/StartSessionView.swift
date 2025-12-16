@@ -705,8 +705,8 @@ struct SessionMapView: View {
                             }
                             
                             // Live territory overlay: Close current route back to start
-                            // Only show for running and golf (not skiing)
-                            if routeCoordinatesSnapshot.count > 2 && (activity == .running || activity == .golf) {
+                            // Only show for running and golf (not skiing) - show as soon as we have 2+ points
+                            if routeCoordinatesSnapshot.count >= 2 && (activity == .running || activity == .golf) {
                                 Path { path in
                                     let points = routeCoordinatesSnapshot.map { convertToMapPoint($0, in: geometry.size) }
                                     if let first = points.first, let last = points.last {
@@ -769,8 +769,10 @@ struct SessionMapView: View {
                         routeCoordinatesSnapshot = []
                         lastSnapshotSourceCount = 0
                         liveTerritoryArea = 0
-                    } else if routeCoordinatesSnapshot.isEmpty {
-                        refreshRouteSnapshot(force: true)
+                    } else {
+                        // Always update snapshot when we have coordinates
+                        refreshRouteSnapshotIfNeeded()
+                        updateLiveTerritoryArea()
                     }
                 }
                 .onAppear {
@@ -788,8 +790,8 @@ struct SessionMapView: View {
                             isPaused = session.isPaused
                             isRunning = !session.isPaused
 
-                            // Set distance from saved session
-                            locationManager.distance = session.accumulatedDistance
+                            // Restore distance properly (both totalDistance and distance)
+                            locationManager.restoreDistance(session.accumulatedDistance)
                             completedSplits = session.completedSplits
 
                             // Restore skiing metrics if available
@@ -1085,6 +1087,56 @@ struct SessionMapView: View {
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal, 16)
+                        
+                        // Other activities section - only show when not running
+                        if !isRunning {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Välj annan aktivitet")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.gray)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 8)
+                                
+                                HStack(spacing: 12) {
+                                    OtherActivityButton(
+                                        icon: "figure.strengthtraining.traditional",
+                                        title: "Gym",
+                                        action: {
+                                            NotificationCenter.default.post(
+                                                name: NSNotification.Name("SwitchActivity"),
+                                                object: nil,
+                                                userInfo: ["activity": ActivityType.walking.rawValue]
+                                            )
+                                        }
+                                    )
+                                    
+                                    OtherActivityButton(
+                                        icon: "figure.golf",
+                                        title: "Golf",
+                                        action: {
+                                            NotificationCenter.default.post(
+                                                name: NSNotification.Name("SwitchActivity"),
+                                                object: nil,
+                                                userInfo: ["activity": ActivityType.golf.rawValue]
+                                            )
+                                        }
+                                    )
+                                    
+                                    OtherActivityButton(
+                                        icon: "snowflake",
+                                        title: "Skidor",
+                                        action: {
+                                            NotificationCenter.default.post(
+                                                name: NSNotification.Name("SwitchActivity"),
+                                                object: nil,
+                                                userInfo: ["activity": ActivityType.skiing.rawValue]
+                                            )
+                                        }
+                                    )
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
                     }
                 }
                 .padding(20)
@@ -1324,8 +1376,8 @@ struct SessionMapView: View {
             return
         }
         
-        // Refresh when new points were added or removed
-        if sourceCount - lastSnapshotSourceCount >= 25 || sourceCount < lastSnapshotSourceCount {
+        // Refresh when new points were added or removed (every 1 point for real-time updates)
+        if sourceCount != lastSnapshotSourceCount {
             refreshRouteSnapshot(force: true)
         }
     }
@@ -1357,10 +1409,15 @@ struct SessionMapView: View {
         let sourceCount = coordinates.count
         lastSnapshotSourceCount = sourceCount
         
-        Task.detached(priority: .userInitiated) {
-            let simplified = simplifyRoute(coordinates, targetCount: maxRouteSnapshotPoints)
-            await MainActor.run {
-                if lastSnapshotSourceCount == sourceCount {
+        // Directly update snapshot for real-time responsiveness
+        // Only simplify if we have many points
+        if coordinates.count <= maxRouteSnapshotPoints {
+            routeCoordinatesSnapshot = coordinates
+        } else {
+            // Simplify in background for large routes
+            Task.detached(priority: .userInitiated) {
+                let simplified = simplifyRoute(coordinates, targetCount: maxRouteSnapshotPoints)
+                await MainActor.run {
                     routeCoordinatesSnapshot = simplified
                 }
             }
@@ -1678,6 +1735,33 @@ struct SessionMapView: View {
             return String(format: "%.2f km²", km2)
         }
         return String(format: "%.0f m²", area)
+    }
+}
+
+// MARK: - Other Activity Button
+struct OtherActivityButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.black)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.black)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.gray.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
