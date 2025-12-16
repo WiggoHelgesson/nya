@@ -243,7 +243,6 @@ struct RewardsView: View {
     
     let heroBanners: [HeroBannerAsset] = [
         HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
-        HeroBannerAsset(imageName: "32", url: "https://peaksummit.se"),
         HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
     ]
     

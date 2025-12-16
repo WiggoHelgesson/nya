@@ -241,19 +241,29 @@ struct ZoneWarView: View {
                 await loadAllLeaders()
                 await loadTerritoryEvents()
             }
-            // Recalculate local stats whenever tiles update (debounced)
-            .onChange(of: territoryStore.tiles) { _ in
-                // Debounce to prevent excessive recalculations during rapid updates
+            // Recalculate local stats whenever tiles update (heavily debounced to prevent lag)
+            .onChange(of: territoryStore.tiles.count) { oldCount, newCount in
+                // Only trigger if count changed significantly (more than 10%)
+                let threshold = max(10, oldCount / 10)
+                guard abs(newCount - oldCount) >= threshold || oldCount == 0 else { return }
+                
                 localStatsDebounceTask?.cancel()
                 localStatsDebounceTask = Task {
-                    try? await Task.sleep(nanoseconds: 200_000_000) // 200ms debounce
+                    try? await Task.sleep(nanoseconds: 800_000_000) // 800ms debounce
                     guard !Task.isCancelled else { return }
                     await MainActor.run { calculateLocalStats() }
                 }
             }
-            // Recalculate local stats whenever global leaders update (to get profile info)
-            .onChange(of: allLeaders) { _ in
-                calculateLocalStats()
+            // Recalculate local stats whenever global leaders update (debounced)
+            .onChange(of: allLeaders.count) { oldCount, newCount in
+                // Only trigger if leader count changed
+                guard oldCount != newCount else { return }
+                localStatsDebounceTask?.cancel()
+                localStatsDebounceTask = Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { calculateLocalStats() }
+                }
             }
             // Floating refresh button that clears cache and reloads - bottom right
             .overlay(alignment: .bottomTrailing) {
@@ -650,7 +660,8 @@ struct ZoneWarView: View {
     private var prizes: [(logoImage: String, text: String)] {
         [
             ("35", "FUSE ENERGY 1500kr"),
-            ("14", "Lonegolf 1000kr")
+            ("14", "Lonegolf 1000kr"),
+            ("22", "Zen Energy 1 flak")
         ]
     }
     
@@ -837,7 +848,16 @@ struct ZoneWarView: View {
     // Profile cache for local lookups - ensures consistent ID-to-profile mapping
     @State private var profileCache: [String: TerritoryOwnerProfile] = [:]
     
+    // Throttle for local stats - prevent excessive database calls
+    @State private var lastLocalStatsTime: Date = .distantPast
+    private let localStatsThrottle: TimeInterval = 5.0 // Only update every 5 seconds
+    
     private func calculateLocalStats() {
+        // Throttle database calls
+        let now = Date()
+        guard now.timeIntervalSince(lastLocalStatsTime) >= localStatsThrottle else { return }
+        lastLocalStatsTime = now
+        
         // Trigger async fetch from database instead of counting local tiles
         Task {
             await loadLocalLeadersFromDatabase()
@@ -1223,11 +1243,15 @@ struct ZoneWarMapView: UIViewRepresentable {
             
             // Debounce map updates to prevent rapid redraws
             context.coordinator.pendingMapUpdate?.cancel()
-            let workItem = DispatchWorkItem { [tiles, territories] in
-                context.coordinator.updateMap(uiView, territories: territories, tiles: tiles)
+            
+            // Capture coordinator weakly to prevent crashes if view deallocated
+            let coordinator = context.coordinator
+            let workItem = DispatchWorkItem { [weak coordinator, tiles, territories] in
+                guard let coordinator = coordinator else { return }
+                coordinator.updateMap(uiView, territories: territories, tiles: tiles)
             }
             context.coordinator.pendingMapUpdate = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
         }
         
         // Animate to target region if set
@@ -1323,25 +1347,70 @@ struct ZoneWarMapView: UIViewRepresentable {
         }
         
         func updateMap(_ mapView: MKMapView, territories: [Territory], tiles: [Tile]) {
-            // Create a signature that includes both ID and owner to detect ownership changes
+            // No arbitrary limit - render all tiles in the current viewport
+            // The TerritoryStore already limits fetching to visible viewport
+            let tilesToRender = tiles
+            
+            // Create signatures for comparison
             let newTerritoryIds = Set(territories.map { $0.id })
-            let newTileSignatures = Set(tiles.map { "\($0.id)_\($0.ownerId ?? "")" })
+            let newTileSignatures = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
             let currentTileSignatures = Set(currentTileIds.map { id -> String in
-                // Find the tile with this ID in the current mapping
                 if let tile = polygonToTile.values.first(where: { $0.id == id }) {
                     return "\(tile.id)_\(tile.ownerId ?? "")"
                 }
                 return "\(id)_"
             })
             
-            // If both territories and tiles (including owners) are unchanged, skip
+            // Skip if nothing changed
             if newTerritoryIds == currentTerritoryIds && newTileSignatures == currentTileSignatures && !currentTileIds.isEmpty {
                 return
             }
-            currentTerritoryIds = newTerritoryIds
-            currentTileIds = Set(tiles.map { $0.id })
             
-            // Use batch operations to minimize flickering
+            // INCREMENTAL UPDATE: Only add/remove changed tiles
+            let tilesToAdd = tilesToRender.filter { tile in
+                !currentTileIds.contains(tile.id) || 
+                polygonToTile.values.first(where: { $0.id == tile.id })?.ownerId != tile.ownerId
+            }
+            let tileIdsToRemove = currentTileIds.subtracting(Set(tilesToRender.map { $0.id }))
+            
+            // If small change, do incremental update (much faster)
+            let isSmallChange = tilesToAdd.count < 50 && tileIdsToRemove.count < 50
+            
+            if isSmallChange && !currentTileIds.isEmpty {
+                // Remove old overlays for tiles being removed/updated
+                let overlaysToRemove = mapView.overlays.filter { overlay in
+                    guard let polygon = overlay as? MKPolygon, polygonIsTile.contains(polygon) else { return false }
+                    if let tile = polygonToTile[polygon] {
+                        return tileIdsToRemove.contains(tile.id) || tilesToAdd.contains(where: { $0.id == tile.id })
+                    }
+                    return false
+                }
+                mapView.removeOverlays(overlaysToRemove)
+                
+                // Add new tiles
+                var newPolygons: [MKPolygon] = []
+                for tile in tilesToAdd {
+                    guard tile.coordinates.count >= 3 else { continue }
+                    var coords = tile.coordinates
+                    if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
+                        coords.append(first)
+                    }
+                    let poly = MKPolygon(coordinates: coords, count: coords.count)
+                    poly.title = tile.ownerId ?? ""
+                    polygonIsTile.insert(poly)
+                    polygonToTile[poly] = tile
+                    newPolygons.append(poly)
+                }
+                mapView.addOverlays(newPolygons)
+                
+                currentTileIds = Set(tilesToRender.map { $0.id })
+                return
+            }
+            
+            // FULL REBUILD (only when necessary)
+            currentTerritoryIds = newTerritoryIds
+            currentTileIds = Set(tilesToRender.map { $0.id })
+            
             let existingOverlays = mapView.overlays
             
             polygonToTerritory.removeAll(keepingCapacity: true)
@@ -1349,29 +1418,26 @@ struct ZoneWarMapView: UIViewRepresentable {
             polygonIsTile.removeAll(keepingCapacity: true)
             
             var allPolygons: [MKPolygon] = []
-            allPolygons.reserveCapacity(territories.count * 2 + tiles.count)
+            allPolygons.reserveCapacity(territories.count * 2 + tilesToRender.count)
             
-            // Tiles first (so territories draw above if needed)
-            for tile in tiles {
+            // Tiles first
+            for tile in tilesToRender {
                 guard tile.coordinates.count >= 3 else { continue }
                 var coords = tile.coordinates
                 if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
                     coords.append(first)
                 }
                 let poly = MKPolygon(coordinates: coords, count: coords.count)
-                poly.title = tile.ownerId ?? "" // empty means neutral
+                poly.title = tile.ownerId ?? ""
                 polygonIsTile.insert(poly)
-                polygonToTile[poly] = tile // Map for tap handling
+                polygonToTile[poly] = tile
                 allPolygons.append(poly)
             }
             
-            // Territories (union per owner)
+            // Territories
             for territory in territories {
                 for (ringIndex, ring) in territory.polygons.enumerated() {
-                    guard ring.count >= 3 else {
-                        print("⚠️   Ring \(ringIndex) has only \(ring.count) coords, skipping")
-                        continue
-                    }
+                    guard ring.count >= 3 else { continue }
                     
                     var coordinates = ring
                     if let first = coordinates.first, let last = coordinates.last {
@@ -1387,13 +1453,10 @@ struct ZoneWarMapView: UIViewRepresentable {
                 }
             }
             
-            // Batch update: Add new overlays first, then remove old ones
-            // This minimizes flickering by ensuring new content appears before old is removed
+            // Batch update
             if !allPolygons.isEmpty {
                 mapView.addOverlays(allPolygons)
             }
-            
-            // Remove old overlays after new ones are added
             if !existingOverlays.isEmpty {
                 mapView.removeOverlays(existingOverlays)
             }
@@ -1417,8 +1480,8 @@ struct ZoneWarMapView: UIViewRepresentable {
                 hasCentered = true
                 
                 // Trigger initial region callback
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    guard let self = self else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak mapView] in
+                    guard let self = self, let mapView = mapView else { return }
                     self.onRegionChanged(mapView.region, mapView.visibleMapRect)
                 }
             }
@@ -1437,9 +1500,10 @@ struct ZoneWarMapView: UIViewRepresentable {
                 onRegionChanged(mapView.region, mapView.visibleMapRect)
             } else {
                 // Schedule for later
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.lastRegionChangeTime = Date()
-                    self?.onRegionChanged(mapView.region, mapView.visibleMapRect)
+                let workItem = DispatchWorkItem { [weak self, weak mapView] in
+                    guard let self = self, let mapView = mapView else { return }
+                    self.lastRegionChangeTime = Date()
+                    self.onRegionChanged(mapView.region, mapView.visibleMapRect)
                 }
                 pendingRegionChange = workItem
                 DispatchQueue.main.asyncAfter(

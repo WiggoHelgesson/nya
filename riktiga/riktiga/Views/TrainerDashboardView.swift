@@ -190,6 +190,7 @@ struct TrainerDashboardView: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .drawingGroup() // GPU-accelerated rendering
     }
     
     private func stripeActiveAccountCard(status: StripeConnectService.AccountStatusResponse) -> some View {

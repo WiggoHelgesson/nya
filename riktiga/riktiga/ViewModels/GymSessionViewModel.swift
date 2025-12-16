@@ -2,6 +2,54 @@ import Foundation
 import SwiftUI
 import Combine
 
+// MARK: - Gym XP Daily Tracker
+// Tracks gym XP per day to enforce daily limit of 30 points
+
+class GymXPTracker {
+    static let shared = GymXPTracker()
+    
+    private let dailyXPKey = "GymDailyXP"
+    private let dateKey = "GymDailyXPDate"
+    
+    private init() {}
+    
+    /// Get today's accumulated gym XP
+    func getTodayGymXP() -> Int {
+        let storedDate = UserDefaults.standard.string(forKey: dateKey) ?? ""
+        let todayString = dateString(for: Date())
+        
+        // Reset if it's a new day
+        if storedDate != todayString {
+            UserDefaults.standard.set(0, forKey: dailyXPKey)
+            UserDefaults.standard.set(todayString, forKey: dateKey)
+            return 0
+        }
+        
+        return UserDefaults.standard.integer(forKey: dailyXPKey)
+    }
+    
+    /// Add XP to today's total
+    func addGymXP(_ xp: Int) {
+        let todayString = dateString(for: Date())
+        let storedDate = UserDefaults.standard.string(forKey: dateKey) ?? ""
+        
+        // Reset if it's a new day
+        if storedDate != todayString {
+            UserDefaults.standard.set(xp, forKey: dailyXPKey)
+            UserDefaults.standard.set(todayString, forKey: dateKey)
+        } else {
+            let current = UserDefaults.standard.integer(forKey: dailyXPKey)
+            UserDefaults.standard.set(current + xp, forKey: dailyXPKey)
+        }
+    }
+    
+    private func dateString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+}
+
 struct PreviousExerciseSet: Equatable {
     let kg: Double
     let reps: Int
@@ -215,10 +263,22 @@ class GymSessionViewModel: ObservableObject {
         
         let volume = totalVolume
         let pointsFromVolume = Int(volume / 160.0)
-        var earnedXP = min(50, pointsFromVolume)
+        
+        // Max 30 points per gym session
+        var earnedXP = min(30, pointsFromVolume)
+        
+        // Check daily limit (max 30 points per day from gym)
+        let todayGymXP = GymXPTracker.shared.getTodayGymXP()
+        let remainingDailyAllowance = max(0, 30 - todayGymXP)
+        earnedXP = min(earnedXP, remainingDailyAllowance)
         
         if isPro {
             earnedXP = Int(Double(earnedXP) * 1.5)
+        }
+        
+        // Track the earned XP for daily limit
+        if earnedXP > 0 {
+            GymXPTracker.shared.addGymXP(earnedXP)
         }
         
         sessionData = GymSessionData(

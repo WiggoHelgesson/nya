@@ -68,6 +68,10 @@ struct TrainerOnboardingView: View {
     var body: some View {
         NavigationStack {
             ZStack {
+                // Background color
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+                
                 VStack(spacing: 0) {
                     // Progress indicator
                     progressIndicator

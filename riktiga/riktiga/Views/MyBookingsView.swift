@@ -108,6 +108,7 @@ struct MyBookingsView: View {
                     selectedBooking = booking
                     showChat = true
                 })
+                .id(booking.id) // Stable identity for better diffing
             }
         }
     }
@@ -154,6 +155,7 @@ struct StudentBookingCard: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(16)
+        .drawingGroup() // GPU-accelerated rendering for smoother scrolling
     }
     
     private var avatarSection: some View {

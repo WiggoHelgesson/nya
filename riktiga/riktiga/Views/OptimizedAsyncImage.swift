@@ -12,9 +12,9 @@ class ImageCacheManager {
     private var prefetchingURLs: Set<String> = []
     
     private init() {
-        // Configure memory cache
-        cache.countLimit = 100
-        cache.totalCostLimit = 50 * 1024 * 1024 // 50MB
+        // Configure memory cache - reduced for better performance
+        cache.countLimit = 75 // Reduced from 100
+        cache.totalCostLimit = 30 * 1024 * 1024 // 30MB (reduced from 50MB)
         
         // Setup disk cache directory
         let documentsPath = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -22,6 +22,28 @@ class ImageCacheManager {
         
         // Create cache directory if it doesn't exist
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        
+        // Auto-cleanup old disk cache on init
+        Task.detached(priority: .background) {
+            self.cleanupOldDiskCache()
+        }
+    }
+    
+    /// Clean up disk cache files older than 7 days
+    private func cleanupOldDiskCache() {
+        let maxAge: TimeInterval = 7 * 24 * 60 * 60 // 7 days
+        let cutoffDate = Date().addingTimeInterval(-maxAge)
+        
+        guard let files = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        
+        for file in files {
+            guard let attributes = try? fileManager.attributesOfItem(atPath: file.path),
+                  let creationDate = attributes[.creationDate] as? Date else { continue }
+            
+            if creationDate < cutoffDate {
+                try? fileManager.removeItem(at: file)
+            }
+        }
     }
     
     func getImage(for url: String) -> UIImage? {
@@ -148,6 +170,14 @@ class ImageCacheManager {
         cache.removeAllObjects()
         try? fileManager.removeItem(at: cacheDirectory)
         try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+    }
+    
+    /// Trim memory cache to reduce memory pressure (keeps disk cache intact)
+    func trimCache() {
+        // Reduce in-memory cache limit temporarily to force eviction
+        let currentLimit = cache.countLimit
+        cache.countLimit = 20 // Keep only 20 most recent images in memory
+        cache.countLimit = currentLimit // Restore limit
     }
 }
 

@@ -25,6 +25,10 @@ struct LessonsView: View {
     // Debounce timer
     @State private var searchDebounceTask: Task<Void, Never>?
     
+    // Performance: Delay heavy map rendering
+    @State private var isMapReady = false
+    @State private var hasAppeared = false
+    
     var body: some View {
         if showFullFeature {
             fullLessonsView
@@ -63,20 +67,25 @@ struct LessonsView: View {
     private var fullLessonsView: some View {
         NavigationStack {
             ZStack {
+                // Show placeholder color immediately while map loads
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
                 if showListView {
                     trainerListView
-                } else {
+                } else if isMapReady {
                     trainerMapView
+                        .transition(.opacity)
                 }
                 
-                // Header with search
+                // Header with search - always visible
                 VStack(spacing: 0) {
                     searchAndFilterHeader
                     Spacer()
                 }
                 
                 // Loading indicator
-                if viewModel.isLoading {
+                if viewModel.isLoading && !hasAppeared {
                     ProgressView()
                         .scaleEffect(1.5)
                         .padding()
@@ -84,10 +93,36 @@ struct LessonsView: View {
                         .cornerRadius(10)
                 }
             }
+            .onAppear {
+                // Use cached data immediately if available
+                if !hasAppeared {
+                    hasAppeared = true
+                    // Show cached trainers instantly
+                    if !LessonsViewModel.hasCachedTrainers {
+                        viewModel.loadFromCacheImmediately()
+                    }
+                    updateFilteredTrainers()
+                    
+                    // Delay map rendering for smoother appearance
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.easeIn(duration: 0.2)) {
+                            isMapReady = true
+                        }
+                    }
+                }
+            }
             .task {
-                await viewModel.fetchTrainers()
-                await loadSpecialties()
+                // Load fresh data in background
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await self.viewModel.fetchTrainers()
+                    }
+                    group.addTask {
+                        await self.loadSpecialties()
+                    }
+                }
                 updateFilteredTrainers()
+                prefetchTrainerImages()
             }
             .onChange(of: searchText) { _, newValue in
                 // Debounce search
@@ -237,7 +272,7 @@ struct LessonsView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
+                .fill(Color(.systemBackground).opacity(0.95)) // Much faster than ultraThinMaterial
                 .shadow(color: .black.opacity(0.1), radius: 10)
         )
         .padding(.horizontal)
@@ -247,11 +282,13 @@ struct LessonsView: View {
     // MARK: - Map View (Optimized)
     
     private var trainerMapView: some View {
-        // Use cached trainers and limit visible to reduce map load
+        // Use cached trainers and limit visible pins for performance
         let trainersToShow = cachedFilteredTrainers.isEmpty ? filteredTrainers : cachedFilteredTrainers
-        return Map(coordinateRegion: $region, annotationItems: Array(trainersToShow.prefix(15))) { trainer in
+        let limitedTrainers = Array(trainersToShow.prefix(10))
+        
+        return Map(coordinateRegion: $region, annotationItems: limitedTrainers) { trainer in
             MapAnnotation(coordinate: trainer.coordinate) {
-                // Simplified pin for better performance
+                // Show profile image on pins
                 SimpleTrainerPin(trainer: trainer) {
                     selectedTrainer = trainer
                 }
@@ -268,7 +305,10 @@ struct LessonsView: View {
                 // Spacer for header
                 Color.clear.frame(height: 180)
                 
-                ForEach(cachedFilteredTrainers.isEmpty ? filteredTrainers : cachedFilteredTrainers) { trainer in
+                // Use pre-computed cached trainers for best performance
+                let trainersToDisplay = cachedFilteredTrainers.isEmpty ? filteredTrainers : cachedFilteredTrainers
+                
+                ForEach(trainersToDisplay) { trainer in
                     TrainerListCard(trainer: trainer) {
                         selectedTrainer = trainer
                     }
@@ -346,6 +386,14 @@ struct LessonsView: View {
     private func applyFilter() async {
         filter.searchText = searchText
         await viewModel.searchTrainers(filter: filter)
+        prefetchTrainerImages()
+    }
+    
+    private func prefetchTrainerImages() {
+        let avatarUrls = viewModel.trainers.compactMap { $0.avatarUrl }
+        if !avatarUrls.isEmpty {
+            ImageCacheManager.shared.prefetch(urls: avatarUrls)
+        }
     }
 }
 
@@ -566,6 +614,29 @@ struct FilterSheetView: View {
 // MARK: - Trainer Map Pin
 
 // MARK: - Simple Trainer Pin (Ultra-lightweight for map performance)
+
+// MARK: - Optimized Trainer Pin (Ultra-lightweight for map performance)
+struct OptimizedTrainerPin: View {
+    let trainer: GolfTrainer
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            // Simple circle with price - minimal rendering
+            ZStack {
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: 36, height: 36)
+                
+                Text("\(trainer.hourlyRate)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 struct SimpleTrainerPin: View {
     let trainer: GolfTrainer
@@ -1334,7 +1405,25 @@ class LessonsViewModel: ObservableObject {
     // Cache for trainers - increased duration for better performance
     private static var cachedTrainers: [GolfTrainer] = []
     private static var lastFetchTime: Date = .distantPast
-    private static let cacheValidDuration: TimeInterval = 300 // 5 minutes (increased from 2)
+    private static let cacheValidDuration: TimeInterval = 300 // 5 minutes
+    
+    // Check if we have cached trainers (for instant display)
+    static var hasCachedTrainers: Bool {
+        !cachedTrainers.isEmpty
+    }
+    
+    /// Invalidate cache to force fresh data on next fetch
+    static func invalidateCache() {
+        lastFetchTime = .distantPast
+    }
+    
+    // Load from cache immediately (synchronous, for instant UI)
+    @MainActor
+    func loadFromCacheImmediately() {
+        if !Self.cachedTrainers.isEmpty {
+            trainers = Self.cachedTrainers
+        }
+    }
     
     @MainActor
     func fetchTrainers(forceRefresh: Bool = false) async {
@@ -1346,8 +1435,8 @@ class LessonsViewModel: ObservableObject {
             return
         }
         
-        // Show loading only if no cached data
-        if trainers.isEmpty {
+        // Show loading only if no cached data AND no trainers displayed yet
+        if trainers.isEmpty && Self.cachedTrainers.isEmpty {
             isLoading = true
         }
         
@@ -1384,12 +1473,6 @@ class LessonsViewModel: ObservableObject {
         }
         
         isLoading = false
-    }
-    
-    // Invalidate cache when needed
-    static func invalidateCache() {
-        cachedTrainers = []
-        lastFetchTime = .distantPast
     }
 }
 

@@ -399,6 +399,8 @@ struct ProfileView: View {
                         // Load user's own posts
                         if let userId = await self.authViewModel.currentUser?.id {
                             await self.myPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
+                            // Prefetch post images for faster display
+                            await self.prefetchPostImages()
                         }
                     }
                 }
@@ -552,6 +554,18 @@ struct ProfileView: View {
                 print("❌ Error loading weekly activity data: \(error)")
             }
         }
+    }
+    
+    /// Prefetch images for posts to speed up display
+    private func prefetchPostImages() async {
+        let imagesToPrefetch = myPostsViewModel.posts.prefix(5).compactMap { post -> [String] in
+            var urls: [String] = []
+            if let imageUrl = post.imageUrl, !imageUrl.isEmpty { urls.append(imageUrl) }
+            if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty { urls.append(userImageUrl) }
+            return urls
+        }.flatMap { $0 }
+        
+        ImageCacheManager.shared.prefetch(urls: imagesToPrefetch)
     }
     
     @MainActor
@@ -762,6 +776,7 @@ struct ProfileCardButton: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.black.opacity(0.04), lineWidth: 1)
             )
+            .drawingGroup() // GPU-accelerated rendering
         }
     }
 }

@@ -46,6 +46,7 @@ struct MainTabView: View {
     @State private var selectedTab = 0  // 0=Hem(Zonkriget), 1=Socialt, 2=Belöningar, 3=Lektioner, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
+    
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
     var body: some View {
@@ -181,9 +182,40 @@ struct MainTabView: View {
                 autoPresentedActiveSession = false
             }
         }
-        .onChange(of: selectedTab) { _, _ in
+        .onChange(of: selectedTab) { oldTab, newTab in
             // Reset to root view when switching tabs
             navigationTracker.setAtRoot(true)
+            
+            // Smart memory cleanup based on which tabs are involved
+            Task.detached(priority: .utility) {
+                // Light cleanup when leaving map-heavy views
+                if oldTab == 0 { // Leaving ZoneWar
+                    await MainActor.run {
+                        ImageCacheManager.shared.trimCache()
+                    }
+                    // Give map time to release resources
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    await MainActor.run {
+                        TerritoryStore.shared.invalidateCache()
+                    }
+                }
+                
+                if oldTab == 3 { // Leaving Lessons
+                    await MainActor.run {
+                        ImageCacheManager.shared.trimCache()
+                        LessonsViewModel.invalidateCache()
+                    }
+                }
+                
+                if oldTab == 1 { // Leaving Social
+                    await MainActor.run {
+                        SocialViewModel.invalidateCache()
+                    }
+                }
+            }
+            
+            // Store previous tab
+            previousTab = oldTab
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
@@ -221,6 +253,14 @@ struct MainTabView: View {
                     }
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            // System is low on memory - clear caches aggressively
+            print("⚠️ Memory warning received - clearing caches")
+            ImageCacheManager.shared.clearCache()
+            TerritoryStore.shared.invalidateCache()
+            LessonsViewModel.invalidateCache()
+            SocialViewModel.invalidateCache()
         }
     }
     

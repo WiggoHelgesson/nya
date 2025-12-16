@@ -58,30 +58,61 @@ struct LocalAsyncImage: View {
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: 400)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .frame(height: 300)
                     .clipped()
             } else if isLoading {
                 Rectangle()
                     .fill(Color(.systemGray5))
                     .frame(height: 300)
-                    .overlay(ProgressView())
-            } else {
+                    .overlay(ProgressView().scaleEffect(0.8))
+            } else if loadFailed {
                 Rectangle()
-                    .fill(Color(.systemGray5))
+                    .fill(Color(.systemGray6))
+                    .frame(height: 300)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 28))
+                            Text("Kunde inte ladda bild")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    )
+            } else {
+                // Fallback - treat as failed
+                Rectangle()
+                    .fill(Color(.systemGray6))
                     .frame(height: 300)
                     .overlay(
                         Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                            .font(.system(size: 24))
+                            .foregroundColor(.gray.opacity(0.5))
+                            .font(.system(size: 28))
                     )
             }
         }
         .task {
+            // Handle empty path immediately
+            if path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                isLoading = false
+                loadFailed = true
+                return
+            }
             await loadImage()
         }
-        .onChange(of: path) { _, _ in
+        .onChange(of: path) { _, newPath in
             image = nil
+            loadFailed = false
+            
+            // Handle empty path immediately
+            if newPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                isLoading = false
+                loadFailed = true
+                return
+            }
+            
             isLoading = true
             Task {
                 await loadImage()
@@ -90,6 +121,15 @@ struct LocalAsyncImage: View {
     }
     
     private func loadImage() async {
+        // Guard against empty paths
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            await MainActor.run {
+                self.isLoading = false
+                self.loadFailed = true
+            }
+            return
+        }
+        
         // Create cache key by normalizing the URL
         let cacheKey: String = {
             if path.hasPrefix("http") {

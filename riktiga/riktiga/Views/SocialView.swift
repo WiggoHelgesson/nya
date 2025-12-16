@@ -90,7 +90,7 @@ struct SocialView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.bottom, 16)
                             
-                            LazyVStack(spacing: 0) {
+                            LazyVStack(spacing: 0, pinnedViews: []) {
                                 ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
                                     VStack(spacing: 0) {
                                         SocialPostCard(
@@ -106,6 +106,7 @@ struct SocialView: View {
                                                 socialViewModel.removePost(postId: postId)
                                             }
                                         )
+                                        .id(post.id) // Stable identity for better SwiftUI diffing
                                         Divider()
                                             .background(Color(.systemGray5))
                                     }
@@ -1362,6 +1363,9 @@ struct CommentRow: View {
 
 @MainActor
 class SocialViewModel: ObservableObject {
+    // Shared instance for cache management
+    static let shared = SocialViewModel()
+    
     @Published var posts: [SocialWorkoutPost] = []
     @Published var isLoading: Bool = false
     private var isFetching = false
@@ -1372,6 +1376,11 @@ class SocialViewModel: ObservableObject {
     
     // CRITICAL: Store the "known good" counts that should never be replaced with 0
     private var knownGoodCounts: [String: (likeCount: Int, commentCount: Int)] = [:]
+    
+    /// Invalidate cache to force fresh data on next fetch
+    static func invalidateCache() {
+        shared.lastSuccessfulFetch = nil
+    }
     
     private struct AuthorMetadata {
         let name: String?

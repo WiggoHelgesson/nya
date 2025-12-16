@@ -51,8 +51,15 @@ struct BookingFlowView: View {
                 }
             }
             .task {
-                await viewModel.loadLessonTypes()
-                await viewModel.loadGolfCourses()
+                // Load data in parallel for faster startup
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await self.viewModel.loadLessonTypes()
+                    }
+                    group.addTask {
+                        await self.viewModel.loadGolfCourses()
+                    }
+                }
             }
             .sheet(isPresented: $showPaymentSheet) {
                 TrainerPaymentView(

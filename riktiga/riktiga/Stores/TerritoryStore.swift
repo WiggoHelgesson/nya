@@ -26,12 +26,13 @@ final class TerritoryStore: ObservableObject {
     private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
     private var lastTileFetchTime: Date = .distantPast
     private var lastTileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
-    private let tileCacheValidity: TimeInterval = 60 // 60 seconds - tiles rarely change
+    private let tileCacheValidity: TimeInterval = 120 // 2 minutes - tiles change rarely
     private var isFetchingTiles: Bool = false // Prevent concurrent fetches
+    private let maxCachedTiles: Int = 10000 // Support large areas - only visible viewport is fetched anyway
     
     // Debounce
     private var debounceTask: Task<Void, Never>?
-    private let debounceInterval: TimeInterval = 0.5 // 500ms debounce (increased)
+    private let debounceInterval: TimeInterval = 0.8 // 800ms debounce (increased for smoother map)
     
     init() {
         // We do NOT load local territories anymore. Server is truth.
@@ -243,6 +244,16 @@ final class TerritoryStore: ObservableObject {
                     
                     // Update or insert tile
                     updatedCache[feature.tile_id] = tile
+                }
+                
+                // Limit cache size to prevent memory issues
+                if updatedCache.count > self.maxCachedTiles {
+                    // Keep only the most recent tiles (by string comparison - ISO dates sort correctly)
+                    let sortedTiles = updatedCache.values.sorted { 
+                        ($0.lastUpdatedAt ?? "") > ($1.lastUpdatedAt ?? "")
+                    }
+                    let tilesToKeep = Array(sortedTiles.prefix(self.maxCachedTiles))
+                    updatedCache = Dictionary(uniqueKeysWithValues: tilesToKeep.map { ($0.id, $0) })
                 }
                 
                 // Only update published array if there are actual changes

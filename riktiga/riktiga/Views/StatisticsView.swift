@@ -738,6 +738,7 @@ private struct StepStatisticsSectionView: View {
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
+        .drawingGroup() // GPU-accelerated rendering
         .onAppear {
             guard !hasInitialized else { return }
             hasInitialized = true
