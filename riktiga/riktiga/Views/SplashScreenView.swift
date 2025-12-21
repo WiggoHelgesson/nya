@@ -1,39 +1,25 @@
 import SwiftUI
 
 struct SplashScreenView: View {
-    @State private var logoScale: CGFloat = 0.3
+    var onComplete: (() -> Void)? = nil
+    @State private var logoScale: CGFloat = 0.6
     @State private var logoOpacity: Double = 0
-    @State private var textOpacity: Double = 0
     
     var body: some View {
         ZStack {
             // Vit bakgrund
-            AppColors.white
+            Color.white
                 .ignoresSafeArea()
             
-            VStack {
-                Spacer()
-                
-                // MARK: - Centered Logo
-                Image("23")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .cornerRadius(28)
-                    .clipped()
-                    .scaleEffect(logoScale)
-                    .opacity(logoOpacity)
-                    .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
-                
-                Spacer()
-                
-                // MARK: - Bottom tagline
-                Text("Målet om ett aktivare samhälle")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
-                    .opacity(textOpacity)
-                    .padding(.bottom, 50)
-            }
+            // MARK: - Centered Logo med snygg zoom animation
+            Image("23")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 180, height: 180)
+                .cornerRadius(32)
+                .scaleEffect(logoScale)
+                .opacity(logoOpacity)
+                .shadow(color: .black.opacity(0.08), radius: 30, x: 0, y: 15)
         }
         .onAppear {
             animateSplash()
@@ -41,16 +27,15 @@ struct SplashScreenView: View {
     }
     
     private func animateSplash() {
-        withAnimation(.easeOut(duration: 0.8)) {
+        // Smidig zoom-in animation med spring-effekt
+        withAnimation(.spring(response: 0.7, dampingFraction: 0.7, blendDuration: 0)) {
             logoScale = 1.0
             logoOpacity = 1.0
         }
         
-        // Fade in text slightly after logo
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            withAnimation(.easeOut(duration: 0.6)) {
-                textOpacity = 1.0
-            }
+        // Anropa onComplete efter animationen
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            onComplete?()
         }
     }
 }

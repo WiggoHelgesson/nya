@@ -103,42 +103,6 @@ struct RewardCatalog {
             isBookmarked: false
         ),
         RewardCard(
-            id: 12,
-            brandName: "PEAK",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "33",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 13,
-            brandName: "PEAK",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "33",
-            category: "Löpning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 14,
-            brandName: "PEAK",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "33",
-            category: "Gym",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 15,
-            brandName: "PEAK",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "33",
-            category: "Skidåkning",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 19,
             brandName: "CAPSTONE",
             discount: "10% rabatt",
@@ -218,6 +182,33 @@ struct RewardCatalog {
             imageName: "40",
             category: "Gym",
             isBookmarked: false
+        ),
+        RewardCard(
+            id: 28,
+            brandName: "XEEIL",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "44",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 29,
+            brandName: "XEEIL",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "44",
+            category: "Gym",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 30,
+            brandName: "XEEIL",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "44",
+            category: "Skidåkning",
+            isBookmarked: false
         )
     ]
 }
@@ -239,7 +230,7 @@ struct RewardsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
-    private let sectionShadowColor = Color.black.opacity(0.05)
+    private let sectionShadowColor = Color.black.opacity(0.03) // Reduced shadow opacity
     
     let heroBanners: [HeroBannerAsset] = [
         HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
@@ -249,6 +240,12 @@ struct RewardsView: View {
     let categories = ["Gym", "Löpning", "Golf", "Skidåkning"]
     
     let allRewards = RewardCatalog.all
+    
+    // Pre-sorted rewards cache - computed once
+    private var gymRewards: [RewardCard] { sortedRewards(for: "Gym") }
+    private var runningRewards: [RewardCard] { sortedRewards(for: "Löpning") }
+    private var golfRewards: [RewardCard] { sortedRewards(for: "Golf") }
+    private var skiRewards: [RewardCard] { sortedRewards(for: "Skidåkning") }
     
     private func sortedRewards(for category: String) -> [RewardCard] {
         let rewards = allRewards.filter { $0.category == category }
@@ -366,13 +363,18 @@ struct RewardsView: View {
     @ViewBuilder
     private func sliderSection(title: String, category: String) -> some View {
         let rewards = sortedRewards(for: category)
+        sliderSectionOptimized(title: title, rewards: rewards)
+    }
+    
+    @ViewBuilder
+    private func sliderSectionOptimized(title: String, rewards: [RewardCard]) -> some View {
         if rewards.isEmpty {
             EmptyView()
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(sectionBackgroundColor)
-                    .shadow(color: sectionShadowColor, radius: 16, x: 0, y: 10)
+                    .shadow(color: sectionShadowColor, radius: 6, x: 0, y: 3) // Minimal shadow
                 
                 VStack(alignment: .leading, spacing: 20) {
                     Text(title)
@@ -389,6 +391,7 @@ struct RewardsView: View {
                                     FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .id(reward.id) // Stable identity
                             }
                         }
                         .padding(.vertical, 8)
@@ -487,10 +490,10 @@ struct RewardsView: View {
                         LazyVStack(spacing: 24) {
                             heroBannerSection
                             categoriesSection
-                            sliderSection(title: "Gym", category: "Gym")
-                            sliderSection(title: "Löpning", category: "Löpning")
-                            sliderSection(title: "Golf", category: "Golf")
-                            sliderSection(title: "Skidåkning", category: "Skidåkning")
+                            sliderSectionOptimized(title: "Gym", rewards: gymRewards)
+                            sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
+                            sliderSectionOptimized(title: "Golf", rewards: golfRewards)
+                            sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
                             Spacer(minLength: 100)
                         }
                         .padding(.top, 8)
@@ -546,8 +549,6 @@ struct CategoryButton: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(isSelected ? .black : Color(.systemGray5))
         )
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
     
     private var iconName: String {
@@ -619,7 +620,6 @@ struct FullScreenRewardCard: View {
                 .padding(.vertical, 6)
                 .background(Color.white)
                 .clipShape(Capsule())
-                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 4)
                 .padding(18)
             }
             
@@ -629,7 +629,6 @@ struct FullScreenRewardCard: View {
                     .scaledToFit()
                     .frame(width: 48, height: 48)
                     .clipShape(Circle())
-                    .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 3)
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(reward.discount)
@@ -662,7 +661,7 @@ struct FullScreenRewardCard: View {
         .frame(width: UIScreen.main.bounds.width - 64)
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shadow(color: Color.black.opacity(0.08), radius: 14, x: 0, y: 9)
+        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3) // Lighter shadow for performance
     }
     
     private func getBrandLogo(for imageName: String) -> String {
@@ -677,12 +676,12 @@ struct FullScreenRewardCard: View {
         case "11": return "20" // RETROGOLF
         case "12": return "21" // PUMPLABS
         case "13": return "22" // ZEN ENERGY
-        case "33": return "33" // PEAK
         case "34": return "34" // CAPSTONE
-        case "35": return "35" // FUSE ENERGY
+        case "35": return "46" // FUSE ENERGY
         case "38": return "38" // Fjällsyn UF
         case "39": return "39" // CLYRO
         case "40": return "40" // Powerwell
+        case "44": return "45" // XEEIL
         default: return "5" // Default to PEGMATE
         }
     }
@@ -703,6 +702,7 @@ struct CategoryRewardsListView: View {
                         FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .id(reward.id) // Stable identity for better diffing
                 }
             }
             .padding(.vertical, 24)
@@ -872,8 +872,6 @@ struct RewardDetailView: View {
             return "PumpLab tar fram högkvalitativa kosttillskott utvecklade och producerade i Sverige. Fokus ligger på rena ingredienser, tydliga doser och produkter som faktiskt levererar resultat – bättre prestation, snabbare återhämtning och god smak för dig som vill ta träningen till nästa nivå."
         case "ZEN ENERGY":
             return "Zen Energy är energidrycken för dig som vill ta både kroppen och hjärnan till nästa nivå. Varje burk innehåller 10 g veganskt protein, 165 mg naturligt koffein och 300 mg ekologiskt Lion’s Mane för skärpa och fokus – plus ett komplett vitaminkomplex utan artificiella tillsatser."
-        case "PEAK":
-            return "PeakSummit är energidrycken för bergsbestigare och äventyrare som aldrig nöjer sig med att stanna vid baslägret. Den är framtagen för att ge målinriktad energi, återhämtning och uthållighet i de mest krävande miljöerna."
         case "CAPSTONE":
             return "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa."
         case "FUSE ENERGY":
@@ -886,6 +884,8 @@ struct RewardDetailView: View {
             return "Fjällsyn tillverkar moderna och stilrena skidglasögon till schyssta priser – designade i svensk fjällmiljö för att du ska få bästa sikt på berget."
         case "Powerwell":
             return "Powerwell tillverkar PWO och kosttillskott av hög kvalitet för dig som vill prestera varje pass. Svenska recept, rena ingredienser och brutalt fokus på effekt utan onödiga tillsatser."
+        case "XEEIL":
+            return "XEEIL är ett innovativt doftstift utvecklat utifrån aromaterapeutiska principer. Vi kombinerar uppfriskande mentol med noggrant utvalda naturliga eteriska oljor för att skapa en balanserad och effektiv doftupplevelse."
         default:
             return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
         }
@@ -915,23 +915,23 @@ struct RewardDetailView: View {
             return "21" // Pumplabs logo
         case "ZEN ENERGY":
             return "22" // Zen energy logo
-        case "PEAK":
-            return "33"
         case "CAPSTONE":
             return "34"
         case "FUSE ENERGY":
-            return "35"
+            return "46"
         case "CLYRO":
             return "39"
         case "Fjällsyn UF":
             return "38"
         case "Powerwell":
             return "40"
+        case "XEEIL":
+            return "45"
         default:
             return "5" // Default to Pegmate logo
         }
     }
-    
+
     private func openCompanyWebsite(for brandName: String) {
         let urlString: String
         
@@ -950,8 +950,6 @@ struct RewardDetailView: View {
             urlString = "https://pegmate.se/en/"
         case "PLIKTGOLF":
             urlString = "https://pliktgolf.se"
-        case "PEAK":
-            urlString = "https://peaksummit.se"
         case "CAPSTONE":
             urlString = "https://capstone.nu/"
         case "FUSE ENERGY":
@@ -970,6 +968,8 @@ struct RewardDetailView: View {
             urlString = "https://fjallsynuf.se/"
         case "Powerwell":
             urlString = "https://powerwell.se/"
+        case "XEEIL":
+            urlString = "https://xeeil.se"
         default:
             urlString = "https://google.com" // Fallback
         }
@@ -1337,8 +1337,6 @@ struct ConfirmationView: View {
             return "UPNDOWN15"
         case "ZEN ENERGY":
             return "UPDOWN15"
-        case "PEAK":
-            return "Summit"
         case "CAPSTONE":
             return "CAPSTONE10"
         case "FUSE ENERGY":
@@ -1349,6 +1347,8 @@ struct ConfirmationView: View {
             return "FJÄLLSYN15PÅALLT"
         case "Powerwell":
             return "1EFN34345G1J"
+        case "XEEIL":
+            return "SNOWSTORM15"
         default:
             return "CODE2025"
         }
@@ -1372,8 +1372,6 @@ struct ConfirmationView: View {
             urlString = "https://pegmate.se/en/"
         case "PLIKTGOLF":
             urlString = "https://pliktgolf.se"
-        case "PEAK":
-            urlString = "https://peaksummit.se"
         case "CAPSTONE":
             urlString = "https://capstone.nu/"
         case "FUSE ENERGY":
@@ -1390,6 +1388,8 @@ struct ConfirmationView: View {
             urlString = "https://fjallsynuf.se/"
         case "Powerwell":
             urlString = "https://powerwell.se/"
+        case "XEEIL":
+            urlString = "https://xeeil.se"
         default:
             urlString = "https://google.com" // Fallback
         }
@@ -1445,12 +1445,12 @@ struct AllRewardsCard: View {
         case "11": return "20" // RETROGOLF
         case "12": return "21" // PUMPLABS
         case "13": return "22" // ZEN ENERGY
-        case "33": return "33" // PEAK
         case "34": return "34" // CAPSTONE
-        case "35": return "35" // FUSE ENERGY
+        case "35": return "46" // FUSE ENERGY
         case "38": return "38" // Fjällsyn
         case "39": return "39" // CLYRO
         case "40": return "40" // Powerwell
+        case "44": return "45" // XEEIL
         default: return "5" // Default to PEGMATE
         }
     }

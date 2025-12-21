@@ -20,7 +20,7 @@ final class TerritoryStore: ObservableObject {
     private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private var lastFetchTime: Date = .distantPast
     private let cacheValidityDuration: TimeInterval = 15 // 15 seconds cache for faster sync
-    private let boundsMargin: Double = 0.1 // Extra margin around viewport (increased significantly)
+    private let boundsMargin: Double = 0.2 // Extra margin around viewport (increased to show more tiles)
     
     // Tiles cache - use dictionary for O(1) lookups and stable updates
     private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
@@ -188,24 +188,34 @@ final class TerritoryStore: ObservableObject {
     }
 
     // MARK: - Tiles
-    func loadTilesInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
+    func loadTilesInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, forceRefresh: Bool = false) async {
         // Prevent concurrent fetches that cause flickering
-        guard !isFetchingTiles else { return }
-        
-        // Throttle tile fetches - only fetch if cache expired OR bounds are outside cached area
-        let now = Date()
-        let cacheValid = now.timeIntervalSince(lastTileFetchTime) < tileCacheValidity
-        let boundsWithinCache: Bool = {
-            guard let last = lastTileBounds else { return false }
-            return minLat >= last.minLat - boundsMargin &&
-                   maxLat <= last.maxLat + boundsMargin &&
-                   minLon >= last.minLon - boundsMargin &&
-                   maxLon <= last.maxLon + boundsMargin
-        }()
-        
-        if cacheValid && boundsWithinCache {
-            return // Use existing cached tiles
+        guard !isFetchingTiles else {
+            print("⏳ [TILES] Skipping fetch - already fetching")
+            return
         }
+        
+        let now = Date()
+        
+        // Skip cache check if force refresh
+        if !forceRefresh {
+            // Throttle tile fetches - only fetch if cache expired OR bounds are outside cached area
+            let cacheValid = now.timeIntervalSince(lastTileFetchTime) < tileCacheValidity
+            let boundsWithinCache: Bool = {
+                guard let last = lastTileBounds else { return false }
+                return minLat >= last.minLat - boundsMargin &&
+                       maxLat <= last.maxLat + boundsMargin &&
+                       minLon >= last.minLon - boundsMargin &&
+                       maxLon <= last.maxLon + boundsMargin
+            }()
+            
+            if cacheValid && boundsWithinCache {
+                print("💾 [TILES] Using cached tiles (count: \(tiles.count))")
+                return // Use existing cached tiles
+            }
+        }
+        
+        print("🔄 [TILES] Fetching tiles for bounds: \(minLat)-\(maxLat), \(minLon)-\(maxLon) (force: \(forceRefresh))")
         
         await MainActor.run { isFetchingTiles = true }
         defer { Task { @MainActor in isFetchingTiles = false } }
@@ -238,6 +248,10 @@ final class TerritoryStore: ObservableObject {
                     let tile = Tile(
                         id: feature.tile_id,
                         ownerId: feature.owner_id,
+                        activityId: feature.activity_id,
+                        distanceKm: feature.distance_km,
+                        durationSec: feature.duration_sec,
+                        pace: feature.pace,
                         coordinates: coords,
                         lastUpdatedAt: feature.last_updated_at
                     )
@@ -267,9 +281,11 @@ final class TerritoryStore: ObservableObject {
                 
                 self.lastTileFetchTime = now
                 self.lastTileBounds = (expandedMinLat, expandedMaxLat, expandedMinLon, expandedMaxLon)
+                
+                print("✅ [TILES] Loaded \(result.count) tiles from server, total cached: \(self.tiles.count)")
             }
         } catch {
-            print("❌ Failed to load tiles in bounds: \(error)")
+            print("❌ [TILES] Failed to load tiles in bounds: \(error)")
             // Don't clear tiles on error - keep showing cached
         }
     }
@@ -297,25 +313,39 @@ final class TerritoryStore: ObservableObject {
         sessionDuration: Int? = nil,
         sessionPace: String? = nil
     ) {
-        guard eligibleActivities.contains(activity) else { return }
-        guard routeCoordinates.count >= 3 else { return }
+        print("🎯 [TERRITORY] finalizeTerritoryCapture called")
+        print("🎯 [TERRITORY] Activity: \(activity.rawValue)")
+        print("🎯 [TERRITORY] Input coordinates count: \(routeCoordinates.count)")
+        
+        guard eligibleActivities.contains(activity) else {
+            print("❌ [TERRITORY] Activity not eligible: \(activity.rawValue)")
+            return
+        }
+        guard routeCoordinates.count >= 3 else {
+            print("❌ [TERRITORY] Not enough coordinates: \(routeCoordinates.count)")
+            return
+        }
         
         // Close the polygon properly
         let closed = ensureClosedLoop(routeCoordinates)
+        print("🎯 [TERRITORY] After closing loop: \(closed.count) points")
         
-        // Simplify to reduce self-intersections
-        let simplified = simplifyPolygon(closed, tolerance: 0.00005)
+        // Less aggressive simplification - keep more detail
+        let simplified = simplifyPolygon(closed, tolerance: 0.00002)
+        print("🎯 [TERRITORY] After simplification: \(simplified.count) points")
         
-        // Use convex hull for very complex routes
+        // Use convex hull only for VERY complex routes to avoid self-intersection issues
         let finalCoordinates: [CLLocationCoordinate2D]
-        if simplified.count > 500 {
+        if simplified.count > 1000 {
             finalCoordinates = convexHull(simplified)
+            print("🎯 [TERRITORY] Used convex hull: \(finalCoordinates.count) points")
         } else {
             finalCoordinates = simplified
         }
         
         // Ensure polygon is closed
         let validPolygon = ensureClosedLoop(finalCoordinates)
+        print("🎯 [TERRITORY] Final polygon: \(validPolygon.count) points")
         let area = calculateArea(coordinates: validPolygon)
         
         let pendingTerritory = Territory(
@@ -344,19 +374,39 @@ final class TerritoryStore: ObservableObject {
         // Save to backend (non-blocking) using tile-based claim
         Task {
             do {
-                print("🎯 Starting tile claim for user: \(userId)")
-                print("   Polygon points: \(validPolygon.count)")
-                print("   Area: \(area) m²")
+                print("🎯 [TERRITORY] Starting tile claim for user: \(userId)")
+                print("🎯 [TERRITORY] Polygon points: \(validPolygon.count)")
+                print("🎯 [TERRITORY] Area: \(area) m²")
+                print("🎯 [TERRITORY] Distance: \(sessionDistance ?? 0) km, Duration: \(sessionDuration ?? 0) sec")
+                print("🎯 [TERRITORY] First coord: \(validPolygon.first?.latitude ?? 0), \(validPolygon.first?.longitude ?? 0)")
+                print("🎯 [TERRITORY] Last coord: \(validPolygon.last?.latitude ?? 0), \(validPolygon.last?.longitude ?? 0)")
                 
                 // Use a generated activityId to tag the claim (not critical)
                 let activityId = UUID()
                 try await service.claimTiles(
                     ownerId: userId,
                     activityId: activityId,
-                    coordinates: validPolygon
+                    coordinates: validPolygon,
+                    distanceKm: sessionDistance,
+                    durationSec: sessionDuration,
+                    pace: sessionPace
                 )
                 
-                print("✅ Tile claim RPC completed successfully!")
+                print("✅ [TERRITORY] Tile claim RPC completed successfully!")
+                
+                // Save bounds BEFORE invalidating cache
+                let savedBounds = self.lastTileBounds
+                
+                // Calculate fallback bounds from the claimed polygon
+                let fallbackBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)? = {
+                    guard !validPolygon.isEmpty else { return nil }
+                    let lats = validPolygon.map { $0.latitude }
+                    let lons = validPolygon.map { $0.longitude }
+                    guard let minLat = lats.min(), let maxLat = lats.max(),
+                          let minLon = lons.min(), let maxLon = lons.max() else { return nil }
+                    // Expand by 0.05 degrees (~5km) to ensure ALL claimed tiles are loaded
+                    return (minLat - 0.05, maxLat + 0.05, minLon - 0.05, maxLon + 0.05)
+                }()
                 
                 // After successful claim, refresh from backend union view
                 // Vi tar bort lokala placeholders
@@ -371,22 +421,28 @@ final class TerritoryStore: ObservableObject {
                 print("   Territories count after refresh: \(self.territories.count)")
                 
                 // Also force refresh tiles to update local stats immediately
-                if let lastBounds = self.lastTileBounds {
-                    print("🔄 Refreshing tiles in bounds...")
+                // Use fallbackBounds from the claimed polygon (more accurate than savedBounds)
+                let boundsToUse = fallbackBounds ?? savedBounds
+                if let bounds = boundsToUse {
+                    print("🔄 Refreshing tiles in bounds: \(bounds)...")
+                    // Force refresh to bypass any caching
                     await self.loadTilesInBounds(
-                        minLat: lastBounds.minLat,
-                        maxLat: lastBounds.maxLat,
-                        minLon: lastBounds.minLon,
-                        maxLon: lastBounds.maxLon
+                        minLat: bounds.minLat,
+                        maxLat: bounds.maxLat,
+                        minLon: bounds.minLon,
+                        maxLon: bounds.maxLon,
+                        forceRefresh: true
                     )
                     print("   Tiles count after refresh: \(self.tiles.count)")
+                } else {
+                    print("⚠️ No bounds available for tile refresh")
                 }
                 
                 print("🎉 Territory capture complete!")
                 
             } catch {
-                print("❌ Tile claim failed: \(error)")
-                print("   Error details: \(String(describing: error))")
+                print("❌ [TERRITORY] Tile claim failed: \(error)")
+                print("❌ [TERRITORY] Error details: \(String(describing: error))")
                 // Keep local territory as fallback? No, grid is truth.
             }
         }
@@ -684,17 +740,23 @@ struct Territory: Identifiable {
     var sessionDuration: Int? // in seconds
     var sessionPace: String? // formatted pace string
     var createdAt: Date?
+    var tileCount: Int? // Number of tiles in this territory
 }
 
 struct Tile: Identifiable, Equatable {
     let id: Int64
     let ownerId: String?
+    let activityId: String?
+    let distanceKm: Double?
+    let durationSec: Int?
+    let pace: String?
     let coordinates: [CLLocationCoordinate2D]
     let lastUpdatedAt: String?
     
     static func == (lhs: Tile, rhs: Tile) -> Bool {
         return lhs.id == rhs.id &&
                lhs.ownerId == rhs.ownerId &&
+               lhs.activityId == rhs.activityId &&
                lhs.lastUpdatedAt == rhs.lastUpdatedAt
     }
 }

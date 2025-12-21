@@ -8,6 +8,7 @@ struct BookingChatView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: BookingChatViewModel
     @State private var messageText = ""
+    @State private var isReady = false
     @FocusState private var isTextFieldFocused: Bool
     
     init(booking: TrainerBooking) {
@@ -16,8 +17,15 @@ struct BookingChatView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        // Show content immediately with background - no white flash
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+            
             VStack(spacing: 0) {
+                // Custom navigation bar - renders immediately
+                customNavigationBar
+                
                 // Status header - always show immediately
                 statusHeader
                 
@@ -52,7 +60,7 @@ struct BookingChatView: View {
                                     .tint(.black)
                                 }
                                 .padding(.top, 50)
-                            } else if viewModel.messages.isEmpty {
+                            } else if viewModel.messages.isEmpty && !viewModel.isLoading {
                                 Text("Inga meddelanden ännu.\nSkriv något för att starta chatten!")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
@@ -84,43 +92,57 @@ struct BookingChatView: View {
                     inputBar
                 }
             }
-            .background(Color(.systemBackground))
-            .navigationTitle(booking.trainerName ?? "Chatt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Stäng") {
-                        dismiss()
-                    }
-                }
-                
-                if viewModel.isTrainer && booking.bookingStatus == .pending {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button {
-                                Task { await viewModel.acceptBooking() }
-                            } label: {
-                                Label("Godkänn", systemImage: "checkmark.circle")
-                            }
-                            
-                            Button(role: .destructive) {
-                                Task { await viewModel.declineBooking() }
-                            } label: {
-                                Label("Avböj", systemImage: "xmark.circle")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                        }
-                    }
-                }
+        }
+        .task {
+            await viewModel.initialize()
+        }
+        .refreshable {
+            await viewModel.loadMessages()
+        }
+    }
+    
+    // MARK: - Custom Navigation Bar (renders immediately, no NavigationStack delay)
+    
+    private var customNavigationBar: some View {
+        HStack {
+            Button("Stäng") {
+                dismiss()
             }
-            .task {
-                await viewModel.initialize()
-            }
-            .refreshable {
-                await viewModel.loadMessages()
+            .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Text(booking.trainerName ?? "Chatt")
+                .font(.headline)
+            
+            Spacer()
+            
+            if viewModel.isTrainer && booking.bookingStatus == .pending {
+                Menu {
+                    Button {
+                        Task { await viewModel.acceptBooking() }
+                    } label: {
+                        Label("Godkänn", systemImage: "checkmark.circle")
+                    }
+                    
+                    Button(role: .destructive) {
+                        Task { await viewModel.declineBooking() }
+                    } label: {
+                        Label("Avböj", systemImage: "xmark.circle")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundColor(.primary)
+                }
+            } else {
+                // Invisible placeholder to balance layout
+                Image(systemName: "ellipsis.circle")
+                    .opacity(0)
             }
         }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
     }
     
     // MARK: - Status Header

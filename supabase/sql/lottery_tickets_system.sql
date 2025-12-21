@@ -159,7 +159,7 @@ BEGIN
         user_total as my_tickets,
         GREATEST(global_total, 1) as total_tickets, -- Avoid division by zero
         CASE 
-            WHEN global_total > 0 THEN ROUND((user_total::double precision / global_total::double precision) * 100, 1)
+            WHEN global_total > 0 THEN ROUND((user_total::numeric / global_total::numeric) * 100, 1)::double precision
             ELSE 0.0
         END as my_percentage,
         user_territory_tickets as territory_tickets,

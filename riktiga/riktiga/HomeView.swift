@@ -20,7 +20,7 @@ struct BrandLogoItem: Identifiable {
         BrandLogoItem(name: "ZEN ENERGY", imageName: "22"),
         BrandLogoItem(name: "PEAK", imageName: "33"),
         BrandLogoItem(name: "CAPSTONE", imageName: "34"),
-        BrandLogoItem(name: "FUSE ENERGY", imageName: "35")
+        BrandLogoItem(name: "FUSE ENERGY", imageName: "46")
     ]
 }
 

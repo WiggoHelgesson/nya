@@ -638,7 +638,7 @@ struct SocialPostCard: View {
             isLiked = newValue ?? isLiked
         }
         .sheet(isPresented: $showComments) {
-            CommentsView(postId: post.id) {
+            CommentsView(postId: post.id, postOwnerId: post.userId) {
                 commentCount += 1
                 onCommentCountChanged(post.id, commentCount)
             }
@@ -915,7 +915,13 @@ struct SocialPostCard: View {
                     let alreadyLiked = existingLikes.contains { $0.userId == userId }
                     
                     if !alreadyLiked {
-                        try await SocialService.shared.likePost(postId: post.id, userId: userId)
+                        // Pass post owner ID to trigger notification
+                        try await SocialService.shared.likePost(
+                            postId: post.id,
+                            userId: userId,
+                            postOwnerId: post.userId,
+                            postTitle: post.activityType
+                        )
                         print("✅ Post liked successfully")
                     } else {
                         print("⚠️ Already liked this post")
@@ -1080,6 +1086,7 @@ extension SocialView {
 
 struct CommentsView: View {
     let postId: String
+    let postOwnerId: String
     let onCommentAdded: (() -> Void)?
     @StateObject private var commentsViewModel = CommentsViewModel()
     @State private var newComment = ""
@@ -1214,7 +1221,8 @@ struct CommentsView: View {
                     postId: postId,
                     userId: userId,
                     content: commentText,
-                    parentCommentId: replyTarget?.id
+                    parentCommentId: replyTarget?.id,
+                    postOwnerId: postOwnerId
                 )
                 print("✅ Comment added successfully")
                 

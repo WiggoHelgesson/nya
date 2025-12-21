@@ -213,41 +213,40 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         
         // Accept location if accuracy is reasonable (more lenient to avoid stopping tracking)
-        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 100 else {
-            print("⚠️ Poor GPS accuracy: \(location.horizontalAccuracy)m, skipping but NOT stopping tracking")
+        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
             // Don't update location but keep tracking active
             return
         }
         
-        print("📍 GPS Update: accuracy=\(location.horizontalAccuracy)m")
-        
-        // Update user location on main thread using Task for async
-        Task { @MainActor in
-            self.userLocation = location.coordinate
+        // Filter out old cached locations (iOS sometimes returns stale data)
+        let locationAge = abs(location.timestamp.timeIntervalSinceNow)
+        guard locationAge < 10 else {
+            return
         }
         
+        // Batch all UI updates into a single async call for performance
+        var newDistance: Double? = nil
+        var newRoutePoint: CLLocationCoordinate2D? = nil
+        var newMaxSpeed: Double? = nil
+        var newElevationGain: Double? = nil
+        var newVehicleDetected: Bool? = nil
+        var newSpeedKmh: Double? = nil
+        
         if startLocation == nil {
-            // First location
+            // First location - ALWAYS add to route
             startLocation = location
             lastLocation = location
-            
-            // Add first point to route
-            Task { @MainActor in
-                self.routeCoordinates.append(location.coordinate)
-            }
-            print("🚀 Tracking started at: \(location.coordinate)")
+            newRoutePoint = location.coordinate
+            print("📍 FIRST route point added: \(location.coordinate)")
         } else if let lastLoc = lastLocation {
             // Calculate distance from last location
-            let newDistance = location.distance(from: lastLoc)
+            let distanceFromLast = location.distance(from: lastLoc)
             
             // Calculate speed (m/s)
             let timeDiff = location.timestamp.timeIntervalSince(lastLoc.timestamp)
-            let speed = timeDiff > 0 ? newDistance / timeDiff : 0.0
+            let speed = timeDiff > 0 ? distanceFromLast / timeDiff : 0.0
             
-            // Update current speed for UI (in km/h)
-            Task { @MainActor in
-                self.currentSpeedKmh = speed * 3.6 // Convert m/s to km/h
-            }
+            newSpeedKmh = speed * 3.6
             
             // Track recent speeds for vehicle detection
             recentSpeeds.append(speed)
@@ -258,103 +257,94 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // Check if moving in vehicle (only for non-skiing activities)
             let isInVehicle = detectVehicleMovement(speed)
             if currentActivityType != "Skidåkning" && isInVehicle {
-                Task { @MainActor in
-                    self.vehicleDetected = true
-                }
-                print("🚗 Vehicle movement detected - speed: \(String(format: "%.1f", speed)) m/s (\(String(format: "%.1f", speed * 3.6)) km/h)")
-                // Skip this distance update
+                newVehicleDetected = true
                 lastLocation = location
+                // Update UI in single batch
                 Task { @MainActor in
                     self.userLocation = location.coordinate
+                    self.currentSpeedKmh = newSpeedKmh ?? 0
+                    self.vehicleDetected = true
                 }
                 return
             } else {
-                Task { @MainActor in
-                    self.vehicleDetected = false
-                }
+                newVehicleDetected = false
             }
             
-            // Accept reasonable distances (up to 100m jumps) and add to route if distance or time moved
-            if timeDiff > 0 {
-                totalDistance += newDistance
+            // Filter GPS spikes from distance calculation
+            let maxReasonableDistance = 50.0 * max(timeDiff, 1.0)
+            let isValidDistance = distanceFromLast <= maxReasonableDistance && distanceFromLast < 200
+            
+            if timeDiff > 0 && isValidDistance {
+                totalDistance += distanceFromLast
+                newDistance = totalDistance / 1000.0
                 
                 // Handle skiing-specific metrics
                 if currentActivityType == "Skidåkning" {
-                    // Detect if on lift: speed > 10 m/s (36 km/h) and relatively constant
                     updateSpeedHistory(speed)
                     let avgSpeed = speedHistory.isEmpty ? 0 : speedHistory.reduce(0, +) / Double(speedHistory.count)
                     let speedVariance = speedHistory.isEmpty ? 0 : speedHistory.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(speedHistory.count)
                     
-                    // On lift if: average speed > 10 m/s and variance is low (< 5 m²/s² means fairly constant speed)
                     let wasOnLift = isOnLift
                     isOnLift = avgSpeed > 10.0 && speedVariance < 5.0 && speedHistory.count >= 5
                     
                     if !isOnLift {
-                        // Not on lift - count elevation gain
                         if let lastAlt = lastValidAltitude, location.altitude > 0 {
                             let altitudeDiff = location.altitude - lastAlt
                             if altitudeDiff > 0 {
-                                // Only count positive elevation gain (going uphill while not on lift)
-                                Task { @MainActor in
-                                    self.elevationGain += altitudeDiff
-                                }
-                                print("⛰️ Elevation gain: +\(altitudeDiff)m (Total: \(self.elevationGain)m)")
+                                newElevationGain = elevationGain + altitudeDiff
                             }
                             lastValidAltitude = location.altitude
                         } else if location.altitude > 0 {
                             lastValidAltitude = location.altitude
                         }
                         
-                        // Update max speed (only when not on lift)
-                        if speed > 0 {
-                            Task { @MainActor in
-                                if speed > self.maxSpeed {
-                                    self.maxSpeed = speed
-                                    print("🏔️ New max speed: \(String(format: "%.1f", speed)) m/s (\(String(format: "%.1f", speed * 3.6)) km/h)")
-                                }
-                            }
+                        if speed > maxSpeed {
+                            newMaxSpeed = speed
                         }
-                    } else if !wasOnLift {
-                        // Just entered lift
-                        print("🚡 Entered lift (speed: \(String(format: "%.1f", avgSpeed)) m/s)")
                     }
                 } else {
-                    // For other activities, track max speed
-                    if speed > 0 {
-                        Task { @MainActor in
-                            if speed > self.maxSpeed {
-                                self.maxSpeed = speed
-                            }
-                        }
+                    if speed > maxSpeed {
+                        newMaxSpeed = speed
                     }
                 }
                 
-                Task { @MainActor in
-                    self.distance = self.totalDistance / 1000.0
+                // Check if we should add this point to route
+                if let lastRoutePoint = routeCoordinates.last {
+                    let lastRouteLocation = CLLocation(latitude: lastRoutePoint.latitude, longitude: lastRoutePoint.longitude)
+                    let distanceFromLastRoute = location.distance(from: lastRouteLocation)
                     
-                    // Add point to route for visualization only if significant distance from last point
-                    // This reduces UI updates and improves performance
-                    let shouldAddPoint: Bool
-                    if let lastRoutePoint = self.routeCoordinates.last {
-                        let lastRouteLocation = CLLocation(latitude: lastRoutePoint.latitude, longitude: lastRoutePoint.longitude)
-                        let distanceFromLastPoint = location.distance(from: lastRouteLocation)
-                        shouldAddPoint = distanceFromLastPoint >= 5.0
-                    } else {
-                        shouldAddPoint = true
+                    // More lenient filtering to ensure route is visible
+                    let minDistance = 2.0 // Reduced from 3.0
+                    let maxDistance = 80.0 // Increased from 50.0
+                    let goodAccuracy = location.horizontalAccuracy <= 30 // More lenient (was 20)
+                    let isReasonableJump = distanceFromLastRoute >= minDistance && distanceFromLastRoute <= maxDistance
+                    let highAccuracyOverride = location.horizontalAccuracy < 15 && distanceFromLastRoute <= 150
+                    
+                    if (isReasonableJump && goodAccuracy) || highAccuracyOverride {
+                        newRoutePoint = location.coordinate
+                        print("📍 Route point added (#\(routeCoordinates.count + 1)): dist=\(String(format: "%.1f", distanceFromLastRoute))m, acc=\(String(format: "%.1f", location.horizontalAccuracy))m")
                     }
-                    
-                    if shouldAddPoint {
-                        self.routeCoordinates.append(location.coordinate)
-                    }
-                    
-                    print("📏 Distance updated: \(self.distance) km")
+                } else {
+                    // First point after start - always add
+                    newRoutePoint = location.coordinate
+                    print("📍 Second route point added")
                 }
                 
                 lastLocation = location
-            } else {
-                print("⚠️ Skipped GPS jump: \(newDistance)m")
             }
         }
+        
+        // Single batched UI update for maximum performance
+        Task { @MainActor in
+            self.userLocation = location.coordinate
+            if let speed = newSpeedKmh { self.currentSpeedKmh = speed }
+            if let vehicle = newVehicleDetected { self.vehicleDetected = vehicle }
+            if let dist = newDistance { self.distance = dist }
+            if let maxSpd = newMaxSpeed { self.maxSpeed = maxSpd }
+            if let elev = newElevationGain { self.elevationGain = elev }
+            if let point = newRoutePoint { self.routeCoordinates.append(point) }
+        }
+        
     }
     
     private func updateSpeedHistory(_ speed: Double) {

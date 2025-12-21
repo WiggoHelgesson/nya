@@ -113,6 +113,14 @@ final class NotificationService {
             .execute()
         
         print("✅ Created like notification")
+        
+        // Send push notification
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: "Ny like",
+            body: "\(likedByUserName) gillade ditt inlägg",
+            data: ["type": "like", "post_id": postId, "actor_id": likedByUserId]
+        )
     }
     
     /// Create a comment notification
@@ -151,6 +159,14 @@ final class NotificationService {
             .execute()
         
         print("✅ Created comment notification")
+        
+        // Send push notification
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: "Ny kommentar",
+            body: "\(commentedByUserName) kommenterade ditt inlägg",
+            data: ["type": "comment", "post_id": postId, "actor_id": commentedByUserId]
+        )
     }
     
     /// Create a follow notification
@@ -182,6 +198,14 @@ final class NotificationService {
             .execute()
         
         print("✅ Created follow notification")
+        
+        // Send push notification
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: "Ny följare",
+            body: "\(followedByUserName) började följa dig",
+            data: ["type": "follow", "actor_id": followedByUserId]
+        )
     }
 }
 

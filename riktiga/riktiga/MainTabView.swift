@@ -9,11 +9,29 @@ import Supabase
 class NavigationDepthTracker: ObservableObject {
     static let shared = NavigationDepthTracker()
     @Published var isAtRootView = true
+    private var navigationDepth = 0
+    
+    func pushView() {
+        navigationDepth += 1
+        isAtRootView = false
+    }
+    
+    func popView() {
+        navigationDepth = max(0, navigationDepth - 1)
+        isAtRootView = navigationDepth == 0
+    }
     
     func setAtRoot(_ atRoot: Bool) {
-        DispatchQueue.main.async {
-            self.isAtRootView = atRoot
+        if atRoot {
+            popView()
+        } else {
+            pushView()
         }
+    }
+    
+    func resetToRoot() {
+        navigationDepth = 0
+        isAtRootView = true
     }
 }
 
@@ -51,47 +69,45 @@ struct MainTabView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            NavigationStack {
-                TabView(selection: $selectedTab) {
-                    ZoneWarView()
-                        .tag(0)
-                        .tabItem {
-                            Image(systemName: "house.fill")
-                            Text("Hem")
-                        }
-                    
-                    SocialView()
-                        .tag(1)
-                        .tabItem {
-                            Image(systemName: "person.2.fill")
-                            Text("Socialt")
-                        }
-                    
-                    RewardsView()
-                        .tag(2)
-                        .tabItem {
-                            Image(systemName: "gift.fill")
-                            Text("Belöningar")
-                        }
-                    
-                    LessonsView()
-                        .tag(3)
-                        .tabItem {
-                            Image(systemName: "figure.golf")
-                            Text("Lektioner")
-                        }
-                    
-                    ProfileView()
-                        .tag(4)
-                        .tabItem {
-                            Image(systemName: "person.fill")
-                            Text("Profil")
-                        }
-                }
-                .accentColor(.black)
-                .ignoresSafeArea(.keyboard, edges: .bottom)
+            // NOTE: Each tab view manages its own NavigationStack - don't nest here
+            TabView(selection: $selectedTab) {
+                ZoneWarView()
+                    .tag(0)
+                    .tabItem {
+                        Image(systemName: "house.fill")
+                        Text("Hem")
+                    }
+                
+                SocialView()
+                    .tag(1)
+                    .tabItem {
+                        Image(systemName: "person.2.fill")
+                        Text("Socialt")
+                    }
+                
+                RewardsView()
+                    .tag(2)
+                    .tabItem {
+                        Image(systemName: "gift.fill")
+                        Text("Belöningar")
+                    }
+                
+                LessonsView()
+                    .tag(3)
+                    .tabItem {
+                        Image(systemName: "figure.golf")
+                        Text("Lektioner")
+                    }
+                
+                ProfileView()
+                    .tag(4)
+                    .tabItem {
+                        Image(systemName: "person.fill")
+                        Text("Profil")
+                    }
             }
-            .enableSwipeBack()
+            .accentColor(.black)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             
             // Floating Start Session Button (now also on Hem (0) och Lektioner (3))
             if (selectedTab == 0 || selectedTab == 1 || selectedTab == 2 || selectedTab == 3 || selectedTab == 4)
@@ -184,7 +200,7 @@ struct MainTabView: View {
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             // Reset to root view when switching tabs
-            navigationTracker.setAtRoot(true)
+            navigationTracker.resetToRoot()
             
             // Smart memory cleanup based on which tabs are involved
             Task.detached(priority: .utility) {
@@ -227,6 +243,12 @@ struct MainTabView: View {
                         try await AuthSessionManager.shared.ensureValidSession()
                         print("✅ Auth session verified on app activation")
                     } catch let authError as AuthError {
+                        // NEVER logout if there's an active workout session!
+                        if SessionManager.shared.hasActiveSession {
+                            print("⚠️ Auth error but ACTIVE SESSION exists - NOT logging out to protect workout")
+                            return
+                        }
+                        
                         // Only logout on true auth errors (session missing), not network issues
                         if case .sessionMissing = authError {
                             print("❌ Session truly missing - logging out")

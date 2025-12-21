@@ -1,5 +1,8 @@
 -- Create a function to fetch the leaderboard based on territory tiles
 -- This ensures the leaderboard reflects the new grid-based system where overlaps are handled by tile ownership.
+-- Now returns tile_count for ranking by number of tiles
+
+DROP FUNCTION IF EXISTS public.get_leaderboard(integer);
 
 CREATE OR REPLACE FUNCTION public.get_leaderboard(
     limit_count integer DEFAULT 20
@@ -7,6 +10,7 @@ CREATE OR REPLACE FUNCTION public.get_leaderboard(
 RETURNS TABLE (
     owner_id uuid,
     area_m2 double precision,
+    tile_count bigint,
     username text,
     avatar_url text,
     is_pro boolean
@@ -16,6 +20,7 @@ BEGIN
     WITH owner_stats AS (
         SELECT 
             t.owner_id, 
+            COUNT(*)::bigint as tiles,
             SUM(ST_Area(t.geom::geography)) as total_area
         FROM public.territory_tiles t
         WHERE t.owner_id IS NOT NULL
@@ -24,12 +29,13 @@ BEGIN
     SELECT 
         os.owner_id,
         os.total_area as area_m2,
+        os.tiles as tile_count,
         p.username,
         p.avatar_url,
         COALESCE(p.is_pro, false) as is_pro
     FROM owner_stats os
     LEFT JOIN public.profiles p ON os.owner_id = p.id
-    ORDER BY os.total_area DESC
+    ORDER BY os.tiles DESC
     LIMIT limit_count;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;

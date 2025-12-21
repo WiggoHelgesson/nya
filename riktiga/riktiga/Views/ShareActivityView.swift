@@ -379,7 +379,8 @@ final class ShareInsightsLoader: ObservableObject {
         }
         
         do {
-            let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: post.userId, forceRefresh: true)
+            // Use cache if available for faster loading
+            let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: post.userId, forceRefresh: false)
             
             // Filter out the current post ID to avoid double counting, then parse dates
             let otherPosts = posts.filter { $0.id != self.post.id }

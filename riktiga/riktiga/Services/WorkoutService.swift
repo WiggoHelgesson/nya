@@ -223,47 +223,48 @@ class WorkoutService {
         var uploadedRouteImageUrl: String? = nil
         var uploadedUserImageUrl: String? = nil
         
-        // Upload route image if provided
-        if let routeImage = routeImage {
-            do {
-                uploadedRouteImageUrl = try await uploadWorkoutImage(routeImage, postId: post.id)
-                print("✅ Route image uploaded successfully")
-            } catch {
-                print("⚠️ Route image upload failed: \(error)")
+        // Upload images in parallel for faster saving
+        await withTaskGroup(of: Void.self) { group in
+            // Upload route image if provided
+            if let routeImage = routeImage {
+                group.addTask {
+                    do {
+                        uploadedRouteImageUrl = try await self.uploadWorkoutImage(routeImage, postId: post.id)
+                    } catch {
+                        print("⚠️ Route image upload failed: \(error)")
+                    }
+                }
             }
-        }
-        
-        // Upload user image if provided
-        if let userImage = userImage {
-            do {
-                let userImageFileName = "\(post.id)_user_\(UUID().uuidString).jpg"
-                guard let imageData = userImage.jpegData(compressionQuality: 0.8) else {
-                    throw NSError(domain: "ImageConversionError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not convert image to JPEG"])
+            
+            // Upload user image if provided
+            if let userImage = userImage {
+                group.addTask {
+                    do {
+                        let userImageFileName = "\(post.id)_user_\(UUID().uuidString).jpg"
+                        guard let imageData = userImage.jpegData(compressionQuality: 0.7) else {
+                            return
+                        }
+                        
+                        _ = try await self.supabase.storage
+                            .from("workout-images")
+                            .upload(userImageFileName, data: imageData, options: FileOptions(upsert: true))
+                        
+                        // Get signed URL
+                        do {
+                            let signedURL = try await self.supabase.storage
+                                .from("workout-images")
+                                .createSignedURL(path: userImageFileName, expiresIn: 31536000)
+                            uploadedUserImageUrl = signedURL.absoluteString
+                        } catch {
+                            let publicURL = try self.supabase.storage
+                                .from("workout-images")
+                                .getPublicURL(path: userImageFileName)
+                            uploadedUserImageUrl = publicURL.absoluteString
+                        }
+                    } catch {
+                        print("⚠️ User image upload failed: \(error)")
+                    }
                 }
-                
-                print("📤 Uploading user image to Supabase Storage: \(userImageFileName)")
-                
-                _ = try await supabase.storage
-                    .from("workout-images")
-                    .upload(userImageFileName, data: imageData, options: FileOptions(upsert: true))
-                
-                print("✅ User image uploaded successfully")
-                
-                // Get signed URL
-                do {
-                    let signedURL = try await supabase.storage
-                        .from("workout-images")
-                        .createSignedURL(path: userImageFileName, expiresIn: 31536000)
-                    uploadedUserImageUrl = signedURL.absoluteString
-                } catch {
-                    print("⚠️ Could not create signed URL for user image, using public URL")
-                    let publicURL = try supabase.storage
-                        .from("workout-images")
-                        .getPublicURL(path: userImageFileName)
-                    uploadedUserImageUrl = publicURL.absoluteString
-                }
-            } catch {
-                print("⚠️ User image upload failed: \(error)")
             }
         }
         

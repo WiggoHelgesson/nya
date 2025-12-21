@@ -40,7 +40,7 @@ final class PushNotificationService: NSObject {
         }
     }
     
-    private func saveTokenToDatabase(_ token: String) async throws {
+    private func saveTokenToDatabase(_ tokenString: String) async throws {
         guard let userId = try? await SupabaseConfig.supabase.auth.session.user.id else {
             print("⚠️ No user logged in, skipping token save")
             return
@@ -50,19 +50,35 @@ final class PushNotificationService: NSObject {
         
         struct TokenPayload: Encodable {
             let user_id: String
-            let device_token: String
+            let token: String
+            let platform: String
+            let device_type: String
+            let is_active: Bool
         }
         
         let payload = TokenPayload(
             user_id: userId.uuidString,
-            device_token: token
+            token: tokenString,
+            platform: "ios",
+            device_type: "iPhone",
+            is_active: true
         )
         
-        // Upsert - insert or update if exists
+        print("🔔 [PUSH] Saving device token for user: \(userId.uuidString)")
+        
+        // Delete old tokens for this user first, then insert new one
+        try? await SupabaseConfig.supabase
+            .from("device_tokens")
+            .delete()
+            .eq("user_id", value: userId.uuidString)
+            .execute()
+        
         try await SupabaseConfig.supabase
             .from("device_tokens")
-            .upsert(payload, onConflict: "user_id,device_token")
+            .insert(payload)
             .execute()
+        
+        print("✅ [PUSH] Device token saved successfully")
     }
     
     // MARK: - Remove Device Token (on logout)
@@ -94,21 +110,29 @@ final class PushNotificationService: NSObject {
         activityType: String,
         postId: String
     ) async {
+        print("🔔 [PUSH] Starting notification flow for workout by \(userName)")
+        print("🔔 [PUSH] User ID: \(userId), Activity: \(activityType), Post ID: \(postId)")
+        
         do {
             // Get all followers
             let followers = try await SocialService.shared.getFollowers(userId: userId)
             
             guard !followers.isEmpty else {
-                print("📭 No followers to notify")
+                print("📭 [PUSH] No followers to notify for user \(userId)")
                 return
             }
             
-            print("🔔 Notifying \(followers.count) followers about new workout")
+            print("🔔 [PUSH] Found \(followers.count) followers to notify: \(followers)")
             
             // Create in-app notification AND send push for each follower
             for followerId in followers {
                 // Don't notify yourself
-                guard followerId != userId else { continue }
+                guard followerId != userId else {
+                    print("⏭️ [PUSH] Skipping self-notification for \(followerId)")
+                    continue
+                }
+                
+                print("📤 [PUSH] Sending notification to follower: \(followerId)")
                 
                 do {
                     // 1. Create in-app notification
@@ -120,22 +144,24 @@ final class PushNotificationService: NSObject {
                         activityType: activityType,
                         postId: postId
                     )
+                    print("✅ [PUSH] In-app notification created for \(followerId)")
                     
                     // 2. Send real iOS push notification via Edge Function
                     await sendRealPushNotification(
                         toUserId: followerId,
-                        title: "Nytt träningspass! 💪",
-                        body: "\(userName) har slutfört ett \(activityType.lowercased())-pass",
+                        title: "Nytt träningspass",
+                        body: "\(userName) har slutfört ett \(activityType.lowercased())",
                         data: ["type": "new_workout", "post_id": postId, "actor_id": userId]
                     )
+                    print("✅ [PUSH] Push notification sent to \(followerId)")
                 } catch {
-                    print("⚠️ Failed to notify follower \(followerId): \(error)")
+                    print("⚠️ [PUSH] Failed to notify follower \(followerId): \(error)")
                 }
             }
             
-            print("✅ All followers notified with push notifications")
+            print("✅ [PUSH] All \(followers.count) followers notified with push notifications")
         } catch {
-            print("❌ Failed to get followers for notification: \(error)")
+            print("❌ [PUSH] Failed to get followers for notification: \(error)")
         }
     }
     
@@ -147,6 +173,9 @@ final class PushNotificationService: NSObject {
         body: String,
         data: [String: String]? = nil
     ) async {
+        print("📱 [PUSH] Calling Edge Function for user: \(userId)")
+        print("📱 [PUSH] Title: \(title), Body: \(body)")
+        
         do {
             struct PushPayload: Encodable {
                 let user_id: String
@@ -168,9 +197,9 @@ final class PushNotificationService: NSObject {
                 options: FunctionInvokeOptions(body: payload)
             )
             
-            print("✅ Real push notification sent to user: \(userId)")
+            print("✅ [PUSH] Real push notification sent to user: \(userId)")
         } catch {
-            print("⚠️ Failed to send real push notification: \(error)")
+            print("⚠️ [PUSH] Failed to send real push notification to \(userId): \(error)")
             // Don't throw - push failures shouldn't block the main flow
         }
     }

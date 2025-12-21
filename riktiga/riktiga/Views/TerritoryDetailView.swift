@@ -203,6 +203,18 @@ struct TerritoryDetailView: View {
             }
             .padding(.top, 8)
             
+            // Tile count row (if available)
+            if let tileCount = territory.tileCount, tileCount > 0 {
+                HStack {
+                    Image(systemName: "square.grid.3x3.fill")
+                        .foregroundColor(.cyan)
+                    Text("\(tileCount) rutor erövrade")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.cyan)
+                }
+                .padding(.top, 4)
+            }
+            
             Spacer(minLength: 20)
         }
         .padding(20)

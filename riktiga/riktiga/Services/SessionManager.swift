@@ -144,8 +144,15 @@ class SessionManager: ObservableObject {
             return
         }
 
-        print("🗑️ finalizeSession() called")
+        // Log the call stack to help debug unexpected session closures
+        let callStack = Thread.callStackSymbols.prefix(10).joined(separator: "\n")
+        print("🗑️ finalizeSession() called from:\n\(callStack)")
         print("🗑️ Before: hasActiveSession = \(self.hasActiveSession)")
+        
+        if let session = activeSession {
+            let duration = Int(Date().timeIntervalSince(session.startTime))
+            print("🗑️ Session duration was: \(duration) seconds (\(duration / 60) minutes)")
+        }
 
         // Clear persisted state first so nothing can be reloaded
         UserDefaults.standard.removeObject(forKey: "activeSession")

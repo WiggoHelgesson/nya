@@ -80,24 +80,46 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       ...data,
     }
     
-    // Production APNs URL for App Store
-    const apnsUrl = `https://api.push.apple.com/3/device/${deviceToken}`
+    // Try production first, then sandbox if it fails
+    // Production APNs URL (App Store builds)
+    const productionUrl = `https://api.push.apple.com/3/device/${deviceToken}`
+    // Sandbox APNs URL (Xcode development builds)
+    const sandboxUrl = `https://api.sandbox.push.apple.com/3/device/${deviceToken}`
     
-    const response = await fetch(apnsUrl, {
+    const headers = {
+      'Authorization': `bearer ${jwt}`,
+      'apns-topic': BUNDLE_ID,
+      'apns-push-type': 'alert',
+      'apns-priority': '10',
+    }
+    
+    // Try production first
+    let response = await fetch(productionUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `bearer ${jwt}`,
-        'apns-topic': BUNDLE_ID,
-        'apns-push-type': 'alert',
-        'apns-priority': '10',
-      },
+      headers,
       body: JSON.stringify(payload),
     })
     
     if (!response.ok) {
-      const error = await response.text()
-      console.error('APNs error:', error)
-      return false
+      const prodError = await response.text()
+      console.log('Production APNs failed, trying sandbox...', prodError)
+      
+      // Try sandbox as fallback (for development builds)
+      response = await fetch(sandboxUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+      
+      if (!response.ok) {
+        const sandboxError = await response.text()
+        console.error('Both APNs endpoints failed. Sandbox error:', sandboxError)
+        return false
+      }
+      
+      console.log('Sandbox APNs succeeded!')
+    } else {
+      console.log('Production APNs succeeded!')
     }
     
     return true
@@ -121,30 +143,40 @@ serve(async (req) => {
 
     const { user_id, title, body, data } = await req.json() as PushPayload
 
+    console.log(`📱 Sending push to user: ${user_id}, title: ${title}`)
+    
     // Get device tokens for the user
     const { data: tokens, error } = await supabaseClient
       .from('device_tokens')
       .select('token')
       .eq('user_id', user_id)
-      .eq('platform', 'ios')
+      .eq('is_active', true)
 
     if (error) {
+      console.error('Database error fetching tokens:', error)
       throw error
     }
 
+    console.log(`📱 Found ${tokens?.length || 0} device tokens for user`)
+
     if (!tokens || tokens.length === 0) {
+      console.log(`⚠️ No active device tokens found for user ${user_id}`)
       return new Response(
         JSON.stringify({ success: false, message: 'No device tokens found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+    
+    console.log(`📱 Device tokens: ${tokens.map(t => t.token.substring(0, 10) + '...').join(', ')}`)
 
     // Send to all user's devices
+    console.log(`📱 Sending to ${tokens.length} devices...`)
     const results = await Promise.all(
       tokens.map(t => sendAPNS(t.token, title, body, data))
     )
 
     const successCount = results.filter(r => r).length
+    console.log(`✅ Push notifications sent: ${successCount}/${tokens.length} succeeded`)
 
     return new Response(
       JSON.stringify({ 

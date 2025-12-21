@@ -160,7 +160,13 @@ struct TerritoryLeader: Identifiable, Equatable {
     let id: String
     let name: String
     let avatarUrl: String?
-    let totalArea: Double // in m²
+    let totalArea: Double // in m² (kept for backwards compatibility)
+    let tileCount: Int // Number of tiles owned
     let isPro: Bool
+    
+    // Computed property for backwards compatibility
+    var totalAreaFromTiles: Double {
+        Double(tileCount) * 625.0 // Each tile is ~625 m²
+    }
 }
 

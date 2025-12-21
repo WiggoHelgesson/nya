@@ -9,6 +9,10 @@ create or replace function public.get_tiles_in_bounds(
 returns table (
     tile_id bigint,
     owner_id uuid,
+    activity_id uuid,
+    distance_km double precision,
+    duration_sec integer,
+    pace text,
     geom jsonb,
     last_updated_at timestamptz
 ) as $$
@@ -17,6 +21,10 @@ begin
     select
         t.tile_id,
         t.owner_id,
+        t.activity_id,
+        t.distance_km,
+        t.duration_sec,
+        t.pace,
         ST_AsGeoJSON(t.geom)::jsonb as geom,
         t.last_updated_at
     from public.territory_tiles t

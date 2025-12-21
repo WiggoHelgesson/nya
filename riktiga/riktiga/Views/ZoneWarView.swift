@@ -74,7 +74,7 @@ struct ZoneWarView: View {
     @State private var currentAreaName: String = "Området"
     @State private var areaLeader: TerritoryLeader?
     @State private var allLeaders: [TerritoryLeader] = []
-    @State private var localLeaders: [TerritoryLeader] = [] // Calculated from visible tiles
+    @State private var localLeaders: [TerritoryLeader] = [] // Calculated from city bounds, not just visible tiles
     @State private var visibleMapRect: MKMapRect = MKMapRect.world
     
     // Bottom menu
@@ -113,6 +113,14 @@ struct ZoneWarView: View {
     // Geocoding throttle
     @State private var lastGeocodingTime: Date = .distantPast
     private let geocodingThrottle: TimeInterval = 2.0
+    
+    // City bounds cache for local leaderboard
+    @State private var cachedCityName: String = ""
+    @State private var cachedCityBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
+    private let cityBoundsGeocoder = CLGeocoder()
+    
+    // Minimum radius for city bounds (15km covers most Swedish municipalities)
+    private let minimumCityRadiusMeters: Double = 15000
     
     var body: some View {
         NavigationStack {
@@ -158,6 +166,11 @@ struct ZoneWarView: View {
                                     maxLon: maxLonTiles
                                 )
                             }
+                            
+                            // Update local king when map region changes (with throttle)
+                            DispatchQueue.main.async {
+                                calculateLocalStats()
+                            }
                         }
                         regionDebounceTask = work
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work) // Increased debounce to reduce flicker
@@ -193,6 +206,17 @@ struct ZoneWarView: View {
                 
             }
             .task {
+                // Clear city bounds cache to ensure fresh calculation with correct radius
+                cachedCityName = ""
+                cachedCityBounds = nil
+                
+                // Check for pending territory celebration - if there's one, force refresh tiles
+                let hasPendingTerritory = territoryStore.pendingCelebrationTerritory != nil
+                if hasPendingTerritory {
+                    // Force clear cache so new tiles are loaded
+                    territoryStore.invalidateCache()
+                }
+                
                 // Check for pending territory celebration
                 if let pendingTerritory = territoryStore.pendingCelebrationTerritory {
                     celebrationTerritory = pendingTerritory
@@ -216,6 +240,9 @@ struct ZoneWarView: View {
                 // First sync any local territories to backend
                 await territoryStore.syncLocalTerritoriesToBackend()
                 
+                // Capture visibleMapRect before task group (can't access @State inside addTask)
+                let currentMapRect = visibleMapRect
+                
                 // Then refresh and load data in parallel for faster loading
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
@@ -230,16 +257,37 @@ struct ZoneWarView: View {
                     group.addTask {
                         await self.loadTerritoryEvents()
                     }
+                    // Force load tiles for current visible region
+                    group.addTask {
+                        // Use visibleMapRect if set (not world and has valid size)
+                        let isValidRect = currentMapRect.size.width > 0 && 
+                                          currentMapRect.size.width < MKMapRect.world.size.width
+                        if isValidRect {
+                            let region = MKCoordinateRegion(currentMapRect)
+                            let minLat = region.center.latitude - region.span.latitudeDelta / 2
+                            let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+                            let minLon = region.center.longitude - region.span.longitudeDelta / 2
+                            let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+                            // Force refresh if there's a pending territory
+                            await self.territoryStore.loadTilesInBounds(
+                                minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon,
+                                forceRefresh: hasPendingTerritory
+                            )
+                        }
+                    }
                 }
                 isLoading = false
             }
             .refreshable {
                 // Force clear cache and refetch everything
+                cachedCityName = ""
+                cachedCityBounds = nil
                 territoryStore.forceRefresh()
                 await territoryStore.syncLocalTerritoriesToBackend()
                 await territoryStore.refresh()
                 await loadAllLeaders()
                 await loadTerritoryEvents()
+                calculateLocalStats() // Recalculate with cleared city cache
             }
             // Recalculate local stats whenever tiles update (heavily debounced to prevent lag)
             .onChange(of: territoryStore.tiles.count) { oldCount, newCount in
@@ -439,8 +487,8 @@ struct ZoneWarView: View {
                                 
                                 Spacer()
                                 
-                                // Total area
-                                Text(formatArea(leader.totalArea))
+                                // Total tiles
+                                Text(formatTileCount(leader.tileCount))
                                     .font(.system(size: 15, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -659,8 +707,9 @@ struct ZoneWarView: View {
     // Prize data model
     private var prizes: [(logoImage: String, text: String)] {
         [
-            ("35", "FUSE ENERGY 1500kr"),
+            ("46", "FUSE ENERGY 1500kr"),
             ("14", "Lonegolf 1000kr"),
+            ("15", "Pliktgolf 500kr"),
             ("22", "Zen Energy 1 flak")
         ]
     }
@@ -736,8 +785,8 @@ struct ZoneWarView: View {
         }
         
         do {
-            // Use the RPC function to get takeover events for current user
-            struct TakeoverEventRow: Decodable {
+            // Use get_my_takeover_events to get only events where someone took OUR tiles
+            struct TakeoverEvent: Decodable {
                 let event_id: UUID
                 let actor_id: UUID
                 let actor_name: String
@@ -747,20 +796,19 @@ struct ZoneWarView: View {
                 let created_at: Date?
             }
             
-            let response: [TakeoverEventRow] = try await SupabaseConfig.supabase
-                .rpc("get_my_takeover_events", params: TakeoverEventParams(
-                    p_user_id: currentUserId,
-                    p_limit: 50
-                ))
+            let params = TakeoverEventParams(p_user_id: currentUserId, p_limit: 50)
+            
+            let response: [TakeoverEvent] = try await SupabaseConfig.supabase
+                .rpc("get_my_takeover_events", params: params)
                 .execute()
                 .value
             
             var events: [TerritoryEvent] = []
             
             for item in response {
-                // Create area description based on tile count
-                let tileCount = item.tile_count
-                let areaDescription = tileCount > 1 ? "\(tileCount) rutor" : "1 ruta"
+                // Calculate area from tile count (each tile is ~625 m² = 25m x 25m)
+                let areaKm2 = Double(item.tile_count) * 625.0 / 1_000_000
+                let areaDescription = String(format: "%.3f km² (%d tiles)", areaKm2, item.tile_count)
                 
                 events.append(TerritoryEvent(
                     id: item.event_id,
@@ -768,7 +816,7 @@ struct ZoneWarView: View {
                     actorId: item.actor_id.uuidString,
                     actorName: item.actor_name,
                     actorAvatarUrl: item.actor_avatar,
-                    territoryId: item.event_id, // Use event_id as placeholder
+                    territoryId: UUID(),
                     areaName: areaDescription,
                     timestamp: item.created_at ?? Date()
                 ))
@@ -782,63 +830,14 @@ struct ZoneWarView: View {
                 self.territoryEvents = events
             }
             
-            print("📢 Loaded \(events.count) takeover events")
+            print("📢 Loaded \(events.count) takeover events (where others took my tiles)")
         } catch {
-            print("❌ Error loading territory events: \(error)")
-            
-            // Fallback: Try direct table query if RPC doesn't exist yet
-            do {
-                let response: [TerritoryEventRow] = try await SupabaseConfig.supabase
-                    .from("territory_events")
-                    .select("id, territory_id, actor_id, event_type, metadata, created_at")
-                    .eq("victim_id", value: currentUserId)
-                    .eq("event_type", value: "takeover")
-                    .order("created_at", ascending: false)
-                    .limit(50)
-                    .execute()
-                    .value
-                
-                var events: [TerritoryEvent] = []
-                let actorIds = Array(Set(response.map { $0.actor_id }))
-                var profilesMap: [String: (name: String, avatarUrl: String?)] = [:]
-                
-                if !actorIds.isEmpty {
-                    if let profiles: [ProfileInfo] = try? await SupabaseConfig.supabase
-                        .from("profiles")
-                        .select("id, username, avatar_url")
-                        .in("id", values: actorIds)
-                        .execute()
-                        .value {
-                        for profile in profiles {
-                            profilesMap[profile.id] = (profile.username ?? "Okänd", profile.avatar_url)
-                        }
-                    }
+            print("⚠️ Takeover events not available: \(error.localizedDescription)")
+            // Don't spam logs - just use empty events
+            await MainActor.run {
+                if Self.cachedEvents.isEmpty {
+                    self.territoryEvents = []
                 }
-                
-                for item in response {
-                    let profile = profilesMap[item.actor_id]
-                    let tileCount = (item.metadata?["tile_count"]?.value as? Int) ?? 1
-                    
-                    events.append(TerritoryEvent(
-                        id: item.id,
-                        type: .takeover,
-                        actorId: item.actor_id,
-                        actorName: profile?.name ?? "Okänd",
-                        actorAvatarUrl: profile?.avatarUrl,
-                        territoryId: item.territory_id,
-                        areaName: tileCount > 1 ? "\(tileCount) rutor" : "1 ruta",
-                        timestamp: item.created_at ?? Date()
-                    ))
-                }
-                
-                Self.cachedEvents = events
-                Self.lastEventsCacheTime = Date()
-                
-                await MainActor.run {
-                    self.territoryEvents = events
-                }
-            } catch {
-                print("❌ Fallback event loading also failed: \(error)")
             }
         }
     }
@@ -850,7 +849,7 @@ struct ZoneWarView: View {
     
     // Throttle for local stats - prevent excessive database calls
     @State private var lastLocalStatsTime: Date = .distantPast
-    private let localStatsThrottle: TimeInterval = 5.0 // Only update every 5 seconds
+    private let localStatsThrottle: TimeInterval = 2.0 // Update every 2 seconds for responsive local king
     
     private func calculateLocalStats() {
         // Throttle database calls
@@ -865,7 +864,77 @@ struct ZoneWarView: View {
     }
     
     private func loadLocalLeadersFromDatabase() async {
-        // Get bounding box from visible map rect
+        // Get city bounds instead of visible map bounds
+        // This ensures we show the full city's leaderboard regardless of zoom level
+        
+        let cityName = currentAreaName
+        
+        // Check if we already have cached bounds for this city
+        if cityName == cachedCityName, let bounds = cachedCityBounds {
+            await fetchLeadersForBounds(minLat: bounds.minLat, maxLat: bounds.maxLat, minLon: bounds.minLon, maxLon: bounds.maxLon)
+            return
+        }
+        
+        // Geocode the city name to get its bounds
+        do {
+            let placemarks = try await cityBoundsGeocoder.geocodeAddressString("\(cityName), Sverige")
+            
+            if let placemark = placemarks.first {
+                let centerLat: Double
+                let centerLon: Double
+                var radiusMeters: Double = minimumCityRadiusMeters // Default 15km radius for cities
+                
+                // Get center from region or location
+                if let region = placemark.region as? CLCircularRegion {
+                    centerLat = region.center.latitude
+                    centerLon = region.center.longitude
+                    // Use the larger of: geocoded radius or minimum (15km)
+                    radiusMeters = max(region.radius, minimumCityRadiusMeters)
+                } else if let location = placemark.location {
+                    centerLat = location.coordinate.latitude
+                    centerLon = location.coordinate.longitude
+                } else {
+                    // Fallback to visible bounds
+                    await fetchLeadersForVisibleBounds()
+                    return
+                }
+                
+                // Convert radius to degrees (approximately)
+                // 1 degree latitude ≈ 111km
+                let radiusInDegrees = radiusMeters / 111000
+                
+                // Create a generous bounding box - use 2x the radius to ensure full coverage
+                // Swedish municipalities can be quite spread out
+                let latSpan = radiusInDegrees * 2.0
+                let lonSpan = radiusInDegrees * 2.0 / cos(centerLat * .pi / 180) // Adjust for longitude
+                
+                let minLat = centerLat - latSpan
+                let maxLat = centerLat + latSpan
+                let minLon = centerLon - lonSpan
+                let maxLon = centerLon + lonSpan
+                
+                // Cache the city bounds
+                await MainActor.run {
+                    self.cachedCityName = cityName
+                    self.cachedCityBounds = (minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+                }
+                
+                await fetchLeadersForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+                
+                #if DEBUG
+                print("📍 City bounds for \(cityName): center(\(centerLat), \(centerLon)) radius=\(radiusMeters)m, lat \(minLat)-\(maxLat), lon \(minLon)-\(maxLon)")
+                #endif
+            } else {
+                // Fallback: use visible map bounds if geocoding fails
+                await fetchLeadersForVisibleBounds()
+            }
+        } catch {
+            print("⚠️ Geocoding failed for \(cityName), using visible bounds: \(error)")
+            await fetchLeadersForVisibleBounds()
+        }
+    }
+    
+    private func fetchLeadersForVisibleBounds() async {
         let topLeft = MKMapPoint(x: visibleMapRect.origin.x, y: visibleMapRect.origin.y)
         let bottomRight = MKMapPoint(x: visibleMapRect.maxX, y: visibleMapRect.maxY)
         
@@ -874,19 +943,17 @@ struct ZoneWarView: View {
         let minLon = min(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
         let maxLon = max(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
         
-        // Add margin to capture more area
-        let margin = 0.01 // ~1km margin
-        let expandedMinLat = minLat - margin
-        let expandedMaxLat = maxLat + margin
-        let expandedMinLon = minLon - margin
-        let expandedMaxLon = maxLon + margin
-        
+        await fetchLeadersForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+    }
+    
+    private func fetchLeadersForBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
             
             struct LocalLeaderRow: Decodable {
                 let owner_id: UUID
                 let area_m2: Double
+                let tile_count: Int
                 let username: String?
                 let avatar_url: String?
                 let is_pro: Bool?
@@ -894,10 +961,10 @@ struct ZoneWarView: View {
             
             let results: [LocalLeaderRow] = try await SupabaseConfig.supabase
                 .rpc("get_leaderboard_in_bounds", params: [
-                    "min_lat": expandedMinLat,
-                    "min_lon": expandedMinLon,
-                    "max_lat": expandedMaxLat,
-                    "max_lon": expandedMaxLon,
+                    "min_lat": minLat,
+                    "min_lon": minLon,
+                    "max_lat": maxLat,
+                    "max_lon": maxLon,
                     "limit_count": 20
                 ])
                 .execute()
@@ -910,13 +977,14 @@ struct ZoneWarView: View {
                         name: row.username ?? "Användare",
                         avatarUrl: row.avatar_url,
                         totalArea: row.area_m2,
+                        tileCount: row.tile_count,
                         isPro: row.is_pro ?? false
                     )
                 }
                 
                 self.localLeaders = leaders
                 
-                // Update Area Leader (King of the visible area)
+                // Update Area Leader (King of the city/area)
                 if let first = leaders.first {
                     self.areaLeader = first
                 } else {
@@ -924,7 +992,7 @@ struct ZoneWarView: View {
                 }
                 
                 #if DEBUG
-                print("📊 Local leaderboard from DB: \(leaders.count) leaders in bounds")
+                print("📊 Local leaderboard from DB: \(leaders.count) leaders for \(currentAreaName)")
                 #endif
             }
         } catch {
@@ -968,6 +1036,14 @@ struct ZoneWarView: View {
         }
     }
     
+    private func formatTileCount(_ count: Int) -> String {
+        if count >= 1000 {
+            return "\(count / 1000)k rutor"
+        } else {
+            return "\(count) rutor"
+        }
+    }
+    
     private func formatArea(_ area: Double) -> String {
         // Always display in km² for consistency
         let km2 = area / 1_000_000
@@ -996,15 +1072,23 @@ struct ZoneWarView: View {
         
         geocoder.reverseGeocodeLocation(location) { placemarks, error in
             if let placemark = placemarks?.first {
-                // Try to get the most specific area name
-                let areaName = placemark.subLocality 
-                    ?? placemark.locality 
+                // Try to get the most specific area name - prefer locality (city/town)
+                let areaName = placemark.locality 
                     ?? placemark.subAdministrativeArea
+                    ?? placemark.subLocality
                     ?? placemark.administrativeArea
                     ?? "Området"
                 
                 DispatchQueue.main.async {
+                    let previousAreaName = self.currentAreaName
                     self.currentAreaName = areaName
+                    
+                    // If the city changed, clear the city bounds cache and refresh leaderboard
+                    if previousAreaName != areaName {
+                        self.cachedCityName = ""
+                        self.cachedCityBounds = nil
+                        self.calculateLocalStats()
+                    }
                 }
             }
         }
@@ -1114,12 +1198,16 @@ struct ZoneWarView: View {
         var avatarUrls: [URL] = []
         
         for (ownerId, area) in sortedOwners {
+            // Calculate tile count from area (each tile is ~625 m²)
+            let tileCount = Int(area / 625.0)
+            
             if let profile = profilesMap[ownerId] {
                 leaders.append(TerritoryLeader(
                     id: profile.id,
                     name: profile.name,
                     avatarUrl: profile.avatarUrl,
                     totalArea: area,
+                    tileCount: tileCount,
                     isPro: profile.isPro ?? false
                 ))
                 
@@ -1135,6 +1223,7 @@ struct ZoneWarView: View {
                     name: "Okänd",
                     avatarUrl: nil,
                     totalArea: area,
+                    tileCount: tileCount,
                     isPro: false
                 ))
             }
@@ -1330,16 +1419,42 @@ struct ZoneWarMapView: UIViewRepresentable {
                         onTerritoryTapped(territory)
                         return
                     }
-                    // Check if it's a tile - create a temporary Territory for display
-                    if let tile = polygonToTile[polygon], let ownerId = tile.ownerId {
-                        let tempTerritory = Territory(
+                    // Check if it's a tile - find all tiles with same activity_id
+                    if let tappedTile = polygonToTile[polygon], let ownerId = tappedTile.ownerId {
+                        // Find all tiles with the same activity_id (from same workout)
+                        let connectedTiles: [Tile]
+                        if let activityId = tappedTile.activityId, !activityId.isEmpty {
+                            connectedTiles = tiles.filter { $0.activityId == activityId }
+                        } else {
+                            // Fallback to just this tile if no activity_id
+                            connectedTiles = [tappedTile]
+                        }
+                        
+                        // Calculate total area (each tile is ~625 m² = 25m x 25m)
+                        let totalArea = Double(connectedTiles.count) * 625.0
+                        
+                        // Collect all polygons for the connected tiles
+                        let allPolygons = connectedTiles.map { $0.coordinates }
+                        
+                        // Get workout metadata from the first tile (all tiles from same workout have same data)
+                        let workoutDistance = tappedTile.distanceKm
+                        let workoutDuration = tappedTile.durationSec
+                        let workoutPace = tappedTile.pace
+                        
+                        // Create aggregated territory with workout info
+                        var aggregatedTerritory = Territory(
                             id: UUID(),
                             ownerId: ownerId,
                             activity: nil,
-                            area: 625, // ~25m x 25m tile
-                            polygons: [tile.coordinates]
+                            area: totalArea,
+                            polygons: allPolygons,
+                            tileCount: connectedTiles.count
                         )
-                        onTerritoryTapped(tempTerritory)
+                        aggregatedTerritory.sessionDistance = workoutDistance
+                        aggregatedTerritory.sessionDuration = workoutDuration
+                        aggregatedTerritory.sessionPace = workoutPace
+                        
+                        onTerritoryTapped(aggregatedTerritory)
                         return
                     }
                 }
@@ -1580,7 +1695,7 @@ struct ZoneWarMenuView: View {
             VStack(spacing: 0) {
                 // Tab selector
                 HStack(spacing: 0) {
-                    ForEach(["Topplista", "Events"], id: \.self) { tab in
+                    ForEach(["Topplista", "Övertaganden"], id: \.self) { tab in
                         let index = tab == "Topplista" ? 0 : 1
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -1633,7 +1748,7 @@ struct ZoneWarMenuView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(selectedTab == 0 ? "Topplista" : "Events")
+                    Text(selectedTab == 0 ? "Topplista" : "Övertaganden")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -1723,8 +1838,8 @@ struct ZoneWarMenuView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 
-                // Leaderboard content
-                let displayLeaders = isShowingSwedenLeaderboard ? swedenLeaders : leaders.sorted { $0.totalArea > $1.totalArea }
+                // Leaderboard content - sort by tile count
+                let displayLeaders = isShowingSwedenLeaderboard ? swedenLeaders : leaders.sorted { $0.tileCount > $1.tileCount }
                 let maxCount = isShowingSwedenLeaderboard ? 20 : displayLeaders.count
                 
                 if isLoadingSwedenLeaders && isShowingSwedenLeaderboard {
@@ -1849,14 +1964,22 @@ struct ZoneWarMenuView: View {
             
             Spacer()
             
-            // Area
-            Text(formatArea(leader.totalArea))
+            // Tile count
+            Text(formatTileCount(leader.tileCount))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.gray)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(index == 0 ? Color.yellow.opacity(0.1) : Color.clear)
+    }
+    
+    private func formatTileCount(_ count: Int) -> String {
+        if count >= 1000 {
+            return "\(count / 1000)k rutor"
+        } else {
+            return "\(count) rutor"
+        }
     }
     
     private func loadSwedenLeaders() {
@@ -1879,6 +2002,7 @@ struct ZoneWarMenuView: View {
                 struct LeaderboardEntry: Decodable {
                     let owner_id: UUID
                     let area_m2: Double
+                    let tile_count: Int
                     let username: String?
                     let avatar_url: String?
                     let is_pro: Bool?
@@ -1911,6 +2035,7 @@ struct ZoneWarMenuView: View {
                             name: entry.username ?? "Användare",
                             avatarUrl: entry.avatar_url,
                             totalArea: entry.area_m2,
+                            tileCount: entry.tile_count,
                             isPro: entry.is_pro ?? false
                         )
                     }
@@ -1928,6 +2053,7 @@ struct ZoneWarMenuView: View {
                         name: entry.username ?? "Användare", // Better fallback than "Okänd"
                         avatarUrl: entry.avatar_url,
                         totalArea: entry.area_m2,
+                        tileCount: entry.tile_count,
                         isPro: entry.is_pro ?? false
                     )
                 }
@@ -2088,7 +2214,7 @@ struct ZoneWarMenuView: View {
     
     private var sponsors: [(name: String, imageName: String)] {
         [
-            ("Fuse Energy", "35"),
+            ("Fuse Energy", "46"),
             ("Lonegolf", "14")
         ]
     }

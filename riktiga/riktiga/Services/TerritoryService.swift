@@ -30,11 +30,18 @@ nonisolated(unsafe) struct TileClaimParams: Encodable, Sendable {
     let p_owner: UUID
     let p_activity: UUID
     let p_coords: [[Double]]
+    let p_distance_km: Double?
+    let p_duration_sec: Int?
+    let p_pace: String?
 }
 
     struct TileFeature: Decodable {
         let tile_id: Int64
         let owner_id: String?
+        let activity_id: String?
+        let distance_km: Double?
+        let duration_sec: Int?
+        let pace: String?
         let geom: GeoJSONPolygon
         let last_updated_at: String?
     }
@@ -196,7 +203,10 @@ final class TerritoryService {
     /// Tile-based claim (no overlap)
     func claimTiles(ownerId: String,
                     activityId: UUID,
-                    coordinates: [CLLocationCoordinate2D]) async throws {
+                    coordinates: [CLLocationCoordinate2D],
+                    distanceKm: Double? = nil,
+                    durationSec: Int? = nil,
+                    pace: String? = nil) async throws {
         guard let ownerUUID = UUID(uuidString: ownerId) else {
             throw TerritoryServiceError.invalidOwnerId(ownerId)
         }
@@ -206,7 +216,10 @@ final class TerritoryService {
         let payload = TileClaimParams(
             p_owner: ownerUUID,
             p_activity: activityId,
-            p_coords: coordinates.map { [$0.latitude, $0.longitude] }
+            p_coords: coordinates.map { [$0.latitude, $0.longitude] },
+            p_distance_km: distanceKm,
+            p_duration_sec: durationSec,
+            p_pace: pace
         )
         
         do {

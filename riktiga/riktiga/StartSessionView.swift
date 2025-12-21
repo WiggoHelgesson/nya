@@ -663,7 +663,11 @@ struct SessionMapView: View {
     @State private var lastPointsUpdate: Date = Date()
     @State private var lastSnapshotSourceCount: Int = 0
     @State private var liveTerritoryArea: Double = 0 // New state for live area
-    private let maxRouteSnapshotPoints = 500 // Reduced from 1500 for better performance
+    private let maxRouteSnapshotPoints = 400 // Balance between detail and performance
+    @State private var lastRouteUpdateTime: Date = .distantPast
+    private let routeUpdateInterval: TimeInterval = 0.2 // Update route every 0.2s for smooth real-time
+    @State private var lastAreaUpdateTime: Date = .distantPast
+    private let areaUpdateInterval: TimeInterval = 1.0 // Update area every 1s
     
     // Speed detection for anti-cheat
     @State private var highSpeedStartTime: Date? = nil
@@ -674,6 +678,11 @@ struct SessionMapView: View {
     private let maxSpeedGolf: Double = 12.0 // km/h
     private let highSpeedDurationThreshold: TimeInterval = 15.0 // seconds
     
+    // Territory closure warning
+    @State private var showTerritoryWarning = false
+    @State private var pendingEndSession = false
+    private let maxDistanceFromStartForTerritory: Double = 200.0 // meters
+    
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -682,96 +691,28 @@ struct SessionMapView: View {
             // MARK: - Map Background with route
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
-                .overlay(
-                    GeometryReader { geometry in
-                        ZStack {
-                            // Previously captured active territories (if any)
-                            ForEach(territoryStore.activeSessionTerritories) { territory in
-                                Path { path in
-                                    for polygon in territory.polygons {
-                                        guard polygon.count > 2 else { continue }
-                                        let points = polygon.map { convertToMapPoint($0, in: geometry.size) }
-                                        if let first = points.first {
-                                            path.move(to: first)
-                                            for point in points.dropFirst() {
-                                                path.addLine(to: point)
-                                            }
-                                            path.closeSubpath()
-                                        }
-                                    }
-                                }
-                                .fill(territory.color.opacity(0.4))
-                                .stroke(territory.color, lineWidth: 2)
-                            }
-                            
-                            // Live territory overlay: Close current route back to start
-                            // Only show for running and golf (not skiing) - show as soon as we have 2+ points
-                            if routeCoordinatesSnapshot.count >= 2 && (activity == .running || activity == .golf) {
-                                Path { path in
-                                    let points = routeCoordinatesSnapshot.map { convertToMapPoint($0, in: geometry.size) }
-                                    if let first = points.first, let last = points.last {
-                                        path.move(to: first)
-                                        for point in points.dropFirst() {
-                                            path.addLine(to: point)
-                                        }
-                                        // Close back to start
-                                        path.addLine(to: first)
-                                        path.closeSubpath()
-                                    }
-                                }
-                                .fill(Color.green.opacity(0.3)) // Semi-transparent green for live capture
-                                
-                                // Dashed closing line
-                                Path { path in
-                                    let points = routeCoordinatesSnapshot.map { convertToMapPoint($0, in: geometry.size) }
-                                    if let first = points.first, let last = points.last {
-                                        path.move(to: last)
-                                        path.addLine(to: first)
-                                    }
-                                }
-                                .stroke(Color.black, style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                            }
-                            
-                            // Route visualization
-                            Path { path in
-                                guard routeCoordinatesSnapshot.count > 1 else { return }
-                                for (index, coordinate) in routeCoordinatesSnapshot.enumerated() {
-                                    let point = convertToMapPoint(coordinate, in: geometry.size)
-                                    if index == 0 {
-                                        path.move(to: point)
-                                    } else {
-                                        path.addLine(to: point)
-                                    }
-                                }
-                            }
-                            .stroke(.black, lineWidth: 4)
-                            
-                            // Start Point Marker
-                            if let first = routeCoordinatesSnapshot.first {
-                                let point = convertToMapPoint(first, in: geometry.size)
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 14, height: 14)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                                    .shadow(radius: 3)
-                                    .position(point)
-                            }
-                        }
-                        .drawingGroup() // GPU acceleration for path rendering
-                    }
-                )
-                .onChange(of: locationManager.routeCoordinates.count) { _ in
-                    refreshRouteSnapshotIfNeeded()
-                    updateLiveTerritoryArea()
-                }
-                .onReceive(locationManager.$routeCoordinates) { coords in
-                    if coords.isEmpty {
+                .overlay(routeCanvasOverlay)
+                .onChange(of: locationManager.routeCoordinates.count) { oldCount, newCount in
+                    // Only trigger on actual changes
+                    guard oldCount != newCount else { return }
+                    
+                    print("📍 Route coordinates changed: \(oldCount) -> \(newCount)")
+                    
+                    if newCount == 0 {
                         routeCoordinatesSnapshot = []
                         lastSnapshotSourceCount = 0
                         liveTerritoryArea = 0
                     } else {
-                        // Always update snapshot when we have coordinates
-                        refreshRouteSnapshotIfNeeded()
+                        // Force immediate update for first points to show route instantly
+                        // Also serves as backup if snapshot was somehow empty
+                        if newCount <= 20 || routeCoordinatesSnapshot.isEmpty {
+                            routeCoordinatesSnapshot = locationManager.routeCoordinates
+                            lastSnapshotSourceCount = newCount
+                            print("📍 Snapshot updated directly: \(routeCoordinatesSnapshot.count) points")
+                        } else {
+                            // After initial points, use throttled updates
+                            refreshRouteSnapshotIfNeeded(force: newCount % 5 == 0)
+                        }
                         updateLiveTerritoryArea()
                     }
                 }
@@ -1010,7 +951,7 @@ struct SessionMapView: View {
                                 title: "Avsluta",
                                 duration: 1.5,
                                 onComplete: {
-                                endSession()
+                                    checkAndEndSession()
                                 }
                             )
                         }
@@ -1160,11 +1101,24 @@ struct SessionMapView: View {
         }
         .alert("Fordon detekterat", isPresented: $showVehicleDetectedAlert) {
             Button("OK") {
-                // User acknowledges - they can dismiss but session is paused
-                dismiss()
+                // User acknowledges - session is paused but NOT dismissed
+                // They can resume when they slow down
+                showVehicleDetectedAlert = false
             }
         } message: {
-            Text("Tracking stoppas. Du verkar färdas med ett fordon, vilket inte är tillåtet under aktiviteter.")
+            Text("Tracking pausas. Du verkar färdas med ett fordon. Passet sparas och du kan fortsätta när du saktar ner.")
+        }
+        .alert("Området kan inte sparas", isPresented: $showTerritoryWarning) {
+            Button("Avbryt", role: .cancel) {
+                showTerritoryWarning = false
+                pendingEndSession = false
+            }
+            Button("Spara ändå") {
+                showTerritoryWarning = false
+                endSession(skipTerritoryCapture: true)
+            }
+        } message: {
+            Text("Du är mer än 200 meter från startpunkten. Området kommer inte att sparas på Zonkriget, men du kan spara passet ändå.")
         }
         .onDisappear {
             // Save session state when view disappears, but DON'T stop timer
@@ -1242,10 +1196,16 @@ struct SessionMapView: View {
         }
         // No onChange needed - session is cleared in endSession()
         .onChange(of: scenePhase) { _, newPhase in
-            guard sessionStartTime != nil else { return }
+            print("📱 [SESSION] ScenePhase changed to \(newPhase)")
+            guard sessionStartTime != nil else {
+                print("📱 [SESSION] No sessionStartTime - skipping state save")
+                return
+            }
             if newPhase == .background || newPhase == .inactive {
-                print("📥 ScenePhase changed to \(newPhase) - saving session state")
+                print("📥 [SESSION] App going to background/inactive - saving session state")
                 saveSessionState()
+            } else if newPhase == .active {
+                print("📱 [SESSION] App became active - session still running: \(isRunning)")
             }
         }
     }
@@ -1270,6 +1230,16 @@ struct SessionMapView: View {
             if now.timeIntervalSince(lastPointsUpdate) >= 5.0 {
                 updateEarnedPoints()
                 lastPointsUpdate = now
+            }
+            
+            // Force route snapshot update every 2 seconds for reliability
+            if Int(sessionDuration) % 2 == 0 && !locationManager.routeCoordinates.isEmpty {
+                let coords = locationManager.routeCoordinates
+                if coords.count != routeCoordinatesSnapshot.count {
+                    routeCoordinatesSnapshot = coords
+                    lastSnapshotSourceCount = coords.count
+                    print("⏱️ Timer route update: \(coords.count) points")
+                }
             }
             
             updateSplitsIfNeeded()
@@ -1365,7 +1335,11 @@ struct SessionMapView: View {
     
     private func refreshRouteSnapshotIfNeeded(force: Bool = false) {
         let sourceCount = locationManager.routeCoordinates.count
+        let now = Date()
+        
+        // Force update bypasses throttling
         if force {
+            lastRouteUpdateTime = now
             refreshRouteSnapshot(force: true)
             return
         }
@@ -1376,25 +1350,43 @@ struct SessionMapView: View {
             return
         }
         
-        // Refresh when new points were added or removed (every 1 point for real-time updates)
+        // Throttle updates to prevent lag
+        let timeSinceLastUpdate = now.timeIntervalSince(lastRouteUpdateTime)
+        guard timeSinceLastUpdate >= routeUpdateInterval else { return }
+        
+        // Only refresh if points changed
         if sourceCount != lastSnapshotSourceCount {
-            refreshRouteSnapshot(force: true)
+            lastRouteUpdateTime = now
+            refreshRouteSnapshot(force: false)
         }
     }
 
     private func updateLiveTerritoryArea() {
+        let now = Date()
+        
+        // Throttle area calculations - expensive operation
+        guard now.timeIntervalSince(lastAreaUpdateTime) >= areaUpdateInterval else { return }
+        
         guard locationManager.routeCoordinates.count > 2 else {
             liveTerritoryArea = 0
             return
         }
         
-        // Calculate area of the potential polygon (route + close back to start)
-        var coords = locationManager.routeCoordinates
-        if let first = coords.first {
-            coords.append(first) // Close the loop
-        }
+        lastAreaUpdateTime = now
         
-        liveTerritoryArea = territoryStore.calculateArea(coordinates: coords)
+        // Calculate area in background to avoid blocking UI
+        let coords = locationManager.routeCoordinates
+        Task.detached(priority: .utility) {
+            var closedCoords = coords
+            if let first = closedCoords.first {
+                closedCoords.append(first) // Close the loop
+            }
+            
+            let area = TerritoryStore.shared.calculateArea(coordinates: closedCoords)
+            await MainActor.run {
+                self.liveTerritoryArea = area
+            }
+        }
     }
     
     private func refreshRouteSnapshot(force: Bool) {
@@ -1414,13 +1406,9 @@ struct SessionMapView: View {
         if coordinates.count <= maxRouteSnapshotPoints {
             routeCoordinatesSnapshot = coordinates
         } else {
-            // Simplify in background for large routes
-            Task.detached(priority: .userInitiated) {
-                let simplified = simplifyRoute(coordinates, targetCount: maxRouteSnapshotPoints)
-                await MainActor.run {
-                    routeCoordinatesSnapshot = simplified
-                }
-            }
+            // Simplify synchronously but efficiently - avoid async overhead for small simplifications
+            let simplified = simplifyRoute(coordinates, targetCount: maxRouteSnapshotPoints)
+            routeCoordinatesSnapshot = simplified
         }
     }
     
@@ -1534,8 +1522,41 @@ struct SessionMapView: View {
         timer = nil
     }
     
-    func endSession() {
-        print("🏁 Ending session...")
+    /// Check if user is close enough to start point before ending session
+    func checkAndEndSession() {
+        // Only check for running and golf (territory-capturing activities)
+        guard activity == .running || activity == .golf else {
+            endSession(skipTerritoryCapture: false)
+            return
+        }
+        
+        // Check if we have enough route coordinates and a start point
+        guard let startCoord = locationManager.routeCoordinates.first,
+              let currentLocation = locationManager.userLocation else {
+            // No start point or current location - just end session normally
+            endSession(skipTerritoryCapture: false)
+            return
+        }
+        
+        // Calculate distance from current location to start point
+        let startLocation = CLLocation(latitude: startCoord.latitude, longitude: startCoord.longitude)
+        let currentLoc = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
+        let distanceFromStart = currentLoc.distance(from: startLocation)
+        
+        print("📏 Distance from start: \(distanceFromStart)m (max: \(maxDistanceFromStartForTerritory)m)")
+        
+        if distanceFromStart > maxDistanceFromStartForTerritory {
+            // Too far from start - show warning
+            showTerritoryWarning = true
+            pendingEndSession = true
+        } else {
+            // Close enough - end session normally with territory capture
+            endSession(skipTerritoryCapture: false)
+        }
+    }
+    
+    func endSession(skipTerritoryCapture: Bool = false) {
+        print("🏁 Ending session... (skipTerritoryCapture: \(skipTerritoryCapture))")
         print("📍 BEFORE STOP - routeCoordinates.count: \(locationManager.routeCoordinates.count)")
         
         // Get user ID early to ensure we can save territory
@@ -1593,19 +1614,24 @@ struct SessionMapView: View {
         // Update streak
         StreakManager.shared.registerWorkoutCompletion()
         
-        // Capture territory - pass the CAPTURED coordinates, not current locationManager state
-        print("🗺️ CALLING captureTerritoryFromRouteIfNeeded with \(finalRouteCoordinates.count) points")
-        captureTerritoryFromRouteIfNeeded(
-            coordinates: finalRouteCoordinates,
-            userId: userId,
-            distance: locationManager.distance,
-            duration: sessionDuration,
-            pace: currentPace
-        )
-        
-        // Store coordinates for territory animation
-        self.territoryAnimationCoordinates = finalRouteCoordinates
-        print("🗺️ Stored \(finalRouteCoordinates.count) coordinates for territory animation")
+        // Capture territory - only if not skipped
+        if !skipTerritoryCapture {
+            print("🗺️ CALLING captureTerritoryFromRouteIfNeeded with \(finalRouteCoordinates.count) points")
+            captureTerritoryFromRouteIfNeeded(
+                coordinates: finalRouteCoordinates,
+                userId: userId,
+                distance: locationManager.distance,
+                duration: sessionDuration,
+                pace: currentPace
+            )
+            
+            // Store coordinates for territory animation
+            self.territoryAnimationCoordinates = finalRouteCoordinates
+            print("🗺️ Stored \(finalRouteCoordinates.count) coordinates for territory animation")
+        } else {
+            print("⏭️ Skipping territory capture (user chose to save without territory)")
+            self.territoryAnimationCoordinates = [] // No animation if skipped
+        }
         
         // Add small delay to ensure route image is generated before showing celebration
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -1735,6 +1761,81 @@ struct SessionMapView: View {
             return String(format: "%.2f km²", km2)
         }
         return String(format: "%.0f m²", area)
+    }
+    
+    // MARK: - Route Canvas View
+    @ViewBuilder
+    private var routeCanvasOverlay: some View {
+        GeometryReader { geometry in
+            Canvas { context, size in
+                drawRouteCanvas(context: context, size: size)
+            }
+            .id("canvas-\(routeCoordinatesSnapshot.count)")
+            .allowsHitTesting(false)
+        }
+        .allowsHitTesting(false)
+    }
+    
+    private func drawRouteCanvas(context: GraphicsContext, size: CGSize) {
+        let currentSnapshot = routeCoordinatesSnapshot
+        let localRoutePoints = currentSnapshot.map { convertToMapPoint($0, in: size) }
+        
+        // 1. Previously captured active territories
+        for territory in territoryStore.activeSessionTerritories {
+            for polygon in territory.polygons {
+                guard polygon.count > 2 else { continue }
+                let points = polygon.map { convertToMapPoint($0, in: size) }
+                var path = Path()
+                if let first = points.first {
+                    path.move(to: first)
+                    for point in points.dropFirst() {
+                        path.addLine(to: point)
+                    }
+                    path.closeSubpath()
+                }
+                context.fill(path, with: .color(territory.color.opacity(0.4)))
+                context.stroke(path, with: .color(territory.color), lineWidth: 2)
+            }
+        }
+        
+        // 2. Live territory fill (running/golf only)
+        if localRoutePoints.count >= 2 && (activity == .running || activity == .golf) {
+            var fillPath = Path()
+            if let first = localRoutePoints.first {
+                fillPath.move(to: first)
+                for point in localRoutePoints.dropFirst() {
+                    fillPath.addLine(to: point)
+                }
+                fillPath.closeSubpath()
+            }
+            context.fill(fillPath, with: .color(.green.opacity(0.3)))
+            
+            // Dashed closing line
+            if let first = localRoutePoints.first, let last = localRoutePoints.last {
+                var dashPath = Path()
+                dashPath.move(to: last)
+                dashPath.addLine(to: first)
+                context.stroke(dashPath, with: .color(.black), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
+            }
+        }
+        
+        // 3. Route line
+        if localRoutePoints.count > 1 {
+            var routePath = Path()
+            routePath.move(to: localRoutePoints[0])
+            for point in localRoutePoints.dropFirst() {
+                routePath.addLine(to: point)
+            }
+            context.stroke(routePath, with: .color(.black), lineWidth: 4)
+        }
+        
+        // 4. Start marker
+        if let first = localRoutePoints.first {
+            let markerSize: CGFloat = 14
+            let markerRect = CGRect(x: first.x - markerSize/2, y: first.y - markerSize/2, width: markerSize, height: markerSize)
+            context.fill(Circle().path(in: markerRect), with: .color(.green))
+            context.stroke(Circle().path(in: markerRect), with: .color(.white), lineWidth: 2)
+        }
     }
 }
 

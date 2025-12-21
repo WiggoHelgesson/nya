@@ -271,7 +271,59 @@ final class TrainerService {
             .execute()
         
         print("✅ Booking created: \(booking.id)")
+        
+        // Send push notification to trainer
+        await sendBookingNotificationToTrainer(trainerId: trainerId, studentUserId: userId)
+        
         return booking.id
+    }
+    
+    /// Send push notification to trainer when a new booking is created
+    private func sendBookingNotificationToTrainer(trainerId: UUID, studentUserId: UUID) async {
+        do {
+            // Get trainer's user_id
+            struct TrainerUser: Decodable {
+                let user_id: String
+            }
+            
+            let trainerInfo: [TrainerUser] = try await supabase.database
+                .from("trainer_profiles")
+                .select("user_id")
+                .eq("id", value: trainerId.uuidString)
+                .execute()
+                .value
+            
+            guard let trainerUserId = trainerInfo.first?.user_id else {
+                print("⚠️ Could not find trainer user_id")
+                return
+            }
+            
+            // Get student's username
+            struct UserProfile: Decodable {
+                let username: String
+            }
+            
+            let studentProfile: [UserProfile] = try await supabase.database
+                .from("profiles")
+                .select("username")
+                .eq("id", value: studentUserId.uuidString)
+                .execute()
+                .value
+            
+            let studentName = studentProfile.first?.username ?? "Någon"
+            
+            // Send push notification
+            await PushNotificationService.shared.sendRealPushNotification(
+                toUserId: trainerUserId,
+                title: "Ny bokning",
+                body: "\(studentName) bokade ett pass med dig",
+                data: ["type": "booking", "trainer_id": trainerId.uuidString]
+            )
+            
+            print("✅ Booking notification sent to trainer")
+        } catch {
+            print("⚠️ Could not send booking notification: \(error)")
+        }
     }
     
     func getBookingsForTrainer() async throws -> [TrainerBooking] {
@@ -1029,6 +1081,10 @@ extension TrainerService {
             .value
         
         print("✅ Extended booking created: \(result.id)")
+        
+        // Send push notification to trainer
+        await sendBookingNotificationToTrainer(trainerId: trainerId, studentUserId: userId)
+        
         return result.id
     }
     
