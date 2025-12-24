@@ -159,7 +159,7 @@ struct AuthenticationView: View {
             
             Text("Träna, få belöningar")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 .padding(.bottom, 32)
             
             VStack(spacing: 18) {
@@ -194,7 +194,7 @@ struct AuthenticationView: View {
                         Text("Har du redan ett konto?")
                             .foregroundColor(.black.opacity(0.6))
                         Text("Logga in här")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .fontWeight(.semibold)
                     }
                     .font(.system(size: 15))
@@ -216,7 +216,7 @@ struct AuthenticationView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .padding(10)
                         .background(Color.black.opacity(0.08))
                         .clipShape(Circle())
@@ -229,7 +229,7 @@ struct AuthenticationView: View {
             VStack(spacing: 18) {
                 Text("Logga in med ditt konto")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
                 
@@ -243,7 +243,7 @@ struct AuthenticationView: View {
             }
             .padding(28)
             .frame(maxWidth: 420)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .shadow(color: Color.black.opacity(0.35), radius: 30, x: 0, y: 18)
             .padding(.horizontal, 24)
@@ -262,7 +262,7 @@ struct AuthenticationView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(step.title)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text(step.subtitle)
                     .font(.system(size: 16))
                     .foregroundColor(.black.opacity(0.6))
@@ -435,7 +435,7 @@ struct AuthenticationView: View {
                         } label: {
                             Text("Öppna inställningar")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .background(Color.black.opacity(0.08))
@@ -738,7 +738,7 @@ private extension AuthenticationView {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .padding(10)
                             .background(Color.black.opacity(0.05))
                             .clipShape(Circle())
@@ -746,7 +746,7 @@ private extension AuthenticationView {
                     
                     Text("Skapa konto")
                         .font(.system(size: 32, weight: .black))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text("Fyll i dina kontouppgifter för att slutföra onboarding.")
                         .font(.system(size: 15))
@@ -792,7 +792,7 @@ private extension AuthenticationView {
                     HStack {
                         Text("@\(onboardingData.trimmedUsername)")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "checkmark.seal.fill")
                             .foregroundColor(.green)
@@ -989,7 +989,7 @@ struct ForgotPasswordSheet: View {
                 VStack(spacing: 12) {
                     Image(systemName: "envelope.badge")
                         .font(.system(size: 50))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text("Återställ lösenord")
                         .font(.system(size: 24, weight: .bold))
@@ -1061,7 +1061,7 @@ struct ForgotPasswordSheet: View {
                     Button("Avbryt") {
                         onDismiss()
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
         }

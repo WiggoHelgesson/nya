@@ -32,7 +32,7 @@ struct WorkoutDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
             .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
         }
@@ -42,7 +42,7 @@ struct WorkoutDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Kilometersplittar")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             if let splits = post.splits, !splits.isEmpty {
                 VStack(spacing: 12) {
@@ -65,7 +65,7 @@ struct WorkoutDetailView: View {
                             }
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(10)
                         .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
                     }
@@ -76,7 +76,7 @@ struct WorkoutDetailView: View {
                     .foregroundColor(.gray)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(10)
                     .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
             }
@@ -90,7 +90,7 @@ struct WorkoutDetailView: View {
                 .foregroundColor(.gray)
             Text(value)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

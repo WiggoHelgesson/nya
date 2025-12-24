@@ -54,7 +54,7 @@ struct EditProfileView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Användarnamn")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             TextField("Användarnamn", text: $username)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())

@@ -87,11 +87,11 @@ struct TerritoryCaptureAnimationView: View {
                 HStack(spacing: 10) {
                     Image(systemName: activityIcon)
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text("Nytt territorium!")
                         .font(.system(size: 28, weight: .black))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 .padding(.top, 60)
                 .opacity(showXP ? 1 : 0)

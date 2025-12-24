@@ -168,10 +168,10 @@ struct ProgressDevelopmentView: View {
                     Text(isSavingPhoto ? "Laddar..." : "Lägg till framsteg")
                         .fontWeight(.semibold)
                 }
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.white)
+                .background(Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
             }

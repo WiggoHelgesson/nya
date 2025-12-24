@@ -84,7 +84,7 @@ struct TrainerPaymentView: View {
                             Text("\(amount) kr")
                                 .font(.title2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         }
                     }
                     .padding()

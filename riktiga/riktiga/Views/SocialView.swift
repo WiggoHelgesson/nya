@@ -1,8 +1,17 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import Supabase
+
+// MARK: - Social Tab Selection
+enum SocialTab: String, CaseIterable {
+    case feed = "Flödet"
+    case news = "Nyheter"
+}
 
 struct SocialView: View {
     @StateObject private var socialViewModel = SocialViewModel()
+    @StateObject private var newsViewModel = NewsViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
@@ -15,12 +24,27 @@ struct SocialView: View {
     @State private var lastActiveTime: Date = Date()
     @State private var showInviteSheet = false
     @State private var showFindFriends = false
+    @State private var selectedTab: SocialTab = .feed
+    @State private var showCreateNews = false
+    @State private var newsToEdit: NewsItem? = nil
+    @State private var showNewsAvatarPicker = false
+    @State private var newsAvatarItem: PhotosPickerItem? = nil
+    @State private var newsAvatarUrl: String? = nil
+    @State private var isUploadingAvatar = false
+    @State private var golfTrainers: [GolfTrainer] = []
+    @State private var isLoadingTrainers = false
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
+    private let adminEmail = "info@bylito.se"
     
     // Only show users with profile pictures
     private var recommendedUsersWithPhoto: [UserSearchResult] {
         recommendedUsers.filter { $0.avatarUrl != nil && !$0.avatarUrl!.isEmpty }
+    }
+    
+    // Check if current user is admin
+    private var isAdmin: Bool {
+        authViewModel.currentUser?.email.lowercased() == adminEmail.lowercased()
     }
     
     var body: some View {
@@ -88,9 +112,131 @@ struct SocialView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HomeHeaderView()
                                 .padding(.horizontal, 16)
-                                .padding(.bottom, 16)
+                                .padding(.bottom, 12)
                             
-                            LazyVStack(spacing: 0, pinnedViews: []) {
+                            // Tab selector
+                            HStack(spacing: 0) {
+                                ForEach(SocialTab.allCases, id: \.self) { tab in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            selectedTab = tab
+                                        }
+                                    } label: {
+                                        VStack(spacing: 8) {
+                                            Text(tab.rawValue)
+                                                .font(.system(size: 15, weight: selectedTab == tab ? .bold : .medium))
+                                                .foregroundColor(selectedTab == tab ? .black : .gray)
+                                            
+                                            Rectangle()
+                                                .fill(selectedTab == tab ? Color.black : Color.clear)
+                                                .frame(height: 2)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                            
+                            Divider()
+                            
+                            if selectedTab == .feed {
+                                // Normal feed
+                                feedContent
+                            } else {
+                                // News section
+                                newsContent
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("")
+            .navigationBarHidden(true)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedPost) { post in
+                WorkoutDetailView(post: post)
+                    .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                    .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+            }
+            .task(id: authViewModel.currentUser?.id) {
+                guard let userId = authViewModel.currentUser?.id else { return }
+                
+                // Ensure valid session before fetching
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid, cannot fetch feed")
+                    return
+                }
+                
+                await socialViewModel.fetchSocialFeedAsync(userId: userId)
+                await loadRecommendedUsers(for: userId)
+                await newsViewModel.fetchNews()
+            }
+            .refreshable {
+                guard let userId = authViewModel.currentUser?.id else { return }
+                
+                // Ensure valid session before refreshing
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                } catch {
+                    print("❌ Session invalid, cannot refresh")
+                    return
+                }
+                
+                visiblePostCount = 5 // Reset to 5 posts when refreshing
+                await socialViewModel.refreshSocialFeed(userId: userId)
+                await loadRecommendedUsers(for: userId)
+                await newsViewModel.fetchNews()
+            }
+            .sheet(isPresented: $showPaywall) {
+                PresentPaywallView()
+            }
+            .sheet(isPresented: $showCreateNews) {
+                CreateNewsView(newsViewModel: newsViewModel)
+            }
+            .enableSwipeBack()
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToNewsTab"))) { _ in
+                withAnimation {
+                    selectedTab = .news
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PostUpdated"))) { _ in
+                // Refresh the feed when a post is updated
+                Task {
+                    await socialViewModel.refreshFeed(userId: authViewModel.currentUser?.id ?? "")
+                }
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .active {
+                    let inactiveTime = Date().timeIntervalSince(lastActiveTime)
+                    // Refresh feed if app was in background for 2+ minutes
+                    if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
+                        print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
+                        Task {
+                            guard let userId = authViewModel.currentUser?.id else { return }
+                            do {
+                                try await AuthSessionManager.shared.ensureValidSession()
+                                await socialViewModel.refreshSocialFeed(userId: userId)
+                            } catch {
+                                print("⚠️ Could not refresh feed on app active: \(error)")
+                            }
+                        }
+                    }
+                    lastActiveTime = Date()
+                } else if newPhase == .background {
+                    lastActiveTime = Date()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Feed Content
+    private var feedContent: some View {
+        LazyVStack(spacing: 0, pinnedViews: []) {
                                 ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
                                     VStack(spacing: 0) {
                                         SocialPostCard(
@@ -153,74 +299,220 @@ struct SocialView: View {
                                         .foregroundColor(.gray)
                                         .padding()
                                 }
+        }
+    }
+    
+    // MARK: - News Content
+    private var newsContent: some View {
+        VStack(spacing: 0) {
+            // Admin controls
+            if isAdmin {
+                VStack(spacing: 12) {
+                    // Avatar picker row
+                    HStack(spacing: 12) {
+                        // Current avatar
+                        PhotosPicker(selection: $newsAvatarItem, matching: .images) {
+                            ZStack {
+                                if let avatarUrl = newsAvatarUrl, !avatarUrl.isEmpty {
+                                    LocalAsyncImage(path: avatarUrl)
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(Circle())
+                                } else {
+                                    Image("23")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 56, height: 56)
+                                        .clipShape(Circle())
+                                }
+                                
+                                // Edit overlay
+                                Circle()
+                                    .fill(Color.black.opacity(0.4))
+                                    .frame(width: 56, height: 56)
+                                    .overlay(
+                                        Image(systemName: "camera.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(.white)
+                                    )
+                                
+                                if isUploadingAvatar {
+                                    Circle()
+                                        .fill(Color.black.opacity(0.6))
+                                        .frame(width: 56, height: 56)
+                                        .overlay(
+                                            ProgressView()
+                                                .tint(.white)
+                                        )
+                                }
                             }
                         }
-                    }
-                }
-            }
-            .navigationTitle("")
-            .navigationBarHidden(true)
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(item: $selectedPost) { post in
-                WorkoutDetailView(post: post)
-                    .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
-                    .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
-            }
-            .task(id: authViewModel.currentUser?.id) {
-                guard let userId = authViewModel.currentUser?.id else { return }
-                
-                // Ensure valid session before fetching
-                do {
-                    try await AuthSessionManager.shared.ensureValidSession()
-                } catch {
-                    print("❌ Session invalid, cannot fetch feed")
-                    return
-                }
-                
-                await socialViewModel.fetchSocialFeedAsync(userId: userId)
-                await loadRecommendedUsers(for: userId)
-            }
-            .refreshable {
-                guard let userId = authViewModel.currentUser?.id else { return }
-                
-                // Ensure valid session before refreshing
-                do {
-                    try await AuthSessionManager.shared.ensureValidSession()
-                } catch {
-                    print("❌ Session invalid, cannot refresh")
-                    return
-                }
-                
-                visiblePostCount = 5 // Reset to 5 posts when refreshing
-                await socialViewModel.refreshSocialFeed(userId: userId)
-                await loadRecommendedUsers(for: userId)
-            }
-            .sheet(isPresented: $showPaywall) {
-                PresentPaywallView()
-            }
-            .enableSwipeBack()
-            .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .active {
-                    let inactiveTime = Date().timeIntervalSince(lastActiveTime)
-                    // Refresh feed if app was in background for 2+ minutes
-                    if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
-                        print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
-                        Task {
-                            guard let userId = authViewModel.currentUser?.id else { return }
-                            do {
-                                try await AuthSessionManager.shared.ensureValidSession()
-                                await socialViewModel.refreshSocialFeed(userId: userId)
-                            } catch {
-                                print("⚠️ Could not refresh feed on app active: \(error)")
-                            }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nyhetsprofil")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("Tryck för att byta profilbild")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
                         }
+                        
+                        Spacer()
                     }
-                    lastActiveTime = Date()
-                } else if newPhase == .background {
-                    lastActiveTime = Date()
+                    .padding(.horizontal, 16)
+                    
+                    // Create news button
+                    Button(action: {
+                        showCreateNews = true
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20))
+                            Text("Skapa nyhet")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(25)
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.vertical, 12)
+                
+                Divider()
+            }
+            
+            if newsViewModel.isLoading {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .padding(.top, 40)
+                    Text("Laddar nyheter...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+            } else if newsViewModel.news.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "newspaper")
+                        .font(.system(size: 48))
+                        .foregroundColor(.gray.opacity(0.5))
+                        .padding(.top, 60)
+                    Text("Inga nyheter än")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.gray)
+                    Text("Håll utkik för uppdateringar!")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(newsViewModel.news) { newsItem in
+                        NewsItemView(
+                            news: newsItem,
+                            isAdmin: isAdmin,
+                            onEdit: { item in
+                                newsToEdit = item
+                            },
+                            onDelete: { item in
+                                Task {
+                                    await newsViewModel.deleteNews(id: item.id)
+                                }
+                            },
+                            onLike: { item, shouldLike in
+                                Task {
+                                    if shouldLike {
+                                        await newsViewModel.likeNews(newsId: item.id)
+                                    } else {
+                                        await newsViewModel.unlikeNews(newsId: item.id)
+                                    }
+                                }
+                            }
+                        )
+                        Divider()
+                    }
                 }
             }
         }
+        .sheet(item: $newsToEdit) { news in
+            EditNewsView(newsViewModel: newsViewModel, news: news)
+        }
+        .onChange(of: newsAvatarItem) { _, newValue in
+            Task {
+                await uploadNewsAvatar(item: newValue)
+            }
+        }
+        .task {
+            // Load saved news avatar URL
+            await loadNewsAvatarUrl()
+        }
+    }
+    
+    // MARK: - News Avatar Functions
+    private func loadNewsAvatarUrl() async {
+        do {
+            struct NewsSettings: Decodable {
+                let avatar_url: String?
+            }
+            
+            let settings: [NewsSettings] = try await SupabaseConfig.supabase
+                .from("news_settings")
+                .select("avatar_url")
+                .limit(1)
+                .execute()
+                .value
+            
+            if let avatarUrl = settings.first?.avatar_url {
+                newsAvatarUrl = avatarUrl
+            }
+        } catch {
+            print("⚠️ Could not load news avatar: \(error)")
+        }
+    }
+    
+    private func uploadNewsAvatar(item: PhotosPickerItem?) async {
+        guard let item = item else { return }
+        
+        isUploadingAvatar = true
+        
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data),
+                  let imageData = image.jpegData(compressionQuality: 0.7) else {
+                isUploadingAvatar = false
+                return
+            }
+            
+            let fileName = "news_avatar_\(UUID().uuidString).jpg"
+            
+            _ = try await SupabaseConfig.supabase.storage
+                .from("avatars")
+                .upload(fileName, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+            
+            // Create full public URL for the avatar
+            let fullAvatarUrl = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/avatars/\(fileName)"
+            
+            // Save to news_settings table
+            struct SettingsPayload: Encodable {
+                let id: String
+                let avatar_url: String
+            }
+            
+            try await SupabaseConfig.supabase
+                .from("news_settings")
+                .upsert(SettingsPayload(id: "default", avatar_url: fullAvatarUrl))
+                .execute()
+            
+            newsAvatarUrl = fullAvatarUrl
+            
+            // Update all news items to use new avatar
+            await newsViewModel.updateAllNewsAvatars(avatarUrl: fullAvatarUrl)
+            
+            print("✅ News avatar updated successfully")
+        } catch {
+            print("❌ Failed to upload news avatar: \(error)")
+        }
+        
+        isUploadingAvatar = false
     }
     
     private func loadMorePosts() {
@@ -371,10 +663,10 @@ struct SocialView: View {
                         Text("Bjud in fler vänner")
                             .font(.system(size: 14, weight: .medium))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(Color(.systemGray5))
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(20)
                 }
                 .frame(maxWidth: .infinity)
@@ -418,7 +710,7 @@ struct SocialView: View {
                                 Text(brand.name.capitalized)
                                     .font(.system(size: 12, weight: .semibold))
                                     .lineLimit(1)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                             }
                             .frame(width: 90)
                         }
@@ -430,61 +722,134 @@ struct SocialView: View {
             }
         }
         .padding(.vertical, 20)
-        .background(Color.white)
+        .background(Color(.systemBackground))
     }
     
     private var bookLessonInlineSection: some View {
-        Button {
-            // Navigate to Lessons tab (index 3)
-            NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
-        } label: {
-            HStack(spacing: 16) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.green.opacity(0.8), Color.green],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                    
-                    Image(systemName: "figure.golf")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                
-                // Text
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Boka en lektion")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.black)
-                    
-                    Text("Hitta en golftränare nära dig")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text("Golftränare")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
-                // Arrow
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 16, weight: .semibold))
+                Button {
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Visa alla")
+                            .font(.system(size: 14, weight: .medium))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                    }
                     .foregroundColor(.gray)
+                }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-            )
             .padding(.horizontal, 16)
+            
+            // Trainer slider
+            if isLoadingTrainers {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(.black)
+                    Spacer()
+                }
+                .frame(height: 160)
+            } else if golfTrainers.isEmpty {
+                // Empty state - show button to navigate
+                Button {
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "figure.golf")
+                            .font(.system(size: 24))
+                            .foregroundColor(.primary)
+                        Text("Utforska golftränare")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 80)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 16)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(golfTrainers.prefix(10)) { trainer in
+                            NavigationLink(destination: TrainerDetailView(trainer: trainer)) {
+                                trainerCard(trainer: trainer)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
         }
-        .buttonStyle(.plain)
         .padding(.vertical, 16)
         .background(Color(.systemGray6))
+        .task {
+            await loadGolfTrainers()
+        }
+    }
+    
+    // MARK: - Trainer Card
+    private func trainerCard(trainer: GolfTrainer) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Cover image (square with rounded corners)
+            if let avatarUrl = trainer.avatarUrl, !avatarUrl.isEmpty {
+                ProfileAvatarView(path: avatarUrl, size: 120)
+                    .frame(width: 120, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 120, height: 120)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.gray)
+                    )
+            }
+            
+            // Name and price
+            VStack(alignment: .leading, spacing: 2) {
+                Text(trainer.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                Text("\(trainer.hourlyRate) kr/h")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+        }
+        .frame(width: 120)
+    }
+    
+    // MARK: - Load Golf Trainers
+    private func loadGolfTrainers() async {
+        guard golfTrainers.isEmpty else { return }
+        
+        isLoadingTrainers = true
+        
+        do {
+            let trainers = try await TrainerService.shared.fetchTrainers()
+            await MainActor.run {
+                golfTrainers = trainers
+                isLoadingTrainers = false
+            }
+        } catch {
+            print("❌ Failed to load golf trainers for social feed: \(error)")
+            await MainActor.run {
+                isLoadingTrainers = false
+            }
+        }
     }
     
     private func toggleRecommendedFollow(for userId: String) {
@@ -568,6 +933,9 @@ struct SocialPostCard: View {
     @State private var likeInProgress = false
     @State private var showShareSheet = false
     @State private var showLikesList = false
+    @State private var showEditSheet = false
+    @State private var editedTitle: String = ""
+    @State private var editedDescription: String = ""
     @EnvironmentObject var authViewModel: AuthViewModel
     
     init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, onLikeChanged: @escaping (String, Bool, Int) -> Void, onCommentCountChanged: @escaping (String, Int) -> Void, onPostDeleted: @escaping (String) -> Void) {
@@ -621,7 +989,7 @@ struct SocialPostCard: View {
             .padding(.vertical, 14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(Color(.systemBackground))
         .task(id: post.id) {
             // Only fetch if we have likes and haven't loaded yet
             if likeCount > 0 && topLikers.isEmpty {
@@ -644,6 +1012,9 @@ struct SocialPostCard: View {
             }
         }
         .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
+            Button("Redigera") {
+                showEditSheet = true
+            }
             Button("Ta bort inlägg", role: .destructive) {
                 showDeleteAlert = true
             }
@@ -664,6 +1035,13 @@ struct SocialPostCard: View {
             LikesListView(postId: post.id)
                 .environmentObject(authViewModel)
         }
+        .sheet(isPresented: $showEditSheet) {
+            EditPostView(post: post) { newTitle, newDescription, newImage in
+                Task {
+                    await updatePost(title: newTitle, description: newDescription, image: newImage)
+                }
+            }
+        }
     }
     
     private var headerSection: some View {
@@ -679,7 +1057,14 @@ struct SocialPostCard: View {
                            !name.isEmpty {
                             Text(name)
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
+                            
+                            // Pro member verified badge
+                            if post.userIsPro == true {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.blue)
+                            }
                         } else {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color(.systemGray5))
@@ -711,7 +1096,7 @@ struct SocialPostCard: View {
                     showMenu = true
                 }) {
                     Image(systemName: "ellipsis")
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .font(.system(size: 16))
                 }
             }
@@ -743,7 +1128,7 @@ struct SocialPostCard: View {
             HStack(spacing: 8) {
                 Text(post.title)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 if let isPro = post.userIsPro, isPro {
                     Image("41")
@@ -860,7 +1245,7 @@ struct SocialPostCard: View {
                 .foregroundColor(.gray)
             Text(value)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -878,6 +1263,38 @@ struct SocialPostCard: View {
                 }
             } catch {
                 print("❌ Error deleting post: \(error)")
+            }
+        }
+    }
+    
+    private func updatePost(title: String, description: String, image: UIImage?) async {
+        do {
+            var imageUrl: String? = nil
+            
+            // Upload new image if provided
+            if let image = image {
+                imageUrl = try await WorkoutService.shared.uploadWorkoutImage(image, postId: post.id)
+            }
+            
+            // Update the post
+            try await WorkoutService.shared.updateWorkoutPost(
+                postId: post.id,
+                title: title,
+                description: description,
+                userImageUrl: imageUrl
+            )
+            
+            print("✅ Post updated successfully")
+            
+            await MainActor.run {
+                showEditSheet = false
+                // Notify that post was updated - trigger refresh
+                NotificationCenter.default.post(name: NSNotification.Name("PostUpdated"), object: nil)
+            }
+        } catch {
+            print("❌ Error updating post: \(error)")
+            await MainActor.run {
+                showEditSheet = false
             }
         }
     }
@@ -1023,7 +1440,7 @@ private extension SocialPostCard {
                         OverlappingAvatarStack(users: Array(topLikers.prefix(3)))
                         Text(likeCountText)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -2074,12 +2491,12 @@ struct GymExercisesListView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(exercise.name)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .lineLimit(2)
                 
                 Text("\(exercise.sets) sets")
                     .font(.system(size: 13))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                 
                 // Show all sets in a compact format
                 ForEach(0..<exercise.sets, id: \.self) { setIndex in
@@ -2087,20 +2504,20 @@ struct GymExercisesListView: View {
                         HStack(spacing: 4) {
                             Text("\(setIndex + 1).")
                                 .font(.system(size: 13))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                                 .frame(width: 20, alignment: .leading)
                             
                             Text("\(Int(exercise.kg[setIndex])) kg")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             Text("×")
                                 .font(.system(size: 13))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                             
                             Text("\(exercise.reps[setIndex]) reps")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         }
                     }
                 }
@@ -2109,35 +2526,137 @@ struct GymExercisesListView: View {
             Spacer()
         }
         .padding(12)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
     @ViewBuilder
     private var userImagePage: some View {
-        if let userImage {
-            LocalAsyncImage(path: userImage)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(
-                    LinearGradient(
-                        colors: [Color.black.opacity(0.2), Color.black.opacity(0.05)],
-                        startPoint: .bottom,
-                        endPoint: .top
+        GeometryReader { geometry in
+            if let userImage {
+                FullFrameAsyncImage(path: userImage, height: geometry.size.height)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.2), Color.black.opacity(0.05)],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
                     )
-                )
-                .overlay(
-                    Text("Din bild")
-                        .font(.system(size: 14, weight: .semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.5))
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                        .padding(16),
-                    alignment: .bottomLeading
-                )
-                .clipped()
+                    .overlay(
+                        Text(userImage.contains("live_") ? "Up&Down Live" : "Din bild")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.5))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                            .padding(16),
+                        alignment: .bottomLeading
+                    )
+                    .clipped()
+            }
+        }
+    }
+}
+
+// MARK: - Full Frame Async Image (for gym post images)
+struct FullFrameAsyncImage: View {
+    let path: String
+    let height: CGFloat
+    @State private var image: UIImage?
+    @State private var isLoading = true
+    @State private var loadFailed = false
+    
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: height)
+                    .clipped()
+            } else if isLoading {
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .frame(height: height)
+                    .overlay(ProgressView().scaleEffect(0.8))
+            } else if loadFailed {
+                Rectangle()
+                    .fill(Color(.systemGray6))
+                    .frame(height: height)
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 28))
+                        }
+                    )
+            } else {
+                Rectangle()
+                    .fill(Color(.systemGray6))
+                    .frame(height: height)
+            }
+        }
+        .task {
+            await loadImage()
+        }
+    }
+    
+    private func loadImage() async {
+        guard !path.isEmpty else {
+            loadFailed = true
+            isLoading = false
+            return
+        }
+        
+        // Check cache first
+        if let cached = ImageCacheManager.shared.getImage(for: path) {
+            image = cached
+            isLoading = false
+            return
+        }
+        
+        // Try to load from URL
+        if let url = URL(string: path) {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let downloadedImage = UIImage(data: data) {
+                    ImageCacheManager.shared.setImage(downloadedImage, for: path)
+                    await MainActor.run {
+                        self.image = downloadedImage
+                        self.isLoading = false
+                    }
+                    return
+                }
+            } catch {
+                print("❌ Failed to load image: \(error)")
+            }
+        }
+        
+        // Try Supabase storage
+        do {
+            let filename = path.contains("/") ? String(path.split(separator: "/").last ?? "") : path
+            let signedURL = try await SupabaseConfig.supabase.storage
+                .from("workout-images")
+                .createSignedURL(path: filename, expiresIn: 3600)
+            
+            let (data, _) = try await URLSession.shared.data(from: signedURL)
+            if let downloadedImage = UIImage(data: data) {
+                ImageCacheManager.shared.setImage(downloadedImage, for: path)
+                await MainActor.run {
+                    self.image = downloadedImage
+                    self.isLoading = false
+                }
+                return
+            }
+        } catch {
+            print("❌ Supabase image load failed: \(error)")
+        }
+        
+        await MainActor.run {
+            loadFailed = true
+            isLoading = false
         }
     }
 }
@@ -2158,7 +2677,7 @@ struct EmptyStateUserCard: View {
             
             Text(user.name)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .lineLimit(1)
             
             Button(action: {
@@ -2171,18 +2690,17 @@ struct EmptyStateUserCard: View {
             }) {
                 Text(isFollowing ? "Följer" : "Följ")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(isFollowing ? .gray : .white)
+                    .foregroundColor(isFollowing ? .secondary : .white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(isFollowing ? Color(.systemGray5) : Color.black)
+                    .background(isFollowing ? Color(.systemGray5) : Color.primary)
                     .cornerRadius(10)
             }
             .disabled(isProcessing)
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -2201,7 +2719,7 @@ struct InviteFriendsSheet: View {
                 VStack(spacing: 12) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 60))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text("Bjud in dina vänner")
                         .font(.system(size: 24, weight: .bold))
@@ -2232,11 +2750,11 @@ struct InviteFriendsSheet: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .padding(16)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                     
@@ -2253,11 +2771,11 @@ struct InviteFriendsSheet: View {
                             Spacer()
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .padding(16)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                     
@@ -2271,11 +2789,11 @@ struct InviteFriendsSheet: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .padding(16)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                 }
@@ -2286,7 +2804,7 @@ struct InviteFriendsSheet: View {
                 // Info text
                 Text("Ju fler vänner, desto roligare träning! 🎉")
                     .font(.system(size: 13))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .padding(.bottom, 20)
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -2295,7 +2813,7 @@ struct InviteFriendsSheet: View {
                     Button("Stäng") {
                         dismiss()
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
         }

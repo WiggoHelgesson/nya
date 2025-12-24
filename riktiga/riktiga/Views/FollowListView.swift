@@ -91,7 +91,7 @@ struct FollowListView: View {
                         dismiss()
                     }) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .frame(width: 32, height: 32)
                             .background(Color(.systemGray5))
                             .cornerRadius(16)
@@ -123,7 +123,7 @@ struct UserFollowRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.name)
                     .font(.headline)
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text("@\(user.name.lowercased())")
                     .font(.subheadline)

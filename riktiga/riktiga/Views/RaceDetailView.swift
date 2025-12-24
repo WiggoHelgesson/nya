@@ -34,7 +34,7 @@ struct RaceDetailView: View {
                     
                     Text(race.name)
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 .padding(.top, 8)
                 
@@ -43,7 +43,7 @@ struct RaceDetailView: View {
                     VStack(spacing: 12) {
                         Text("Lägg till minnen")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         PhotosPicker(selection: $photosPickerItems, maxSelectionCount: 10, matching: .images) {
                             HStack(spacing: 8) {
@@ -101,7 +101,7 @@ struct RaceDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Minnen (\(memories.count))")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .padding(.horizontal, 16)
                         
                         LazyVGrid(columns: [

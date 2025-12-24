@@ -18,12 +18,12 @@ struct ForceUpdateView: View {
                 // Icon
                 Image(systemName: "arrow.down.app.fill")
                     .font(.system(size: 80))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 // Title
                 Text(isForced ? "Uppdatering krävs" : "Uppdatering tillgänglig")
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 // Message
                 Text("Uppdatera appen via App Store för att använda den")

@@ -37,8 +37,8 @@ struct NewTerritoryCelebrationView: View {
                         .font(.system(size: 15, weight: .bold))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color.white)
-                        .foregroundColor(.black)
+                        .background(Color(.secondarySystemBackground))
+                        .foregroundColor(.primary)
                         .clipShape(Capsule())
                 }
                 

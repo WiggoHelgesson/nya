@@ -106,7 +106,7 @@ struct FavoriteRewardCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(reward.brandName)
                         .font(.system(size: 14, weight: .medium))
@@ -120,11 +120,11 @@ struct FavoriteRewardCard: View {
                 }) {
                     Image(systemName: "bookmark.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
             }
             .padding(20)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
         }
         .frame(width: UIScreen.main.bounds.width - 32, height: 280)
         .cornerRadius(12)

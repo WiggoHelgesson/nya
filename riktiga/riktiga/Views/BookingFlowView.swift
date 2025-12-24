@@ -311,7 +311,7 @@ struct BookingFlowView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "mappin.and.ellipse")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Tränarens täckningsområde (\(Int(trainer.serviceRadiusKm ?? 10)) km)")
                     .font(.headline)
             }
@@ -458,7 +458,7 @@ struct BookingFlowView: View {
                         Text("\(viewModel.totalPrice) kr")
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                     }
                 }
                 .padding()
@@ -579,7 +579,7 @@ struct LessonTypeCard: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 } else {
                     Circle()
                         .stroke(Color.gray, lineWidth: 2)
@@ -625,7 +625,7 @@ struct LocationOptionCard: View {
                 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
             }
             .padding()
@@ -643,7 +643,7 @@ struct SummaryRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(width: 30)
             
             Text(title)

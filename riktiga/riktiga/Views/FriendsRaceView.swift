@@ -188,10 +188,10 @@ private struct TrackBackgroundView: View {
                         VStack(spacing: 4) {
                             Text(finishLabel)
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.white)
+                                .background(Color(.secondarySystemBackground))
                                 .clipShape(Capsule())
                         }
                         .position(labelPoint)

@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var showAdmin = false
     @State private var hasLoadedOnce = false
+    @State private var showReferralView = false
     
     var body: some View {
         NavigationStack {
@@ -36,7 +37,7 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Up&Down PRO")
                                         .font(.system(size: 16))
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                     
                                     if isLoadingPremium {
                                         ProgressView()
@@ -100,7 +101,28 @@ struct SettingsView: View {
                                 action: openSubscriptionManagement
                             )
                         }
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                    }
+                    
+                    // MARK: - REFERERA Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("TJÄNA PENGAR")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                        
+                        VStack(spacing: 0) {
+                            SettingsRow(
+                                title: "Referera och tjäna",
+                                icon: "chevron.right",
+                                action: {
+                                    showReferralView = true
+                                }
+                            )
+                        }
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                     
@@ -163,7 +185,7 @@ struct SettingsView: View {
                                 }
                             )
                         }
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
 
@@ -183,7 +205,7 @@ struct SettingsView: View {
                                     action: { showAdmin = true }
                                 )
                             }
-                            .background(Color.white)
+                            .background(Color(.secondarySystemBackground))
                             .cornerRadius(12)
                         }
                     }
@@ -204,7 +226,7 @@ struct SettingsView: View {
                             Spacer()
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
 
@@ -225,7 +247,7 @@ struct SettingsView: View {
                             Spacer()
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                     .padding(.bottom, 8)
@@ -243,7 +265,7 @@ struct SettingsView: View {
                     Button("Klar") {
                         dismiss()
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
             .sheet(isPresented: $showSubscriptionView) {
@@ -251,6 +273,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showAdmin) {
                 AdminTrainerApprovalsView()
+            }
+            .sheet(isPresented: $showReferralView) {
+                ReferralView()
             }
             .task {
                 // Only sync once per view instance to avoid lag
@@ -337,13 +362,13 @@ struct SettingsRow: View {
             HStack {
                 Text(title)
                     .font(.system(size: 16))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
             .padding(16)
         }

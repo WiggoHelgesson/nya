@@ -144,7 +144,7 @@ struct StudentBookingCard: View {
                         .fontWeight(.semibold)
                 }
                 .font(.subheadline)
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(Color(.systemGray5))
@@ -195,7 +195,7 @@ struct StudentBookingCard: View {
                     Label(time, systemImage: "clock")
                 }
                 .font(.subheadline)
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             }
             
             // Price
@@ -203,7 +203,7 @@ struct StudentBookingCard: View {
                 Text("\(price) kr")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             
             // Location info

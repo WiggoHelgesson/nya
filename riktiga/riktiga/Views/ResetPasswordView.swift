@@ -16,7 +16,7 @@ struct ResetPasswordView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "lock.rotation")
                         .font(.system(size: 60))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text("Nytt lösenord")
                         .font(.system(size: 28, weight: .bold))
@@ -110,7 +110,7 @@ struct ResetPasswordView: View {
                     Button("Avbryt") {
                         dismiss()
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
         }

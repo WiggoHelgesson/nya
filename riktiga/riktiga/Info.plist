@@ -12,6 +12,14 @@
 				<string>upanddown</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Insert Affiliate</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ia-ooc4erygmyaztjecbnr7tjzb1bl2</string>
+			</array>
+		</dict>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
@@ -19,5 +27,12 @@
 	</array>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Vi använder detta tillstånd för att kunna förbättra träningsupplevelsen och hålla din statistik synkad. Ingen reklamspårning sker.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram</string>
+		<string>instagram-stories</string>
+		<string>snapchat</string>
+		<string>sms</string>
+	</array>
 </dict>
 </plist>

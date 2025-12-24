@@ -21,7 +21,7 @@ struct SubscriptionView: View {
                         
                         Text("Uppgradera till Premium")
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         Text("Få tillgång till alla rabattkoder och exklusiva erbjudanden")
                             .font(.system(size: 16))
@@ -34,7 +34,7 @@ struct SubscriptionView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Premium fördelar")
                             .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         VStack(spacing: 12) {
                             FeatureRow(icon: "tag.fill", text: "Obegränsade rabattkoder")
@@ -51,7 +51,7 @@ struct SubscriptionView: View {
                         VStack(spacing: 16) {
                             Text("Välj din plan")
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             VStack(spacing: 12) {
                                 ForEach(currentOffering.availablePackages, id: \.identifier) { package in
@@ -183,12 +183,12 @@ struct FeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(width: 20)
             
             Text(text)
                 .font(.system(size: 16))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             Spacer()
         }
@@ -206,7 +206,7 @@ struct PackageCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(package.storeProduct.localizedTitle)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(package.storeProduct.localizedDescription)
                         .font(.system(size: 14))
@@ -219,7 +219,7 @@ struct PackageCard: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(package.localizedPriceString)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     if package.packageType == .annual {
                         Text("Bästa valet")

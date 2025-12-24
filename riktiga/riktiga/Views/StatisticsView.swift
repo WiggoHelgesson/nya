@@ -53,7 +53,7 @@ struct StatisticsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Stäng") { dismiss() }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
         }
@@ -149,8 +149,8 @@ private struct CalendarOverviewView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 8)
-                    .background(Color.black)
-                    .foregroundColor(.white)
+                    .background(Color.primary)
+                    .foregroundColor(Color(.systemBackground))
                     .clipShape(Capsule())
                 }
                 .padding()
@@ -370,19 +370,18 @@ private struct MonthCalendarView: View {
                         .frame(width: 38, height: 38)
                         .background(
                             Circle()
-                                .fill(isWorkoutDay ? Color.black : Color.clear)
+                                .fill(isWorkoutDay ? Color.primary : Color.clear)
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.black.opacity(0.08), lineWidth: isWorkoutDay ? 0 : 1)
+                                        .stroke(Color.primary.opacity(0.15), lineWidth: isWorkoutDay ? 0 : 1)
                                 )
                         )
-                        .foregroundColor(isWorkoutDay ? .white : .primary)
+                        .foregroundColor(isWorkoutDay ? Color(.systemBackground) : .primary)
                 }
             }
             .padding()
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 6)
         }
     }
     
@@ -447,15 +446,14 @@ private struct MiniMonthCard: View {
                     let date = makeDate(day: day)
                     let hasWorkout = date.map { workoutSet.contains(calendar.startOfDay(for: $0)) } ?? false
                     Circle()
-                        .fill(hasWorkout ? Color.black : Color(.systemGray5))
+                        .fill(hasWorkout ? Color.primary : Color(.systemGray5))
                         .frame(width: 10, height: 10)
                 }
             }
         }
         .padding(12)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 4)
     }
     
     private func makeDate(day: Int) -> Date? {
@@ -576,16 +574,16 @@ private struct StatisticsMenuRow: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
             Text(title)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text(subtitle)
                     .font(.system(size: 12))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -627,11 +625,11 @@ private struct UppyMenuRow: View {
                 HStack(spacing: 6) {
                     Text(prefixText.isEmpty ? title : prefixText.replacingOccurrences(of: " ", with: ""))
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     if let uppyText {
                         LinearGradient(
-                            colors: [Color.black, Color.gray.opacity(0.75), Color.gray.opacity(0.55)],
+                            colors: [Color.primary, Color.gray.opacity(0.75), Color.gray.opacity(0.55)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -702,8 +700,8 @@ private struct StepStatisticsSectionView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                                .background(Color.black)
-                                .foregroundColor(.white)
+                                .background(Color.primary)
+                                .foregroundColor(Color(.systemBackground))
                                 .clipShape(Capsule())
                         }
                         Button(action: HealthKitManager.shared.handleManageAuthorizationButton) {
@@ -735,9 +733,8 @@ private struct StepStatisticsSectionView: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
         .drawingGroup() // GPU-accelerated rendering
         .onAppear {
             guard !hasInitialized else { return }
@@ -943,10 +940,10 @@ private struct MonthlyReportView: View {
             }) {
                 Text("Försök igen")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(.systemBackground))
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
-                    .background(Color.black)
+                    .background(Color.primary)
                     .clipShape(Capsule())
             }
         }
@@ -982,9 +979,8 @@ private struct MonthlyReportView: View {
                     .foregroundColor(.secondary)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 6)
             }
             
             VStack(alignment: .leading, spacing: 16) {
@@ -1003,9 +999,8 @@ private struct MonthlyReportView: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 10)
         }
     }
     
@@ -1120,16 +1115,15 @@ private struct MonthlyStatCard: View {
                 .foregroundColor(.secondary)
             Text(value)
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             Text(subtitle)
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Color.black.opacity(0.05), radius: 12, x: 0, y: 8)
     }
 }
 

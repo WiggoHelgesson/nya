@@ -21,33 +21,16 @@ struct ProfileView: View {
     @State private var showTrainerDashboard = false
     @State private var isTrainer = false
     @State private var pendingBookingsCount = 0
-    @State private var weeklyActivityData: [WeeklyActivityData] = []
     @State private var activityCount: Int = 0
-    @State private var personalBestInfo: PersonalBestInfo = PersonalBestInfo()
-    @State private var lastActivityFetch: Date?
-    @State private var isUsingCachedWeeklyData = false
     @State private var lastTrainerCheck: Date?
     @State private var lastStatsLoad: Date?
     @State private var isInitialLoad = true
     @StateObject private var myPostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
     
-    private let cacheManager = AppCacheManager.shared
-    private let weeklyDataThrottle: TimeInterval = 120
     private let trainerCheckThrottle: TimeInterval = 30
     private let statsLoadThrottle: TimeInterval = 60
     
-    private func updatePersonalBestInfo() {
-        let fiveKm = authViewModel.currentUser?.pb5kmMinutes
-        let tenKmMinutes: Int?
-        if let minutes = authViewModel.currentUser?.pb10kmMinutes {
-            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
-            tenKmMinutes = hours * 60 + minutes
-        } else {
-            tenKmMinutes = nil
-        }
-        personalBestInfo = PersonalBestInfo(fiveKmMinutes: fiveKm, tenKmMinutes: tenKmMinutes, benchMaxKg: personalBestInfo.benchMaxKg)
-    }
     
     var body: some View {
         NavigationStack {
@@ -74,7 +57,7 @@ struct ProfileView: View {
                         }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.title2)
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -109,7 +92,7 @@ struct ProfileView: View {
                                     }) {
                                         Image(systemName: "pencil.circle.fill")
                                             .font(.title2)
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                     }
                                 }
                                 
@@ -128,10 +111,10 @@ struct ProfileView: View {
                                         VStack(spacing: 4) {
                                             Text("\(followersCount)")
                                                 .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(.black)
+                                                .foregroundColor(.primary)
                                             Text("Följare")
                                                 .font(.caption2)
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(.secondary)
                                         }
                                     }
                                     
@@ -141,10 +124,10 @@ struct ProfileView: View {
                                         VStack(spacing: 4) {
                                             Text("\(followingCount)")
                                                 .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(.black)
+                                                .foregroundColor(.primary)
                                             Text("Följer")
                                                 .font(.caption2)
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(.secondary)
                                         }
                                     }
                                     
@@ -176,9 +159,12 @@ struct ProfileView: View {
                         Spacer()
                     }
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(12)
-                    .border(Color.black, width: 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary, lineWidth: 2)
+                    )
                     
                     // MARK: - Action Buttons (3x1 top row)
                     HStack(spacing: 10) {
@@ -237,20 +223,12 @@ struct ProfileView: View {
                                 }
                             }
                         }
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                     }
                     
-                    Divider()
-                        .background(Color(.systemGray4))
-                    
-                    // MARK: - Weekly Activity Chart
-                    WeeklyActivityChart(weeklyData: weeklyActivityData)
-                        .padding(.horizontal, 16)
-                    
-                    if isUsingCachedWeeklyData {
-                        cachedStatsIndicator
-                    }
+                    // MARK: - Up&Down Live Gallery
+                    UpAndDownLiveGallery(posts: myPostsViewModel.posts)
                     
                     Divider()
                         .background(Color(.systemGray4))
@@ -260,7 +238,7 @@ struct ProfileView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Mina aktiviteter")
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .padding(.horizontal, 4)
                         
                         if myPostsViewModel.isLoading && myPostsViewModel.posts.isEmpty {
@@ -362,9 +340,6 @@ struct ProfileView: View {
                 // Update premium status
                 isPremium = RevenueCatManager.shared.isPremium
                 
-                // Update local state immediately (non-blocking)
-                updatePersonalBestInfo()
-                
                 // Load profile observer first (non-async)
                 profileObserver = NotificationCenter.default.addObserver(
                     forName: .profileImageUpdated,
@@ -388,9 +363,6 @@ struct ProfileView: View {
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask { @MainActor in
                         self.loadProfileStats()
-                    }
-                    group.addTask { @MainActor in
-                        self.loadWeeklyActivityData()
                     }
                     group.addTask { @MainActor in
                         self.checkIfUserIsTrainer()
@@ -431,20 +403,6 @@ struct ProfileView: View {
                 }
             }
         }
-    }
-    
-    private var cachedStatsIndicator: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 12, weight: .semibold))
-            Text("Visar sparad statistik")
-                .font(.system(size: 12, weight: .medium))
-        }
-        .foregroundColor(.black)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.black.opacity(0.05))
-        .cornerRadius(12)
     }
     
     private func loadProfileStats(force: Bool = false) {
@@ -502,60 +460,6 @@ struct ProfileView: View {
         }
     }
     
-    private func loadWeeklyActivityData(forceReload: Bool = false) {
-        guard let userId = authViewModel.currentUser?.id else { return }
-        
-        let pbFive = authViewModel.currentUser?.pb5kmMinutes
-        let pbTenCombined: Int? = {
-            guard let minutes = authViewModel.currentUser?.pb10kmMinutes else { return nil }
-            let hours = authViewModel.currentUser?.pb10kmHours ?? 0
-            return hours * 60 + minutes
-        }()
-        
-        if !forceReload,
-           let cachedWorkouts = cacheManager.getCachedUserWorkouts(userId: userId, allowExpired: true),
-           !cachedWorkouts.isEmpty {
-            Task.detached(priority: .utility) {
-                let metrics = ProfileView.computeMetrics(from: cachedWorkouts)
-                await MainActor.run {
-                    self.applyProfileMetrics(metrics,
-                                             pbFive: pbFive,
-                                             pbTen: pbTenCombined,
-                                             usingCache: true)
-                }
-            }
-        }
-        
-        if !forceReload,
-           let lastFetch = lastActivityFetch,
-           Date().timeIntervalSince(lastFetch) < weeklyDataThrottle,
-           !weeklyActivityData.isEmpty {
-            return
-        }
-        
-        Task(priority: .userInitiated) {
-            do {
-                let activities = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId)
-                cacheManager.saveUserWorkouts(activities, userId: userId)
-                
-                let metrics = await Task.detached(priority: .utility) {
-                    ProfileView.computeMetrics(from: activities)
-                }.value
-                
-                await MainActor.run {
-                    self.lastActivityFetch = Date()
-                    self.applyProfileMetrics(metrics,
-                                             pbFive: pbFive,
-                                             pbTen: pbTenCombined,
-                                             usingCache: false)
-                }
-            } catch {
-                if Task.isCancelled { return }
-                print("❌ Error loading weekly activity data: \(error)")
-            }
-        }
-    }
-    
     /// Prefetch images for posts to speed up display
     private func prefetchPostImages() async {
         let imagesToPrefetch = myPostsViewModel.posts.prefix(5).compactMap { post -> [String] in
@@ -568,160 +472,6 @@ struct ProfileView: View {
         ImageCacheManager.shared.prefetch(urls: imagesToPrefetch)
     }
     
-    @MainActor
-    private func applyProfileMetrics(_ metrics: ProfileMetrics,
-                                     pbFive: Int?,
-                                     pbTen: Int?,
-                                     usingCache: Bool) {
-        weeklyActivityData = metrics.weeklyData
-        activityCount = metrics.activityCount
-        personalBestInfo = PersonalBestInfo(
-            fiveKmMinutes: pbFive,
-            tenKmMinutes: pbTen,
-            benchMaxKg: metrics.benchMaxKg
-        )
-        isUsingCachedWeeklyData = usingCache
-    }
-}
-
-private struct ProfileMetrics {
-    let weeklyData: [WeeklyActivityData]
-    let activityCount: Int
-    let benchMaxKg: Double?
-}
-
-private extension ProfileView {
-    static func computeMetrics(from activities: [WorkoutPost]) -> ProfileMetrics {
-        let calendar = Calendar.current
-        let now = Date()
-        let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let isoFormatter = ISO8601DateFormatter()
-        var activitiesWithDates: [(WorkoutPost, Date)] = []
-        activitiesWithDates.reserveCapacity(activities.count)
-        var benchBestKg: Double = 0.0
-        
-        for activity in activities {
-            guard let date = isoFormatter.date(from: activity.createdAt) else { continue }
-            activitiesWithDates.append((activity, date))
-            
-            if activity.activityType.lowercased().contains("gym"),
-               let exercises = activity.exercises {
-                for exercise in exercises {
-                    let normalizedName = exercise.name.lowercased()
-                    if normalizedName.contains("bänk") || normalizedName.contains("bench"),
-                       let maxKg = exercise.kg.max() {
-                        benchBestKg = max(benchBestKg, maxKg)
-                    }
-                }
-            }
-        }
-        
-        struct WeekKey: Hashable {
-            let year: Int
-            let week: Int
-        }
-        
-        var buckets: [WeekKey: [WorkoutPost]] = [:]
-        for (activity, date) in activitiesWithDates {
-            let comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-            guard let year = comps.yearForWeekOfYear,
-                  let week = comps.weekOfYear else { continue }
-            let key = WeekKey(year: year, week: week)
-            buckets[key, default: []].append(activity)
-        }
-        
-        let labelFormatter = DateFormatter()
-        labelFormatter.locale = Locale(identifier: "sv_SE")
-        labelFormatter.dateFormat = "MMM d"
-        
-        var weeks: [WeeklyActivityData] = []
-        for offset in stride(from: 9, through: 0, by: -1) {
-            guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -offset, to: currentWeekStart),
-                  let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else { continue }
-            
-            let comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: weekStart)
-            guard let year = comps.yearForWeekOfYear,
-                  let week = comps.weekOfYear else { continue }
-            
-            let key = WeekKey(year: year, week: week)
-            let weeklyActivities = buckets[key] ?? []
-            
-            var runDistance = 0.0, runTime = 0.0, runElevation = 0.0
-            var golfDistance = 0.0, golfTime = 0.0, golfElevation = 0.0
-            var climbingDistance = 0.0, climbingTime = 0.0, climbingElevation = 0.0
-            var skiingDistance = 0.0, skiingTime = 0.0, skiingElevation = 0.0
-            var gymVolume = 0.0, gymTime = 0.0
-            
-            for activity in weeklyActivities {
-                let distance = activity.distance ?? 0
-                let time = Double(activity.duration ?? 0)
-                let elevation = activity.elevationGain ?? 0
-                let type = activity.activityType.lowercased()
-                
-                switch type {
-                case "run", "running", "löpning":
-                    runDistance += distance
-                    runTime += time
-                    runElevation += elevation
-                case "golf":
-                    golfDistance += distance
-                    golfTime += time
-                    golfElevation += elevation
-                case "climbing", "klättring", "bergsklättring":
-                    climbingDistance += distance
-                    climbingTime += time
-                    climbingElevation += elevation
-                case "skiing", "skidåkning":
-                    skiingDistance += distance
-                    skiingTime += time
-                    skiingElevation += elevation
-                case "gym", "gympass":
-                    gymTime += time
-                    if let exercises = activity.exercises {
-                        for exercise in exercises {
-                            let volume = zip(exercise.kg, exercise.reps).reduce(0.0) { partial, pair in
-                                partial + (pair.0 * Double(pair.1))
-                            }
-                            gymVolume += volume
-                        }
-                    }
-                default:
-                    runDistance += distance
-                    runTime += time
-                    runElevation += elevation
-                }
-            }
-            
-            weeks.append(
-                WeeklyActivityData(
-                    weekLabel: labelFormatter.string(from: weekStart),
-                    runDistance: runDistance,
-                    runTime: runTime,
-                    runElevation: runElevation,
-                    golfDistance: golfDistance,
-                    golfTime: golfTime,
-                    golfElevation: golfElevation,
-                    climbingDistance: climbingDistance,
-                    climbingTime: climbingTime,
-                    climbingElevation: climbingElevation,
-                    skiingDistance: skiingDistance,
-                    skiingTime: skiingTime,
-                    skiingElevation: skiingElevation,
-                    gymVolume: gymVolume,
-                    gymTime: gymTime,
-                    startDate: weekStart,
-                    endDate: weekEnd
-                )
-            )
-        }
-        
-        let benchValue = benchBestKg > 0 ? benchBestKg : nil
-        return ProfileMetrics(
-            weeklyData: weeks,
-            activityCount: activities.count,
-            benchMaxKg: benchValue
-        )
-    }
 }
 
 struct ActionButton: View {
@@ -734,16 +484,16 @@ struct ActionButton: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(label)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .padding(16)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
         }
     }
@@ -754,27 +504,28 @@ struct ProfileCardButton: View {
     let icon: String
     let label: String
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 90)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(16)
-            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .shadow(color: colorScheme == .dark ? .clear : .black.opacity(0.08), radius: 12, x: 0, y: 4)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
             .drawingGroup() // GPU-accelerated rendering
         }
@@ -793,18 +544,18 @@ struct ProfileListRow: View {
             // Icon
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(width: 40, height: 40)
             
             // Text
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(subtitle)
                     .font(.system(size: 13))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
             
             Spacer()
@@ -873,6 +624,290 @@ struct ImagePicker: UIViewControllerRepresentable {
 #Preview {
     ProfileView()
         .environmentObject(AuthViewModel())
+}
+
+// MARK: - Up&Down Live Gallery
+struct UpAndDownLiveGallery: View {
+    let posts: [SocialWorkoutPost]
+    
+    // Filter posts that have Up&Down Live photos (filename contains "live_")
+    private var postsWithImages: [SocialWorkoutPost] {
+        posts.filter { post in
+            // Check for live photos in userImageUrl (has "live_" prefix in filename)
+            if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
+                return userImageUrl.contains("live_")
+            }
+            return false
+        }
+    }
+    
+    // Create rows of 3 images
+    private var imageRows: [[SocialWorkoutPost]] {
+        var rows: [[SocialWorkoutPost]] = []
+        var currentRow: [SocialWorkoutPost] = []
+        
+        for post in postsWithImages {
+            currentRow.append(post)
+            if currentRow.count == 3 {
+                rows.append(currentRow)
+                currentRow = []
+            }
+        }
+        
+        // Add remaining items
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+        
+        return rows
+    }
+    
+    // Subtle gray that blends with background
+    private let sectionBackground = Color(.systemGray6)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .cornerRadius(6)
+                
+                Text("Up&Down Live")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text("\(postsWithImages.count)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+            
+            if postsWithImages.isEmpty {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray.opacity(0.5))
+                    
+                    Text("Inga Up&Down Live bilder än")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.gray)
+                    
+                    Text("Ta en bild med Up&Down Live efter ditt nästa pass!")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                // Photo grid - 3 columns
+                VStack(spacing: 8) {
+                    ForEach(Array(imageRows.enumerated()), id: \.offset) { rowIndex, row in
+                        HStack(spacing: 8) {
+                            ForEach(row) { post in
+                                LivePhotoCell(post: post)
+                            }
+                            
+                            // Fill empty spots in last row
+                            if row.count < 3 {
+                                ForEach(0..<(3 - row.count), id: \.self) { _ in
+                                    Rectangle()
+                                        .fill(Color.clear)
+                                        .aspectRatio(1, contentMode: .fit)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+            }
+        }
+        .padding(8)
+        .background(sectionBackground)
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - Live Photo Cell
+struct LivePhotoCell: View {
+    let post: SocialWorkoutPost
+    @State private var showDetail = false
+    
+    var body: some View {
+        Button(action: {
+            showDetail = true
+        }) {
+            GeometryReader { geo in
+                // Use userImageUrl for Up&Down Live photos
+                if let userImageUrl = post.userImageUrl, userImageUrl.contains("live_") {
+                    LivePhotoGridImage(path: userImageUrl)
+                        .frame(width: geo.size.width, height: geo.size.width)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: geo.size.width, height: geo.size.width)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .aspectRatio(1, contentMode: .fit)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showDetail) {
+            LivePhotoDetailView(post: post)
+        }
+    }
+}
+
+// MARK: - Live Photo Grid Image (fills cell properly)
+struct LivePhotoGridImage: View {
+    let path: String
+    @State private var image: UIImage?
+    @State private var isLoading = true
+    
+    var body: some View {
+        ZStack {
+            Color.black
+            
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+            }
+        }
+        .task {
+            await loadImage()
+        }
+    }
+    
+    private func loadImage() async {
+        // Check cache first
+        if let cached = ImageCacheManager.shared.getImage(for: path) {
+            await MainActor.run {
+                self.image = cached
+                self.isLoading = false
+            }
+            return
+        }
+        
+        // Load from URL
+        guard let url = URL(string: path) else {
+            isLoading = false
+            return
+        }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let loadedImage = UIImage(data: data) {
+                ImageCacheManager.shared.setImage(loadedImage, for: path)
+                await MainActor.run {
+                    self.image = loadedImage
+                    self.isLoading = false
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+// MARK: - Live Photo Detail View
+struct LivePhotoDetailView: View {
+    let post: SocialWorkoutPost
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack {
+                // Close button
+                HStack {
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Color.white.opacity(0.2))
+                            .clipShape(Circle())
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 50)
+                }
+                
+                Spacer()
+                
+                // Image - use userImageUrl for Up&Down Live photos
+                if let userImageUrl = post.userImageUrl, userImageUrl.contains("live_") {
+                    LocalAsyncImage(path: userImageUrl)
+                        .scaledToFit()
+                        .cornerRadius(16)
+                        .padding(.horizontal, 16)
+                }
+                
+                Spacer()
+                
+                // Info
+                VStack(spacing: 8) {
+                    Text(post.title ?? "Träningspass")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 16) {
+                        if let distance = post.distance, distance > 0 {
+                            Label(String(format: "%.2f km", distance), systemImage: "figure.run")
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        
+                        if let duration = post.duration, duration > 0 {
+                            Label(formatDuration(duration), systemImage: "clock")
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .font(.system(size: 14))
+                    
+                    Text(formatDate(post.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.bottom, 50)
+            }
+        }
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%d:%02d", minutes, secs)
+        }
+    }
+    
+    private func formatDate(_ isoString: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        guard let date = isoFormatter.date(from: isoString) else { return "" }
+        
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter.string(from: date)
+    }
 }
 
 // MARK: - Helper Functions

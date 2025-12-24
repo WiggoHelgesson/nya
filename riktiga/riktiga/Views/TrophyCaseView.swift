@@ -73,7 +73,7 @@ struct TrophyCaseView: View, Equatable {
             HStack {
                 Text("Pokaler")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
@@ -99,7 +99,7 @@ struct TrophyCaseView: View, Equatable {
                 HStack {
                     Text("Alla pokaler")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundColor(.gray)
@@ -108,7 +108,7 @@ struct TrophyCaseView: View, Equatable {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .sheet(isPresented: $showAllTrophies) {
             AllTrophiesView(activityCount: activityCount, personalBests: personalBests)
@@ -153,7 +153,7 @@ struct TrophyBadge: View {
             
             Text(trophy.title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .multilineTextAlignment(.center)
                 .frame(width: 90)
         }
@@ -203,7 +203,7 @@ struct AllTrophiesView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(trophy.title)
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text(detailText(for: trophy, activityCount: activityCount, personalBests: personalBests))
                                     .font(.system(size: 14))
                                     .foregroundColor(unlocked ? .green : .gray)

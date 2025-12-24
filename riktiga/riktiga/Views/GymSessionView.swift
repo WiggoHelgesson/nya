@@ -18,8 +18,6 @@ struct GymSessionView: View {
     @State private var didLoadSavedWorkouts = false
     @State private var hasInitializedSession = false
     @State private var lastPersistedElapsedSeconds: Int = 0
-    @State private var xpCelebrationData: XpCelebrationData? = nil
-    @State private var showStreakCelebration = false
     @FocusState private var focusedField: GymSessionInputField?
     @State private var showWorkoutGenerator = false
     @State private var generatorPrompt: String = ""
@@ -43,16 +41,16 @@ struct GymSessionView: View {
                     Text("Skapa ett pass med UPPY")
                         .font(.system(size: 15, weight: .semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(Color(.systemBackground))
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
-                .background(Color.black)
+                .background(Color.primary)
                 .cornerRadius(14)
             }
             
             Text("Beta version")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.gray)
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
     }
@@ -107,8 +105,8 @@ struct GymSessionView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(generatorWordCount == 0 || isGeneratingWorkout ? Color.gray.opacity(0.3) : Color.black)
-                    .foregroundColor(generatorWordCount == 0 || isGeneratingWorkout ? .gray : .white)
+                    .background(generatorWordCount == 0 || isGeneratingWorkout ? Color.secondary.opacity(0.3) : Color.primary)
+                    .foregroundColor(generatorWordCount == 0 || isGeneratingWorkout ? .secondary : Color(.systemBackground))
                     .cornerRadius(16)
                 }
                 .disabled(generatorWordCount == 0 || isGeneratingWorkout)
@@ -202,7 +200,7 @@ struct GymSessionView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sparade pass")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .padding(.horizontal, 16)
             
             if viewModel.isLoadingSavedWorkouts {
@@ -212,7 +210,7 @@ struct GymSessionView: View {
             } else if viewModel.savedWorkouts.isEmpty {
                 Text("Du har inga sparade pass ännu.")
                     .font(.system(size: 13))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .padding(.horizontal, 16)
             } else {
                 ForEach(viewModel.savedWorkouts) { workout in
@@ -223,21 +221,20 @@ struct GymSessionView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(workout.name)
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("\(workout.exercises.count) övningar")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.secondary)
                             }
                             Spacer()
                             Image(systemName: "arrow.down.circle.fill")
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .font(.system(size: 18))
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -266,11 +263,11 @@ struct GymSessionView: View {
                             VStack(spacing: 24) {
                                 Image(systemName: "dumbbell.fill")
                                     .font(.system(size: 60))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.secondary)
                                 
                                 Text("Lägg till övningar för att börja")
                                     .font(.headline)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.secondary)
                                 
                                 Button(action: {
                                     showExercisePicker = true
@@ -280,10 +277,10 @@ struct GymSessionView: View {
                                         Text("Lägg till övning")
                                     }
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 16)
-                                    .background(Color(.systemGray6))
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(12)
                                 }
                                 .padding(.horizontal, 16)
@@ -359,10 +356,10 @@ struct GymSessionView: View {
                                     Text("Lägg till övning")
                                 }
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(Color(.systemGray6))
+                                .background(Color(.secondarySystemBackground))
                                 .cornerRadius(12)
                             }
                             .padding(.horizontal, 16)
@@ -381,7 +378,7 @@ struct GymSessionView: View {
                         showCancelConfirmation = true
                     }) {
                         Image(systemName: "xmark")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .font(.system(size: 16, weight: .semibold))
                     }
                 }
@@ -403,21 +400,6 @@ struct GymSessionView: View {
                     viewModel.addExercise(exercise)
                 }
             }
-            .sheet(item: $xpCelebrationData) { data in
-                XpCelebrationView(
-                    points: data.points,
-                    buttonTitle: "Fortsätt"
-                ) {
-                    xpCelebrationData = nil
-                    showStreakCelebration = true
-                }
-            }
-            .sheet(isPresented: $showStreakCelebration) {
-                StreakCelebrationView(onDismiss: {
-                    showStreakCelebration = false
-                    showCompleteSession = true
-                })
-            }
             .sheet(isPresented: $showWorkoutGenerator) {
                 workoutGeneratorSheet
             }
@@ -432,6 +414,7 @@ struct GymSessionView: View {
                         duration: sessionData.duration,
                         earnedPoints: sessionData.earnedXP,
                         routeImage: nil,
+                        routeCoordinates: [],  // No route for gym sessions
                         elevationGain: 0,
                         maxSpeed: 0,
                         completedSplits: [],
@@ -519,18 +502,18 @@ struct GymSessionView: View {
         // Update streak
         StreakManager.shared.registerWorkoutCompletion()
         
-        let points = viewModel.sessionData?.earnedXP ?? 0
-        xpCelebrationData = XpCelebrationData(points: points)
+        // Go directly to session complete
+        showCompleteSession = true
     }
     
     private func metricView(title: String, value: String) -> some View {
         VStack(spacing: 6) {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.gray)
+                .foregroundColor(.secondary)
             Text(value)
                 .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
     }
 }
@@ -628,12 +611,12 @@ private struct HoldToSaveButton: View {
                     .fill(Color(.systemGray5))
                 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.black)
+                    .fill(Color.primary)
                     .frame(width: min(fillWidth, width))
                 
                 Text(title.uppercased())
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(.systemBackground))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(height: 54)
@@ -723,12 +706,12 @@ struct ExerciseCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(exercise.name)
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     if let category = exercise.category {
                         Text(category)
                             .font(.system(size: 14))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -746,28 +729,26 @@ struct ExerciseCard: View {
             .padding(.top, 12)
             
             // Sets header
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Text("SET")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .frame(width: 40, alignment: .center)
+                    .foregroundColor(.secondary)
+                    .frame(width: 32, alignment: .center)
                 Text("FÖRRA")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .frame(width: 70, alignment: .leading)
+                    .foregroundColor(.secondary)
+                    .frame(width: 55, alignment: .leading)
                 Text("KG")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .frame(width: 80, alignment: .center)
+                    .foregroundColor(.secondary)
+                    .frame(width: 60, alignment: .center)
                 Text("REPS")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.gray)
-                    .frame(width: 80, alignment: .center)
+                    .foregroundColor(.secondary)
+                    .frame(width: 60, alignment: .center)
                 Spacer()
-                Color.clear
-                    .frame(width: 28)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 24)
             
             // Sets
             ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
@@ -807,9 +788,8 @@ struct ExerciseCard: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
         }
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
         .padding(.horizontal, 16)
         .confirmationDialog("Ta bort övning?", isPresented: $showDeleteConfirmation) {
             Button("Ta bort", role: .destructive) {
@@ -872,39 +852,39 @@ struct SetRow: View {
     }
     
     var body: some View {
-        let inputBackground = isCompleted ? Color.white.opacity(0.95) : Color(.systemGray6)
-        let rowBackground = isCompleted ? Color(red: 210/255, green: 248/255, blue: 210/255) : Color.white
+        let inputBackground = isCompleted ? Color(.systemBackground).opacity(0.95) : Color(.systemGray6)
+        let rowBackground = isCompleted ? Color(red: 210/255, green: 248/255, blue: 210/255) : Color(.secondarySystemBackground)
         let checkBackground = isCompleted ? Color(red: 47/255, green: 158/255, blue: 68/255) : Color(.systemGray5)
         
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             // Set number
             Text("\(setNumber)")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
-                .frame(width: 40, alignment: .center)
+                .foregroundColor(.primary)
+                .frame(width: 32, alignment: .center)
             
             VStack(alignment: .leading, spacing: 2) {
                 if let previousSet {
                     Text(formattedWeight(previousSet.kg))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
                     Text("\(previousSet.reps) reps")
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                 } else {
                     Text("—")
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                 }
             }
-            .frame(width: 70, alignment: .leading)
+            .frame(width: 55, alignment: .leading)
             
             // KG input
             TextField("0", text: $kgText)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
                 .font(.system(size: 16, weight: .medium))
-                .frame(width: 80)
+                .frame(width: 60)
                 .padding(.vertical, 8)
                 .background(inputBackground)
                 .cornerRadius(8)
@@ -921,7 +901,7 @@ struct SetRow: View {
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.center)
                 .font(.system(size: 16, weight: .medium))
-                .frame(width: 80)
+                .frame(width: 60)
                 .padding(.vertical, 8)
                 .background(inputBackground)
                 .cornerRadius(8)
@@ -948,21 +928,20 @@ struct SetRow: View {
                     )
             }
             .buttonStyle(.plain)
-            .frame(width: 40, alignment: .center)
             
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.red)
             }
-            .frame(width: 28, alignment: .center)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(rowBackground)
         )
+        .padding(.horizontal, 12) // Margin from card edges
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isCompleted)
     }
     
@@ -1030,7 +1009,7 @@ struct ExercisePickerView: View {
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .background(Color.white)
+                .background(Color(.systemBackground))
                 
                 // Filter buttons
                 HStack(spacing: 12) {
@@ -1043,11 +1022,11 @@ struct ExercisePickerView: View {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 12))
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 8)
-                        .background(selectedEquipment != nil ? Color.black.opacity(0.1) : Color(.systemGray6))
+                        .background(selectedEquipment != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
                         .cornerRadius(10)
                     }
                     
@@ -1060,17 +1039,17 @@ struct ExercisePickerView: View {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 12))
                         }
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 8)
-                        .background(selectedTarget != nil ? Color.black.opacity(0.1) : Color(.systemGray6))
+                        .background(selectedTarget != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
                         .cornerRadius(10)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(Color.white)
+                .background(Color(.systemBackground))
                 
                 if isLoading {
                     ProgressView()
@@ -1082,10 +1061,10 @@ struct ExercisePickerView: View {
                             .foregroundColor(.orange)
                         Text("Kunde inte ladda övningar")
                             .font(.headline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                         Button("Försök igen") {
                             Task {
@@ -1094,8 +1073,8 @@ struct ExercisePickerView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(Color.black)
-                        .foregroundColor(.white)
+                        .background(Color.primary)
+                        .foregroundColor(Color(.systemBackground))
                         .cornerRadius(8)
                     }
                     .padding()
@@ -1118,7 +1097,7 @@ struct ExercisePickerView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Senast använda")
                                         .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                         .padding(.horizontal, 16)
                                         .padding(.top, 16)
                                     
@@ -1139,10 +1118,10 @@ struct ExercisePickerView: View {
                                                 VStack(alignment: .leading, spacing: 4) {
                                                     Text(exercise.displayName)
                                                         .font(.system(size: 16, weight: .medium))
-                                                        .foregroundColor(.black)
+                                                        .foregroundColor(.primary)
                                                     Text(exercise.swedishBodyPart)
                                                         .font(.system(size: 13))
-                                                        .foregroundColor(.gray)
+                                                        .foregroundColor(.secondary)
                                                 }
                                                 Spacer()
                                                 Image(systemName: "clock.arrow.circlepath")
@@ -1160,7 +1139,7 @@ struct ExercisePickerView: View {
                                     
                                     Text("Alla övningar")
                                         .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                         .padding(.horizontal, 16)
                                 }
                             }
@@ -1183,23 +1162,23 @@ struct ExercisePickerView: View {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(exercise.displayName)
                                                 .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.black)
+                                                .foregroundColor(.primary)
                                                 .multilineTextAlignment(.leading)
                                             
                                             Text(exercise.swedishBodyPart)
                                                 .font(.system(size: 14))
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(.secondary)
                                         }
                                         
                                         Spacer()
                                         
                                         Image(systemName: "arrow.up.right")
                                             .font(.system(size: 18))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
-                                    .background(Color.white)
+                                    .background(Color(.systemBackground))
                                 }
                                 
                                 Divider()
@@ -1252,7 +1231,7 @@ struct ExercisePickerView: View {
                     }
                 )
             }
-            .background(Color.white)
+            .background(Color(.systemBackground))
         }
     }
     
@@ -1465,7 +1444,7 @@ struct EquipmentFilterSheet: View {
                 } label: {
                     HStack {
                         Text("All utrustning")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Spacer()
                         if selectedEquipment == nil {
                             Image(systemName: "checkmark")
@@ -1482,7 +1461,7 @@ struct EquipmentFilterSheet: View {
                     } label: {
                         HStack {
                             Text(equipment.prefix(1).capitalized + equipment.dropFirst())
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Spacer()
                             if selectedEquipment == equipment {
                                 Image(systemName: "checkmark")
@@ -1522,7 +1501,7 @@ struct MuscleFilterSheet: View {
                 } label: {
                     HStack {
                         Text("Alla muskler")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Spacer()
                         if selectedTarget == nil {
                             Image(systemName: "checkmark")
@@ -1539,7 +1518,7 @@ struct MuscleFilterSheet: View {
                     } label: {
                         HStack {
                             Text(target.prefix(1).capitalized + target.dropFirst())
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Spacer()
                             if selectedTarget == target {
                                 Image(systemName: "checkmark")
@@ -1592,7 +1571,7 @@ struct ExerciseIconView: View {
     var body: some View {
         Image(systemName: iconName)
             .font(.system(size: 28))
-            .foregroundColor(.black)
+            .foregroundColor(.primary)
             .frame(width: 60, height: 60)
             .background(Color(.systemGray6))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -1611,8 +1590,8 @@ struct FilterButton: View {
                 .font(.system(size: 14, weight: .medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.black : Color(.systemGray6))
-                .foregroundColor(isSelected ? .white : .black)
+                .background(isSelected ? Color.primary : Color(.systemGray6))
+                .foregroundColor(isSelected ? Color(.systemBackground) : .primary)
                 .cornerRadius(20)
         }
     }

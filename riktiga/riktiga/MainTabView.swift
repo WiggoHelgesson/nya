@@ -56,12 +56,13 @@ extension View {
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var navigationTracker = NavigationDepthTracker.shared
+    @ObservedObject private var notificationNav = NotificationNavigationManager.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var hasActiveSession = SessionManager.shared.hasActiveSession
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem(Zonkriget), 1=Socialt, 2=Belöningar, 3=Lektioner, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem(Zonkriget/Lektioner), 1=Socialt, 2=Starta pass (intercepted), 3=Belöningar, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     
@@ -71,7 +72,7 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             // NOTE: Each tab view manages its own NavigationStack - don't nest here
             TabView(selection: $selectedTab) {
-                ZoneWarView()
+                HomeContainerView()
                     .tag(0)
                     .tabItem {
                         Image(systemName: "house.fill")
@@ -85,18 +86,19 @@ struct MainTabView: View {
                         Text("Socialt")
                     }
                 
-                RewardsView()
+                // Placeholder for center "Starta pass" button
+                Color.clear
                     .tag(2)
+                    .tabItem {
+                        Image(systemName: "figure.run")
+                        Text("Starta pass")
+                    }
+                
+                RewardsView()
+                    .tag(3)
                     .tabItem {
                         Image(systemName: "gift.fill")
                         Text("Belöningar")
-                    }
-                
-                LessonsView()
-                    .tag(3)
-                    .tabItem {
-                        Image(systemName: "figure.golf")
-                        Text("Lektioner")
                     }
                 
                 ProfileView()
@@ -108,11 +110,23 @@ struct MainTabView: View {
             }
             .accentColor(.black)
             .ignoresSafeArea(.keyboard, edges: .bottom)
-            
-            // Floating Start Session Button (now also on Hem (0) och Lektioner (3))
-            if (selectedTab == 0 || selectedTab == 1 || selectedTab == 2 || selectedTab == 3 || selectedTab == 4)
-                && navigationTracker.isAtRootView {
-                floatingStartButton
+            .onChange(of: selectedTab) { oldValue, newValue in
+                // Intercept "Starta pass" tab and show start session instead
+                if newValue == 2 {
+                    selectedTab = oldValue // Stay on previous tab
+                    triggerHeavyHaptic()
+                    Task {
+                        await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                        await MainActor.run {
+                            if hasActiveSession {
+                                showResumeSession = true
+                            } else {
+                                startActivityType = .running
+                                showStartSession = true
+                            }
+                        }
+                    }
+                }
             }
         }
         .fullScreenCover(isPresented: $showStartSession) {
@@ -165,14 +179,29 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
-            selectedTab = 2
+            selectedTab = 3  // Belöningar is now at index 3
             showStartSession = false
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToLessons"))) { _ in
-            selectedTab = 3
+            selectedTab = 0  // Go to Hem tab
             showStartSession = false
             showResumeSession = false
+            // Post notification to HomeContainerView to switch to Lektioner
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToLektionerSubTab"), object: nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
+            selectedTab = 1  // Socialt tab
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onChange(of: notificationNav.shouldNavigateToNews) { _, shouldNavigate in
+            if shouldNavigate {
+                selectedTab = 1  // Switch to Socialt tab
+                // Post notification to SocialView to switch to News tab
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToNewsTab"), object: nil)
+                notificationNav.resetNavigation()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
             showStartSession = false

@@ -84,7 +84,7 @@ struct ProgressiveOverloadView: View {
                             HStack {
                                 Text("Följ din styrkeutveckling")
                                     .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 
                                 if isRefreshing {
                                     ProgressView()
@@ -98,7 +98,7 @@ struct ProgressiveOverloadView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
                         .padding(.horizontal, 16)
@@ -130,7 +130,7 @@ struct ProgressiveOverloadView: View {
                                                     Text("PRO")
                                                         .font(.system(size: 14, weight: .black))
                                                 }
-                                                .foregroundColor(.black)
+                                                .foregroundColor(.primary)
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 6)
                                                 .background(
@@ -492,7 +492,7 @@ private struct ExerciseHistoryRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(history.name)
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     if let category = history.category {
                         Text(category)
@@ -508,7 +508,7 @@ private struct ExerciseHistoryRow: View {
                     if let bestWeight = history.personalBestWeight {
                         Text("\(String(format: "%.0f", bestWeight)) kg")
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("Personbästa")
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
@@ -547,7 +547,7 @@ private struct ExerciseHistoryRow: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         .drawingGroup() // GPU-accelerated rendering
@@ -595,7 +595,7 @@ private struct ExerciseHistoryDetailView: View {
             VStack(spacing: 4) {
                 Text(history.name)
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 if let category = history.category {
                     Text(category)
                         .font(.system(size: 15))
@@ -611,7 +611,7 @@ private struct ExerciseHistoryDetailView: View {
                 VStack(spacing: 4) {
                     Text("\(String(format: "%.0f", history.latestSnapshot?.bestSet.weight ?? 0))")
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Text("Senaste vikt")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
@@ -633,7 +633,7 @@ private struct ExerciseHistoryDetailView: View {
                 VStack(spacing: 4) {
                     Text("\(history.history.count)")
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Text("Pass")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
@@ -656,7 +656,7 @@ private struct ExerciseHistoryDetailView: View {
             .clipShape(Capsule())
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
@@ -665,7 +665,7 @@ private struct ExerciseHistoryDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Utvecklingskurva")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             // Build chart data (personal best weight per session)
             let chartData = history.history.map { snapshot in
@@ -765,7 +765,7 @@ private struct ExerciseHistoryDetailView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
@@ -774,7 +774,7 @@ private struct ExerciseHistoryDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Historik")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             ForEach(Array(history.history.enumerated().reversed()), id: \.element.id) { index, snapshot in
                 let previousSnapshot: ExerciseSnapshot? = index > 0 ? history.history[index - 1] : nil
@@ -784,7 +784,7 @@ private struct ExerciseHistoryDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(dateFormatter.string(from: snapshot.date))
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             Text("\(String(format: "%.1f", snapshot.bestSet.weight)) kg × \(snapshot.bestSet.reps) reps")
                                 .font(.system(size: 14))
@@ -796,7 +796,7 @@ private struct ExerciseHistoryDetailView: View {
                         VStack(alignment: .trailing, spacing: 4) {
                             Text("\(String(format: "%.0f", snapshot.bestSet.weight)) kg")
                                 .font(.system(size: 17, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             // Change from previous
                             if let prev = previousSnapshot {
@@ -817,7 +817,7 @@ private struct ExerciseHistoryDetailView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }

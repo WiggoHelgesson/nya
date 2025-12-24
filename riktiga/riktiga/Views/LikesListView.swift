@@ -75,7 +75,7 @@ struct LikesListView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .frame(width: 32, height: 32)
                             .background(Color(.systemGray5))
                             .clipShape(Circle())
@@ -164,7 +164,7 @@ private struct LikeUserRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(user.name)
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("@\(user.name.lowercased())")
                             .font(.system(size: 13))
                             .foregroundColor(.gray)

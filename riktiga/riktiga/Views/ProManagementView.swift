@@ -27,7 +27,7 @@ struct ProManagementView: View {
                             
                             Text("Up&Down PRO")
                                 .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             if isLoadingPremium {
                                 VStack(spacing: 8) {
@@ -60,7 +60,7 @@ struct ProManagementView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("PRO fördelar")
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             VStack(spacing: 12) {
                                 BenefitRow(
@@ -122,11 +122,11 @@ struct ProManagementView: View {
                                         }
                                         Text(isRestoring ? "Återställer..." : "Återställ köp")
                                             .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding(16)
-                                    .background(Color.white)
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(12)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
@@ -161,11 +161,11 @@ struct ProManagementView: View {
                                         }
                                         Text(isRestoring ? "Återställer..." : "Återställ köp")
                                             .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding(16)
-                                    .background(Color.white)
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(12)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
@@ -255,13 +255,13 @@ struct BenefitRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(width: 20)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(description)
                     .font(.system(size: 14))

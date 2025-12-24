@@ -66,7 +66,7 @@ struct ShareActivityView: View {
         VStack(spacing: 6) {
             Text("Up&Down")
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             Text(headerSubtitle)
                 .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.gray)
@@ -80,7 +80,16 @@ struct ShareActivityView: View {
     }
     
     private var templates: [ShareCardTemplate] {
-        var list: [ShareCardTemplate] = [.stats, .streak, .calendar]
+        var list: [ShareCardTemplate] = [.stats]
+        
+        // Only show streak card if user has an actual streak (2+ consecutive days)
+        let streakDays = insightsLoader.insights.streakInfo.consecutiveDays
+        if streakDays >= 2 {
+            list.append(.streak)
+        }
+        
+        list.append(.calendar)
+        
         if (post.exercises?.isEmpty == false) {
             list.append(.muscles)
         }
@@ -472,7 +481,8 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
         case .transparent:
             return [Color.black.opacity(0.35), Color.black.opacity(0.8)]
         case .white:
-            return [Color.white.opacity(0.1), Color.white.opacity(0.45)]
+            // Darker overlay for white background so text is readable over images
+            return [Color.black.opacity(0.3), Color.black.opacity(0.6)]
         case .black:
             return [Color.black.opacity(0.55), Color.black.opacity(0.9)]
         }
@@ -481,9 +491,14 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
     var preferredTextColor: Color {
         switch self {
         case .transparent: return .white
-        case .white: return .white
+        case .white: return .black  // Black text on white background
         case .black: return .white
         }
+    }
+    
+    // Text color when cover image is shown (always white for readability over dark overlay)
+    var textColorWithCoverImage: Color {
+        return .white
     }
 }
 
@@ -580,7 +595,7 @@ struct ShareCardView: View {
     }
     
     private var textColor: Color {
-        shouldShowCoverImage ? .white : background.preferredTextColor
+        shouldShowCoverImage ? background.textColorWithCoverImage : background.preferredTextColor
     }
     
     private var statsCard: some View {
@@ -679,16 +694,30 @@ struct ShareCardView: View {
                                 .frame(height: 28 * scale)
                         } else {
                             let isWorkout = workoutDays.contains(day)
+                            let circleColor: Color = {
+                                if isWorkout {
+                                    return background == .white ? .black : .white
+                                } else {
+                                    return background == .white ? Color.black.opacity(0.08) : Color.white.opacity(0.08)
+                                }
+                            }()
+                            let dayTextColor: Color = {
+                                if isWorkout {
+                                    return background == .white ? .white : .black
+                                } else {
+                                    return textColor.opacity(0.7)
+                                }
+                            }()
                             Text("\(day)")
                                 .font(.system(size: 14 * scale, weight: .semibold))
                                 .frame(height: 32 * scale)
                                 .frame(maxWidth: .infinity)
                                 .background(
                                     Circle()
-                                        .fill(isWorkout ? Color.white : Color.white.opacity(0.08))
+                                        .fill(circleColor)
                                         .shadow(color: isWorkout ? Color.black.opacity(0.15) : .clear, radius: isWorkout ? 4 * scale : 0, x: 0, y: 2)
                                 )
-                                .foregroundColor(isWorkout ? .black : textColor.opacity(0.7))
+                                .foregroundColor(dayTextColor)
                         }
                     }
                 }
@@ -737,7 +766,8 @@ struct ShareCardView: View {
     }
 
     private var brandSignature: some View {
-        HStack(spacing: 16 * scale) {
+        let borderColor = background == .white && !shouldShowCoverImage ? Color.black.opacity(0.2) : Color.white.opacity(0.6)
+        return HStack(spacing: 16 * scale) {
             Image("23")
                 .resizable()
                 .renderingMode(.original)
@@ -746,7 +776,7 @@ struct ShareCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16 * scale))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16 * scale)
-                        .stroke(Color.white.opacity(0.6), lineWidth: 2 * scale)
+                        .stroke(borderColor, lineWidth: 2 * scale)
                 )
             VStack(alignment: .leading, spacing: 4 * scale) {
                 Text("Up&Down")
@@ -819,7 +849,7 @@ struct ShareActionButton: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.gray)

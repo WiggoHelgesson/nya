@@ -217,7 +217,34 @@ class WorkoutService {
         }
     }
     
-    func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, earnedPoints: Int = 0) async throws {
+    func updateWorkoutPost(postId: String, title: String, description: String, userImageUrl: String? = nil) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        var updateData: [String: AnyJSON] = [
+            "title": .string(title),
+            "description": .string(description)
+        ]
+        
+        // Only update image URL if a new one was provided
+        if let imageUrl = userImageUrl {
+            updateData["user_image_url"] = .string(imageUrl)
+        }
+        
+        do {
+            try await supabase
+                .from("workout_posts")
+                .update(updateData)
+                .eq("id", value: postId)
+                .execute()
+            
+            print("✅ Successfully updated workout post: \(postId)")
+        } catch {
+            print("❌ Error updating workout post: \(error)")
+            throw error
+        }
+    }
+    
+    func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, earnedPoints: Int = 0, isLivePhoto: Bool = false) async throws {
         try await AuthSessionManager.shared.ensureValidSession()
         var postToSave = post
         var uploadedRouteImageUrl: String? = nil
@@ -240,7 +267,9 @@ class WorkoutService {
             if let userImage = userImage {
                 group.addTask {
                     do {
-                        let userImageFileName = "\(post.id)_user_\(UUID().uuidString).jpg"
+                        // Use "live_" prefix for Up&Down Live photos
+                        let prefix = isLivePhoto ? "live_" : ""
+                        let userImageFileName = "\(prefix)\(post.id)_user_\(UUID().uuidString).jpg"
                         guard let imageData = userImage.jpegData(compressionQuality: 0.7) else {
                             return
                         }

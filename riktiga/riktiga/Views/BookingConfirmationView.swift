@@ -37,7 +37,7 @@ struct BookingConfirmationView: View {
                     VStack(spacing: 8) {
                         Text("Bokning bekräftad!")
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         Text("Din lektion är nu bokad")
                             .font(.subheadline)
@@ -56,7 +56,7 @@ struct BookingConfirmationView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(trainer.name)
                                     .font(.headline)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 
                                 if let city = trainer.city {
                                     HStack(spacing: 4) {
@@ -118,18 +118,18 @@ struct BookingConfirmationView: View {
                             HStack {
                                 Text("Totalt betalt")
                                     .font(.headline)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 
                                 Spacer()
                                 
                                 Text("\(price) kr")
                                     .font(.system(size: 24, weight: .bold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                             }
                         }
                         .padding()
                     }
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(16)
                     .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
                     .padding(.horizontal)
@@ -140,7 +140,7 @@ struct BookingConfirmationView: View {
                     VStack(spacing: 12) {
                         HStack(spacing: 8) {
                             Image(systemName: "bell.badge.fill")
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Tränaren kommer att bekräfta din bokning inom kort")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -148,7 +148,7 @@ struct BookingConfirmationView: View {
                         
                         HStack(spacing: 8) {
                             Image(systemName: "message.fill")
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Du får en notis när bokningen är bekräftad")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -207,7 +207,7 @@ private struct ConfirmationDetailRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .frame(width: 24)
             
             Text(title)
@@ -219,7 +219,7 @@ private struct ConfirmationDetailRow: View {
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .multilineTextAlignment(.trailing)
         }
     }

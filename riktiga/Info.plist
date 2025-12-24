@@ -14,5 +14,12 @@
 	<array>
 		<string>location</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram</string>
+		<string>instagram-stories</string>
+		<string>snapchat</string>
+		<string>sms</string>
+	</array>
 </dict>
 </plist>

@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 import Supabase
 import Functions
+import Combine
 
 final class PushNotificationService: NSObject {
     static let shared = PushNotificationService()
@@ -237,14 +238,86 @@ final class PushNotificationService: NSObject {
             .insert(payload)
             .execute()
     }
+    
+    // MARK: - Notify All Users About News
+    
+    func notifyAllUsersAboutNews(newsId: String) async {
+        print("🔔 [PUSH] Sending news notification to all users")
+        
+        do {
+            // Get all device tokens (all active users)
+            struct DeviceToken: Decodable {
+                let user_id: String
+            }
+            
+            let tokens: [DeviceToken] = try await SupabaseConfig.supabase
+                .from("device_tokens")
+                .select("user_id")
+                .eq("is_active", value: true)
+                .execute()
+                .value
+            
+            let uniqueUserIds = Set(tokens.map { $0.user_id })
+            print("🔔 [PUSH] Found \(uniqueUserIds.count) users to notify about news")
+            
+            // Send push to each user
+            for userId in uniqueUserIds {
+                await sendRealPushNotification(
+                    toUserId: userId,
+                    title: "Ny Nyhet",
+                    body: "Up&Down la ut en ny nyhet!",
+                    data: ["type": "news", "news_id": newsId]
+                )
+            }
+            
+            print("✅ [PUSH] News notification sent to all users")
+        } catch {
+            print("❌ [PUSH] Failed to send news notifications: \(error)")
+        }
+    }
+}
+
+// MARK: - Notification Navigation Manager
+
+class NotificationNavigationManager: ObservableObject {
+    static let shared = NotificationNavigationManager()
+    
+    @Published var shouldNavigateToNews = false
+    @Published var shouldNavigateToPost: String? = nil
+    
+    func navigateToNews() {
+        DispatchQueue.main.async {
+            self.shouldNavigateToNews = true
+        }
+    }
+    
+    func navigateToPost(postId: String) {
+        DispatchQueue.main.async {
+            self.shouldNavigateToPost = postId
+        }
+    }
+    
+    func resetNavigation() {
+        shouldNavigateToNews = false
+        shouldNavigateToPost = nil
+    }
 }
 
 // MARK: - App Delegate for Push Notifications
+
+import InsertAffiliateSwift
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        
+        // Initialize Insert Affiliate SDK
+        InsertAffiliateSwift.initialize(
+            companyCode: "Ooc4ERYgmYaZtJeCBnR7TjZb1BL2",
+            verboseLogging: false
+        )
+        
         return true
     }
     
@@ -256,6 +329,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("❌ Failed to register for remote notifications: \(error)")
     }
     
+    // Called when app is about to go to background
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        print("📥 [AppDelegate] App entering background - ensuring session is saved")
+        // Force synchronize UserDefaults to disk
+        UserDefaults.standard.synchronize()
+    }
+    
+    // Called when app is about to be terminated
+    func applicationWillTerminate(_ application: UIApplication) {
+        print("🛑 [AppDelegate] App will terminate - force saving all data")
+        // Force synchronize UserDefaults to disk before termination
+        UserDefaults.standard.synchronize()
+    }
+    
     // Handle notification when app is in foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound, .badge])
@@ -265,7 +352,21 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         print("📱 Notification tapped: \(userInfo)")
-        // Handle navigation based on notification type
+        
+        // Check notification type and navigate accordingly
+        if let type = userInfo["type"] as? String {
+            switch type {
+            case "news":
+                NotificationNavigationManager.shared.navigateToNews()
+            case "new_workout", "like", "comment":
+                if let postId = userInfo["post_id"] as? String {
+                    NotificationNavigationManager.shared.navigateToPost(postId: postId)
+                }
+            default:
+                break
+            }
+        }
+        
         completionHandler()
     }
 }

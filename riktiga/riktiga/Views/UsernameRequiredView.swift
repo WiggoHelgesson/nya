@@ -18,7 +18,7 @@ struct UsernameRequiredView: View {
             VStack(spacing: 8) {
                 Text("Användarnamn krävs")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text("Välj ett användarnamn för att fortsätta")
                     .font(.system(size: 16))
@@ -31,7 +31,7 @@ struct UsernameRequiredView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Användarnamn")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 TextField("Användarnamn", text: $username)
                     .padding(12)

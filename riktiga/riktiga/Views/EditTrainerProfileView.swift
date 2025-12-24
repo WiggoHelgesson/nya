@@ -113,10 +113,10 @@ struct EditTrainerProfileView: View {
                                 if let loc = selectedLocation {
                                     HStack {
                                         Image(systemName: "mappin.circle.fill")
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                         Text("Vald plats: \(String(format: "%.4f", loc.latitude)), \(String(format: "%.4f", loc.longitude))")
                                             .font(.caption)
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                     }
                                 }
                                 

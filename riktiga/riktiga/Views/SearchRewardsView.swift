@@ -96,7 +96,7 @@ struct SearchRewardCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(reward.discount)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(reward.brandName)
                     .font(.system(size: 14, weight: .medium))
@@ -114,7 +114,7 @@ struct SearchRewardCard: View {
                 .foregroundColor(.gray)
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
     }

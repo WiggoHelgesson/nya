@@ -62,10 +62,12 @@ class SessionManager: ObservableObject {
             self.hasActiveSession = true
             self.activeSession = session
             self.acceptsSaves = true
+            print("✅ [SessionManager] Restored active session: \(session.activityType), duration: \(session.accumulatedDuration)s, distance: \(String(format: "%.2f", session.accumulatedDistance))km")
         } else {
             self.hasActiveSession = false
             self.activeSession = nil
             self.acceptsSaves = false
+            print("ℹ️ [SessionManager] No saved session found on init")
         }
     }
     
@@ -84,36 +86,42 @@ class SessionManager: ObservableObject {
             print("⏭️ saveActiveSession ignored (acceptsSaves=false)")
             return
         }
-        Task {
-            let session = ActiveSession(
-                activityType: activityType,
-                startTime: startTime,
-                isPaused: isPaused,
-                accumulatedDuration: duration,
-                accumulatedDistance: distance,
-                routeCoordinates: routeCoordinates.map { coord in
-                    ActiveSession.LocationCoordinate(
-                        latitude: coord.latitude,
-                        longitude: coord.longitude,
-                        timestamp: Date()
-                    )
-                },
-                completedSplits: completedSplits,
-                elevationGain: elevationGain,
-                maxSpeed: maxSpeed,
-                gymExercises: gymExercises
-            )
+        
+        let session = ActiveSession(
+            activityType: activityType,
+            startTime: startTime,
+            isPaused: isPaused,
+            accumulatedDuration: duration,
+            accumulatedDistance: distance,
+            routeCoordinates: routeCoordinates.map { coord in
+                ActiveSession.LocationCoordinate(
+                    latitude: coord.latitude,
+                    longitude: coord.longitude,
+                    timestamp: Date()
+                )
+            },
+            completedSplits: completedSplits,
+            elevationGain: elevationGain,
+            maxSpeed: maxSpeed,
+            gymExercises: gymExercises
+        )
+        
+        // Save to UserDefaults SYNCHRONOUSLY to ensure it's persisted before app is suspended
+        if let encoded = try? JSONEncoder().encode(session) {
+            UserDefaults.standard.set(encoded, forKey: "activeSession")
+            UserDefaults.standard.set(true, forKey: "hasActiveSession")
+            // Force immediate write to disk - critical for backgrounded apps
+            UserDefaults.standard.synchronize()
             
-            // Save to UserDefaults
-            if let encoded = try? JSONEncoder().encode(session) {
-                UserDefaults.standard.set(encoded, forKey: "activeSession")
-                UserDefaults.standard.set(true, forKey: "hasActiveSession")
-                
-                await MainActor.run {
-                    self.hasActiveSession = true
-                    self.activeSession = session
-                }
+            print("💾 Session saved: duration=\(duration)s, distance=\(String(format: "%.2f", distance))km, coords=\(routeCoordinates.count)")
+            
+            // Update in-memory state on main thread
+            DispatchQueue.main.async { [weak self] in
+                self?.hasActiveSession = true
+                self?.activeSession = session
             }
+        } else {
+            print("❌ Failed to encode session for saving")
         }
     }
     

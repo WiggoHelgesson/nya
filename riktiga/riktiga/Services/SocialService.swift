@@ -267,7 +267,13 @@ class SocialService {
                 do {
                     // Fetch current user info
                     let currentUser = try await supabase.auth.user()
-                    let userProfile: [UserSearchResult] = try await supabase
+                    
+                    struct ProfileInfo: Codable {
+                        let username: String?
+                        let avatar_url: String?
+                    }
+                    
+                    let userProfile: [ProfileInfo] = try await supabase
                         .from("profiles")
                         .select("username, avatar_url")
                         .eq("id", value: currentUser.id.uuidString)
@@ -278,8 +284,8 @@ class SocialService {
                         try await NotificationService.shared.createLikeNotification(
                             userId: postOwnerId,
                             likedByUserId: userId,
-                            likedByUserName: profile.name,
-                            likedByUserAvatar: profile.avatarUrl,
+                            likedByUserName: profile.username ?? "Användare",
+                            likedByUserAvatar: profile.avatar_url,
                             postId: postId,
                             postTitle: postTitle
                         )
@@ -452,7 +458,13 @@ class SocialService {
                 do {
                     // Fetch current user info
                     let currentUser = try await supabase.auth.user()
-                    let userProfile: [UserSearchResult] = try await supabase
+                    
+                    struct ProfileInfo: Codable {
+                        let username: String?
+                        let avatar_url: String?
+                    }
+                    
+                    let userProfile: [ProfileInfo] = try await supabase
                         .from("profiles")
                         .select("username, avatar_url")
                         .eq("id", value: currentUser.id.uuidString)
@@ -463,8 +475,8 @@ class SocialService {
                         try await NotificationService.shared.createCommentNotification(
                             userId: postOwnerId,
                             commentedByUserId: userId,
-                            commentedByUserName: profile.name,
-                            commentedByUserAvatar: profile.avatarUrl,
+                            commentedByUserName: profile.username ?? "Användare",
+                            commentedByUserAvatar: profile.avatar_url,
                             postId: postId,
                             postTitle: postTitle,
                             commentText: content

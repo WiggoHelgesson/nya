@@ -140,7 +140,6 @@ final class NotificationService {
             let actor_avatar_url: String?
             let type: String
             let post_id: String
-            let comment_text: String
         }
         
         let payload = Payload(
@@ -149,8 +148,7 @@ final class NotificationService {
             actor_username: commentedByUserName,
             actor_avatar_url: commentedByUserAvatar,
             type: "comment",
-            post_id: postId,
-            comment_text: String(commentText.prefix(100)) // Limit length
+            post_id: postId
         )
         
         try await supabase

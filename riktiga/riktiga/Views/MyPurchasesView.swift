@@ -15,15 +15,15 @@ struct MyPurchasesView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "cart")
                             .font(.system(size: 48))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                         
                         Text("Inga köp än")
                             .font(.headline)
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         Text("Dina köpta rabattkoder kommer att visas här")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                     }
                 } else {
@@ -65,18 +65,18 @@ struct PurchaseCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(purchase.brandName)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(purchase.discount)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
                 
                 Text(formatDate(purchase.purchaseDate))
                     .font(.system(size: 12))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
             .padding(16)
             
@@ -87,11 +87,11 @@ struct PurchaseCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Rabattkod")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                     
                     Text(purchase.discountCode)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 
                 Spacer()
@@ -102,17 +102,16 @@ struct PurchaseCard: View {
                 }) {
                     Image(systemName: "doc.on.doc")
                         .font(.system(size: 14))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(.systemBackground))
                         .frame(width: 32, height: 32)
-                        .background(Color.black)
+                        .background(Color.primary)
                         .cornerRadius(6)
                 }
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
     
     private func formatDate(_ date: Date) -> String {

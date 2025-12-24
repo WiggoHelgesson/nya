@@ -126,11 +126,11 @@ struct FindFriendsView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Rekommenderade vänner")
                                         .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                     
                                     Text("Baserat på gemensamma vänner")
                                         .font(.system(size: 14))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.secondary)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 16)
@@ -290,18 +290,18 @@ struct UserSearchCard: View {
                 HStack(spacing: 6) {
                     Text(user.name)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     // Chevron to indicate tappable
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.gray.opacity(0.6))
+                        .foregroundColor(.secondary.opacity(0.6))
                 }
                 
                 Text("@\(user.name.lowercased().replacingOccurrences(of: " ", with: ""))")
                     .font(.system(size: 13))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             }
             
@@ -328,21 +328,20 @@ struct UserSearchCard: View {
                     Text(isFollowing ? "Följer" : "Följ")
                         .font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundColor(isFollowing ? .gray : .white)
+                .foregroundColor(isFollowing ? .secondary : Color(.systemBackground))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isFollowing ? Color(.systemGray5) : Color.black)
+                        .fill(isFollowing ? Color(.systemGray5) : Color.primary)
                 )
             }
             .buttonStyle(.borderless) // Prevents NavigationLink from triggering
             .disabled(isProcessing)
         }
         .padding(14)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
     }
 }
 

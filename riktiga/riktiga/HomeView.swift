@@ -146,7 +146,7 @@ struct HomeView: View {
                             VStack(alignment: .leading, spacing: 16) {
                                 Text("Rekommenderade vänner")
                                     .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .padding(.horizontal, 20)
                                 
                                 if isLoadingRecommended {
@@ -155,7 +155,7 @@ struct HomeView: View {
                                         Spacer()
                                     }
                                     .padding(20)
-                                    .background(Color.white)
+                                    .background(Color(.secondarySystemBackground))
                                     .cornerRadius(16)
                                     .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
                                     .padding(.horizontal, 20)
@@ -400,7 +400,7 @@ struct HomeView: View {
                 } else {
                     Text(uppyInsight)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .multilineTextAlignment(.leading)
                 }
                 
@@ -421,7 +421,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Varumärken")
                 .font(.system(size: 20, weight: .black))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
@@ -444,7 +444,7 @@ struct HomeView: View {
                                 
                                 Text(brand.name.capitalized)
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .lineLimit(1)
                             }
                         }
@@ -543,12 +543,12 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Din streak")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     HStack(spacing: 8) {
                         Text("\(streakInfo.consecutiveDays)")
                             .font(.system(size: 28, weight: .black))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text(streakInfo.consecutiveDays == 1 ? "dag i rad" : "dagar i rad")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.gray)
@@ -702,7 +702,7 @@ extension HomeView {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Steg denna vecka")
                     .font(.system(size: 20, weight: .black))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Gå 10k steg och få 10 poäng varje dag")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
@@ -727,7 +727,7 @@ extension HomeView {
                 }
             }
             .padding(20)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
@@ -739,7 +739,7 @@ extension HomeView {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Träningspass denna månaden")
                     .font(.system(size: 20, weight: .black))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             .padding(.horizontal, 20)
             .padding(.top, 32)
@@ -755,7 +755,7 @@ extension HomeView {
                 }
             }
             .padding(20)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
@@ -835,7 +835,7 @@ extension HomeView {
         VStack(alignment: .leading, spacing: 16) {
             Text("Veckoöversikt")
                 .font(.system(size: 20, weight: .black))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .padding(.horizontal, 20)
             
             VStack(spacing: 12) {
@@ -858,7 +858,7 @@ extension HomeView {
                 }
             }
             .padding(20)
-            .background(Color.white)
+            .background(Color(.secondarySystemBackground))
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         }
@@ -971,7 +971,7 @@ struct RecommendedFriendCard: View {
             
             Text(user.name)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .lineLimit(1)
             
             Button(action: {
@@ -994,7 +994,7 @@ struct RecommendedFriendCard: View {
         }
         .frame(width: 100)
         .padding(12)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
     }

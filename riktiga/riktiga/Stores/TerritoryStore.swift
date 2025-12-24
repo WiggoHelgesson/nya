@@ -26,9 +26,12 @@ final class TerritoryStore: ObservableObject {
     private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
     private var lastTileFetchTime: Date = .distantPast
     private var lastTileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
-    private let tileCacheValidity: TimeInterval = 120 // 2 minutes - tiles change rarely
+    private let tileCacheValidity: TimeInterval = 30 // 30 seconds - faster refresh for new tiles
     private var isFetchingTiles: Bool = false // Prevent concurrent fetches
     private let maxCachedTiles: Int = 10000 // Support large areas - only visible viewport is fetched anyway
+    
+    // Track if we need force refresh (set after completing a workout)
+    @Published var needsForceRefresh: Bool = false
     
     // Debounce
     private var debounceTask: Task<Void, Never>?
@@ -197,8 +200,11 @@ final class TerritoryStore: ObservableObject {
         
         let now = Date()
         
+        // Check if we need force refresh (after completing a workout)
+        let shouldForce = forceRefresh || needsForceRefresh
+        
         // Skip cache check if force refresh
-        if !forceRefresh {
+        if !shouldForce {
             // Throttle tile fetches - only fetch if cache expired OR bounds are outside cached area
             let cacheValid = now.timeIntervalSince(lastTileFetchTime) < tileCacheValidity
             let boundsWithinCache: Bool = {
@@ -215,7 +221,12 @@ final class TerritoryStore: ObservableObject {
             }
         }
         
-        print("🔄 [TILES] Fetching tiles for bounds: \(minLat)-\(maxLat), \(minLon)-\(maxLon) (force: \(forceRefresh))")
+        // Clear the force refresh flag
+        if needsForceRefresh {
+            await MainActor.run { needsForceRefresh = false }
+        }
+        
+        print("🔄 [TILES] Fetching tiles for bounds: \(minLat)-\(maxLat), \(minLon)-\(maxLon) (force: \(shouldForce))")
         
         await MainActor.run { isFetchingTiles = true }
         defer { Task { @MainActor in isFetchingTiles = false } }
@@ -393,6 +404,11 @@ final class TerritoryStore: ObservableObject {
                 )
                 
                 print("✅ [TERRITORY] Tile claim RPC completed successfully!")
+                
+                // Set flag to force refresh tiles on next load
+                await MainActor.run {
+                    self.needsForceRefresh = true
+                }
                 
                 // Save bounds BEFORE invalidating cache
                 let savedBounds = self.lastTileBounds

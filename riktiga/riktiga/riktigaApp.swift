@@ -7,6 +7,8 @@
 
 import SwiftUI
 import StripePaymentSheet
+import InsertAffiliateSwift
+import RevenueCat
 
 @main
 struct UpAndDownApp: App {
@@ -74,8 +76,44 @@ struct UpAndDownApp: App {
                     }
                 }
             }
-            // Handle deep links (password reset, etc.)
+            // Handle deep links (password reset, Insert Affiliate, etc.)
             .onOpenURL { url in
+                print("📱 Received deep link: \(url)")
+                
+                // Check if this is an Insert Affiliate deep link
+                let urlString = url.absoluteString
+                
+                // Handle Insert Affiliate URL scheme (ia-companycode://affiliatecode)
+                if urlString.hasPrefix("ia-") {
+                    if let affiliateCode = url.host {
+                        Task {
+                            _ = await InsertAffiliateSwift.setShortCode(shortCode: affiliateCode)
+                            print("✅ Insert Affiliate code processed: \(affiliateCode)")
+                            // Set RevenueCat attribute if identifier exists
+                            if let identifier = InsertAffiliateSwift.returnInsertAffiliateIdentifier() {
+                                Purchases.shared.attribution.setAttributes(["insert_affiliate": identifier])
+                                print("✅ RevenueCat attribute set: \(identifier)")
+                            }
+                        }
+                    }
+                }
+                // Handle Insert Affiliate universal link (https://api.insertaffiliate.com/V1/companycode/affiliatecode)
+                else if urlString.contains("insertaffiliate.com") {
+                    let pathComponents = url.pathComponents
+                    if let affiliateCode = pathComponents.last, affiliateCode.count > 2 {
+                        Task {
+                            _ = await InsertAffiliateSwift.setShortCode(shortCode: affiliateCode)
+                            print("✅ Insert Affiliate code processed: \(affiliateCode)")
+                            // Set RevenueCat attribute if identifier exists
+                            if let identifier = InsertAffiliateSwift.returnInsertAffiliateIdentifier() {
+                                Purchases.shared.attribution.setAttributes(["insert_affiliate": identifier])
+                                print("✅ RevenueCat attribute set: \(identifier)")
+                            }
+                        }
+                    }
+                }
+                
+                // Handle other deep links (password reset, etc.)
                 _ = deepLinkHandler.handle(url: url)
             }
             // Show reset password sheet when triggered by deep link

@@ -10,6 +10,8 @@ struct UserProfileView: View {
     @State private var isLoading: Bool = true
     @State private var isFollowingUser: Bool = false
     @State private var followToggleInProgress: Bool = false
+    @State private var isPro: Bool = false
+    @State private var showPersonalRecords: Bool = false
     @StateObject private var profilePostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
     @Environment(\.dismiss) private var dismiss
@@ -23,27 +25,21 @@ struct UserProfileView: View {
                     // Header
                     VStack(spacing: 12) {
                         HStack(spacing: 12) {
-                            LocalAsyncImage(path: avatarUrl ?? "")
-                                .frame(width: 72, height: 72)
-                                .clipShape(Circle())
+                            ProfileAvatarView(path: avatarUrl ?? "", size: 72)
                                 .overlay(Circle().stroke(Color(.systemGray5), lineWidth: 1))
-                                .opacity((avatarUrl ?? "").isEmpty ? 0 : 1)
-                                .overlay(
-                                    Group {
-                                        if (avatarUrl ?? "").isEmpty {
-                                            Image(systemName: "person.circle.fill")
-                                                .resizable()
-                                                .scaledToFill()
-                                                .foregroundColor(.gray)
-                                                .frame(width: 72, height: 72)
-                                        }
-                                    }
-                                )
                             
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(username.isEmpty ? "Användare" : username)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(.black)
+                                HStack(spacing: 6) {
+                                    Text(username.isEmpty ? "Användare" : username)
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                    
+                                    if isPro {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.blue)
+                                    }
+                                }
                                 HStack(spacing: 16) {
                                     HStack(spacing: 4) {
                                         Text("Följare")
@@ -60,6 +56,24 @@ struct UserProfileView: View {
                                             .font(.system(size: 14, weight: .semibold))
                                     }
                                 }
+                                
+                                // Personal Records button
+                                Button(action: {
+                                    showPersonalRecords = true
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "trophy.fill")
+                                            .font(.system(size: 12))
+                                        Text("Personliga rekord")
+                                            .font(.system(size: 12, weight: .medium))
+                                    }
+                                    .foregroundColor(.primary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                                }
+                                .padding(.top, 4)
                             }
                             Spacer()
 
@@ -86,7 +100,7 @@ struct UserProfileView: View {
                         .padding(.top, 12)
                         .padding(.bottom, 12)
                     }
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     Divider()
                 
                     // Posts list
@@ -152,6 +166,9 @@ struct UserProfileView: View {
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
         }
+        .sheet(isPresented: $showPersonalRecords) {
+            PersonalRecordsView(userId: userId, username: username)
+        }
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
         .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
@@ -174,6 +191,7 @@ struct UserProfileView: View {
             if let profile = profile {
                 self.username = profile.name
                 self.avatarUrl = profile.avatarUrl
+                self.isPro = profile.isProMember
             }
             
             self.followersCount = followersIds.count

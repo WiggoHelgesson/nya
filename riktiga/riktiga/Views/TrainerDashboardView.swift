@@ -150,7 +150,7 @@ struct TrainerDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "creditcard.fill")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Utbetalningar")
                     .font(.system(size: 18, weight: .bold))
                 Spacer()
@@ -187,7 +187,7 @@ struct TrainerDashboardView: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .drawingGroup() // GPU-accelerated rendering
@@ -197,7 +197,7 @@ struct TrainerDashboardView: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Konto aktivt")
                         .font(.system(size: 14, weight: .semibold))
@@ -220,7 +220,7 @@ struct TrainerDashboardView: View {
                         if let available = balance.available?.first {
                             Text(StripeConnectService.formatBalance(available.amount, currency: available.currency))
                                 .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                         } else {
                             Text("0 SEK")
                                 .font(.system(size: 18, weight: .bold))
@@ -255,7 +255,7 @@ struct TrainerDashboardView: View {
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12))
                 }
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             }
             .padding(.top, 4)
         }
@@ -308,7 +308,7 @@ struct TrainerDashboardView: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Koppla betalningar")
                         .font(.system(size: 14, weight: .semibold))
@@ -571,7 +571,7 @@ struct TrainerDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "megaphone.fill")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Hantera annons")
                     .font(.system(size: 18, weight: .bold))
                 Spacer()

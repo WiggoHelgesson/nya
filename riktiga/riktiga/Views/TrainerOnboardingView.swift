@@ -242,7 +242,7 @@ struct TrainerOnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "person.text.rectangle")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("Din bakgrund")
                             .font(.headline)
                     }
@@ -275,7 +275,7 @@ struct TrainerOnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "lightbulb")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("Din träningsfilosofi")
                             .font(.headline)
                     }
@@ -477,7 +477,7 @@ struct TrainerOnboardingView: View {
                 } else {
                     Text("\(selectedSpecialties.count) specialiteter valda")
                         .font(.caption)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 
                 Spacer()
@@ -645,7 +645,7 @@ struct TrainerOnboardingView: View {
                     if !isMapLocked {
                         Image(systemName: "arrowtriangle.down.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .offset(y: -5)
                     }
                 }
@@ -688,7 +688,7 @@ struct TrainerOnboardingView: View {
                             Text("Ändra")
                         }
                         .font(.headline)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.systemGray5))
@@ -858,7 +858,7 @@ struct TrainerOnboardingView: View {
                             // Edit badge
                             Image(systemName: "camera.circle.fill")
                                 .font(.system(size: 24))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .background(Circle().fill(.white).frame(width: 20, height: 20))
                         }
                     }
@@ -928,7 +928,7 @@ struct TrainerOnboardingView: View {
                 } label: {
                     Text("Tillbaka")
                         .font(.headline)
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color(.systemGray5))
@@ -1309,7 +1309,7 @@ struct TrainerApplicationConfirmationView: View {
                 Spacer()
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 48))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Vi behandlar din ansökan")
                     .font(.title3)
                     .fontWeight(.semibold)

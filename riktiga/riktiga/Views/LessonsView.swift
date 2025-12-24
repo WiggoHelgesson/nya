@@ -45,7 +45,7 @@ struct LessonsView: View {
                 
                 Image(systemName: "figure.golf")
                     .font(.system(size: 80))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text("Golflektioner")
                     .font(.system(size: 28, weight: .bold))
@@ -460,7 +460,7 @@ struct TrainerListCard: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("\(trainer.hourlyRate) kr")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Text("/timme")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -844,7 +844,7 @@ struct TrainerDetailView: View {
                             .font(.caption)
                             .fontWeight(.medium)
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.black.opacity(0.15))
@@ -911,7 +911,7 @@ struct TrainerDetailView: View {
                         Text("\(lessonType.price) kr")
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("\(lessonType.durationMinutes) min")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -945,7 +945,7 @@ struct TrainerDetailView: View {
                         showAllReviews = true
                     }
                     .font(.subheadline)
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 }
             }
             
@@ -978,7 +978,7 @@ struct TrainerDetailView: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "mappin.and.ellipse")
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text("Träningsområde")
                     .font(.headline)
             }
@@ -1005,7 +1005,7 @@ struct TrainerDetailView: View {
                 // Center pin
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 28))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .allowsHitTesting(false)
             }
             .frame(height: 200)
@@ -1160,7 +1160,7 @@ struct ReviewCard: View {
                     Text("Verifierad bokning")
                 }
                 .font(.caption)
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             }
         }
         .padding()
@@ -1285,7 +1285,7 @@ struct StatBadge: View {
                 .font(.caption)
                 .fontWeight(.semibold)
         }
-        .foregroundColor(.black)
+        .foregroundColor(.primary)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.black.opacity(0.15))

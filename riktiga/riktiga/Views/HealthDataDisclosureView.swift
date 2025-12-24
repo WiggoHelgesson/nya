@@ -20,7 +20,7 @@ struct HealthDataDisclosureView: View {
             if style == .card {
                 content
                     .padding(18)
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(14)
                     .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
             } else {
@@ -51,7 +51,7 @@ struct HealthDataDisclosureView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Text(description)
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
@@ -67,7 +67,7 @@ struct HealthDataDisclosureView: View {
                         Image(systemName: isAuthorized ? "chevron.right" : "bolt.heart.fill")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 14)
                     .background(isAuthorized ? Color(.systemGray5) : Color.black.opacity(0.08))

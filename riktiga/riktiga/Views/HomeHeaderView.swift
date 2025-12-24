@@ -10,13 +10,13 @@ struct HomeHeaderView: View {
     var body: some View {
         HStack(spacing: 16) {
             // Notifications Button on the left
-            Button(action: {
+            Button {
                 showNotifications = true
-            }) {
+            } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     // Notification badge
                     if unreadNotifications > 0 {
@@ -31,25 +31,29 @@ struct HomeHeaderView: View {
                             .offset(x: 8, y: -8)
                     }
                 }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             
             Spacer()
             
-            Button(action: {
+            Button {
                 showMonthlyPrize = true
-            }) {
+            } label: {
                 Text("Månadens pris")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.white)
+                    .background(Color(.secondarySystemBackground))
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(Color.black.opacity(0.1), lineWidth: 1)
                     )
             }
+            .buttonStyle(.plain)
             
             Spacer()
             
@@ -57,8 +61,11 @@ struct HomeHeaderView: View {
             NavigationLink(destination: FindFriendsView()) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -222,8 +222,8 @@ struct ActivityCarouselSelectionView: View {
                             Image(systemName: activity.icon)
                     .font(.system(size: 30, weight: .bold))
                     .padding(12)
-                    .background(isSelected ? Color.black : Color.black.opacity(0.08))
-                    .foregroundColor(isSelected ? .white : .black)
+                    .background(isSelected ? Color.primary : Color.primary.opacity(0.08))
+                    .foregroundColor(isSelected ? Color(.systemBackground) : .primary)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             
                             VStack(alignment: .leading, spacing: 4) {
@@ -235,7 +235,7 @@ struct ActivityCarouselSelectionView: View {
                         }
                         .padding(16)
             .frame(maxWidth: .infinity)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .overlay(
                 RoundedRectangle(cornerRadius: 24)
@@ -275,7 +275,7 @@ struct XpCelebrationView: View {
     
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            Color(.systemBackground).ignoresSafeArea()
             
             VStack(spacing: 32) {
             Spacer()
@@ -283,7 +283,7 @@ struct XpCelebrationView: View {
                 VStack(spacing: 12) {
                     Text(title)
                         .font(.system(size: 28, weight: .black))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(subtitle)
                         .font(.system(size: 16, weight: .medium))
@@ -307,12 +307,12 @@ struct XpCelebrationView: View {
                     
                     AnimatedNumberText(value: animatedPoints)
                         .font(.system(size: 56, weight: .black))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 
                 Text(badgeText.uppercased())
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Button(action: onButtonTap) {
                     Text(buttonTitle.uppercased())
@@ -362,7 +362,7 @@ struct StreakCelebrationView: View {
     
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            Color(.systemBackground).ignoresSafeArea()
             
             ScrollView {
                 VStack(spacing: 32) {
@@ -372,7 +372,7 @@ struct StreakCelebrationView: View {
                     VStack(spacing: 8) {
                         Text("Din streak lever!")
                             .font(.system(size: 32, weight: .black))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                             .opacity(showContent ? 1 : 0)
                             .offset(y: showContent ? 0 : 20)
                         
@@ -486,7 +486,7 @@ struct StreakCelebrationView: View {
         VStack(spacing: 8) {
             Text(value)
                 .font(.system(size: 36, weight: .black))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.gray)
@@ -649,8 +649,6 @@ struct SessionMapView: View {
     @State private var sessionStartTime: Date?
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
-    @State private var xpCelebrationData: XpCelebrationData? = nil
-    @State private var showStreakCelebration = false
     @State private var showTerritoryAnimation = false
     @State private var territoryAnimationCoordinates: [CLLocationCoordinate2D] = []
     @State private var showSessionComplete = false
@@ -847,23 +845,23 @@ struct SessionMapView: View {
                     VStack(spacing: 4) {
                         Text(String(format: "%.2f", locationManager.distance))
                             .font(.system(size: 36, weight: .black))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("km")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                     }
 
                     // Status Text
                     Text("Inspelning pågår")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
 
                     // Three Column Stats
                     HStack(spacing: 20) {
                         VStack(spacing: 4) {
                             Text("\(earnedPoints)")
                                 .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Poäng")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
@@ -873,7 +871,7 @@ struct SessionMapView: View {
                         VStack(spacing: 4) {
                             Text(formattedTime(sessionDuration))
                                 .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             Text("Tid")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.gray)
@@ -885,7 +883,7 @@ struct SessionMapView: View {
                             VStack(spacing: 4) {
                                 Text(String(format: "%.0f m", locationManager.elevationGain))
                                     .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("Höjdmeter")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.gray)
@@ -895,7 +893,7 @@ struct SessionMapView: View {
                             VStack(spacing: 4) {
                                 Text(currentPace)
                                     .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("Tempo")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.gray)
@@ -907,7 +905,7 @@ struct SessionMapView: View {
                             VStack(spacing: 4) {
                                 Text(formatTopSpeed(locationManager.maxSpeed))
                                     .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("Topphastighet")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.gray)
@@ -967,7 +965,7 @@ struct SessionMapView: View {
                                     .foregroundColor(.red)
                                 Text(formatArea(estimatePolygonArea(routeCoordinatesSnapshot)))
                                     .font(.system(size: 28, weight: .black))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("Capture in Progress")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.gray)
@@ -976,7 +974,7 @@ struct SessionMapView: View {
                             .padding(.horizontal, 24)
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.white)
+                                    .fill(Color(.secondarySystemBackground))
                                     .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
                             )
                             .padding(.bottom, 8)
@@ -1083,12 +1081,31 @@ struct SessionMapView: View {
                 .padding(20)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white.opacity(0.95))
+                        .fill(Color(.secondarySystemBackground).opacity(0.98))
                         .shadow(radius: 10)
                 )
                 .padding(16)
             }
             
+            // X button to cancel before starting (only show when not running and not paused)
+            if !isRunning && !isPaused && !resumeSession {
+                VStack {
+                    HStack {
+                        Button {
+                            NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundStyle(.black, Color(.systemGray5))
+                        }
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 60)
+            }
         }
         .navigationBarHidden(true)
         .alert("Platsåtkomst i bakgrunden krävs", isPresented: $locationManager.showLocationDeniedAlert) {
@@ -1128,27 +1145,6 @@ struct SessionMapView: View {
         .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
             isPremium = newValue
         }
-        .sheet(item: $xpCelebrationData) { data in
-            XpCelebrationView(
-                points: data.points,
-                buttonTitle: "Fortsätt"
-            ) {
-                xpCelebrationData = nil
-                
-                // Check if this is an outdoor activity with enough route points for territory animation
-                // Territory animation only for running and golf (not skiing)
-                let isTerritoryActivity = activity == .running || activity == .golf
-                let hasEnoughPoints = territoryAnimationCoordinates.count >= 10
-                
-                if isTerritoryActivity && hasEnoughPoints {
-                    // Show cool territory animation instead of streak
-                    showTerritoryAnimation = true
-                } else {
-                    // Fall back to streak celebration for gym/hiking/skiing or short routes
-                    showStreakCelebration = true
-                }
-            }
-        }
         .fullScreenCover(isPresented: $showTerritoryAnimation) {
             TerritoryCaptureAnimationView(
                 routeCoordinates: territoryAnimationCoordinates,
@@ -1160,12 +1156,6 @@ struct SessionMapView: View {
                 }
             )
         }
-        .sheet(isPresented: $showStreakCelebration) {
-            StreakCelebrationView(onDismiss: {
-                showStreakCelebration = false
-                showSessionComplete = true
-            })
-        }
         .sheet(isPresented: $showSessionComplete) {
             SessionCompleteView(
                 activity: activity,
@@ -1173,6 +1163,7 @@ struct SessionMapView: View {
                 duration: sessionDuration,
                 earnedPoints: earnedPoints,
                 routeImage: routeImage,
+                routeCoordinates: locationManager.routeCoordinates,
                 elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
                 maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
                 completedSplits: completedSplits,
@@ -1240,6 +1231,11 @@ struct SessionMapView: View {
                     lastSnapshotSourceCount = coords.count
                     print("⏱️ Timer route update: \(coords.count) points")
                 }
+            }
+            
+            // Auto-save session state every 10 seconds to prevent data loss
+            if Int(sessionDuration) % 10 == 0 {
+                saveSessionState()
             }
             
             updateSplitsIfNeeded()
@@ -1509,8 +1505,6 @@ struct SessionMapView: View {
         locationManager.elevationGain = 0
         locationManager.maxSpeed = 0
         showSessionComplete = false
-        xpCelebrationData = nil
-        showStreakCelebration = false
         showTerritoryAnimation = false
         territoryAnimationCoordinates = []
         forceNewSession = true
@@ -1633,13 +1627,13 @@ struct SessionMapView: View {
             self.territoryAnimationCoordinates = [] // No animation if skipped
         }
         
-        // Add small delay to ensure route image is generated before showing celebration
+        // Add small delay to ensure route image is generated before showing session complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            print("✅ Showing XP celebration...")
             self.updateEarnedPoints()
-            let points = self.earnedPoints
-            print("🎉 Celebration points: \(points), Distance: \(self.locationManager.distance)")
-            self.xpCelebrationData = XpCelebrationData(points: points)
+            print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
+            
+            // Go directly to session complete (skip territory animation)
+            self.showSessionComplete = true
         }
     }
     
@@ -1850,10 +1844,10 @@ struct OtherActivityButton: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)

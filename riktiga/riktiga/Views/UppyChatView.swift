@@ -272,7 +272,7 @@ struct UppyChatView: View {
                     } label: {
                         Text(prompt)
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background(Color(.systemGray5))

@@ -210,9 +210,12 @@ struct ZoneWarView: View {
                 cachedCityName = ""
                 cachedCityBounds = nil
                 
-                // Check for pending territory celebration - if there's one, force refresh tiles
+                // Check for pending territory celebration OR needsForceRefresh flag
                 let hasPendingTerritory = territoryStore.pendingCelebrationTerritory != nil
-                if hasPendingTerritory {
+                let needsRefresh = territoryStore.needsForceRefresh
+                
+                if hasPendingTerritory || needsRefresh {
+                    print("🔄 Force refreshing tiles (pending: \(hasPendingTerritory), needsRefresh: \(needsRefresh))")
                     // Force clear cache so new tiles are loaded
                     territoryStore.invalidateCache()
                 }
@@ -268,10 +271,10 @@ struct ZoneWarView: View {
                             let maxLat = region.center.latitude + region.span.latitudeDelta / 2
                             let minLon = region.center.longitude - region.span.longitudeDelta / 2
                             let maxLon = region.center.longitude + region.span.longitudeDelta / 2
-                            // Force refresh if there's a pending territory
+                            // Force refresh if there's a pending territory or needsRefresh flag
                             await self.territoryStore.loadTilesInBounds(
                                 minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon,
-                                forceRefresh: hasPendingTerritory
+                                forceRefresh: hasPendingTerritory || needsRefresh
                             )
                         }
                     }
@@ -1577,18 +1580,21 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
             
             if !hasCentered {
-                if let firstPolygon = allPolygons.first {
-                    let rect = firstPolygon.boundingMapRect
-                    let expandedRect = rect.insetBy(dx: -rect.size.width * 0.5, dy: -rect.size.height * 0.5)
-                    mapView.setVisibleMapRect(
-                        expandedRect,
-                        edgePadding: UIEdgeInsets(top: 120, left: 60, bottom: 120, right: 60),
-                        animated: true
+                // Use user's location if available, otherwise default to Stockholm
+                // Always use a wider zoom level (0.05 = ~5km view) so user sees more area
+                let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                
+                if let userLocation = mapView.userLocation.location {
+                    let userRegion = MKCoordinateRegion(
+                        center: userLocation.coordinate,
+                        span: defaultSpan
                     )
+                    mapView.setRegion(userRegion, animated: false)
                 } else {
+                    // Fallback to Stockholm with wider zoom
                     let stockholm = MKCoordinateRegion(
                         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
-                        span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+                        span: defaultSpan
                     )
                     mapView.setRegion(stockholm, animated: false)
                 }
@@ -1713,7 +1719,7 @@ struct ZoneWarMenuView: View {
                                     if index == 1 && !events.isEmpty {
                                         Text("\(events.count)")
                                             .font(.system(size: 11, weight: .bold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(.primary)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
                                             .background(Color.yellow)
@@ -2153,7 +2159,7 @@ struct ZoneWarMenuView: View {
                             } label: {
                                 Text("Visa")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
                                     .background(Color.yellow)

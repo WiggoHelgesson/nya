@@ -9,7 +9,7 @@ struct RewardsSection: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
                 .font(.system(size: 20, weight: .black, design: .rounded))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .padding(.horizontal, 20)
             
             ScrollView(.horizontal, showsIndicators: false) {

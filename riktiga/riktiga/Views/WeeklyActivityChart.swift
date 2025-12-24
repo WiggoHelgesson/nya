@@ -121,7 +121,7 @@ struct WeeklyActivityChart: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .sheet(isPresented: $showStatistics) {
             StatisticsView()
@@ -218,7 +218,7 @@ struct StatView: View {
                 .foregroundColor(.gray)
             Text(value)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -345,7 +345,7 @@ struct ChartView: View {
                 // Value label
                 Text(valueSummary())
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }

@@ -1,5 +1,6 @@
 -- Updated claim_tiles with workout metadata
--- Fixed: Use numeric casting for generate_series to avoid double precision errors
+-- Now claims ALL tiles inside the polygon (not just along the edge)
+-- This makes the Zonkriget map show the exact same area as during the workout
 DROP FUNCTION IF EXISTS claim_tiles(UUID, UUID, double precision[][], double precision, integer, text);
 
 CREATE OR REPLACE FUNCTION claim_tiles(
@@ -12,8 +13,9 @@ CREATE OR REPLACE FUNCTION claim_tiles(
 ) RETURNS VOID AS $$
 DECLARE
   new_poly geometry;
-  -- Grid size in degrees (approx 50m)
-  grid_size numeric := 0.00045; 
+  filled_poly geometry;
+  -- Grid size in degrees (approx 25m for better resolution)
+  grid_size numeric := 0.000225; 
   tile RECORD;
   min_x numeric;
   min_y numeric;
@@ -22,6 +24,7 @@ DECLARE
   x_val numeric;
   y_val numeric;
   tile_geom geometry;
+  tile_center geometry;
   tiles_created integer := 0;
 BEGIN
   -- Debug logging
@@ -34,26 +37,35 @@ BEGIN
       FROM generate_subscripts(p_coords,1) i
   )));
 
-  -- 2. Make valid and buffer
-  -- Buffer by ~5m (0.00005 deg) to give "thickness" to the path
-  new_poly := ST_Buffer(ST_MakeValid(new_poly), 0.00005);
+  -- 2. Make valid - this fills the entire polygon interior
+  new_poly := ST_MakeValid(new_poly);
 
   IF ST_IsEmpty(new_poly) OR new_poly IS NULL THEN
-    RAISE NOTICE 'Polygon is empty after buffer';
+    RAISE NOTICE 'Polygon is empty after MakeValid';
     RETURN;
   END IF;
 
-  RAISE NOTICE 'Polygon created, area: %', ST_Area(new_poly::geography);
+  -- 3. Also add a small buffer around the edge to catch tiles along the path
+  -- This ensures we get tiles both INSIDE and along the EDGE of the route
+  filled_poly := ST_Union(
+    new_poly,
+    ST_Buffer(ST_ExteriorRing(new_poly), 0.0001) -- ~10m buffer along the path
+  );
 
-  -- 3. Calculate bounds
-  min_x := floor(ST_XMin(new_poly)::numeric / grid_size) * grid_size;
-  min_y := floor(ST_YMin(new_poly)::numeric / grid_size) * grid_size;
-  max_x := ceil(ST_XMax(new_poly)::numeric / grid_size) * grid_size;
-  max_y := ceil(ST_YMax(new_poly)::numeric / grid_size) * grid_size;
+  RAISE NOTICE 'Polygon created, area: % m²', ST_Area(new_poly::geography);
+
+  -- 4. Calculate bounds with margin
+  min_x := floor(ST_XMin(filled_poly)::numeric / grid_size) * grid_size;
+  min_y := floor(ST_YMin(filled_poly)::numeric / grid_size) * grid_size;
+  max_x := ceil(ST_XMax(filled_poly)::numeric / grid_size) * grid_size;
+  max_y := ceil(ST_YMax(filled_poly)::numeric / grid_size) * grid_size;
 
   RAISE NOTICE 'Bounds: % to %, % to %', min_x, max_x, min_y, max_y;
 
-  -- 4. Iterate over grid cells using numeric generate_series
+  -- 5. Iterate over grid cells
+  -- Claim tiles that are either:
+  --   a) Completely inside the polygon (center point is inside)
+  --   b) Intersect with the buffered edge
   FOR x_val IN SELECT generate_series(min_x, max_x, grid_size)
   LOOP
     FOR y_val IN SELECT generate_series(min_y, max_y, grid_size)
@@ -66,10 +78,13 @@ BEGIN
         4326
       ), 4326);
       
-      IF ST_Intersects(tile_geom, new_poly) THEN
+      tile_center := ST_Centroid(tile_geom);
+      
+      -- Claim if: center is inside polygon OR tile intersects with filled area
+      IF ST_Within(tile_center, new_poly) OR ST_Intersects(tile_geom, filled_poly) THEN
         INSERT INTO territory_tiles (tile_id, geom, owner_id, activity_id, distance_km, duration_sec, pace, last_updated_at)
         VALUES (
-          abs(hashtext(ST_AsText(ST_SnapToGrid(ST_Centroid(tile_geom), grid_size::double precision))))::bigint,
+          abs(hashtext(ST_AsText(ST_SnapToGrid(tile_center, grid_size::double precision))))::bigint,
           tile_geom,
           p_owner,
           p_activity,

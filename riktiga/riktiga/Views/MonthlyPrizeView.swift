@@ -23,12 +23,12 @@ struct MonthlyPrizeView: View {
                         VStack(spacing: 8) {
                             Text("Tid kvar av månaden")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 20)
                             Text(countdownText)
                                 .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 20)
                         }
@@ -46,7 +46,7 @@ struct MonthlyPrizeView: View {
                         // Current month leaderboard
                         Text("Topplista denna månad")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
                         
@@ -67,7 +67,7 @@ struct MonthlyPrizeView: View {
                                     .foregroundColor(.gray)
                                 Text("Inga träningspass hittades den här månaden")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                 Text("Starta ditt första pass för att hamna på topplistan!")
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
@@ -93,7 +93,7 @@ struct MonthlyPrizeView: View {
                                     }
                                 }
                             }
-                            .background(Color.white)
+                            .background(Color(.secondarySystemBackground))
                             .cornerRadius(12)
                             .padding(.horizontal, 20)
                         }
@@ -110,7 +110,7 @@ struct MonthlyPrizeView: View {
                         dismiss()
                     }) {
                         Image(systemName: "xmark")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                     }
                 }
             }
@@ -256,7 +256,7 @@ struct MonthlyUserRow: View {
             HStack(spacing: 6) {
                 Text(user.username)
                     .font(.system(size: 14))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 
@@ -274,7 +274,7 @@ struct MonthlyUserRow: View {
             // Steps
             Text("\(user.steps) steg")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .fixedSize()

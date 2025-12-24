@@ -169,7 +169,7 @@ struct ActivitiesView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Alla belöningar")
                                     .font(.headline)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .padding(.horizontal, 16)
                                 
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -247,7 +247,7 @@ struct WorkoutPostCard: View {
                 // Title
                 Text(post.title)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 
@@ -335,7 +335,7 @@ struct WorkoutPostCard: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
         }
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
     }
@@ -347,7 +347,7 @@ struct WorkoutPostCard: View {
                 .foregroundColor(.gray)
             Text(value)
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)

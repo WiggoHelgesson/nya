@@ -11,17 +11,17 @@ struct SwipeableImageView: View {
     private let imageHeight: CGFloat = 300
     
     // Cached computed property for images array - filters out empty/invalid paths
-    private var images: [(String, String)] {
-        var result: [(String, String)] = []
+    private var images: [String] {
+        var result: [String] = []
         if let routeImage = routeImage?.trimmingCharacters(in: .whitespacesAndNewlines), 
            !routeImage.isEmpty,
            isValidImagePath(routeImage) {
-            result.append((routeImage, "Rutt"))
+            result.append(routeImage)
         }
         if let userImage = userImage?.trimmingCharacters(in: .whitespacesAndNewlines), 
            !userImage.isEmpty,
            isValidImagePath(userImage) {
-            result.append((userImage, "Bild"))
+            result.append(userImage)
         }
         return result
     }
@@ -47,7 +47,7 @@ struct SwipeableImageView: View {
                 )
         } else if images.count == 1 {
             // Single image - no swipe needed
-            LocalAsyncImage(path: images[0].0)
+            LocalAsyncImage(path: images[0])
                 .frame(height: imageHeight)
                 .clipped()
         } else {
@@ -57,11 +57,11 @@ struct SwipeableImageView: View {
                 ZStack {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: gapWidth) {
-                            ForEach(Array(images.enumerated()), id: \.offset) { item in
-                                LocalAsyncImage(path: item.element.0)
+                            ForEach(Array(images.enumerated()), id: \.offset) { index, imagePath in
+                                LocalAsyncImage(path: imagePath)
                                     .frame(width: pageWidth, height: imageHeight)
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
-                                    .id(item.offset)
+                                    .id(index)
                             }
                         }
                         .scrollTargetLayout()
@@ -74,19 +74,8 @@ struct SwipeableImageView: View {
                         if let idx = newValue { currentIndex = min(max(0, idx), images.count - 1) }
                     }
 
-                    // Label + dots overlay
+                    // Dots overlay (no label)
                     VStack {
-                        HStack {
-                            Text(images[min(currentIndex, images.count - 1)].1)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(6)
-                            Spacer()
-                        }
-                        .padding(12)
                         Spacer()
                         HStack(spacing: 6) {
                             ForEach(0..<images.count, id: \.self) { idx in

@@ -3,6 +3,7 @@ import UIKit
 
 struct RewardCatalog {
     static let all: [RewardCard] = [
+        // MARK: - Golf
         RewardCard(
             id: 1,
             brandName: "PLIKTGOLF",
@@ -75,6 +76,37 @@ struct RewardCatalog {
             category: "Golf",
             isBookmarked: false
         ),
+        
+        // MARK: - Energidryck (ny kategori)
+        RewardCard(
+            id: 31,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Energidryck",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 32,
+            brandName: "ZEN ENERGY",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "13",
+            category: "Energidryck",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 33,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Energidryck",
+            isBookmarked: false
+        ),
+        
+        // MARK: - Gym (endast PUMPLABS, CLYRO, Powerwell)
         RewardCard(
             id: 9,
             brandName: "PUMPLABS",
@@ -82,69 +114,6 @@ struct RewardCatalog {
             points: "200 poäng",
             imageName: "12",
             category: "Gym",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 10,
-            brandName: "ZEN ENERGY",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "13",
-            category: "Gym",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 11,
-            brandName: "ZEN ENERGY",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "13",
-            category: "Löpning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 19,
-            brandName: "CAPSTONE",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "34",
-            category: "Skidåkning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 20,
-            brandName: "FUSE ENERGY",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "35",
-            category: "Gym",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 21,
-            brandName: "FUSE ENERGY",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "35",
-            category: "Löpning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 22,
-            brandName: "FUSE ENERGY",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "35",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 23,
-            brandName: "FUSE ENERGY",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "35",
-            category: "Skidåkning",
             isBookmarked: false
         ),
         RewardCard(
@@ -157,30 +126,41 @@ struct RewardCatalog {
             isBookmarked: false
         ),
         RewardCard(
-            id: 25,
-            brandName: "CLYRO",
-            discount: "20% rabatt",
-            points: "200 poäng",
-            imageName: "39",
-            category: "Löpning",
-            isBookmarked: false
-        ),
-        RewardCard(
-            id: 26,
-            brandName: "Fjällsyn UF",
-            discount: "15% rabatt",
-            points: "200 poäng",
-            imageName: "38",
-            category: "Skidåkning",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 27,
             brandName: "Powerwell",
             discount: "15% rabatt",
             points: "200 poäng",
             imageName: "40",
             category: "Gym",
+            isBookmarked: false
+        ),
+        
+        // MARK: - Löpning
+        RewardCard(
+            id: 11,
+            brandName: "ZEN ENERGY",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "13",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 21,
+            brandName: "FUSE ENERGY",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "35",
+            category: "Löpning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 25,
+            brandName: "CLYRO",
+            discount: "20% rabatt",
+            points: "200 poäng",
+            imageName: "39",
+            category: "Löpning",
             isBookmarked: false
         ),
         RewardCard(
@@ -192,13 +172,24 @@ struct RewardCatalog {
             category: "Löpning",
             isBookmarked: false
         ),
+        
+        // MARK: - Skidåkning (utan FUSE ENERGY)
         RewardCard(
-            id: 29,
-            brandName: "XEEIL",
+            id: 19,
+            brandName: "CAPSTONE",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "34",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
+        RewardCard(
+            id: 26,
+            brandName: "Fjällsyn UF",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "44",
-            category: "Gym",
+            imageName: "38",
+            category: "Skidåkning",
             isBookmarked: false
         ),
         RewardCard(
@@ -220,7 +211,7 @@ struct HeroBannerAsset: Identifiable {
 }
 
 struct RewardsView: View {
-    @State private var selectedCategory = "Gym"
+    @State private var selectedCategory = "Energidryck"
     @State private var currentHeroIndex = 0
     @State private var searchText = ""
     @State private var showSearchView = false
@@ -229,19 +220,20 @@ struct RewardsView: View {
     @State private var favoritedRewards: Set<Int> = []
     @EnvironmentObject var authViewModel: AuthViewModel
     
-    private let sectionBackgroundColor = Color(red: 247/255, green: 248/255, blue: 255/255)
-    private let sectionShadowColor = Color.black.opacity(0.03) // Reduced shadow opacity
+    private let pageBackgroundColor = Color(.systemBackground) // Adapts to dark mode
+    private let sectionBackgroundColor = Color(.systemBackground) // Adapts to dark mode
     
     let heroBanners: [HeroBannerAsset] = [
         HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
         HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
     ]
     
-    let categories = ["Gym", "Löpning", "Golf", "Skidåkning"]
+    let categories = ["Energidryck", "Gym", "Löpning", "Golf", "Skidåkning"]
     
     let allRewards = RewardCatalog.all
     
     // Pre-sorted rewards cache - computed once
+    private var energyDrinkRewards: [RewardCard] { sortedRewards(for: "Energidryck") }
     private var gymRewards: [RewardCard] { sortedRewards(for: "Gym") }
     private var runningRewards: [RewardCard] { sortedRewards(for: "Löpning") }
     private var golfRewards: [RewardCard] { sortedRewards(for: "Golf") }
@@ -272,6 +264,23 @@ struct RewardsView: View {
         if category == "Skidåkning" {
             let priority: [String: Int] = [
                 "J.LINDEBERG": 0
+            ]
+            
+            return rewards.sorted { lhs, rhs in
+                let leftPriority = priority[lhs.brandName] ?? Int.max
+                let rightPriority = priority[rhs.brandName] ?? Int.max
+                
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+                
+                return featuredSort(lhs, rhs)
+            }
+        }
+        
+        if category == "Löpning" {
+            let priority: [String: Int] = [
+                "FUSE ENERGY": 0
             ]
             
             return rewards.sorted { lhs, rhs in
@@ -324,39 +333,41 @@ struct RewardsView: View {
         .tabViewStyle(.page(indexDisplayMode: .automatic))
         .frame(height: 200)
         .padding(.horizontal, 16)
+        .padding(.vertical, 16)
     }
     
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Kategorier")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
                 .padding(.horizontal, 16)
             
-            HStack(spacing: 16) {
-                ForEach(categories, id: \.self) { category in
-                    NavigationLink {
-                        CategoryRewardsListView(
-                            category: category,
-                            rewards: sortedRewards(for: category),
-                            favoritedRewards: $favoritedRewards
-                        )
-                    } label: {
-                        CategoryButton(
-                            category: category,
-                            isSelected: selectedCategory == category
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(categories, id: \.self) { category in
+                        NavigationLink {
+                            CategoryRewardsListView(
+                                category: category,
+                                rewards: sortedRewards(for: category),
+                                favoritedRewards: $favoritedRewards
+                            )
+                        } label: {
+                            CategoryButton(
+                                category: category,
+                                isSelected: selectedCategory == category
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                selectedCategory = category
+                            }
                         )
                     }
-                    .buttonStyle(.plain)
-                    .simultaneousGesture(
-                        TapGesture().onEnded {
-                            selectedCategory = category
-                        }
-                    )
                 }
+                .padding(.horizontal, 16)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
         }
     }
     
@@ -371,91 +382,94 @@ struct RewardsView: View {
         if rewards.isEmpty {
             EmptyView()
         } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(sectionBackgroundColor)
-                    .shadow(color: sectionShadowColor, radius: 6, x: 0, y: 3) // Minimal shadow
-                
-                VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Section header with "Se alla"
+                HStack {
                     Text(title)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 4)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
                     
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 20) {
-                            ForEach(rewards) { reward in
-                                NavigationLink {
-                                    RewardDetailView(reward: reward)
-                                } label: {
-                                    FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .id(reward.id) // Stable identity
-                            }
+                    Spacer()
+                    
+                    NavigationLink {
+                        CategoryRewardsListView(
+                            category: title,
+                            rewards: rewards,
+                            favoritedRewards: $favoritedRewards
+                        )
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Se alla")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.gray)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.gray)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 4)
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.vertical, 28)
-                .padding(.horizontal, 22)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                // Horizontal scroll of reward cards with snapping
+                SnappingRewardScrollView(rewards: rewards, favoritedRewards: $favoritedRewards)
             }
-            .padding(.horizontal, 16)
+            .background(sectionBackgroundColor)
+            .clipped()
         }
     }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                pageBackgroundColor
+                    .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
                     // MARK: - Header with Search, Favorites, and Points
                     VStack(spacing: 16) {
                         // Top row with points and icons
                         HStack {
-                // Points display
-                HStack(spacing: 8) {
-                    Image(systemName: "gift.fill")
-                        .foregroundColor(.white)
-                        .font(.system(size: 16))
-                    
-                    Text("\(authViewModel.currentUser?.currentXP ?? 0)")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.black)
-                .cornerRadius(20)
-                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                            // Points display
+                            HStack(spacing: 8) {
+                                Image(systemName: "gift.fill")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 16))
+                                
+                                Text("\(authViewModel.currentUser?.currentXP ?? 0)")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.black)
+                            .cornerRadius(20)
                             
                             Spacer()
                             
                             // Right side icons
                             HStack(spacing: 16) {
                                 Button(action: {
-                                    // Navigate to My Purchases
                                     showMyPurchases = true
                                 }) {
                                     Image(systemName: "bag.fill")
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                         .font(.system(size: 20))
                                 }
                                 
                                 Button(action: {
-                                    // Navigate to favorited discounts
                                     showFavorites = true
                                 }) {
                                     Image(systemName: "bookmark.fill")
-                                        .foregroundColor(.black)
+                                        .foregroundColor(.primary)
                                         .font(.system(size: 20))
                                 }
                             }
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
                         
                         // Search bar
                         Button(action: {
@@ -474,29 +488,35 @@ struct RewardsView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            .background(Color.white)
+                            .background(Color(.secondarySystemBackground))
                             .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
                         }
                         .padding(.horizontal, 16)
                     }
                     .padding(.bottom, 16)
-                    .background(Color(.systemBackground))
+                    .background(Color(.secondarySystemBackground))
                     
                     ScrollView {
-                        LazyVStack(spacing: 24) {
+                        LazyVStack(spacing: 12) {
                             heroBannerSection
+                                .background(Color(.secondarySystemBackground))
+                            
                             categoriesSection
+                                .padding(.vertical, 16)
+                                .background(Color(.secondarySystemBackground))
+                            
+                            sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
+                            
                             sliderSectionOptimized(title: "Gym", rewards: gymRewards)
+                            
                             sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
+                            
                             sliderSectionOptimized(title: "Golf", rewards: golfRewards)
+                            
                             sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
+                            
                             Spacer(minLength: 100)
                         }
-                        .padding(.top, 8)
                     }
                 }
             }
@@ -553,6 +573,8 @@ struct CategoryButton: View {
     
     private var iconName: String {
         switch category {
+        case "Energidryck":
+            return "bolt.fill"
         case "Golf":
             return "flag.fill"
         case "Löpning":
@@ -577,6 +599,146 @@ struct RewardCard: Identifiable {
     let isBookmarked: Bool
 }
 
+// Snapping scroll view for reward cards
+struct SnappingRewardScrollView: View {
+    let rewards: [RewardCard]
+    @Binding var favoritedRewards: Set<Int>
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 16) {
+                ForEach(rewards) { reward in
+                    NavigationLink {
+                        RewardDetailView(reward: reward)
+                    } label: {
+                        ModernRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .id(reward.id)
+                }
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+        }
+        .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, 0, for: .scrollContent)
+    }
+}
+
+// Modern card design matching the inspiration
+struct ModernRewardCard: View {
+    let reward: RewardCard
+    @Binding var favoritedRewards: Set<Int>
+    
+    private let cardWidth: CGFloat = UIScreen.main.bounds.width - 64
+    private let imageHeight: CGFloat = 260
+    
+    private var isBookmarked: Bool {
+        favoritedRewards.contains(reward.id)
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Image section with badge
+            ZStack(alignment: .topTrailing) {
+                Image(reward.imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: cardWidth, height: imageHeight)
+                    .clipped()
+                
+                // Points badge
+                HStack(spacing: 4) {
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("200")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                .padding(16)
+            }
+            
+            // Info section - clean white
+            HStack(spacing: 14) {
+                // Brand logo
+                Image(getBrandLogo(for: reward.imageName))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 52, height: 52)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                    )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(reward.discount)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                    
+                    Text(reward.brandName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                        .textCase(.uppercase)
+                }
+                
+                Spacer()
+                
+                // Bookmark button
+                Button(action: {
+                    if isBookmarked {
+                        favoritedRewards.remove(reward.id)
+                    } else {
+                        favoritedRewards.insert(reward.id)
+                    }
+                }) {
+                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 20))
+                        .foregroundColor(isBookmarked ? .black : .gray)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 18)
+            .background(Color(UIColor.systemGray6).opacity(0.5))
+        }
+        .frame(width: cardWidth)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+    }
+    
+    private func getBrandLogo(for imageName: String) -> String {
+        switch imageName {
+        case "4": return "15" // PLIKTGOLF
+        case "5": return "5"  // PEGMATE
+        case "6": return "14" // LONEGOLF
+        case "7": return "17" // WINWIZE
+        case "8": return "18" // SCANDIGOLF
+        case "9": return "19" // Exotic Golf
+        case "10": return "16" // HAPPYALBA (Alba)
+        case "11": return "20" // RETROGOLF
+        case "12": return "21" // PUMPLABS
+        case "13": return "22" // ZEN ENERGY
+        case "34": return "34" // CAPSTONE
+        case "35": return "46" // FUSE ENERGY
+        case "38": return "38" // Fjällsyn UF
+        case "39": return "39" // CLYRO
+        case "40": return "40" // Powerwell
+        case "44": return "45" // XEEIL
+        default: return "5" // Default to PEGMATE
+        }
+    }
+}
+
 struct FullScreenRewardCard: View {
     let reward: RewardCard
     @Binding var favoritedRewards: Set<Int>
@@ -584,7 +746,7 @@ struct FullScreenRewardCard: View {
     static let cardHeight: CGFloat = 360
     
     private let cornerRadius: CGFloat = 24
-    private let cardBackground = Color.white
+    private let cardBackground = Color(.secondarySystemBackground)
     private let infoBackground = Color(red: 247/255, green: 247/255, blue: 255/255)
     private let accentColor = Color(red: 78/255, green: 77/255, blue: 255/255)
     
@@ -610,15 +772,15 @@ struct FullScreenRewardCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(reward.points)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.white)
+                .background(Color(.secondarySystemBackground))
                 .clipShape(Capsule())
                 .padding(18)
             }
@@ -633,7 +795,7 @@ struct FullScreenRewardCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(reward.discount)
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Text(reward.brandName)
                         .font(.system(size: 13, weight: .medium))
@@ -694,22 +856,21 @@ struct CategoryRewardsListView: View {
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 20) {
+            LazyVStack(spacing: 16) {
                 ForEach(rewards, id: \.id) { reward in
                     NavigationLink {
                         RewardDetailView(reward: reward)
                     } label: {
-                        FullScreenRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
+                        ModernRewardCard(reward: reward, favoritedRewards: $favoritedRewards)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .id(reward.id) // Stable identity for better diffing
+                    .id(reward.id)
                 }
             }
-            .padding(.vertical, 24)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 8)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
@@ -730,8 +891,8 @@ struct RewardDetailView: View {
     
     var body: some View {
         ZStack {
-            // White background for the entire page
-            Color.white
+            // Background adapts to dark mode
+            Color(.systemBackground)
                 .ignoresSafeArea()
             
             ScrollView {
@@ -749,7 +910,7 @@ struct RewardDetailView: View {
                         VStack(spacing: 8) {
                             Text(reward.discount)
                                 .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             Text("för \(reward.brandName)")
                                 .font(.system(size: 18, weight: .medium))
@@ -767,7 +928,7 @@ struct RewardDetailView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 80, height: 80)
-                                    .background(Color.white)
+                                    .background(Color(.secondarySystemBackground))
                                     .clipShape(Circle())
                                     .overlay(
                                         Circle()
@@ -777,14 +938,14 @@ struct RewardDetailView: View {
                                 // Company name
                                 Text(reward.brandName)
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                             }
                             .padding(.top, 24)
                             
                             // Company description
                             Text(getCompanyDescription(for: reward.brandName))
                                 .font(.system(size: 14))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .multilineTextAlignment(.leading)
                                 .lineLimit(nil)
                                 .padding(.horizontal, 20)
@@ -806,10 +967,10 @@ struct RewardDetailView: View {
                             }) {
                                 Text("BESÖK HEMSIDA")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(.primary)
                                     .frame(width: 280) // Shorter width
                                     .padding(.vertical, 16)
-                                    .background(Color.white)
+                                    .background(Color(.secondarySystemBackground))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
@@ -1007,7 +1168,7 @@ struct CheckoutView: View {
                     VStack(spacing: 12) {
                         Text(reward.discount)
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         Text(reward.brandName)
                             .font(.system(size: 18, weight: .medium))
@@ -1020,7 +1181,7 @@ struct CheckoutView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Förnamn")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             TextField("Ange ditt förnamn", text: $firstName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -1029,7 +1190,7 @@ struct CheckoutView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Efternamn")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             TextField("Ange ditt efternamn", text: $lastName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -1038,7 +1199,7 @@ struct CheckoutView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("E-post")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             TextField("Ange din e-post", text: $email)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -1059,7 +1220,7 @@ struct CheckoutView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Stad")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             TextField("Ange din stad", text: $city)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -1195,13 +1356,13 @@ struct ConfirmationView: View {
                     VStack(spacing: 16) {
                         Text("Tack för din beställning!")
                             .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("För att ta del av erbjudandet:")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                             
                             Text("1. Kopiera koden nedan")
                                 .font(.system(size: 14))
@@ -1220,10 +1381,10 @@ struct ConfirmationView: View {
                         HStack {
                             Text(getDiscountCode(for: reward.brandName))
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(Color.white)
+                                .background(Color(.secondarySystemBackground))
                                 .cornerRadius(8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
@@ -1271,10 +1432,10 @@ struct ConfirmationView: View {
                         }) {
                             Text("INTE NU")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(16)
-                                .background(Color.white)
+                                .background(Color(.secondarySystemBackground))
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -1285,7 +1446,7 @@ struct ConfirmationView: View {
                     .padding(.bottom, 20)
                 }
                 .padding(.horizontal, 20)
-                .background(Color.white)
+                .background(Color(.secondarySystemBackground))
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
@@ -1299,7 +1460,7 @@ struct ConfirmationView: View {
                         dismiss()
                     }) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .frame(width: 32, height: 32)
                             .background(Color(.systemGray5))
                             .cornerRadius(16)
@@ -1415,7 +1576,7 @@ struct AllRewardsCard: View {
             VStack(spacing: 2) {
                 Text(reward.discount)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                 
                 Text(reward.brandName)
@@ -1427,7 +1588,7 @@ struct AllRewardsCard: View {
         }
         .frame(width: 80, height: 80)
         .padding(8)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
         .drawingGroup() // Rasterize for better scroll performance
