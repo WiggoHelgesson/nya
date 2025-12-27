@@ -1,6 +1,6 @@
 -- Updated claim_tiles with workout metadata
--- Now claims ALL tiles inside the polygon (not just along the edge)
--- This makes the Zonkriget map show the exact same area as during the workout
+-- Uses WHILE loops instead of generate_series for reliability
+-- Claims ALL tiles inside the polygon + along the edge
 DROP FUNCTION IF EXISTS claim_tiles(UUID, UUID, double precision[][], double precision, integer, text);
 
 CREATE OR REPLACE FUNCTION claim_tiles(
@@ -14,21 +14,28 @@ CREATE OR REPLACE FUNCTION claim_tiles(
 DECLARE
   new_poly geometry;
   filled_poly geometry;
-  -- Grid size in degrees (approx 25m for better resolution)
-  grid_size numeric := 0.000225; 
-  tile RECORD;
-  min_x numeric;
-  min_y numeric;
-  max_x numeric;
-  max_y numeric;
-  x_val numeric;
-  y_val numeric;
+  -- Grid size in degrees (approx 25m)
+  grid_size double precision := 0.000225; 
+  min_x double precision;
+  min_y double precision;
+  max_x double precision;
+  max_y double precision;
+  x_val double precision;
+  y_val double precision;
   tile_geom geometry;
   tile_center geometry;
   tiles_created integer := 0;
+  coord_count integer;
 BEGIN
   -- Debug logging
-  RAISE NOTICE 'claim_tiles called with % coordinates', array_length(p_coords, 1);
+  coord_count := array_length(p_coords, 1);
+  RAISE NOTICE 'claim_tiles called with % coordinates', coord_count;
+  
+  -- Validate minimum coordinates for polygon
+  IF coord_count IS NULL OR coord_count < 3 THEN
+    RAISE NOTICE 'Not enough coordinates for polygon (need at least 3)';
+    RETURN;
+  END IF;
   
   -- 1. Build polygon from coordinates
   -- PostGIS expects (lon, lat)
@@ -45,8 +52,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- 3. Also add a small buffer around the edge to catch tiles along the path
-  -- This ensures we get tiles both INSIDE and along the EDGE of the route
+  -- 3. Also add a buffer around the edge to catch tiles along the path
   filled_poly := ST_Union(
     new_poly,
     ST_Buffer(ST_ExteriorRing(new_poly), 0.0001) -- ~10m buffer along the path
@@ -54,27 +60,27 @@ BEGIN
 
   RAISE NOTICE 'Polygon created, area: % m²', ST_Area(new_poly::geography);
 
-  -- 4. Calculate bounds with margin
-  min_x := floor(ST_XMin(filled_poly)::numeric / grid_size) * grid_size;
-  min_y := floor(ST_YMin(filled_poly)::numeric / grid_size) * grid_size;
-  max_x := ceil(ST_XMax(filled_poly)::numeric / grid_size) * grid_size;
-  max_y := ceil(ST_YMax(filled_poly)::numeric / grid_size) * grid_size;
+  -- 4. Calculate bounds
+  min_x := floor(ST_XMin(filled_poly) / grid_size) * grid_size;
+  min_y := floor(ST_YMin(filled_poly) / grid_size) * grid_size;
+  max_x := ceil(ST_XMax(filled_poly) / grid_size) * grid_size;
+  max_y := ceil(ST_YMax(filled_poly) / grid_size) * grid_size;
 
-  RAISE NOTICE 'Bounds: % to %, % to %', min_x, max_x, min_y, max_y;
+  RAISE NOTICE 'Bounds: X[% to %], Y[% to %]', min_x, max_x, min_y, max_y;
+  RAISE NOTICE 'Expected iterations: % x %', 
+    ceil((max_x - min_x) / grid_size), 
+    ceil((max_y - min_y) / grid_size);
 
-  -- 5. Iterate over grid cells
-  -- Claim tiles that are either:
-  --   a) Completely inside the polygon (center point is inside)
-  --   b) Intersect with the buffered edge
-  FOR x_val IN SELECT generate_series(min_x, max_x, grid_size)
-  LOOP
-    FOR y_val IN SELECT generate_series(min_y, max_y, grid_size)
-    LOOP
+  -- 5. Use WHILE loops instead of generate_series for reliability
+  x_val := min_x;
+  WHILE x_val <= max_x LOOP
+    y_val := min_y;
+    WHILE y_val <= max_y LOOP
       tile_geom := ST_SetSRID(ST_MakeEnvelope(
-        x_val::double precision, 
-        y_val::double precision, 
-        (x_val + grid_size)::double precision, 
-        (y_val + grid_size)::double precision, 
+        x_val, 
+        y_val, 
+        x_val + grid_size, 
+        y_val + grid_size, 
         4326
       ), 4326);
       
@@ -84,7 +90,7 @@ BEGIN
       IF ST_Within(tile_center, new_poly) OR ST_Intersects(tile_geom, filled_poly) THEN
         INSERT INTO territory_tiles (tile_id, geom, owner_id, activity_id, distance_km, duration_sec, pace, last_updated_at)
         VALUES (
-          abs(hashtext(ST_AsText(ST_SnapToGrid(tile_center, grid_size::double precision))))::bigint,
+          abs(hashtext(ST_AsText(ST_SnapToGrid(tile_center, grid_size))))::bigint,
           tile_geom,
           p_owner,
           p_activity,
@@ -103,10 +109,13 @@ BEGIN
         
         tiles_created := tiles_created + 1;
       END IF;
+      
+      y_val := y_val + grid_size;
     END LOOP;
+    x_val := x_val + grid_size;
   END LOOP;
 
-  RAISE NOTICE 'Created/updated % tiles', tiles_created;
+  RAISE NOTICE 'Created/updated % tiles for owner %', tiles_created, p_owner;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

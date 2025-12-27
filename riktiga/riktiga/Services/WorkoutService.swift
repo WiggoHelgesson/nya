@@ -311,7 +311,8 @@ class WorkoutService {
             elevationGain: post.elevationGain,
             maxSpeed: post.maxSpeed,
             splits: post.splits,
-            exercises: post.exercises
+            exercises: post.exercises,
+            routeData: post.routeData
         )
         
         do {
@@ -359,6 +360,12 @@ class WorkoutService {
             if let exercises = postToSave.exercises, let exercisesPayload = encodeExercises(exercises) {
                 minimalPost["exercises_data"] = DynamicEncodable(exercisesPayload)
                 print("✅ Saving post with \(exercises.count) exercises")
+            }
+            
+            // Save route coordinates for Zone War
+            if let routeData = postToSave.routeData, !routeData.isEmpty {
+                minimalPost["route_data"] = DynamicEncodable(routeData)
+                print("✅ Saving post with route_data: \(routeData.count) characters")
             }
             
             try await supabase

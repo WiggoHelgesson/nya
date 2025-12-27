@@ -5,50 +5,92 @@ struct StatisticsView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                Section("Steg statistik") {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Step statistics section
                     StepStatisticsSectionView()
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .padding(.horizontal, 16)
+                    
+                    // Menu sections
+                    VStack(spacing: 16) {
+                        // AI Coach section
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeader(title: "AI Coach", icon: "sparkles")
+                            
+                            NavigationLink(destination: UppyChatView()) {
+                                StatisticsMenuRow(
+                                    icon: "bubble.left.and.bubble.right.fill",
+                                    title: "Prata med UPPY",
+                                    subtitle: "Chatta med din AI-coach direkt i appen",
+                                    iconColor: .primary
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(16)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                        
+                        // Statistics section
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionHeader(title: "Statistik & Rapporter", icon: "chart.bar.fill")
+                            
+                            VStack(spacing: 0) {
+                                NavigationLink(destination: MonthlyReportView()) {
+                                    StatisticsMenuRow(
+                                        icon: "doc.text.magnifyingglass",
+                                        title: "Månadsrapport",
+                                        subtitle: "Sammanfattning av dina pass denna månad",
+                                        iconColor: .primary,
+                                        showDivider: true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                
+                                NavigationLink(destination: CalendarOverviewView()) {
+                                    StatisticsMenuRow(
+                                        icon: "calendar",
+                                        title: "Kalender",
+                                        subtitle: "Se alla träningsdagar i månad, år eller flera år",
+                                        iconColor: .primary,
+                                        showDivider: true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                
+                                NavigationLink(destination: ProgressiveOverloadView()) {
+                                    StatisticsMenuRow(
+                                        icon: "chart.line.uptrend.xyaxis",
+                                        title: "Progressive Overload",
+                                        subtitle: "Följ din styrkeutveckling över tid",
+                                        iconColor: .primary,
+                                        showDivider: true
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                
+                                NavigationLink(destination: UppyChatView(initialPrompt: "Vilken övning kör jag mest på gymmet?")) {
+                                    StatisticsMenuRow(
+                                        icon: "dumbbell.fill",
+                                        title: "Mest använda gymövningar",
+                                        subtitle: "Se vilka övningar du gör mest",
+                                        iconColor: .primary
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(16)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                    }
+                    .padding(.horizontal, 16)
                 }
-                Section {
-                    NavigationLink(destination: UppyChatView()) {
-                        UppyMenuRow(
-                            title: "Prata med UPPY",
-                            subtitle: "Chatta med din AI-coach direkt i appen"
-                        )
-                    }
-                    NavigationLink(destination: MonthlyReportView()) {
-                        StatisticsMenuRow(
-                            icon: "doc.text.magnifyingglass",
-                            title: "Månadsrapport",
-                            subtitle: "Sammanfattning av dina pass denna månad"
-                        )
-                    }
-                    NavigationLink(destination: CalendarOverviewView()) {
-                        StatisticsMenuRow(
-                            icon: "calendar",
-                            title: "Kalender",
-                            subtitle: "Se alla träningsdagar i månad, år eller flera år"
-                        )
-                    }
-                    NavigationLink(destination: ProgressiveOverloadView()) {
-                        StatisticsMenuRow(
-                            icon: "chart.bar.xaxis",
-                            title: "Progressive Overload",
-                            subtitle: "Följ din styrkeutveckling över tid"
-                        )
-                    }
-                    NavigationLink(destination: UppyChatView(initialPrompt: "Vilken övning kör jag mest på gymmet?")) {
-                        StatisticsMenuRow(
-                            icon: "dumbbell.fill",
-                            title: "Mest använda gymövningar",
-                            subtitle: "Se vilka övningar du gör mest"
-                        )
-                    }
-                }
+                .padding(.vertical, 16)
             }
-            .listStyle(.insetGrouped)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Statistik")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -58,6 +100,24 @@ struct StatisticsView: View {
             }
         }
         .enableSwipeBack()
+    }
+}
+
+private struct SectionHeader: View {
+    let title: String
+    let icon: String
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+            
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+        }
     }
 }
 
@@ -100,25 +160,72 @@ private struct CalendarOverviewView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                modePicker
-                switch mode {
-                case .month:
-                    MonthCalendarView(referenceDate: $referenceDate,
-                                      workoutSet: workoutSet,
-                                      calendar: calendar)
-                case .year:
-                    YearCalendarView(referenceDate: $referenceDate,
-                                     workoutSet: workoutSet,
-                                     calendar: calendar)
-                case .multiYear:
-                    MultiYearCalendarView(referenceDate: referenceDate,
-                                          earliestDate: earliestDate,
+            VStack(spacing: 20) {
+                // Header card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(.primary)
+                        
+                        Text("Träningskalender")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                    }
+                    
+                    Text("Visualisera dina träningsdagar och håll koll på din kontinuitet.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    
+                    // Stats row
+                    HStack(spacing: 12) {
+                        CalendarStatItem(value: "\(workoutDates.count)", label: "Pass", color: .primary)
+                        CalendarStatItem(value: "\(workoutSet.count)", label: "Dagar", color: .secondary)
+                        CalendarStatItem(value: "\(currentStreak)", label: "Streak", color: .green)
+                    }
+                    .padding(.top, 8)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                
+                // Mode picker card
+                VStack(spacing: 16) {
+                    modePicker
+                }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                
+                // Calendar card
+                VStack {
+                    switch mode {
+                    case .month:
+                        MonthCalendarView(referenceDate: $referenceDate,
                                           workoutSet: workoutSet,
                                           calendar: calendar)
+                    case .year:
+                        YearCalendarView(referenceDate: $referenceDate,
+                                         workoutSet: workoutSet,
+                                         calendar: calendar)
+                    case .multiYear:
+                        MultiYearCalendarView(referenceDate: referenceDate,
+                                              earliestDate: earliestDate,
+                                              workoutSet: workoutSet,
+                                              calendar: calendar)
+                    }
                 }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
             }
-            .padding(20)
+            .padding(16)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Kalender")
@@ -165,6 +272,32 @@ private struct CalendarOverviewView: View {
         .refreshable {
             await loadWorkoutDates(force: true)
         }
+    }
+    
+    private var currentStreak: Int {
+        guard !workoutSet.isEmpty else { return 0 }
+        
+        var streak = 0
+        var currentDate = calendar.startOfDay(for: Date())
+        
+        // Check if today or yesterday was a workout day to start the streak
+        if !workoutSet.contains(currentDate) {
+            if let yesterday = calendar.date(byAdding: .day, value: -1, to: currentDate) {
+                currentDate = yesterday
+            }
+        }
+        
+        // Count consecutive days backwards
+        while workoutSet.contains(currentDate) {
+            streak += 1
+            if let previousDay = calendar.date(byAdding: .day, value: -1, to: currentDate) {
+                currentDate = previousDay
+            } else {
+                break
+            }
+        }
+        
+        return streak
     }
     
     private var modePicker: some View {
@@ -234,6 +367,28 @@ private struct CalendarOverviewView: View {
                 self.isLoading = false
             }
         }
+    }
+}
+
+private struct CalendarStatItem: View {
+    let value: String
+    let label: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(value)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(color)
+            
+            Text(label)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(color.opacity(0.1))
+        .cornerRadius(12)
     }
 }
 
@@ -343,45 +498,79 @@ private struct MonthCalendarView: View {
         return normalized
     }
     
+    private var workoutCountThisMonth: Int {
+        daysInMonth.filter { day in
+            guard let date = dayDate(day: day) else { return false }
+            return workoutSet.contains(calendar.startOfDay(for: date))
+        }.count
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(monthLabel)
-                .font(.system(size: 22, weight: .bold))
+            // Month header with stats
+            HStack {
+                Text(monthLabel)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                    Text("\(workoutCountThisMonth) pass")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(10)
+            }
             
+            // Weekday headers
             let weekdaySymbols = calendar.shortWeekdaySymbols
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 12) {
                 ForEach(weekdaySymbols, id: \.self) { symbol in
                     Text(symbol.capitalized)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
                 }
                 
+                // Empty cells for offset
                 ForEach(0..<firstWeekdayOffset, id: \.self) { _ in
                     Text("")
                         .frame(height: 36)
                 }
                 
+                // Day cells
                 ForEach(daysInMonth, id: \.self) { day in
                     let date = dayDate(day: day)
                     let isWorkoutDay = date.map { workoutSet.contains(calendar.startOfDay(for: $0)) } ?? false
+                    let isToday = date.map { calendar.isDateInToday($0) } ?? false
+                    
                     Text("\(day)")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 15, weight: isWorkoutDay || isToday ? .bold : .medium))
                         .frame(width: 38, height: 38)
                         .background(
-                            Circle()
-                                .fill(isWorkoutDay ? Color.primary : Color.clear)
-                                .overlay(
+                            ZStack {
+                                if isWorkoutDay {
                                     Circle()
-                                        .stroke(Color.primary.opacity(0.15), lineWidth: isWorkoutDay ? 0 : 1)
-                                )
+                                        .fill(Color.green)
+                                } else if isToday {
+                                    Circle()
+                                        .stroke(Color.primary, lineWidth: 2)
+                                } else {
+                                    Circle()
+                                        .fill(Color(.systemGray6))
+                                }
+                            }
                         )
-                        .foregroundColor(isWorkoutDay ? Color(.systemBackground) : .primary)
+                        .foregroundColor(isWorkoutDay ? .white : .primary)
                 }
             }
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
     
@@ -402,12 +591,43 @@ private struct YearCalendarView: View {
         return (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: yearStart) }
     }
     
+    private var totalWorkoutsThisYear: Int {
+        months.reduce(0) { total, monthStart in
+            let days = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
+            return total + days.filter { day in
+                var comps = calendar.dateComponents([.year, .month], from: monthStart)
+                comps.day = day
+                guard let date = calendar.date(from: comps) else { return false }
+                return workoutSet.contains(calendar.startOfDay(for: date))
+            }.count
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(yearFormatter.string(from: referenceDate))
-                .font(.system(size: 22, weight: .bold))
+            // Year header with total stats
+            HStack {
+                Text(yearFormatter.string(from: referenceDate))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                    Text("\(totalWorkoutsThisYear) pass totalt")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(10)
+            }
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 16) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 2), spacing: 12) {
                 ForEach(months, id: \.self) { monthStart in
                     MiniMonthCard(monthStart: monthStart, workoutSet: workoutSet, calendar: calendar)
                 }
@@ -435,24 +655,48 @@ private struct MiniMonthCard: View {
         return formatter.string(from: monthStart).capitalized
     }
     
+    private var workoutCount: Int {
+        let days = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
+        return days.filter { day in
+            guard let date = makeDate(day: day) else { return false }
+            return workoutSet.contains(calendar.startOfDay(for: date))
+        }.count
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(monthLabel)
-                .font(.system(size: 15, weight: .semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(monthLabel)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if workoutCount > 0 {
+                    Text("\(workoutCount)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.green)
+                        .cornerRadius(8)
+                }
+            }
+            
             let days = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-            LazyVGrid(columns: columns, spacing: 4) {
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 3), count: 7)
+            LazyVGrid(columns: columns, spacing: 3) {
                 ForEach(days, id: \.self) { day in
                     let date = makeDate(day: day)
                     let hasWorkout = date.map { workoutSet.contains(calendar.startOfDay(for: $0)) } ?? false
-                    Circle()
-                        .fill(hasWorkout ? Color.primary : Color(.systemGray5))
-                        .frame(width: 10, height: 10)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(hasWorkout ? Color.green : Color(.systemGray5))
+                        .frame(width: 12, height: 12)
                 }
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground))
+        .padding(14)
+        .background(Color(.systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     
@@ -476,14 +720,48 @@ private struct MultiYearCalendarView: View {
         return Array(earliestYear...refYear).reversed()
     }
     
+    private var totalWorkouts: Int {
+        workoutSet.count
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Flera år")
-                .font(.system(size: 22, weight: .bold))
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            HStack {
+                Text("Historik")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.green)
+                    Text("\(totalWorkouts) pass totalt")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(10)
+            }
+            
             if years.isEmpty {
-                Text("Inga registrerade pass ännu.")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.exclamationmark")
+                        .font(.system(size: 24))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Inga registrerade pass ännu.")
+                        .font(.system(size: 15))
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
             } else {
                 ForEach(years, id: \.self) { year in
                     YearHeatRow(year: year, workoutSet: workoutSet, calendar: calendar)
@@ -498,10 +776,39 @@ private struct YearHeatRow: View {
     let workoutSet: Set<Date>
     let calendar: Calendar
     
+    private var workoutsThisYear: Int {
+        let months = (0..<12).compactMap { offset -> Date? in
+            var comps = DateComponents()
+            comps.year = year
+            comps.month = offset + 1
+            comps.day = 1
+            return calendar.date(from: comps)
+        }
+        return months.reduce(0) { total, monthStart in
+            let range = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
+            return total + range.filter { day in
+                var comps = calendar.dateComponents([.year, .month], from: monthStart)
+                comps.day = day
+                guard let date = calendar.date(from: comps) else { return false }
+                return workoutSet.contains(calendar.startOfDay(for: date))
+            }.count
+        }
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\(year)")
-                .font(.system(size: 17, weight: .semibold))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("\(year)")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text("\(workoutsThisYear) pass")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            
             let months = (0..<12).compactMap { offset -> Date? in
                 var comps = DateComponents()
                 comps.year = year
@@ -509,13 +816,27 @@ private struct YearHeatRow: View {
                 comps.day = 1
                 return calendar.date(from: comps)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(16), spacing: 4), count: 12), spacing: 4) {
+            
+            // Month labels
+            HStack(spacing: 4) {
+                ForEach(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"], id: \.self) { label in
+                    Text(label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            
+            // Activity dots
+            HStack(spacing: 4) {
                 ForEach(months, id: \.self) { monthStart in
                     MiniMonthDot(monthStart: monthStart, workoutSet: workoutSet, calendar: calendar)
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(14)
     }
 }
 
@@ -524,25 +845,29 @@ private struct MiniMonthDot: View {
     let workoutSet: Set<Date>
     let calendar: Calendar
     
-    var body: some View {
-        let hasWorkout = monthHasWorkout
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(hasWorkout ? Color.black : Color(.systemGray5))
-            .frame(width: 14, height: 14)
-    }
-    
-    private var monthHasWorkout: Bool {
+    private var workoutCountInMonth: Int {
         let range = calendar.range(of: .day, in: .month, for: monthStart) ?? 1..<32
-        for day in range {
+        return range.filter { day in
             var comps = calendar.dateComponents([.year, .month], from: monthStart)
             comps.day = day
-            if let date = calendar.date(from: comps) {
-                if workoutSet.contains(calendar.startOfDay(for: date)) {
-                    return true
-                }
-            }
-        }
-        return false
+            guard let date = calendar.date(from: comps) else { return false }
+            return workoutSet.contains(calendar.startOfDay(for: date))
+        }.count
+    }
+    
+    private var intensity: Double {
+        let count = workoutCountInMonth
+        if count == 0 { return 0 }
+        if count <= 3 { return 0.3 }
+        if count <= 7 { return 0.5 }
+        if count <= 12 { return 0.75 }
+        return 1.0
+    }
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(workoutCountInMonth > 0 ? Color.green.opacity(intensity) : Color(.systemGray5))
+            .frame(maxWidth: .infinity, minHeight: 20)
     }
 }
 
@@ -551,42 +876,61 @@ private struct StatisticsMenuRow: View {
     let assetName: String?
     let title: String
     let subtitle: String
+    var iconColor: Color
+    var showDivider: Bool
     
-    init(icon: String, assetName: String? = nil, title: String, subtitle: String) {
+    init(icon: String, assetName: String? = nil, title: String, subtitle: String, iconColor: Color = .primary, showDivider: Bool = false) {
         self.icon = icon
         self.assetName = assetName
         self.title = title
         self.subtitle = subtitle
+        self.iconColor = iconColor
+        self.showDivider = showDivider
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color(.systemGray6))
-                    .frame(width: 48, height: 48)
-                if let assetName {
-                    Image(assetName)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 42, height: 42)
-                        .clipShape(Circle())
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(iconColor.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    if let assetName {
+                        Image(assetName)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 38, height: 38)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    } else {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(iconColor)
+                    }
                 }
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.5))
             }
-            VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+            .padding(.vertical, 12)
+            
+            if showDivider {
+                Divider()
+                    .padding(.leading, 58)
             }
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -641,7 +985,7 @@ private struct UppyMenuRow: View {
                         
                         Image(systemName: "sparkle.fill")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.yellow)
+                            .foregroundColor(.primary)
                             .accessibilityHidden(true)
                     }
                 }
@@ -952,55 +1296,97 @@ private struct MonthlyReportView: View {
     }
     
     private func summaryContent(for summary: MonthlySummary) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Så går det i \(monthFormatter.string(from: summary.monthStartDate).capitalized)")
-                    .font(.system(size: 22, weight: .bold))
+        VStack(alignment: .leading, spacing: 20) {
+            // Header card
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Så går det i \(monthFormatter.string(from: summary.monthStartDate).capitalized)")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+                
                 Text("Statistiken gäller pass registrerade från månadens början fram till idag.")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
             
-            let statsData: [(title: String, value: String, subtitle: String)] = [
-                ("Pass", "\(summary.totalSessions)", "denna månad"),
-                ("Tid", formatDuration(summary.totalDurationSeconds), "total tid"),
-                ("Volym", formatVolume(summary.totalVolumeKg), "summa kg")
+            // Stats cards
+            let statsData: [(title: String, value: String, subtitle: String, icon: String, color: Color)] = [
+                ("Pass", "\(summary.totalSessions)", "denna månad", "figure.run", .primary),
+                ("Tid", formatDuration(summary.totalDurationSeconds), "total tid", "clock.fill", .secondary),
+                ("Volym", formatVolume(summary.totalVolumeKg), "summa kg", "scalemass.fill", .primary)
             ]
             
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(statsData, id: \.title) { data in
-                    MonthlyStatCard(title: data.title, value: data.value, subtitle: data.subtitle)
+                    MonthlyStatCard(title: data.title, value: data.value, subtitle: data.subtitle, icon: data.icon, color: data.color)
                 }
             }
             
             if summary.totalSessions == 0 {
-                Text("Inga pass är registrerade ännu den här månaden. Ditt första pass kommer att dyka upp här!")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                HStack(spacing: 12) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Inga pass är registrerade ännu den här månaden. Ditt första pass kommer att dyka upp här!")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
             }
             
+            // Calendar section
             VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Kalender")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    if !summary.highlightedDays.isEmpty {
+                        let dayCount = summary.highlightedDays.count
+                        Text("\(dayCount) \(dayCount == 1 ? "dag" : "dagar")")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray5))
+                            .cornerRadius(8)
+                    }
+                }
+                
                 MonthlyCalendarView(monthStart: summary.monthStartDate, highlightedDays: summary.highlightedDays)
                 
                 if summary.highlightedDays.isEmpty {
                     Text("Planera in dina pass för att se kalendern fyllas med träningsdagar.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                } else {
-                    let dayCount = summary.highlightedDays.count
-                    Text("\(dayCount) \(dayCount == 1 ? "dag" : "dagar") markerade som träningsdag denna månad.")
-                        .font(.footnote)
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
         }
     }
     
@@ -1107,23 +1493,31 @@ private struct MonthlyStatCard: View {
     let title: String
     let value: String
     let subtitle: String
+    var icon: String = "chart.bar.fill"
+    var color: Color = .primary
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(color)
+            
             Text(value)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.primary)
-            Text(subtitle)
-                .font(.system(size: 13))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.vertical, 16)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -1135,24 +1529,22 @@ private struct MonthlyCalendarView: View {
     private let weekdaySymbols = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Kalender")
-                .font(.system(size: 18, weight: .semibold))
-            
+        VStack(alignment: .leading, spacing: 16) {
+            // Weekday headers
             HStack {
                 ForEach(weekdaySymbols, id: \.self) { symbol in
                     Text(symbol)
-                        .font(.caption)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 10) {
                 ForEach(0..<leadingEmptyDays, id: \.self) { _ in
                     Rectangle()
                         .foregroundColor(.clear)
-                        .frame(height: 32)
+                        .frame(height: 36)
                 }
                 
                 ForEach(1...daysInMonth, id: \.self) { day in
@@ -1176,20 +1568,26 @@ private struct MonthlyCalendarView: View {
         let today = Date()
         let isFuture = date > today
         let isHighlighted = highlightedDays.contains(day)
+        let isToday = calendar.isDateInToday(date)
         
         return Text("\(day)")
-            .font(.system(size: 15, weight: .semibold))
-            .frame(maxWidth: .infinity, minHeight: 32)
-            .padding(6)
+            .font(.system(size: 15, weight: isHighlighted || isToday ? .bold : .medium))
+            .frame(width: 36, height: 36)
             .background(
-                Circle()
-                    .fill(isHighlighted ? Color.black : Color.clear)
-                    .overlay(
+                ZStack {
+                    if isHighlighted {
                         Circle()
-                            .stroke(Color.black.opacity(isFuture ? 0.1 : 0.15), lineWidth: isHighlighted ? 0 : 1)
-                    )
+                            .fill(Color.green)
+                    } else if isToday {
+                        Circle()
+                            .stroke(Color.primary, lineWidth: 2)
+                    } else if !isFuture {
+                        Circle()
+                            .fill(Color(.systemGray6))
+                    }
+                }
             )
-            .foregroundColor(isHighlighted ? .white : (isFuture ? .gray.opacity(0.4) : .black))
+            .foregroundColor(isHighlighted ? .white : (isFuture ? .secondary.opacity(0.4) : .primary))
     }
 }
 

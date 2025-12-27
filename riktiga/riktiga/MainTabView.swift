@@ -68,67 +68,38 @@ struct MainTabView: View {
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
+    // Tab items data
+    private let tabItems: [(icon: String, title: String)] = [
+        ("house.fill", "Hem"),
+        ("person.2.fill", "Socialt"),
+        ("figure.run", "Starta pass"),
+        ("gift.fill", "Belöningar"),
+        ("person.fill", "Profil")
+    ]
+    
     var body: some View {
         ZStack(alignment: .bottom) {
-            // NOTE: Each tab view manages its own NavigationStack - don't nest here
-            TabView(selection: $selectedTab) {
-                HomeContainerView()
-                    .tag(0)
-                    .tabItem {
-                        Image(systemName: "house.fill")
-                        Text("Hem")
-                    }
-                
-                SocialView()
-                    .tag(1)
-                    .tabItem {
-                        Image(systemName: "person.2.fill")
-                        Text("Socialt")
-                    }
-                
-                // Placeholder for center "Starta pass" button
-                Color.clear
-                    .tag(2)
-                    .tabItem {
-                        Image(systemName: "figure.run")
-                        Text("Starta pass")
-                    }
-                
-                RewardsView()
-                    .tag(3)
-                    .tabItem {
-                        Image(systemName: "gift.fill")
-                        Text("Belöningar")
-                    }
-                
-                ProfileView()
-                    .tag(4)
-                    .tabItem {
-                        Image(systemName: "person.fill")
-                        Text("Profil")
-                    }
-            }
-            .accentColor(.black)
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .onChange(of: selectedTab) { oldValue, newValue in
-                // Intercept "Starta pass" tab and show start session instead
-                if newValue == 2 {
-                    selectedTab = oldValue // Stay on previous tab
-                    triggerHeavyHaptic()
-                    Task {
-                        await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                        await MainActor.run {
-                            if hasActiveSession {
-                                showResumeSession = true
-                            } else {
-                                startActivityType = .running
-                                showStartSession = true
-                            }
-                        }
-                    }
+            // Content views based on selected tab
+            Group {
+                switch selectedTab {
+                case 0:
+                    HomeContainerView()
+                case 1:
+                    SocialView()
+                case 3:
+                    RewardsView()
+                case 4:
+                    ProfileView()
+                default:
+                    Color.clear
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Custom Tab Bar
+            customTabBar
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .fullScreenCover(isPresented: $showStartSession) {
             StartSessionView(initialActivity: startActivityType ?? .running)
                 .id(startActivityType ?? .running)
@@ -200,6 +171,18 @@ struct MainTabView: View {
                 selectedTab = 1  // Switch to Socialt tab
                 // Post notification to SocialView to switch to News tab
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateToNewsTab"), object: nil)
+                notificationNav.resetNavigation()
+            }
+        }
+        .onChange(of: notificationNav.shouldNavigateToPost) { _, postId in
+            if let postId = postId {
+                selectedTab = 1  // Switch to Socialt tab
+                // Post notification to SocialView to open the specific post
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("NavigateToPost"),
+                    object: nil,
+                    userInfo: ["postId": postId]
+                )
                 notificationNav.resetNavigation()
             }
         }
@@ -315,6 +298,50 @@ struct MainTabView: View {
         }
     }
     
+    // MARK: - Custom Tab Bar
+    
+    private var customTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<tabItems.count, id: \.self) { index in
+                TabBarItem(
+                    icon: tabItems[index].icon,
+                    title: tabItems[index].title,
+                    isSelected: selectedTab == index,
+                    action: {
+                        if index == 2 {
+                            // Starta pass - special handling
+                            triggerHeavyHaptic()
+                            Task {
+                                await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                                await MainActor.run {
+                                    if hasActiveSession {
+                                        showResumeSession = true
+                                    } else {
+                                        startActivityType = .running
+                                        showStartSession = true
+                                    }
+                                }
+                            }
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = index
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .padding(.bottom, 16)
+        .background(
+            Rectangle()
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: -2)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+    
     // MARK: - Floating Start Button
     
     private var floatingStartButton: some View {
@@ -353,6 +380,48 @@ struct MainTabView: View {
     private func triggerHeavyHaptic() {
         hapticGenerator.prepare()
         hapticGenerator.impactOccurred(intensity: 1.0)
+    }
+}
+
+// MARK: - Tab Bar Item Component
+private struct TabBarItem: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                // Icon with gradient when selected
+                if isSelected {
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color.black,
+                                    Color.gray.opacity(0.6)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: 28)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(.gray)
+                        .frame(height: 28)
+                }
+                
+                Text(title)
+                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? .black : .gray)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 }
 

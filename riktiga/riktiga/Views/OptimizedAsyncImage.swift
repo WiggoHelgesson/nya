@@ -166,6 +166,23 @@ class ImageCacheManager {
         }
     }
     
+    /// High-priority prefetch for immediately visible images (first few posts)
+    func prefetchHighPriority(urls: [String]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls.prefix(5) where !url.isEmpty {
+                if hasImage(for: url) { continue }
+                
+                group.addTask {
+                    do {
+                        _ = try await self.downloadAndCacheImage(from: url)
+                    } catch {
+                        // Ignore failures
+                    }
+                }
+            }
+        }
+    }
+    
     func clearCache() {
         cache.removeAllObjects()
         try? fileManager.removeItem(at: cacheDirectory)
@@ -202,6 +219,13 @@ struct OptimizedAsyncImage: View {
         self.width = width
         self.height = height
         self.cornerRadius = cornerRadius
+        
+        // Check cache immediately at init to avoid flash of loading state
+        if let urlString = url, !urlString.isEmpty,
+           let cachedImage = ImageCacheManager.shared.getImage(for: urlString) {
+            _image = State(initialValue: cachedImage)
+            _isLoading = State(initialValue: false)
+        }
     }
     
     var body: some View {
@@ -247,16 +271,19 @@ struct OptimizedAsyncImage: View {
     }
     
     private func loadImage() {
+        // Skip if already loaded
+        if image != nil { return }
+        
         guard let urlString = url, !urlString.isEmpty else {
             hasError = true
             return
         }
         
-        // Check cache first
+        // Check cache first (double-check in case it was cached after init)
         if let cachedImage = ImageCacheManager.shared.getImage(for: urlString) {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                self.image = cachedImage
-            }
+            // No animation needed if loading from cache - appear instantly
+            self.image = cachedImage
+            self.isLoading = false
             return
         }
         
@@ -268,7 +295,7 @@ struct OptimizedAsyncImage: View {
                 let loadedImage = try await loadImageFromURL(urlString)
                 
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
                         self.image = loadedImage
                         self.isLoading = false
                     }

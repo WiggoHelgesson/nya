@@ -33,6 +33,7 @@ struct SocialView: View {
     @State private var isUploadingAvatar = false
     @State private var golfTrainers: [GolfTrainer] = []
     @State private var isLoadingTrainers = false
+    @State private var pendingPostNavigation: String? = nil
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -48,110 +49,10 @@ struct SocialView: View {
     }
     
     var body: some View {
-            NavigationStack {
+        NavigationStack {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
-                
-                if socialViewModel.isLoading && socialViewModel.posts.isEmpty {
-                    VStack(spacing: 20) {
-                        ProgressView()
-                            .tint(AppColors.brandBlue)
-                            .scaleEffect(1.5)
-                        Text("Laddar inlägg...")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
-                } else if socialViewModel.posts.isEmpty {
-                    // Centered empty state
-                    VStack(spacing: 24) {
-                        Spacer()
-                        
-                        // Empty state content
-                        VStack(spacing: 16) {
-                            Image(systemName: "person.2.badge.plus")
-                                .font(.system(size: 64))
-                                .foregroundColor(.gray.opacity(0.6))
-                            
-                            Text("Inga inlägg än")
-                                .font(.system(size: 24, weight: .bold))
-                            
-                            Text("Följ andra användare för att se deras inlägg i ditt flöde")
-                                .font(.system(size: 15))
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
-                            
-                            // Add friends button
-                            Button {
-                                showFindFriends = true
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Text("Lägg till vänner")
-                                        .font(.system(size: 16, weight: .semibold))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 28)
-                                .padding(.vertical, 14)
-                                .background(Color.black)
-                                .cornerRadius(25)
-                            }
-                            .padding(.top, 8)
-                        }
-                        
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .sheet(isPresented: $showFindFriends) {
-                        FindFriendsView()
-                            .environmentObject(authViewModel)
-                    }
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            HomeHeaderView()
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 12)
-                            
-                            // Tab selector
-                            HStack(spacing: 0) {
-                                ForEach(SocialTab.allCases, id: \.self) { tab in
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            selectedTab = tab
-                                        }
-                                    } label: {
-                                        VStack(spacing: 8) {
-                                            Text(tab.rawValue)
-                                                .font(.system(size: 15, weight: selectedTab == tab ? .bold : .medium))
-                                                .foregroundColor(selectedTab == tab ? .black : .gray)
-                                            
-                                            Rectangle()
-                                                .fill(selectedTab == tab ? Color.black : Color.clear)
-                                                .frame(height: 2)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 12)
-                            
-                            Divider()
-                            
-                            if selectedTab == .feed {
-                                // Normal feed
-                                feedContent
-                            } else {
-                                // News section
-                                newsContent
-                            }
-                        }
-                    }
-                }
+                mainContent
             }
             .navigationTitle("")
             .navigationBarHidden(true)
@@ -162,35 +63,10 @@ struct SocialView: View {
                     .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
             }
             .task(id: authViewModel.currentUser?.id) {
-                guard let userId = authViewModel.currentUser?.id else { return }
-                
-                // Ensure valid session before fetching
-                do {
-                    try await AuthSessionManager.shared.ensureValidSession()
-                } catch {
-                    print("❌ Session invalid, cannot fetch feed")
-                    return
-                }
-                
-                await socialViewModel.fetchSocialFeedAsync(userId: userId)
-                await loadRecommendedUsers(for: userId)
-                await newsViewModel.fetchNews()
+                await loadInitialData()
             }
             .refreshable {
-                guard let userId = authViewModel.currentUser?.id else { return }
-                
-                // Ensure valid session before refreshing
-                do {
-                    try await AuthSessionManager.shared.ensureValidSession()
-                } catch {
-                    print("❌ Session invalid, cannot refresh")
-                    return
-                }
-                
-                visiblePostCount = 5 // Reset to 5 posts when refreshing
-                await socialViewModel.refreshSocialFeed(userId: userId)
-                await loadRecommendedUsers(for: userId)
-                await newsViewModel.fetchNews()
+                await refreshData()
             }
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
@@ -198,39 +74,247 @@ struct SocialView: View {
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
             }
+            .sheet(isPresented: $showFindFriends) {
+                FindFriendsView()
+                    .environmentObject(authViewModel)
+            }
             .enableSwipeBack()
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToNewsTab"))) { _ in
                 withAnimation {
                     selectedTab = .news
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPost"))) { notification in
+                if let userInfo = notification.userInfo,
+                   let postId = userInfo["postId"] as? String {
+                    // Switch to feed tab first
+                    withAnimation {
+                        selectedTab = .feed
+                    }
+                    // Try to find the post in existing posts
+                    if let post = socialViewModel.posts.first(where: { $0.id == postId }) {
+                        selectedPost = post
+                    } else {
+                        // Post not in current feed - save it and fetch when data loads
+                        pendingPostNavigation = postId
+                        // Try to fetch the post directly
+                        Task {
+                            await fetchAndNavigateToPost(postId: postId)
+                        }
+                    }
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PostUpdated"))) { _ in
-                // Refresh the feed when a post is updated
                 Task {
-                    await socialViewModel.refreshFeed(userId: authViewModel.currentUser?.id ?? "")
+                    await socialViewModel.refreshSocialFeed(userId: authViewModel.currentUser?.id ?? "")
                 }
             }
             .onChange(of: scenePhase) { oldPhase, newPhase in
-                if newPhase == .active {
-                    let inactiveTime = Date().timeIntervalSince(lastActiveTime)
-                    // Refresh feed if app was in background for 2+ minutes
-                    if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
-                        print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
-                        Task {
-                            guard let userId = authViewModel.currentUser?.id else { return }
-                            do {
-                                try await AuthSessionManager.shared.ensureValidSession()
-                                await socialViewModel.refreshSocialFeed(userId: userId)
-                            } catch {
-                                print("⚠️ Could not refresh feed on app active: \(error)")
-                            }
-                        }
+                handleScenePhaseChange(newPhase)
+            }
+        }
+    }
+    
+    // MARK: - Extracted Views
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        if socialViewModel.isLoading && socialViewModel.posts.isEmpty {
+            loadingView
+        } else if socialViewModel.posts.isEmpty {
+            emptyStateView
+        } else {
+            scrollContent
+        }
+    }
+    
+    private var loadingView: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .tint(AppColors.brandBlue)
+                .scaleEffect(1.5)
+            Text("Laddar inlägg...")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.gray)
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            VStack(spacing: 16) {
+                Image(systemName: "person.2.badge.plus")
+                    .font(.system(size: 64))
+                    .foregroundColor(.gray.opacity(0.6))
+                
+                Text("Inga inlägg än")
+                    .font(.system(size: 24, weight: .bold))
+                
+                Text("Följ andra användare för att se deras inlägg i ditt flöde")
+                    .font(.system(size: 15))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                
+                Button {
+                    showFindFriends = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Lägg till vänner")
+                            .font(.system(size: 16, weight: .semibold))
                     }
-                    lastActiveTime = Date()
-                } else if newPhase == .background {
-                    lastActiveTime = Date()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 14)
+                    .background(Color.black)
+                    .cornerRadius(25)
+                }
+                .padding(.top, 8)
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HomeHeaderView()
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                
+                tabSelector
+                
+                Divider()
+                
+                if selectedTab == .feed {
+                    feedContent
+                } else {
+                    newsContent
                 }
             }
+        }
+    }
+    
+    private var tabSelector: some View {
+        HStack(spacing: 0) {
+            ForEach(SocialTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(.system(size: 15, weight: selectedTab == tab ? .bold : .medium))
+                            .foregroundColor(selectedTab == tab ? .primary : .gray)
+                        
+                        Rectangle()
+                            .fill(selectedTab == tab ? Color.primary : Color.clear)
+                            .frame(height: 2)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func loadInitialData() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+        } catch {
+            print("❌ Session invalid, cannot fetch feed")
+            return
+        }
+        
+        await socialViewModel.fetchSocialFeedAsync(userId: userId)
+        await loadRecommendedUsers(for: userId)
+        await newsViewModel.fetchNews()
+        
+        // Check if we have a pending post navigation
+        if let postId = pendingPostNavigation {
+            pendingPostNavigation = nil
+            if let post = socialViewModel.posts.first(where: { $0.id == postId }) {
+                await MainActor.run {
+                    selectedPost = post
+                }
+            }
+        }
+    }
+    
+    private func fetchAndNavigateToPost(postId: String) async {
+        do {
+            // Try to fetch this specific post
+            let response = try await SupabaseConfig.supabase
+                .from("workout_posts")
+                .select("""
+                    *,
+                    profiles!inner(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .eq("id", value: postId)
+                .single()
+                .execute()
+            
+            let post: SocialWorkoutPost = try response.value
+            await MainActor.run {
+                selectedPost = post
+                pendingPostNavigation = nil
+            }
+        } catch {
+            print("❌ Failed to fetch post \(postId): \(error)")
+            // Post might not exist or user doesn't have access
+            pendingPostNavigation = nil
+        }
+    }
+    
+    private func refreshData() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+        } catch {
+            print("❌ Session invalid, cannot refresh")
+            return
+        }
+        
+        visiblePostCount = 5
+        await socialViewModel.refreshSocialFeed(userId: userId)
+        await loadRecommendedUsers(for: userId)
+        await newsViewModel.fetchNews()
+    }
+    
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        if newPhase == .active {
+            let inactiveTime = Date().timeIntervalSince(lastActiveTime)
+            if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
+                print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
+                Task {
+                    guard let userId = authViewModel.currentUser?.id else { return }
+                    do {
+                        try await AuthSessionManager.shared.ensureValidSession()
+                        await socialViewModel.refreshSocialFeed(userId: userId)
+                    } catch {
+                        print("❌ Failed to refresh on scene change: \(error)")
+                    }
+                }
+            }
+            lastActiveTime = Date()
+        } else if newPhase == .background || newPhase == .inactive {
+            lastActiveTime = Date()
         }
     }
     
@@ -1149,6 +1233,31 @@ struct SocialPostCard: View {
                     .padding(.horizontal, 16)
             }
             
+            // PB Badge - show if this workout has a personal best
+            if let pbExercise = post.pbExerciseName, let pbVal = post.pbValue,
+               !pbExercise.isEmpty, !pbVal.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.yellow)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Nytt PB!")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.yellow)
+                        Text("\(pbExercise): \(pbVal)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal, 16)
+            }
+            
             HStack(spacing: 0) {
                 if isGymPost {
                     if let duration = post.duration {
@@ -1911,8 +2020,22 @@ class SocialViewModel: ObservableObject {
         if let cached = cachedPosts, !cached.isEmpty {
             // Apply known good counts to cached posts before showing
             let enhancedCached = applyKnownGoodCounts(to: cached)
-            posts = sortedByDateDesc(enhancedCached)
-            prefetchAvatars(for: posts)
+            let sortedPosts = sortedByDateDesc(enhancedCached)
+            
+            // Prefetch first avatar URLs with HIGH priority and WAIT for completion
+            let firstAvatarUrls = sortedPosts.prefix(3).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+            if !firstAvatarUrls.isEmpty {
+                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+            }
+            
+            // Now show posts - first avatars should be in cache
+            posts = sortedPosts
+            
+            // Prefetch rest in background (non-blocking)
+            Task.detached(priority: .background) {
+                await ImageCacheManager.shared.prefetchHighPriority(urls: sortedPosts.dropFirst(3).prefix(7).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty })
+            }
+            
             isLoading = false
             Task { await self.enrichAuthorMetadataIfNeeded() }
         } else {
@@ -1942,8 +2065,22 @@ class SocialViewModel: ObservableObject {
                 }
             }
             
-            posts = sortedByDateDesc(fetchedPosts)
-            prefetchAvatars(for: posts)
+            let sortedPosts = sortedByDateDesc(fetchedPosts)
+            
+            // Prefetch first avatar URLs with HIGH priority and WAIT for completion
+            let firstAvatarUrls = sortedPosts.prefix(3).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+            if !firstAvatarUrls.isEmpty {
+                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+            }
+            
+            // Now show posts - first avatars should be in cache
+            posts = sortedPosts
+            
+            // Prefetch rest in background (non-blocking)
+            Task.detached(priority: .background) {
+                await ImageCacheManager.shared.prefetchHighPriority(urls: sortedPosts.dropFirst(3).prefix(7).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty })
+            }
+            
             isLoading = false
             isFetching = false
             lastSuccessfulFetch = Date()
@@ -2003,7 +2140,9 @@ class SocialViewModel: ObservableObject {
                     commentCount: finalCommentCount,
                     isLikedByCurrentUser: post.isLikedByCurrentUser,
                     splits: post.splits,
-                    exercises: post.exercises
+                    exercises: post.exercises,
+                    pbExerciseName: post.pbExerciseName,
+                    pbValue: post.pbValue
                 )
             }
             return post
@@ -2053,8 +2192,13 @@ class SocialViewModel: ObservableObject {
                 }
                 
                 let sorted = sortedByDateDesc(fetchedPosts)
+                
+                // Prefetch first 5 avatars with HIGH priority BEFORE showing posts
+                let firstAvatarUrls = sorted.prefix(5).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+                
                 posts = sorted
-                prefetchAvatars(for: posts)
+                prefetchAvatars(for: posts) // Prefetch rest in background
                 lastSuccessfulFetch = Date()
                 AppCacheManager.shared.saveSocialFeed(sorted, userId: userId)
                 Task { await self.enrichAuthorMetadataIfNeeded() }
@@ -2094,6 +2238,11 @@ class SocialViewModel: ObservableObject {
         
         do {
             let fetchedPosts = try await SocialService.shared.getPostsForUser(targetUserId: targetUserId, viewerId: viewerId)
+            
+            // Prefetch first 5 avatars with HIGH priority BEFORE showing posts
+            let firstAvatarUrls = fetchedPosts.prefix(5).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+            await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+            
             await MainActor.run {
                 self.posts = fetchedPosts
                 self.isLoading = false
@@ -2173,7 +2322,9 @@ class SocialViewModel: ObservableObject {
                 commentCount: post.commentCount,
                 isLikedByCurrentUser: post.isLikedByCurrentUser,
                 splits: post.splits,
-                exercises: post.exercises
+                exercises: post.exercises,
+                pbExerciseName: post.pbExerciseName,
+                pbValue: post.pbValue
             )
         }
         
@@ -2187,7 +2338,16 @@ class SocialViewModel: ObservableObject {
         guard !posts.isEmpty else { return }
         let urls = posts.compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
         guard !urls.isEmpty else { return }
-        ImageCacheManager.shared.prefetch(urls: urls)
+        
+        // Prefetch first 5 with high priority, rest with normal priority
+        Task {
+            await ImageCacheManager.shared.prefetchHighPriority(urls: Array(urls.prefix(5)))
+        }
+        
+        // Prefetch the rest with normal priority
+        if urls.count > 5 {
+            ImageCacheManager.shared.prefetch(urls: Array(urls.dropFirst(5)))
+        }
     }
     
     func updatePostLikeStatus(postId: String, isLiked: Bool, likeCount: Int) {
@@ -2222,7 +2382,9 @@ class SocialViewModel: ObservableObject {
                 commentCount: updatedPost.commentCount,
                 isLikedByCurrentUser: isLiked,
                 splits: updatedPost.splits,
-                exercises: updatedPost.exercises
+                exercises: updatedPost.exercises,
+                pbExerciseName: updatedPost.pbExerciseName,
+                pbValue: updatedPost.pbValue
             )
             posts[index] = updatedPost
             if let uid = currentUserId {
@@ -2263,7 +2425,9 @@ class SocialViewModel: ObservableObject {
                 commentCount: commentCount,
                 isLikedByCurrentUser: updatedPost.isLikedByCurrentUser,
                 splits: updatedPost.splits,
-                exercises: updatedPost.exercises
+                exercises: updatedPost.exercises,
+                pbExerciseName: updatedPost.pbExerciseName,
+                pbValue: updatedPost.pbValue
             )
             posts[index] = updatedPost
             if let uid = currentUserId {

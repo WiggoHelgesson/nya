@@ -35,6 +35,15 @@ nonisolated(unsafe) struct TileClaimParams: Encodable, Sendable {
     let p_pace: String?
 }
 
+/// Params for fetching tiles in bounds
+nonisolated(unsafe) struct TileBoundsParams: Encodable, Sendable {
+    let p_min_lat: Double
+    let p_min_lon: Double
+    let p_max_lat: Double
+    let p_max_lon: Double
+    let p_limit: Int
+}
+
     struct TileFeature: Decodable {
         let tile_id: Int64
         let owner_id: String?
@@ -44,6 +53,36 @@ nonisolated(unsafe) struct TileClaimParams: Encodable, Sendable {
         let pace: String?
         let geom: GeoJSONPolygon
         let last_updated_at: String?
+        
+        // Custom decoder to handle UUID as string
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            tile_id = try container.decode(Int64.self, forKey: .tile_id)
+            
+            // Handle owner_id as UUID or String
+            if let uuid = try? container.decode(UUID.self, forKey: .owner_id) {
+                owner_id = uuid.uuidString
+            } else {
+                owner_id = try? container.decode(String.self, forKey: .owner_id)
+            }
+            
+            // Handle activity_id as UUID or String
+            if let uuid = try? container.decode(UUID.self, forKey: .activity_id) {
+                activity_id = uuid.uuidString
+            } else {
+                activity_id = try? container.decode(String.self, forKey: .activity_id)
+            }
+            
+            distance_km = try? container.decode(Double.self, forKey: .distance_km)
+            duration_sec = try? container.decode(Int.self, forKey: .duration_sec)
+            pace = try? container.decode(String.self, forKey: .pace)
+            geom = try container.decode(GeoJSONPolygon.self, forKey: .geom)
+            last_updated_at = try? container.decode(String.self, forKey: .last_updated_at)
+        }
+        
+        enum CodingKeys: String, CodingKey {
+            case tile_id, owner_id, activity_id, distance_km, duration_sec, pace, geom, last_updated_at
+        }
     }
 
     struct GeoJSONPolygon: Decodable {
@@ -141,16 +180,26 @@ final class TerritoryService {
     ) async throws -> [TileFeature] {
         try await AuthSessionManager.shared.ensureValidSession()
         let params: [String: Double] = [
-            "min_lat": minLat,
-            "min_lon": minLon,
-            "max_lat": maxLat,
-            "max_lon": maxLon
+            "p_min_lat": minLat,
+            "p_min_lon": minLon,
+            "p_max_lat": maxLat,
+            "p_max_lon": maxLon
         ]
-        let tiles: [TileFeature] = try await supabase.database
-            .rpc("get_tiles_in_bounds", params: params)
-            .execute()
-            .value
-        return tiles
+        
+        print("🔍 [TILES RPC] Fetching tiles with bounds: lat(\(minLat)-\(maxLat)), lon(\(minLon)-\(maxLon))")
+        
+        do {
+            let tiles: [TileFeature] = try await supabase.database
+                .rpc("get_tiles_in_bounds", params: params)
+                .execute()
+                .value
+            
+            print("🔍 [TILES RPC] Decoded \(tiles.count) tiles successfully")
+            return tiles
+        } catch {
+            print("❌ [TILES RPC] Decoding error: \(error)")
+            throw error
+        }
     }
     
     /// Legacy polygon claim (still available if needed)
@@ -207,11 +256,27 @@ final class TerritoryService {
                     distanceKm: Double? = nil,
                     durationSec: Int? = nil,
                     pace: String? = nil) async throws {
+        print("🎯 [CLAIM_TILES] Starting claim for owner: \(ownerId)")
+        print("🎯 [CLAIM_TILES] Coordinates count: \(coordinates.count)")
+        
         guard let ownerUUID = UUID(uuidString: ownerId) else {
+            print("❌ [CLAIM_TILES] Invalid owner ID: \(ownerId)")
             throw TerritoryServiceError.invalidOwnerId(ownerId)
         }
         
+        guard coordinates.count >= 3 else {
+            print("❌ [CLAIM_TILES] Not enough coordinates: \(coordinates.count) (need at least 3)")
+            return
+        }
+        
+        // Log first and last coordinates for debugging
+        if let first = coordinates.first, let last = coordinates.last {
+            print("🎯 [CLAIM_TILES] First coord: (\(first.latitude), \(first.longitude))")
+            print("🎯 [CLAIM_TILES] Last coord: (\(last.latitude), \(last.longitude))")
+        }
+        
         try await AuthSessionManager.shared.ensureValidSession()
+        print("🎯 [CLAIM_TILES] Session valid, preparing payload...")
         
         let payload = TileClaimParams(
             p_owner: ownerUUID,
@@ -222,13 +287,16 @@ final class TerritoryService {
             p_pace: pace
         )
         
+        print("🎯 [CLAIM_TILES] Payload prepared, calling RPC...")
+        
         do {
             _ = try await supabase.database
                 .rpc("claim_tiles", params: payload)
                 .execute()
-            print("✅ Tiles claimed successfully for owner: \(ownerId)")
+            print("✅ [CLAIM_TILES] Tiles claimed successfully for owner: \(ownerId)")
         } catch {
-            print("❌ claim_tiles failed: \(error)")
+            print("❌ [CLAIM_TILES] RPC failed with error: \(error)")
+            print("❌ [CLAIM_TILES] Error type: \(type(of: error))")
             throw error
         }
     }

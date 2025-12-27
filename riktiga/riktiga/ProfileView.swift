@@ -3,7 +3,7 @@ import Combine
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
     @State private var showSettings = false
@@ -27,6 +27,7 @@ struct ProfileView: View {
     @State private var isInitialLoad = true
     @StateObject private var myPostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
+    @State private var showPublicProfile = false
     
     private let trainerCheckThrottle: TimeInterval = 30
     private let statsLoadThrottle: TimeInterval = 60
@@ -140,6 +141,23 @@ struct ProfileView: View {
                     .padding(20)
                     .background(Color(.systemGray6))
                     .cornerRadius(16)
+                    
+                    // MARK: - Public Profile Button
+                    Button(action: {
+                        showPublicProfile = true
+                    }) {
+                        HStack {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Se din publika profil")
+                                .font(.system(size: 15, weight: .medium))
+                        }
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
 
                     // MARK: - XP Box
                     HStack(spacing: 16) {
@@ -326,6 +344,20 @@ struct ProfileView: View {
             .sheet(isPresented: $showEditProfile) {
                 EditProfileView()
             }
+            .sheet(isPresented: $showPublicProfile) {
+                if let userId = authViewModel.currentUser?.id {
+                    NavigationStack {
+                        UserProfileView(userId: userId)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button("Stäng") {
+                                        showPublicProfile = false
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
             .sheet(isPresented: $showTrainerOnboarding) {
                 TrainerOnboardingView()
             }
@@ -338,7 +370,7 @@ struct ProfileView: View {
             }
             .task {
                 // Update premium status
-                isPremium = RevenueCatManager.shared.isPremium
+                isPremium = RevenueCatManager.shared.isProMember
                 
                 // Load profile observer first (non-async)
                 profileObserver = NotificationCenter.default.addObserver(
@@ -371,17 +403,24 @@ struct ProfileView: View {
                         // Load user's own posts
                         if let userId = await self.authViewModel.currentUser?.id {
                             await self.myPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
+                            // Update activity count with loaded posts
+                            await MainActor.run {
+                                self.activityCount = self.myPostsViewModel.posts.count
+                            }
                             // Prefetch post images for faster display
                             await self.prefetchPostImages()
                         }
                     }
                 }
             }
-            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue
             }
             .onReceive(NotificationCenter.default.publisher(for: .profileStatsUpdated)) { _ in
                 loadProfileStats(force: true)
+            }
+            .onChange(of: myPostsViewModel.posts.count) { _, newCount in
+                activityCount = newCount
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshTrainerStatus"))) { notification in
                 // Check if the notification has immediate status info

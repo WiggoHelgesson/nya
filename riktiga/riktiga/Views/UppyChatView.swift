@@ -256,7 +256,7 @@ struct UppyChatView: View {
     }
     
     private var isProUser: Bool {
-        authViewModel.currentUser?.isProMember ?? false
+        RevenueCatManager.shared.isProMember
     }
     
     private var shouldGateChat: Bool {

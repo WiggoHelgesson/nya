@@ -28,7 +28,7 @@ final class TerritoryStore: ObservableObject {
     private var lastTileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private let tileCacheValidity: TimeInterval = 30 // 30 seconds - faster refresh for new tiles
     private var isFetchingTiles: Bool = false // Prevent concurrent fetches
-    private let maxCachedTiles: Int = 10000 // Support large areas - only visible viewport is fetched anyway
+    private let maxCachedTiles: Int = 100000 // Support ALL of Sweden - SQL handles smart loading
     
     // Track if we need force refresh (set after completing a workout)
     @Published var needsForceRefresh: Bool = false
@@ -55,6 +55,7 @@ final class TerritoryStore: ObservableObject {
         territories.removeAll()
         tileCache.removeAll()
         tiles.removeAll()
+        needsForceRefresh = true
         
         // Clear local storage (cleanup)
         UserDefaults.standard.removeObject(forKey: localStorageKey)
@@ -245,15 +246,36 @@ final class TerritoryStore: ObservableObject {
                 maxLon: expandedMaxLon
             )
             
+            print("📊 [TILES DEBUG] Received \(result.count) tiles from server")
+            if let firstTile = result.first {
+                print("📊 [TILES DEBUG] First tile: id=\(firstTile.tile_id), owner=\(firstTile.owner_id ?? "nil")")
+                print("📊 [TILES DEBUG] First tile geom type: \(firstTile.geom.type)")
+                print("📊 [TILES DEBUG] First tile coords rings: \(firstTile.geom.coordinates.count)")
+                if let firstRing = firstTile.geom.coordinates.first {
+                    print("📊 [TILES DEBUG] First ring points: \(firstRing.count)")
+                    if let firstPoint = firstRing.first {
+                        print("📊 [TILES DEBUG] First point: \(firstPoint)")
+                    }
+                }
+            }
+            
             await MainActor.run {
                 // MERGE tiles instead of replacing - prevents flickering
                 var updatedCache = self.tileCache
+                var tilesWithCoords = 0
+                var tilesWithoutCoords = 0
                 
                 for feature in result {
                     let ring = feature.geom.coordinates.first ?? []
                     let coords = ring.compactMap { pair -> CLLocationCoordinate2D? in
                         guard pair.count == 2 else { return nil }
                         return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
+                    }
+                    
+                    if coords.count >= 3 {
+                        tilesWithCoords += 1
+                    } else {
+                        tilesWithoutCoords += 1
                     }
                     
                     let tile = Tile(
@@ -270,6 +292,8 @@ final class TerritoryStore: ObservableObject {
                     // Update or insert tile
                     updatedCache[feature.tile_id] = tile
                 }
+                
+                print("📊 [TILES DEBUG] Tiles with valid coords: \(tilesWithCoords), without: \(tilesWithoutCoords)")
                 
                 // Limit cache size to prevent memory issues
                 if updatedCache.count > self.maxCachedTiles {
@@ -337,17 +361,27 @@ final class TerritoryStore: ObservableObject {
             return
         }
         
+        print("🎯 [TERRITORY] Input coordinates: \(routeCoordinates.count)")
+        if let first = routeCoordinates.first {
+            print("🎯 [TERRITORY] First input coord: (\(first.latitude), \(first.longitude))")
+        }
+        
         // Close the polygon properly
         let closed = ensureClosedLoop(routeCoordinates)
         print("🎯 [TERRITORY] After closing loop: \(closed.count) points")
         
         // Less aggressive simplification - keep more detail
-        let simplified = simplifyPolygon(closed, tolerance: 0.00002)
+        // Use smaller tolerance to preserve more points
+        let simplified = simplifyPolygon(closed, tolerance: 0.00001)
         print("🎯 [TERRITORY] After simplification: \(simplified.count) points")
         
-        // Use convex hull only for VERY complex routes to avoid self-intersection issues
+        // IMPORTANT: If simplification reduced to less than 4 points, use original closed loop
         let finalCoordinates: [CLLocationCoordinate2D]
-        if simplified.count > 1000 {
+        if simplified.count < 4 {
+            print("⚠️ [TERRITORY] Simplification too aggressive (\(simplified.count) points), using closed loop instead (\(closed.count) points)")
+            finalCoordinates = closed
+        } else if simplified.count > 1000 {
+            // Use convex hull only for VERY complex routes to avoid self-intersection issues
             finalCoordinates = convexHull(simplified)
             print("🎯 [TERRITORY] Used convex hull: \(finalCoordinates.count) points")
         } else {
@@ -383,8 +417,17 @@ final class TerritoryStore: ObservableObject {
         }
         
         // Save to backend (non-blocking) using tile-based claim
-        Task {
+        // Use Task.detached to ensure it continues even if the calling context is deallocated
+        let store = TerritoryStore.shared
+        Task.detached(priority: .userInitiated) { [service, validPolygon, area, sessionDistance, sessionDuration, sessionPace, userId, store] in
             do {
+                // Log to UserDefaults for debugging on real device
+                let logKey = "TerritoryClaimLog"
+                var logs = UserDefaults.standard.stringArray(forKey: logKey) ?? []
+                logs.append("[\(Date())] Starting claim: \(validPolygon.count) points, user: \(userId)")
+                if logs.count > 50 { logs = Array(logs.suffix(50)) }
+                UserDefaults.standard.set(logs, forKey: logKey)
+                
                 print("🎯 [TERRITORY] Starting tile claim for user: \(userId)")
                 print("🎯 [TERRITORY] Polygon points: \(validPolygon.count)")
                 print("🎯 [TERRITORY] Area: \(area) m²")
@@ -403,15 +446,19 @@ final class TerritoryStore: ObservableObject {
                     pace: sessionPace
                 )
                 
+                // Log success
+                logs.append("[\(Date())] ✅ Claim successful!")
+                UserDefaults.standard.set(logs, forKey: logKey)
+                
                 print("✅ [TERRITORY] Tile claim RPC completed successfully!")
                 
                 // Set flag to force refresh tiles on next load
                 await MainActor.run {
-                    self.needsForceRefresh = true
+                    store.needsForceRefresh = true
                 }
                 
                 // Save bounds BEFORE invalidating cache
-                let savedBounds = self.lastTileBounds
+                let savedBounds = store.lastTileBounds
                 
                 // Calculate fallback bounds from the claimed polygon
                 let fallbackBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)? = {
@@ -427,14 +474,14 @@ final class TerritoryStore: ObservableObject {
                 // After successful claim, refresh from backend union view
                 // Vi tar bort lokala placeholders
                 await MainActor.run {
-                    self.activeSessionTerritories.removeAll()
+                    store.activeSessionTerritories.removeAll()
                     // pendingCelebrationTerritory rensas i UI när modalen stängs
-                    self.invalidateCache()
+                    store.invalidateCache()
                 }
                 
                 print("🔄 Refreshing territories from server...")
-                await self.refresh()
-                print("   Territories count after refresh: \(self.territories.count)")
+                await store.refresh()
+                print("   Territories count after refresh: \(store.territories.count)")
                 
                 // Also force refresh tiles to update local stats immediately
                 // Use fallbackBounds from the claimed polygon (more accurate than savedBounds)
@@ -442,14 +489,14 @@ final class TerritoryStore: ObservableObject {
                 if let bounds = boundsToUse {
                     print("🔄 Refreshing tiles in bounds: \(bounds)...")
                     // Force refresh to bypass any caching
-                    await self.loadTilesInBounds(
+                    await store.loadTilesInBounds(
                         minLat: bounds.minLat,
                         maxLat: bounds.maxLat,
                         minLon: bounds.minLon,
                         maxLon: bounds.maxLon,
                         forceRefresh: true
                     )
-                    print("   Tiles count after refresh: \(self.tiles.count)")
+                    print("   Tiles count after refresh: \(store.tiles.count)")
                 } else {
                     print("⚠️ No bounds available for tile refresh")
                 }
@@ -459,9 +506,25 @@ final class TerritoryStore: ObservableObject {
             } catch {
                 print("❌ [TERRITORY] Tile claim failed: \(error)")
                 print("❌ [TERRITORY] Error details: \(String(describing: error))")
-                // Keep local territory as fallback? No, grid is truth.
+                
+                // Log error to UserDefaults for debugging on real device
+                let logKey = "TerritoryClaimLog"
+                var logs = UserDefaults.standard.stringArray(forKey: logKey) ?? []
+                logs.append("[\(Date())] ❌ FAILED: \(error.localizedDescription)")
+                if logs.count > 50 { logs = Array(logs.suffix(50)) }
+                UserDefaults.standard.set(logs, forKey: logKey)
             }
         }
+    }
+    
+    /// Get territory claim logs for debugging (call from settings or debug view)
+    static func getClaimLogs() -> [String] {
+        return UserDefaults.standard.stringArray(forKey: "TerritoryClaimLog") ?? []
+    }
+    
+    /// Clear territory claim logs
+    static func clearClaimLogs() {
+        UserDefaults.standard.removeObject(forKey: "TerritoryClaimLog")
     }
     
     // MARK: - Polygon Processing
@@ -803,3 +866,4 @@ extension Territory {
         }
     }
 }
+

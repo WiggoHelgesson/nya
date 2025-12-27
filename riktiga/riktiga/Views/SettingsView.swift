@@ -6,7 +6,7 @@ import UIKit
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var isLoadingPremium = RevenueCatManager.shared.isLoading
     @State private var showSubscriptionView = false
     @State private var showDeleteAccountConfirmation = false
@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var showAdmin = false
     @State private var hasLoadedOnce = false
     @State private var showReferralView = false
+    @State private var showTerritoryLogs = false
+    @State private var territoryLogs: [String] = []
     
     var body: some View {
         NavigationStack {
@@ -208,6 +210,56 @@ struct SettingsView: View {
                             .background(Color(.secondarySystemBackground))
                             .cornerRadius(12)
                         }
+                        
+                        // DEBUG Section
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("DEBUG")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 8)
+                            
+                            VStack(spacing: 0) {
+                                SettingsRow(
+                                    title: "Territory Claim Logs",
+                                    icon: "chevron.right",
+                                    action: {
+                                        territoryLogs = TerritoryStore.getClaimLogs()
+                                        showTerritoryLogs = true
+                                    }
+                                )
+                                
+                                Divider()
+                                    .padding(.leading, 16)
+                                
+                                SettingsRow(
+                                    title: "Rensa Territory Logs",
+                                    icon: "trash",
+                                    action: {
+                                        TerritoryStore.clearClaimLogs()
+                                        territoryLogs = []
+                                    }
+                                )
+                                
+                                Divider()
+                                    .padding(.leading, 16)
+                                
+                                SettingsRow(
+                                    title: "Refresh Pro Status",
+                                    icon: "arrow.clockwise",
+                                    action: {
+                                        Task {
+                                            await RevenueCatManager.shared.refreshDatabaseProStatus()
+                                            await MainActor.run {
+                                                isPremium = RevenueCatManager.shared.isProMember
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                        }
                     }
 
                     // MARK: - Radera konto Button
@@ -277,6 +329,31 @@ struct SettingsView: View {
             .sheet(isPresented: $showReferralView) {
                 ReferralView()
             }
+            .sheet(isPresented: $showTerritoryLogs) {
+                NavigationStack {
+                    List {
+                        if territoryLogs.isEmpty {
+                            Text("Inga loggar ännu")
+                                .foregroundColor(.gray)
+                        } else {
+                            ForEach(territoryLogs.reversed(), id: \.self) { log in
+                                Text(log)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(log.contains("❌") ? .red : (log.contains("✅") ? .green : .primary))
+                            }
+                        }
+                    }
+                    .navigationTitle("Territory Logs")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Klar") {
+                                showTerritoryLogs = false
+                            }
+                        }
+                    }
+                }
+            }
             .task {
                 // Only sync once per view instance to avoid lag
                 guard !hasLoadedOnce else { return }
@@ -287,7 +364,7 @@ struct SettingsView: View {
                     await RevenueCatManager.shared.syncAndRefresh()
                 }
             }
-            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue
             }
             .onReceive(RevenueCatManager.shared.$isLoading) { newValue in

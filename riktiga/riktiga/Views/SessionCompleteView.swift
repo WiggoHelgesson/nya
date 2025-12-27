@@ -14,12 +14,13 @@ struct SessionCompleteView: View {
     let maxSpeed: Double?
     let completedSplits: [WorkoutSplit]
     let gymExercises: [GymExercise]?
+    let sessionLivePhoto: UIImage?  // Live photo taken during session
     @Binding var isPresented: Bool
     let onComplete: () -> Void
     let onDelete: () -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     
     @State private var title: String = ""
     @State private var description: String = ""
@@ -42,6 +43,15 @@ struct SessionCompleteView: View {
     @State private var showLiveCapture = false
     @State private var difficultyRating: Double = 0.5  // 0 = Lätt, 1 = Svårt
     @State private var isLivePhoto = false  // Track if image was taken with Up&Down Live
+    
+    // PB (Personal Best) tracking
+    @State private var showPBSheet = false
+    @State private var selectedPBExercise: GymExercise?
+    @State private var pbWeight: String = ""
+    @State private var pbReps: String = ""
+    @State private var hasPB = false
+    @State private var pbExerciseName: String = ""
+    @State private var pbValue: String = ""
     
     // Default titles based on activity
     private var defaultTitle: String {
@@ -104,6 +114,13 @@ struct SessionCompleteView: View {
         }
         .sheet(isPresented: $showLiveCapture) {
             liveCaptureSheet
+        }
+        .onAppear {
+            // If a live photo was taken during the session, use it
+            if let livePhoto = sessionLivePhoto {
+                sessionImage = livePhoto
+                isLivePhoto = true
+            }
         }
     }
     
@@ -192,11 +209,202 @@ struct SessionCompleteView: View {
         VStack(spacing: 24) {
             titleSection
             difficultySliderSection
+            if isGymWorkout {
+                pbButtonSection
+            }
             descriptionSection
             photoOptionsSection
             gymTemplateToggle
             saveButton
         }
+    }
+    
+    // MARK: - PB Button Section
+    @ViewBuilder
+    private var pbButtonSection: some View {
+        VStack(spacing: 12) {
+            if hasPB {
+                // Show PB badge when set
+                HStack(spacing: 12) {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.yellow)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Nytt PB!")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.yellow)
+                        Text("\(pbExerciseName): \(pbValue)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        // Clear PB
+                        hasPB = false
+                        selectedPBExercise = nil
+                        pbWeight = ""
+                        pbReps = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(16)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+                .padding(.horizontal, 16)
+            } else {
+                // Show PB button
+                Button {
+                    showPBSheet = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "trophy")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Tog du ett PB idag?")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .sheet(isPresented: $showPBSheet) {
+            pbSelectionSheet
+        }
+    }
+    
+    // MARK: - PB Selection Sheet
+    private var pbSelectionSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if let exercises = gymExercises, !exercises.isEmpty {
+                    List {
+                        Section {
+                            ForEach(exercises) { exercise in
+                                Button {
+                                    selectedPBExercise = exercise
+                                    // Pre-fill with best set from this workout
+                                    if let bestSet = exercise.sets.max(by: { $0.kg < $1.kg }) {
+                                        pbWeight = String(format: "%.1f", bestSet.kg)
+                                        pbReps = "\(bestSet.reps)"
+                                    }
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(exercise.name)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.primary)
+                                            
+                                            // Show best set from this workout
+                                            if let bestSet = exercise.sets.max(by: { $0.kg < $1.kg }) {
+                                                Text("Bästa set: \(String(format: "%.1f", bestSet.kg)) kg x \(bestSet.reps)")
+                                                    .font(.system(size: 13))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if selectedPBExercise?.id == exercise.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                                .font(.system(size: 22))
+                                        } else {
+                                            Image(systemName: "circle")
+                                                .foregroundColor(.gray)
+                                                .font(.system(size: 22))
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        } header: {
+                            Text("Välj övning")
+                        }
+                        
+                        if selectedPBExercise != nil {
+                            Section {
+                                HStack(spacing: 16) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Vikt (kg)")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                        TextField("0", text: $pbWeight)
+                                            .keyboardType(.decimalPad)
+                                            .font(.system(size: 24, weight: .bold))
+                                            .padding(12)
+                                            .background(Color(.systemGray6))
+                                            .cornerRadius(8)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Reps")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                        TextField("0", text: $pbReps)
+                                            .keyboardType(.numberPad)
+                                            .font(.system(size: 24, weight: .bold))
+                                            .padding(12)
+                                            .background(Color(.systemGray6))
+                                            .cornerRadius(8)
+                                    }
+                                }
+                            } header: {
+                                Text("Ditt nya PB")
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "dumbbell")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                        Text("Inga övningar i detta pass")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationTitle("Nytt PB")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Avbryt") {
+                        showPBSheet = false
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Spara") {
+                        savePB()
+                    }
+                    .disabled(selectedPBExercise == nil || pbWeight.isEmpty || pbReps.isEmpty)
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Save PB
+    private func savePB() {
+        guard let exercise = selectedPBExercise,
+              let weight = Double(pbWeight.replacingOccurrences(of: ",", with: ".")),
+              let reps = Int(pbReps) else { return }
+        
+        hasPB = true
+        pbExerciseName = exercise.name
+        pbValue = "\(String(format: "%.1f", weight)) kg x \(reps) reps"
+        showPBSheet = false
     }
     
     // MARK: - Title Section
@@ -738,6 +946,17 @@ struct SessionCompleteView: View {
             // Use the title (which has default value set)
             let finalTitle = title.isEmpty ? defaultTitle : title
             
+            // Convert route coordinates to JSON string for database storage
+            var routeDataJson: String? = nil
+            if !routeCoordinates.isEmpty {
+                let coordsArray = routeCoordinates.map { ["lat": $0.latitude, "lon": $0.longitude] }
+                if let jsonData = try? JSONSerialization.data(withJSONObject: coordsArray),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    routeDataJson = jsonString
+                    print("📍 Route data prepared: \(routeCoordinates.count) coordinates")
+                }
+            }
+            
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
                 activityType: activity.rawValue,
@@ -750,7 +969,10 @@ struct SessionCompleteView: View {
                 elevationGain: elevationGain,
                 maxSpeed: maxSpeed,
                 splits: splits.isEmpty ? nil : splits,
-                exercises: exercisesData
+                exercises: exercisesData,
+                routeData: routeDataJson,
+                pbExerciseName: hasPB ? pbExerciseName : nil,
+                pbValue: hasPB ? pbValue : nil
             )
             
             do {
@@ -773,7 +995,7 @@ struct SessionCompleteView: View {
                     from: post,
                     userName: authViewModel.currentUser?.name,
                     userAvatarUrl: authViewModel.currentUser?.avatarUrl,
-                    userIsPro: authViewModel.currentUser?.isProMember
+                    userIsPro: RevenueCatManager.shared.isProMember
                 )
                 
                 if activity.rawValue == "Gympass" && pointsToAward > 0 {
@@ -791,6 +1013,20 @@ struct SessionCompleteView: View {
                 }
                 
                 NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
+                
+                // Send PB notification to followers if user set a new PB
+                if hasPB, let userId = authViewModel.currentUser?.id {
+                    Task {
+                        await PushNotificationService.shared.notifyFollowersAboutPB(
+                            userId: userId,
+                            userName: authViewModel.currentUser?.name ?? "En användare",
+                            userAvatar: authViewModel.currentUser?.avatarUrl,
+                            exerciseName: pbExerciseName,
+                            pbValue: pbValue,
+                            postId: post.id
+                        )
+                    }
+                }
                 
                 await MainActor.run {
                     isSaving = false
@@ -1063,6 +1299,7 @@ extension Color {
         maxSpeed: nil,
         completedSplits: [],
         gymExercises: nil,
+        sessionLivePhoto: nil,
         isPresented: .constant(true),
         onComplete: {},
         onDelete: {}

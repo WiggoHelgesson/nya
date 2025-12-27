@@ -10,7 +10,7 @@ struct GymSessionView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var activeSession: SessionManager.ActiveSession? = SessionManager.shared.activeSession
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @StateObject private var viewModel = GymSessionViewModel()
     @State private var showExercisePicker = false
     @State private var showCompleteSession = false
@@ -127,7 +127,7 @@ struct GymSessionView: View {
     }
 
     private func handleGeneratorButtonTap() {
-        guard authViewModel.currentUser?.isProMember == true else {
+        guard isPremium else {
             showSubscriptionView = true
             return
         }
@@ -286,9 +286,25 @@ struct GymSessionView: View {
                                 .padding(.horizontal, 16)
                             }
                             
+                            // Duration & Volume header - always visible
+                            HStack(spacing: 0) {
+                                metricView(title: "Tid", value: viewModel.formattedDuration)
+                                    .frame(maxWidth: .infinity)
+                                Divider()
+                                    .frame(height: 40)
+                                metricView(title: "Volym", value: viewModel.formattedVolume)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 18)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(16)
+                            .padding(.top, 16)
+                            .padding(.horizontal, 16)
+                            
                             // Spacer before scrollable sections
                             Spacer()
-                                .frame(height: 60)
+                                .frame(height: 40)
                             
                             // Scrollable sections below
                             VStack(spacing: 24) {
@@ -363,8 +379,6 @@ struct GymSessionView: View {
                                 .cornerRadius(12)
                             }
                             .padding(.horizontal, 16)
-                            
-                            savedWorkoutsSection
                         }
                         .padding(.bottom, 100)
                     }
@@ -404,7 +418,7 @@ struct GymSessionView: View {
                 workoutGeneratorSheet
             }
             .sheet(isPresented: $showSubscriptionView) {
-                SubscriptionView()
+                PresentPaywallView()
             }
             .fullScreenCover(isPresented: $showCompleteSession) {
                 if let sessionData = viewModel.sessionData {
@@ -419,6 +433,7 @@ struct GymSessionView: View {
                         maxSpeed: 0,
                         completedSplits: [],
                         gymExercises: sessionData.exercises,  // Pass gym exercises
+                        sessionLivePhoto: nil,  // No live photo for gym sessions
                         isPresented: $showCompleteSession,
                         onComplete: {
                             finalizeSessionAndDismiss()
@@ -460,7 +475,7 @@ struct GymSessionView: View {
             .onReceive(SessionManager.shared.$activeSession) { newValue in
                 activeSession = newValue
             }
-            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue
             }
             .alert("UPPY", isPresented: $showGeneratorResultAlert, presenting: generatorResultMessage) { _ in

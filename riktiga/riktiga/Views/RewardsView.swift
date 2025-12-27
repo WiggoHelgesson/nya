@@ -9,7 +9,7 @@ struct RewardCatalog {
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "4",
+            imageName: "56",
             category: "Golf",
             isBookmarked: false
         ),
@@ -18,7 +18,7 @@ struct RewardCatalog {
             brandName: "PEGMATE",
             discount: "5% rabatt",
             points: "200 poäng",
-            imageName: "5",
+            imageName: "49",
             category: "Golf",
             isBookmarked: false
         ),
@@ -27,7 +27,7 @@ struct RewardCatalog {
             brandName: "LONEGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "6",
+            imageName: "50",
             category: "Golf",
             isBookmarked: false
         ),
@@ -36,7 +36,7 @@ struct RewardCatalog {
             brandName: "WINWIZE",
             discount: "20% rabatt",
             points: "200 poäng",
-            imageName: "7",
+            imageName: "51",
             category: "Golf",
             isBookmarked: false
         ),
@@ -50,20 +50,11 @@ struct RewardCatalog {
             isBookmarked: false
         ),
         RewardCard(
-            id: 6,
-            brandName: "Exotic Golf",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "9",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 7,
             brandName: "HAPPYALBA",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "10",
+            imageName: "57",
             category: "Golf",
             isBookmarked: false
         ),
@@ -83,7 +74,7 @@ struct RewardCatalog {
             brandName: "FUSE ENERGY",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "35",
+            imageName: "48",
             category: "Energidryck",
             isBookmarked: false
         ),
@@ -92,7 +83,7 @@ struct RewardCatalog {
             brandName: "ZEN ENERGY",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "13",
+            imageName: "52",
             category: "Energidryck",
             isBookmarked: false
         ),
@@ -101,7 +92,7 @@ struct RewardCatalog {
             brandName: "CLYRO",
             discount: "20% rabatt",
             points: "200 poäng",
-            imageName: "39",
+            imageName: "53",
             category: "Energidryck",
             isBookmarked: false
         ),
@@ -112,7 +103,7 @@ struct RewardCatalog {
             brandName: "PUMPLABS",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "12",
+            imageName: "54",
             category: "Gym",
             isBookmarked: false
         ),
@@ -121,7 +112,7 @@ struct RewardCatalog {
             brandName: "CLYRO",
             discount: "20% rabatt",
             points: "200 poäng",
-            imageName: "39",
+            imageName: "53",
             category: "Gym",
             isBookmarked: false
         ),
@@ -130,7 +121,7 @@ struct RewardCatalog {
             brandName: "Powerwell",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "40",
+            imageName: "55",
             category: "Gym",
             isBookmarked: false
         ),
@@ -141,7 +132,7 @@ struct RewardCatalog {
             brandName: "ZEN ENERGY",
             discount: "15% rabatt",
             points: "200 poäng",
-            imageName: "13",
+            imageName: "52",
             category: "Löpning",
             isBookmarked: false
         ),
@@ -150,7 +141,7 @@ struct RewardCatalog {
             brandName: "FUSE ENERGY",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "35",
+            imageName: "48",
             category: "Löpning",
             isBookmarked: false
         ),
@@ -159,7 +150,7 @@ struct RewardCatalog {
             brandName: "CLYRO",
             discount: "20% rabatt",
             points: "200 poäng",
-            imageName: "39",
+            imageName: "53",
             category: "Löpning",
             isBookmarked: false
         ),
@@ -523,6 +514,7 @@ struct RewardsView: View {
             .navigationTitle("Belöningar")
             .navigationBarTitleDisplayMode(.inline)
             .enableSwipeBack()
+            .tint(.black) // Black back buttons
             .sheet(isPresented: $showSearchView) {
                 SearchRewardsView(allRewards: allRewards)
             }
@@ -533,6 +525,7 @@ struct RewardsView: View {
                 MyPurchasesView()
             }
         }
+        .tint(.black) // Black back buttons for all navigation
     }
 }
 
@@ -718,21 +711,31 @@ struct ModernRewardCard: View {
     
     private func getBrandLogo(for imageName: String) -> String {
         switch imageName {
-        case "4": return "15" // PLIKTGOLF
-        case "5": return "5"  // PEGMATE
-        case "6": return "14" // LONEGOLF
-        case "7": return "17" // WINWIZE
+        case "4": return "15" // PLIKTGOLF (old)
+        case "56": return "15" // PLIKTGOLF (new cover)
+        case "5": return "5"  // PEGMATE (old)
+        case "49": return "5"  // PEGMATE (new cover)
+        case "6": return "14" // LONEGOLF (old)
+        case "50": return "14" // LONEGOLF (new cover)
+        case "7": return "17" // WINWIZE (old)
+        case "51": return "17" // WINWIZE (new cover)
         case "8": return "18" // SCANDIGOLF
         case "9": return "19" // Exotic Golf
-        case "10": return "16" // HAPPYALBA (Alba)
+        case "10": return "16" // HAPPYALBA (old)
+        case "57": return "16" // HAPPYALBA (new cover)
         case "11": return "20" // RETROGOLF
-        case "12": return "21" // PUMPLABS
-        case "13": return "22" // ZEN ENERGY
+        case "12": return "21" // PUMPLABS (old)
+        case "54": return "21" // PUMPLABS (new cover)
+        case "13": return "22" // ZEN ENERGY (old)
+        case "52": return "22" // ZEN ENERGY (new cover)
         case "34": return "34" // CAPSTONE
-        case "35": return "46" // FUSE ENERGY
+        case "35": return "46" // FUSE ENERGY (old)
+        case "48": return "46" // FUSE ENERGY (new cover)
         case "38": return "38" // Fjällsyn UF
-        case "39": return "39" // CLYRO
-        case "40": return "40" // Powerwell
+        case "39": return "39" // CLYRO (old)
+        case "53": return "39" // CLYRO (new cover)
+        case "40": return "40" // Powerwell (old)
+        case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
         default: return "5" // Default to PEGMATE
         }
@@ -828,21 +831,31 @@ struct FullScreenRewardCard: View {
     
     private func getBrandLogo(for imageName: String) -> String {
         switch imageName {
-        case "4": return "15" // PLIKTGOLF
-        case "5": return "5"  // PEGMATE
-        case "6": return "14" // LONEGOLF
-        case "7": return "17" // WINWIZE
+        case "4": return "15" // PLIKTGOLF (old)
+        case "56": return "15" // PLIKTGOLF (new cover)
+        case "5": return "5"  // PEGMATE (old)
+        case "49": return "5"  // PEGMATE (new cover)
+        case "6": return "14" // LONEGOLF (old)
+        case "50": return "14" // LONEGOLF (new cover)
+        case "7": return "17" // WINWIZE (old)
+        case "51": return "17" // WINWIZE (new cover)
         case "8": return "18" // SCANDIGOLF
         case "9": return "19" // Exotic Golf
-        case "10": return "16" // HAPPYALBA (Alba)
+        case "10": return "16" // HAPPYALBA (old)
+        case "57": return "16" // HAPPYALBA (new cover)
         case "11": return "20" // RETROGOLF
-        case "12": return "21" // PUMPLABS
-        case "13": return "22" // ZEN ENERGY
+        case "12": return "21" // PUMPLABS (old)
+        case "54": return "21" // PUMPLABS (new cover)
+        case "13": return "22" // ZEN ENERGY (old)
+        case "52": return "22" // ZEN ENERGY (new cover)
         case "34": return "34" // CAPSTONE
-        case "35": return "46" // FUSE ENERGY
+        case "35": return "46" // FUSE ENERGY (old)
+        case "48": return "46" // FUSE ENERGY (new cover)
         case "38": return "38" // Fjällsyn UF
-        case "39": return "39" // CLYRO
-        case "40": return "40" // Powerwell
+        case "39": return "39" // CLYRO (old)
+        case "53": return "39" // CLYRO (new cover)
+        case "40": return "40" // Powerwell (old)
+        case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
         default: return "5" // Default to PEGMATE
         }
@@ -994,7 +1007,7 @@ struct RewardDetailView: View {
                             }
                             .disabled(!hasEnoughPoints)
                         }
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 100) // Extra bottom padding for safe scrolling
                     }
                 }
             }
@@ -1596,21 +1609,31 @@ struct AllRewardsCard: View {
     
     private func getBrandLogo(for imageName: String) -> String {
         switch imageName {
-        case "4": return "15" // PLIKTGOLF
-        case "5": return "5"  // PEGMATE
-        case "6": return "14" // LONEGOLF
-        case "7": return "17" // WINWIZE
+        case "4": return "15" // PLIKTGOLF (old)
+        case "56": return "15" // PLIKTGOLF (new cover)
+        case "5": return "5"  // PEGMATE (old)
+        case "49": return "5"  // PEGMATE (new cover)
+        case "6": return "14" // LONEGOLF (old)
+        case "50": return "14" // LONEGOLF (new cover)
+        case "7": return "17" // WINWIZE (old)
+        case "51": return "17" // WINWIZE (new cover)
         case "8": return "18" // SCANDIGOLF
         case "9": return "19" // Exotic Golf
-        case "10": return "16" // HAPPYALBA (Alba)
+        case "10": return "16" // HAPPYALBA (old)
+        case "57": return "16" // HAPPYALBA (new cover)
         case "11": return "20" // RETROGOLF
-        case "12": return "21" // PUMPLABS
-        case "13": return "22" // ZEN ENERGY
+        case "12": return "21" // PUMPLABS (old)
+        case "54": return "21" // PUMPLABS (new cover)
+        case "13": return "22" // ZEN ENERGY (old)
+        case "52": return "22" // ZEN ENERGY (new cover)
         case "34": return "34" // CAPSTONE
-        case "35": return "46" // FUSE ENERGY
+        case "35": return "46" // FUSE ENERGY (old)
+        case "48": return "46" // FUSE ENERGY (new cover)
         case "38": return "38" // Fjällsyn
-        case "39": return "39" // CLYRO
-        case "40": return "40" // Powerwell
+        case "39": return "39" // CLYRO (old)
+        case "53": return "39" // CLYRO (new cover)
+        case "40": return "40" // Powerwell (old)
+        case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
         default: return "5" // Default to PEGMATE
         }

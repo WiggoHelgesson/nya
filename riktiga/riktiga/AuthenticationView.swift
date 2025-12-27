@@ -632,15 +632,7 @@ struct AuthenticationView: View {
                 NotificationManager.shared.requestAuthorization { granted in
                     onboardingData.notificationsAuthorized = granted
                     notificationsStatus = granted ? "Notiser aktiverade" : "Notiser nekades"
-                    if granted {
-                        HealthKitManager.shared.getStepsForDate(Date()) { steps in
-                            if steps < 10_000 {
-                                NotificationManager.shared.scheduleDailyStepsReminder(atHour: 19, minute: 0)
-                            } else {
-                                NotificationManager.shared.cancelDailyStepsReminder()
-                            }
-                        }
-                    }
+                    // Daily steps reminder removed - users found it annoying
                 }
             }
         }

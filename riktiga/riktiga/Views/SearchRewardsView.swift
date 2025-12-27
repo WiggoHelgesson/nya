@@ -121,16 +121,23 @@ struct SearchRewardCard: View {
     
     private func getBrandLogo(for imageName: String) -> String {
         switch imageName {
-        case "4": return "15" // PLIKTGOLF
-        case "5": return "5"  // PEGMATE
-        case "6": return "14" // LONEGOLF
-        case "7": return "17" // WINWIZE
+        case "4": return "15" // PLIKTGOLF (old)
+        case "56": return "15" // PLIKTGOLF (new cover)
+        case "5": return "5"  // PEGMATE (old)
+        case "49": return "5"  // PEGMATE (new cover)
+        case "6": return "14" // LONEGOLF (old)
+        case "50": return "14" // LONEGOLF (new cover)
+        case "7": return "17" // WINWIZE (old)
+        case "51": return "17" // WINWIZE (new cover)
         case "8": return "18" // SCANDIGOLF
         case "9": return "19" // Exotic Golf
-        case "10": return "16" // HAPPYALBA (Alba)
+        case "10": return "16" // HAPPYALBA (old)
+        case "57": return "16" // HAPPYALBA (new cover)
         case "11": return "20" // RETROGOLF
-        case "12": return "21" // PUMPLABS
-        case "13": return "22" // ZEN ENERGY
+        case "12": return "21" // PUMPLABS (old)
+        case "54": return "21" // PUMPLABS (new cover)
+        case "13": return "22" // ZEN ENERGY (old)
+        case "52": return "22" // ZEN ENERGY (new cover)
         default: return "5" // Default to PEGMATE
         }
     }

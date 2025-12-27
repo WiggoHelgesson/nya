@@ -40,25 +40,52 @@ class AuthViewModel: NSObject, ObservableObject {
         RevenueCatManager.shared.$isPremium
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isPremium in
-                self?.updateLocalProStatus(isPremium: isPremium)
+                self?.updateLocalProStatus(revenueCatPremium: isPremium)
             }
             .store(in: &cancellables)
     }
     
-    private func updateLocalProStatus(isPremium: Bool) {
+    private func updateLocalProStatus(revenueCatPremium: Bool) {
         guard var user = currentUser else { return }
-        user.isProMember = isPremium
-        currentUser = user
-        print("🔄 Updated local Pro status: \(isPremium)")
         
-        // Also update the profile in the database to keep it in sync
-        Task {
-            do {
-                try await ProfileService.shared.updateProStatus(userId: user.id, isPro: isPremium)
-                print("✅ Pro status synced to database: \(isPremium)")
-            } catch {
-                print("❌ Error syncing Pro status to database: \(error)")
+        // Pro status = RevenueCat OR database (allows granting Pro via database only)
+        let databasePro = user.isProMember
+        let combinedProStatus = revenueCatPremium || databasePro
+        
+        user.isProMember = combinedProStatus
+        currentUser = user
+        print("🔄 Updated local Pro status: \(combinedProStatus) (RevenueCat: \(revenueCatPremium), Database: \(databasePro))")
+        
+        // Only sync to database if RevenueCat says Pro (don't overwrite database-granted Pro)
+        if revenueCatPremium {
+            Task {
+                do {
+                    try await ProfileService.shared.updateProStatus(userId: user.id, isPro: true)
+                    print("✅ Pro status synced to database: true")
+                } catch {
+                    print("❌ Error syncing Pro status to database: \(error)")
+                }
             }
+        }
+    }
+    
+    /// Refresh Pro status from database (useful after granting Pro via Supabase)
+    func refreshProStatusFromDatabase() async {
+        guard let userId = currentUser?.id else { return }
+        
+        do {
+            if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                await MainActor.run {
+                    var user = self.currentUser
+                    let revenueCatPro = RevenueCatManager.shared.isPremium
+                    let databasePro = profile.isProMember
+                    user?.isProMember = revenueCatPro || databasePro
+                    self.currentUser = user
+                    print("🔄 Refreshed Pro status from database: \(user?.isProMember ?? false)")
+                }
+            }
+        } catch {
+            print("❌ Error refreshing Pro status: \(error)")
         }
     }
     
@@ -72,10 +99,15 @@ class AuthViewModel: NSObject, ObservableObject {
                 
                 // Hämta profil-data från Supabase
                 if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
-                    DispatchQueue.main.async {
+                    // IMPORTANT: Update database Pro status BEFORE RevenueCat login
+                    // to ensure combined status is correct
+                    await MainActor.run {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.prefetchAvatar(url: profile.avatarUrl)
+                        
+                        // Update database Pro status in RevenueCatManager FIRST
+                        RevenueCatManager.shared.updateDatabaseProStatus(profile.isProMember)
                         
                         // Check if user has a valid username (not "Användare" or empty)
                         let hasValidUsername = !profile.name.isEmpty && profile.name != "Användare"
@@ -84,8 +116,10 @@ class AuthViewModel: NSObject, ObservableObject {
                             self.showUsernameRequiredPopup = true
                         }
                         
-                        print("✅ User automatically logged in: \(profile.name)")
+                        print("✅ User automatically logged in: \(profile.name), Pro: \(profile.isProMember)")
                     }
+                    
+                    // Now login to RevenueCat (after databasePro is already set)
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
                     // Ingen profil hittades – behandla som raderat/disabled konto

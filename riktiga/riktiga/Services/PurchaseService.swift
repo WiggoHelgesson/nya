@@ -13,8 +13,8 @@ class PurchaseService: ObservableObject {
     @Published var isLoading: Bool = false
     
     private init() {
-        // Listen to RevenueCat updates
-        revenueCatManager.$isPremium
+        // Listen to RevenueCat updates (using combined Pro status)
+        revenueCatManager.$isProMember
             .assign(to: &$isPremium)
         
         revenueCatManager.$isLoading

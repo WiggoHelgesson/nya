@@ -8,11 +8,25 @@ class RevenueCatManager: NSObject, ObservableObject {
     
     @Published var customerInfo: CustomerInfo?
     @Published var offerings: Offerings?
-    @Published var isPremium: Bool = false
+    @Published var isPremium: Bool = false {
+        didSet { updateCombinedProStatus() }
+    }
+    @Published var databasePro: Bool = false {
+        didSet { updateCombinedProStatus() }
+    }
+    @Published var isProMember: Bool = false  // Combined: RevenueCat OR database
     @Published var activeEntitlementId: String? = nil
     @Published var activeExpirationDate: Date? = nil
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
+    
+    private func updateCombinedProStatus() {
+        let newValue = isPremium || databasePro
+        if isProMember != newValue {
+            isProMember = newValue
+            print("🔄 Combined Pro status updated: \(newValue) (RevenueCat: \(isPremium), Database: \(databasePro))")
+        }
+    }
     
     // Product identifiers - these should match your App Store Connect configuration
     private let premiumProductId = "monthly"
@@ -240,6 +254,30 @@ class RevenueCatManager: NSObject, ObservableObject {
             print("✅ Pro status updated in database: \(isPro)")
         } catch {
             print("❌ Error updating Pro status in database: \(error)")
+        }
+    }
+    
+    /// Update database Pro status (call this after fetching user profile)
+    @MainActor
+    func updateDatabaseProStatus(_ isPro: Bool) {
+        self.databasePro = isPro
+        print("🔄 Database Pro status updated: \(isPro)")
+    }
+    
+    /// Refresh database Pro status from Supabase
+    func refreshDatabaseProStatus() async {
+        do {
+            let session = try await SupabaseConfig.supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                await MainActor.run {
+                    self.databasePro = profile.isProMember
+                    print("🔄 Refreshed database Pro status: \(profile.isProMember)")
+                }
+            }
+        } catch {
+            print("❌ Error refreshing database Pro status: \(error)")
         }
     }
 

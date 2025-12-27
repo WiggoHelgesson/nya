@@ -22,6 +22,9 @@ struct UpAndDownApp: App {
     init() {
         // Configure Stripe
         StripeConfig.configure()
+        
+        // Cancel any existing daily steps reminders (feature removed)
+        NotificationManager.shared.cancelDailyStepsReminder()
     }
     
     var body: some Scene {
@@ -128,6 +131,7 @@ struct UpAndDownApp: App {
         if authViewModel.isLoggedIn {
             MainTabView()
                 .environmentObject(authViewModel)
+                .tint(.black) // Global black tint for all navigation
                 .onAppear {
                     // Request push notification permission when logged in
                     PushNotificationService.shared.requestPermissionAndRegister()

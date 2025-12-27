@@ -166,6 +166,100 @@ final class PushNotificationService: NSObject {
         }
     }
     
+    // MARK: - Notify Followers About New PB
+    
+    func notifyFollowersAboutPB(
+        userId: String,
+        userName: String,
+        userAvatar: String?,
+        exerciseName: String,
+        pbValue: String,
+        postId: String
+    ) async {
+        print("🏆 [PUSH] Starting PB notification flow for \(userName)")
+        print("🏆 [PUSH] Exercise: \(exerciseName), PB: \(pbValue)")
+        
+        do {
+            // Get all followers
+            let followers = try await SocialService.shared.getFollowers(userId: userId)
+            
+            guard !followers.isEmpty else {
+                print("📭 [PUSH] No followers to notify about PB")
+                return
+            }
+            
+            print("🏆 [PUSH] Found \(followers.count) followers to notify about PB")
+            
+            for followerId in followers {
+                guard followerId != userId else { continue }
+                
+                do {
+                    // Create in-app notification
+                    try await createPBNotification(
+                        forUserId: followerId,
+                        fromUserId: userId,
+                        fromUserName: userName,
+                        fromUserAvatar: userAvatar,
+                        exerciseName: exerciseName,
+                        pbValue: pbValue,
+                        postId: postId
+                    )
+                    
+                    // Send real iOS push notification
+                    await sendRealPushNotification(
+                        toUserId: followerId,
+                        title: "🏆 Nytt PB!",
+                        body: "\(userName) slog nytt PB i \(exerciseName) (\(pbValue)), gå in och supporta!",
+                        data: ["type": "new_pb", "post_id": postId, "actor_id": userId]
+                    )
+                } catch {
+                    print("⚠️ [PUSH] Failed to notify follower \(followerId) about PB: \(error)")
+                }
+            }
+            
+            print("✅ [PUSH] All followers notified about PB")
+        } catch {
+            print("❌ [PUSH] Failed to get followers for PB notification: \(error)")
+        }
+    }
+    
+    // MARK: - Create PB Notification in Database
+    
+    private func createPBNotification(
+        forUserId: String,
+        fromUserId: String,
+        fromUserName: String,
+        fromUserAvatar: String?,
+        exerciseName: String,
+        pbValue: String,
+        postId: String
+    ) async throws {
+        struct NotificationPayload: Encodable {
+            let user_id: String
+            let type: String
+            let actor_id: String
+            let actor_name: String
+            let actor_avatar: String?
+            let reference_id: String
+            let message: String
+        }
+        
+        let payload = NotificationPayload(
+            user_id: forUserId,
+            type: "new_pb",
+            actor_id: fromUserId,
+            actor_name: fromUserName,
+            actor_avatar: fromUserAvatar,
+            reference_id: postId,
+            message: "\(fromUserName) slog nytt PB i \(exerciseName): \(pbValue)"
+        )
+        
+        try await SupabaseConfig.supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+    }
+    
     // MARK: - Send Real iOS Push via Edge Function
     
     func sendRealPushNotification(
@@ -332,6 +426,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     // Called when app is about to go to background
     func applicationDidEnterBackground(_ application: UIApplication) {
         print("📥 [AppDelegate] App entering background - ensuring session is saved")
+        // Force save any active session
+        if SessionManager.shared.hasActiveSession {
+            SessionManager.shared.forceSaveCurrentSession()
+            print("💾 [AppDelegate] Force saved active session on background")
+        }
         // Force synchronize UserDefaults to disk
         UserDefaults.standard.synchronize()
     }
@@ -339,6 +438,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     // Called when app is about to be terminated
     func applicationWillTerminate(_ application: UIApplication) {
         print("🛑 [AppDelegate] App will terminate - force saving all data")
+        // Force save any active session
+        if SessionManager.shared.hasActiveSession {
+            SessionManager.shared.forceSaveCurrentSession()
+            print("💾 [AppDelegate] Force saved active session on terminate")
+        }
         // Force synchronize UserDefaults to disk before termination
         UserDefaults.standard.synchronize()
     }

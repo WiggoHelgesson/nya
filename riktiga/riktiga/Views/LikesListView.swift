@@ -182,11 +182,11 @@ private struct LikeUserRow: View {
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .stroke(isFollowing ? Color.red : Color.orange, lineWidth: isFollowing ? 1 : 0)
+                                .stroke(isFollowing ? Color.red : Color.clear, lineWidth: isFollowing ? 1 : 0)
                         )
                         .background(
                             Capsule()
-                                .fill(isFollowing ? Color(.systemGray6) : Color.orange)
+                                .fill(isFollowing ? Color(.systemGray6) : Color.black)
                         )
                         .foregroundColor(isFollowing ? .red : .white)
                 }

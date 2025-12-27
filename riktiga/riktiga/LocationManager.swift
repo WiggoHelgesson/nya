@@ -26,9 +26,37 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     /// Restore distance when resuming a session (prevents distance from resetting to 0)
     func restoreDistance(_ distanceInKm: Double) {
+        guard distanceInKm >= 0 else {
+            print("⚠️ Invalid distance to restore: \(distanceInKm) km")
+            return
+        }
         totalDistance = distanceInKm * 1000.0 // Convert km back to meters
         distance = distanceInKm
-        print("📍 Restored totalDistance: \(totalDistance)m (\(distanceInKm) km)")
+        print("📍 [RESTORE] totalDistance: \(totalDistance)m (\(String(format: "%.3f", distanceInKm)) km)")
+    }
+    
+    /// Restore route coordinates when resuming a session
+    func restoreRouteCoordinates(_ coordinates: [CLLocationCoordinate2D]) {
+        guard !coordinates.isEmpty else {
+            print("⚠️ No coordinates to restore")
+            return
+        }
+        routeCoordinates = coordinates
+        // Set lastLocation to last coordinate to continue tracking from there
+        if let lastCoord = coordinates.last {
+            lastLocation = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
+            print("📍 [RESTORE] Restored \(coordinates.count) coordinates, lastLocation set")
+        }
+    }
+    
+    /// Debug print current state
+    func debugPrintState() {
+        print("📊 [LocationManager] State:")
+        print("  - distance: \(String(format: "%.3f", distance)) km")
+        print("  - totalDistance: \(String(format: "%.1f", totalDistance)) m")
+        print("  - routeCoordinates: \(routeCoordinates.count)")
+        print("  - isTracking: \(isTracking)")
+        print("  - userLocation: \(userLocation != nil ? "set" : "nil")")
     }
     
     // For lift detection (skiing)

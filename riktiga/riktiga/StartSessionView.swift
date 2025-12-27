@@ -635,7 +635,7 @@ struct SessionMapView: View {
     let resumeSession: Bool
     @Binding var forceNewSession: Bool
     @ObservedObject private var locationManager = LocationManager.shared
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var territoryStore = TerritoryStore.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
@@ -676,10 +676,18 @@ struct SessionMapView: View {
     private let maxSpeedGolf: Double = 12.0 // km/h
     private let highSpeedDurationThreshold: TimeInterval = 15.0 // seconds
     
+    // Live photo during session
+    @State private var sessionLivePhoto: UIImage? = nil
+    @State private var showLivePhotoCapture = false
+    @State private var livePhotoTaken = false
+    
+    // Expandable stats panel
+    @State private var isStatsExpanded = false
+    
     // Territory closure warning
     @State private var showTerritoryWarning = false
     @State private var pendingEndSession = false
-    private let maxDistanceFromStartForTerritory: Double = 200.0 // meters
+    private let maxDistanceFromStartForTerritory: Double = 500.0 // meters (increased for GPS accuracy on real devices)
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -712,6 +720,11 @@ struct SessionMapView: View {
                             refreshRouteSnapshotIfNeeded(force: newCount % 5 == 0)
                         }
                         updateLiveTerritoryArea()
+                        
+                        // Save session every 10 coordinate updates for bulletproof persistence
+                        if newCount % 10 == 0 {
+                            saveSessionState()
+                        }
                     }
                 }
                 .onAppear {
@@ -723,7 +736,12 @@ struct SessionMapView: View {
                     }
                     if resumeSession, let session = sessionManager.activeSession {
                         Task { @MainActor in
-                            print("🔄 Resuming session with duration: \(session.accumulatedDuration)s, distance: \(session.accumulatedDistance) km")
+                            print("🔄 [RESUME] Starting session restoration...")
+                            print("🔄 [RESUME] Duration: \(session.accumulatedDuration)s")
+                            print("🔄 [RESUME] Distance: \(String(format: "%.3f", session.accumulatedDistance)) km")
+                            print("🔄 [RESUME] Coords: \(session.routeCoordinates.count)")
+                            print("🔄 [RESUME] Paused: \(session.isPaused)")
+                            
                             sessionDuration = session.accumulatedDuration
                             sessionStartTime = session.startTime
                             isPaused = session.isPaused
@@ -736,13 +754,26 @@ struct SessionMapView: View {
                             // Restore skiing metrics if available
                             if let elevationGain = session.elevationGain {
                                 locationManager.elevationGain = elevationGain
+                                print("🔄 [RESUME] Restored elevationGain: \(elevationGain)m")
                             }
                             if let maxSpeed = session.maxSpeed {
                                 locationManager.maxSpeed = maxSpeed
+                                print("🔄 [RESUME] Restored maxSpeed: \(maxSpeed)m/s")
                             }
 
                             // Set activity type for location manager
                             locationManager.setActivityType(session.activityType)
+
+                            // Load route coordinates if available - BEFORE starting tracking
+                            if !session.routeCoordinates.isEmpty {
+                                let restoredCoords = session.routeCoordinates.map { coord in
+                                    CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)
+                                }
+                                locationManager.restoreRouteCoordinates(restoredCoords)
+                                routeCoordinatesSnapshot = restoredCoords
+                                lastSnapshotSourceCount = restoredCoords.count
+                                print("🔄 [RESUME] Restored \(restoredCoords.count) route coordinates")
+                            }
 
                             // Calculate earned points for the current distance
                             updateEarnedPoints()
@@ -752,18 +783,23 @@ struct SessionMapView: View {
                                 sessionManager.beginSession()
                                 locationManager.startTracking(preserveData: true, activityType: session.activityType)
                                 startTimer()
+                                print("🔄 [RESUME] Timer started, tracking resumed")
+                            } else {
+                                // Even if paused, enable saves so state can be updated
+                                sessionManager.beginSession()
+                                print("🔄 [RESUME] Session paused, but saves enabled")
                             }
 
                             // Ensure we are in resume mode
                             forceNewSession = false
-
-                            // Load route coordinates if available
-                            if !session.routeCoordinates.isEmpty {
-                                locationManager.routeCoordinates = session.routeCoordinates.map { coord in
-                                    CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude)
-                                }
-                                refreshRouteSnapshot(force: true)
-                            }
+                            
+                            // Refresh route display
+                            refreshRouteSnapshot(force: true)
+                            
+                            // Final verification
+                            locationManager.debugPrintState()
+                            sessionManager.debugPrintState()
+                            print("🔄 [RESUME] Session restoration complete ✅")
                         }
                     } else {
                         // Initialize snapshot for new sessions
@@ -808,112 +844,159 @@ struct SessionMapView: View {
                 Spacer()
 
                 VStack(spacing: 16) {
-                    // GPS Status
-                    HStack(spacing: 8) {
-                        Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
-                            .font(.system(size: 14))
-                            .foregroundColor(locationManager.authorizationStatus == .authorizedAlways ? .black : .red)
-                        Text(locationManager.userLocation != nil ? "GPS" : (locationManager.authorizationStatus == .authorizedAlways ? "GPS" : "GPS Ej tillgänglig"))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(locationManager.userLocation != nil ? .black : (locationManager.authorizationStatus == .authorizedAlways ? .black : .red))
-                    }
-                    
-                    // Location Error Display
-                    if let error = locationManager.locationError {
-                        VStack(spacing: 12) {
-                            Text(error)
-                                .font(.system(size: 12))
-                                .foregroundColor(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
+                    // Only show detailed stats when session is running or paused
+                    if isRunning || isPaused {
+                        // GPS Status - Always visible when running
+                        HStack(spacing: 8) {
+                            Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
+                                .font(.system(size: 14))
+                                .foregroundColor(locationManager.authorizationStatus == .authorizedAlways ? .black : .red)
+                            Text(locationManager.userLocation != nil ? "GPS" : (locationManager.authorizationStatus == .authorizedAlways ? "GPS" : "GPS Ej tillgänglig"))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(locationManager.userLocation != nil ? .black : (locationManager.authorizationStatus == .authorizedAlways ? .black : .red))
+                        }
+                        
+                        // Location Error Display
+                        if let error = locationManager.locationError {
+                            VStack(spacing: 12) {
+                                Text(error)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 16)
+                                
+                                Button(action: {
+                                    locationManager.openSettings()
+                                }) {
+                                    Text("Öppna Inställningar")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 8)
+                                        .background(AppColors.brandBlue)
+                                        .cornerRadius(8)
+                                }
+                            }
+                        }
+
+                        // Main Distance Display - Always visible when running
+                        VStack(spacing: 4) {
+                            Text(String(format: "%.2f", locationManager.distance))
+                                .font(.system(size: 36, weight: .black))
+                                .foregroundColor(.primary)
+                            Text("km")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                        
+                        // EXPANDABLE SECTION - Hidden by default when running
+                        if isStatsExpanded || isPaused {
+                            // Status Text
+                            Text("Inspelning pågår")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            // Three Column Stats
+                            HStack(spacing: 20) {
+                                VStack(spacing: 4) {
+                                    Text("\(earnedPoints)")
+                                        .font(.system(size: 20, weight: .black))
+                                        .foregroundColor(.primary)
+                                    Text("Poäng")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                                
+                                VStack(spacing: 4) {
+                                    Text(formattedTime(sessionDuration))
+                                        .font(.system(size: 20, weight: .black))
+                                        .foregroundColor(.primary)
+                                    Text("Tid")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
                             
+                                // Show elevation for skiing, pace for others
+                                if activity == .skiing || activity == .hiking {
+                                    VStack(spacing: 4) {
+                                        Text(String(format: "%.0f m", locationManager.elevationGain))
+                                            .font(.system(size: 20, weight: .black))
+                                            .foregroundColor(.primary)
+                                        Text("Höjdmeter")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                } else {
+                                    VStack(spacing: 4) {
+                                        Text(currentPace)
+                                            .font(.system(size: 20, weight: .black))
+                                            .foregroundColor(.primary)
+                                        Text("Tempo")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            
+                                if activity == .skiing {
+                                    VStack(spacing: 4) {
+                                        Text(formatTopSpeed(locationManager.maxSpeed))
+                                            .font(.system(size: 20, weight: .black))
+                                            .foregroundColor(.primary)
+                                        Text("Topphastighet")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.gray)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            
+                            // Show area capture card (only for running and golf, not skiing)
+                            if locationManager.distance > 0.01 && (activity == .running || activity == .golf) {
+                                VStack(spacing: 2) {
+                                    Image(systemName: "wifi")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.red)
+                                    Text(formatArea(estimatePolygonArea(routeCoordinatesSnapshot)))
+                                        .font(.system(size: 28, weight: .black))
+                                        .foregroundColor(.primary)
+                                    Text("Ditt område")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 24)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground))
+                                        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
+                                )
+                                .padding(.bottom, 8)
+                            }
+                        }
+                        
+                        // Expand/Collapse handle - Only show when running (not paused)
+                        if isRunning && !isPaused {
                             Button(action: {
-                                locationManager.openSettings()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    isStatsExpanded.toggle()
+                                }
                             }) {
-                                Text("Öppna Inställningar")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 8)
-                                    .background(AppColors.brandBlue)
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
-
-                    // Main Distance Display (Längst upp i fetstil)
-                    VStack(spacing: 4) {
-                        Text(String(format: "%.2f", locationManager.distance))
-                            .font(.system(size: 36, weight: .black))
-                            .foregroundColor(.primary)
-                        Text("km")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-
-                    // Status Text
-                    Text("Inspelning pågår")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    // Three Column Stats
-                    HStack(spacing: 20) {
-                        VStack(spacing: 4) {
-                            Text("\(earnedPoints)")
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.primary)
-                            Text("Poäng")
-                                .font(.system(size: 12, weight: .semibold))
+                                HStack(spacing: 4) {
+                                    Image(systemName: isStatsExpanded ? "chevron.down" : "chevron.up")
+                                        .font(.system(size: 12, weight: .bold))
+                                    Text(isStatsExpanded ? "Dölj statistik" : "Visa statistik")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
                                 .foregroundColor(.gray)
-                        }
-                        .frame(maxWidth: .infinity)
-                        
-                        VStack(spacing: 4) {
-                            Text(formattedTime(sessionDuration))
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(.primary)
-                            Text("Tid")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.gray)
-                        }
-                        .frame(maxWidth: .infinity)
-                        
-                        // Show elevation for skiing, pace for others
-                        if activity == .skiing || activity == .hiking {
-                            VStack(spacing: 4) {
-                                Text(String(format: "%.0f m", locationManager.elevationGain))
-                                    .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.primary)
-                                Text("Höjdmeter")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.gray)
+                                .padding(.vertical, 8)
                             }
-                            .frame(maxWidth: .infinity)
-                        } else {
-                            VStack(spacing: 4) {
-                                Text(currentPace)
-                                    .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.primary)
-                                Text("Tempo")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.gray)
-                            }
-                            .frame(maxWidth: .infinity)
                         }
-                        
-                        if activity == .skiing {
-                            VStack(spacing: 4) {
-                                Text(formatTopSpeed(locationManager.maxSpeed))
-                                    .font(.system(size: 20, weight: .black))
-                                    .foregroundColor(.primary)
-                                Text("Topphastighet")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.gray)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .padding(.horizontal, 16)
+                    } // End of isRunning || isPaused condition for stats
 
                     // Start/Pause/Continue/End Buttons
                     if isPaused {
@@ -955,32 +1038,7 @@ struct SessionMapView: View {
                         }
                         .padding(.horizontal, 16)
                     } else {
-                        // Running state
-                        
-                        // Show area capture card (only for running and golf, not skiing)
-                        if locationManager.distance > 0.01 && (activity == .running || activity == .golf) {
-                            VStack(spacing: 2) {
-                                Image(systemName: "wifi") // Placeholder for signal icon
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.red)
-                                Text(formatArea(estimatePolygonArea(routeCoordinatesSnapshot)))
-                                    .font(.system(size: 28, weight: .black))
-                                    .foregroundColor(.primary)
-                                Text("Capture in Progress")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color(.secondarySystemBackground))
-                                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
-                            )
-                            .padding(.bottom, 8)
-                        }
-                        
-                        // Show Start/Pause button
+                        // Running state - Show Start/Pause button
                         Button(action: {
                             if isRunning {
                                 stopTimer()
@@ -1026,6 +1084,30 @@ struct SessionMapView: View {
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal, 16)
+                        
+                        // Live photo button - only show when running
+                        if isRunning {
+                            Button(action: {
+                                if !livePhotoTaken {
+                                    showLivePhotoCapture = true
+                                }
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: livePhotoTaken ? "checkmark.circle.fill" : "camera.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text(livePhotoTaken ? "Bild tagen ✓" : "Ta en live bild")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(livePhotoTaken ? Color.green : Color.white)
+                                .foregroundColor(livePhotoTaken ? .white : .black)
+                                .cornerRadius(10)
+                            }
+                            .disabled(livePhotoTaken)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                        }
                         
                         // Other activities section - only show when not running
                         if !isRunning {
@@ -1135,14 +1217,15 @@ struct SessionMapView: View {
                 endSession(skipTerritoryCapture: true)
             }
         } message: {
-            Text("Du är mer än 200 meter från startpunkten. Området kommer inte att sparas på Zonkriget, men du kan spara passet ändå.")
+            Text("Du är mer än 500 meter från startpunkten. Området kommer inte att sparas på Zonkriget, men du kan spara passet ändå.")
         }
         .onDisappear {
             // Save session state when view disappears, but DON'T stop timer
             // Timer continues in background
-            saveSessionState()
+            print("📱 [SESSION] SessionMapView disappearing - force saving")
+            saveSessionState(force: true)
         }
-        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
         .fullScreenCover(isPresented: $showTerritoryAnimation) {
@@ -1163,11 +1246,12 @@ struct SessionMapView: View {
                 duration: sessionDuration,
                 earnedPoints: earnedPoints,
                 routeImage: routeImage,
-                routeCoordinates: locationManager.routeCoordinates,
+                routeCoordinates: territoryAnimationCoordinates.isEmpty ? locationManager.routeCoordinates : territoryAnimationCoordinates,  // Use preserved coordinates
                 elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
                 maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
                 completedSplits: completedSplits,
                 gymExercises: nil,  // No gym exercises for regular workouts
+                sessionLivePhoto: sessionLivePhoto,  // Pass the live photo taken during session
                 isPresented: $showSessionComplete,
                 onComplete: {
                     print("💾 Workout saved - finalizing session now")
@@ -1185,6 +1269,14 @@ struct SessionMapView: View {
                 }
             )
         }
+        .sheet(isPresented: $showLivePhotoCapture) {
+            LivePhotoCaptureView(
+                capturedImage: $sessionLivePhoto,
+                onCapture: {
+                    livePhotoTaken = true
+                }
+            )
+        }
         // No onChange needed - session is cleared in endSession()
         .onChange(of: scenePhase) { _, newPhase in
             print("📱 [SESSION] ScenePhase changed to \(newPhase)")
@@ -1193,10 +1285,14 @@ struct SessionMapView: View {
                 return
             }
             if newPhase == .background || newPhase == .inactive {
-                print("📥 [SESSION] App going to background/inactive - saving session state")
-                saveSessionState()
+                print("📥 [SESSION] App going to background/inactive - FORCE saving session state")
+                saveSessionState(force: true)
+                // Also force save through SessionManager as backup
+                SessionManager.shared.forceSaveCurrentSession()
             } else if newPhase == .active {
                 print("📱 [SESSION] App became active - session still running: \(isRunning)")
+                // Verify session state is intact
+                SessionManager.shared.debugPrintState()
             }
         }
     }
@@ -1233,8 +1329,8 @@ struct SessionMapView: View {
                 }
             }
             
-            // Auto-save session state every 10 seconds to prevent data loss
-            if Int(sessionDuration) % 10 == 0 {
+            // Auto-save session state every 5 seconds to prevent data loss
+            if Int(sessionDuration) % 5 == 0 {
                 saveSessionState()
             }
             
@@ -1453,22 +1549,22 @@ struct SessionMapView: View {
         }
     }
     
-    func saveSessionState() {
+    func saveSessionState(force: Bool = false) {
         guard let startTime = sessionStartTime else {
             print("⚠️ No startTime, not saving")
             return
         }
         
-        print("🔍 saveSessionState - isSessionEnding: \(isSessionEnding)")
+        print("🔍 saveSessionState - isSessionEnding: \(isSessionEnding), force: \(force)")
         
-        // Don't save if we're in the process of ending the session
-        if isSessionEnding {
+        // Don't save if we're in the process of ending the session (unless forced)
+        if isSessionEnding && !force {
             print("🛑 Not saving session state - session is ending (isSessionEnding = true)")
             return
         }
 
         // Auto-cancel sessions that have been running in the background for more than 2 hours
-        if UIApplication.shared.applicationState != .active {
+        if UIApplication.shared.applicationState != .active && !force {
             let elapsed = Date().timeIntervalSince(startTime)
             if elapsed >= 2 * 3600 {
                 print("⏰ Session auto-cancelled after 2h in background")
@@ -1479,19 +1575,22 @@ struct SessionMapView: View {
         
         // Get route coordinates from location manager
         let coords = locationManager.routeCoordinates
+        let currentDistance = locationManager.distance
         
-        print("💾 Saving session state... (isSessionEnding is FALSE)")
+        print("💾 Saving session state: duration=\(sessionDuration)s, distance=\(String(format: "%.2f", currentDistance))km, coords=\(coords.count)")
+        
         // Save to SessionManager
         sessionManager.saveActiveSession(
             activityType: activity.rawValue,
             startTime: startTime,
             isPaused: isPaused,
             duration: sessionDuration,
-            distance: locationManager.distance,
+            distance: currentDistance,
             routeCoordinates: coords,
             completedSplits: completedSplits,
             elevationGain: locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
-            maxSpeed: locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil
+            maxSpeed: locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
+            force: force
         )
     }
 

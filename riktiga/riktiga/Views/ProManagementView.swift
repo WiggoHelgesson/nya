@@ -3,7 +3,7 @@ import RevenueCat
 
 struct ProManagementView: View {
     @Environment(\.dismiss) var dismiss
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var isLoadingPremium = RevenueCatManager.shared.isLoading
     @State private var customerInfo: CustomerInfo? = RevenueCatManager.shared.customerInfo
     @State private var showSubscriptionView = false
@@ -205,7 +205,7 @@ struct ProManagementView: View {
                 await RevenueCatManager.shared.loadCustomerInfo()
             }
         }
-        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
         .onReceive(RevenueCatManager.shared.$isLoading) { newValue in

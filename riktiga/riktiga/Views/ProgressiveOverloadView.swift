@@ -10,7 +10,7 @@ struct ProgressiveOverloadView: View {
     @State private var exerciseHistories: [ExerciseHistory] = []
     
     // Pro membership
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showPaywall = false
     private let freeExerciseLimit = 3
     
@@ -51,6 +51,10 @@ struct ProgressiveOverloadView: View {
     
     var body: some View {
         ZStack {
+            // Background color
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+            
             if isLoading && exerciseHistories.isEmpty {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -77,43 +81,93 @@ struct ProgressiveOverloadView: View {
                         .padding(.horizontal, 32)
                 }
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Header section
-                        VStack(alignment: .leading, spacing: 8) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 20) {
+                        // Header card
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
                                 Text("Följ din styrkeutveckling")
                                     .font(.system(size: 20, weight: .bold))
                                     .foregroundColor(.primary)
+                                
+                                Spacer()
                                 
                                 if isRefreshing {
                                     ProgressView()
                                         .scaleEffect(0.7)
                                 }
                             }
+                            
                             Text("Spåra ditt personbästa över tid. Tryck på en övning för att se graf och detaljerad historik.")
                                 .font(.system(size: 14))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                        .padding(20)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
-                        .padding(.bottom, 20)
                         
-                        // Exercise list
-                        LazyVStack(spacing: 12) {
+                        // Stats summary card
+                        HStack(spacing: 16) {
+                            StatSummaryItem(
+                                icon: "dumbbell.fill",
+                                value: "\(exerciseHistories.count)",
+                                label: "Övningar",
+                                color: .primary
+                            )
+                            
+                            StatSummaryItem(
+                                icon: "flame.fill",
+                                value: "\(exerciseHistories.filter { $0.simpleTrendInfo.type == .strongIncrease || $0.simpleTrendInfo.type == .increasing }.count)",
+                                label: "Ökar",
+                                color: .green
+                            )
+                            
+                            StatSummaryItem(
+                                icon: "star.fill",
+                                value: "\(exerciseHistories.filter { $0.history.count >= 3 }.count)",
+                                label: "3+ pass",
+                                color: .secondary
+                            )
+                        }
+                        .padding(16)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                        .padding(.horizontal, 16)
+                        
+                        // Section header
+                        HStack {
+                            Text("Dina övningar")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                            
+                            Text("\(exerciseHistories.count) st")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        
+                        // Exercise list in a card container
+                        VStack(spacing: 0) {
                             ForEach(Array(exerciseHistories.enumerated()), id: \.element.id) { index, history in
                                 if isPremium || index < freeExerciseLimit {
                                     // Full access for Pro or first 3 exercises
                                     NavigationLink {
                                         ExerciseHistoryDetailView(history: history, dateFormatter: Self.dateFormatter, shortDateFormatter: Self.shortDateFormatter)
                                     } label: {
-                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter)
+                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter, isLast: index == exerciseHistories.count - 1)
                                     }
                                     .buttonStyle(.plain)
                                 } else {
@@ -121,7 +175,7 @@ struct ProgressiveOverloadView: View {
                                     Button {
                                         showPaywall = true
                                     } label: {
-                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter)
+                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter, isLast: index == exerciseHistories.count - 1)
                                             .blur(radius: 6)
                                             .overlay(
                                                 HStack(spacing: 6) {
@@ -135,7 +189,7 @@ struct ProgressiveOverloadView: View {
                                                 .padding(.vertical, 6)
                                                 .background(
                                                     Capsule()
-                                                        .fill(Color.white)
+                                                        .fill(Color(.systemBackground))
                                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                                 )
                                             )
@@ -144,21 +198,50 @@ struct ProgressiveOverloadView: View {
                                 }
                             }
                         }
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 24)
                     }
+                    .frame(maxWidth: .infinity)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
         }
         .navigationTitle("Progressive Overload")
-        .background(Color(.systemGroupedBackground))
         .task { await loadExercises(forceRefresh: false) }
         .refreshable { await loadExercises(forceRefresh: true) }
         .sheet(isPresented: $showPaywall) {
             PresentPaywallView()
         }
-        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
+        }
+    }
+    
+    // MARK: - Stats Summary Item
+    private struct StatSummaryItem: View {
+        let icon: String
+        let value: String
+        let label: String
+        let color: Color
+        
+        var body: some View {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(color)
+                
+                Text(value)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
         }
     }
     
@@ -454,9 +537,9 @@ enum TrendType {
         switch self {
         case .strongIncrease: return .green
         case .increasing: return .green.opacity(0.8)
-        case .stable, .plateau: return .orange
-        case .decreasing: return .red.opacity(0.8)
-        case .strongDecrease: return .red
+        case .stable, .plateau: return .secondary
+        case .decreasing: return .secondary.opacity(0.8)
+        case .strongDecrease: return .secondary
         case .needsMoreData: return .gray
         }
     }
@@ -485,72 +568,111 @@ struct TrendInfo {
 private struct ExerciseHistoryRow: View {
     let history: ExerciseHistory
     let dateFormatter: DateFormatter
+    var isLast: Bool = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                // Category icon
+                ZStack {
+                    Circle()
+                        .fill(categoryColor.opacity(0.15))
+                        .frame(width: 48, height: 48)
+                    
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(categoryColor)
+                }
+                
+                // Exercise info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(history.name)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                     
-                    if let category = history.category {
-                        Text(category)
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
+                    HStack(spacing: 6) {
+                        if let category = history.category {
+                            Text(category)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("•")
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .font(.system(size: 10))
+                        
+                        Text("\(history.history.count) pass")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
                 }
                 
                 Spacer()
                 
-                // Show personal best (max weight lifted)
-                VStack(alignment: .trailing, spacing: 2) {
+                // Stats column
+                VStack(alignment: .trailing, spacing: 4) {
                     if let bestWeight = history.personalBestWeight {
                         Text("\(String(format: "%.0f", bestWeight)) kg")
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.primary)
-                        Text("Personbästa")
-                            .font(.system(size: 11))
-                            .foregroundColor(.gray)
                     }
+                    
+                    // Trend badge
+                    let trend = history.simpleTrendInfo
+                    HStack(spacing: 4) {
+                        Image(systemName: trend.type.icon)
+                            .font(.system(size: 11, weight: .bold))
+                        Text(trend.message)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(trend.type.color)
+                    .clipShape(Capsule())
                 }
-            }
-            
-            // Session count and date
-            HStack {
-                Text("\(history.history.count) pass")
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
                 
-                if let latest = history.latestSnapshot {
-                    Text("•")
-                        .foregroundColor(.gray.opacity(0.5))
-                    Text(dateFormatter.string(from: latest.date))
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            // Trend badge (using simple trend for performance)
-            let trend = history.simpleTrendInfo
-            HStack(spacing: 8) {
-                Image(systemName: trend.type.icon)
-                    .font(.system(size: 13, weight: .bold))
-                Text(trend.message)
+                // Chevron
+                Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.5))
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(trend.type.color)
-            .clipShape(Capsule())
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            
+            // Divider (unless last item)
+            if !isLast {
+                Divider()
+                    .padding(.leading, 80)
+            }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         .drawingGroup() // GPU-accelerated rendering
+    }
+    
+    private var categoryIcon: String {
+        guard let category = history.category?.lowercased() else { return "dumbbell.fill" }
+        
+        if category.contains("bröst") || category.contains("chest") {
+            return "figure.strengthtraining.traditional"
+        } else if category.contains("rygg") || category.contains("back") {
+            return "figure.rowing"
+        } else if category.contains("ben") || category.contains("lår") || category.contains("leg") {
+            return "figure.walk"
+        } else if category.contains("axlar") || category.contains("shoulder") {
+            return "figure.arms.open"
+        } else if category.contains("biceps") || category.contains("triceps") || category.contains("arm") {
+            return "figure.boxing"
+        } else if category.contains("mage") || category.contains("core") || category.contains("abs") {
+            return "figure.core.training"
+        }
+        return "dumbbell.fill"
+    }
+    
+    private var categoryColor: Color {
+        // Using primary/secondary for consistent black/white/gray design
+        return .primary
     }
 }
 
@@ -569,7 +691,7 @@ private struct ExerciseHistoryDetailView: View {
     let shortDateFormatter: DateFormatter
     
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 16) {
                 // Header card with stats
                 statsCard
@@ -583,7 +705,9 @@ private struct ExerciseHistoryDetailView: View {
                 historyCard
             }
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background(Color(.systemGroupedBackground))
         .navigationTitle(history.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -661,85 +785,56 @@ private struct ExerciseHistoryDetailView: View {
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
     
+    private var progressChart: some View {
+        let chartData = history.history.map { snapshot in
+            ChartDataPoint(
+                date: snapshot.date,
+                value: snapshot.bestSet.weight,
+                label: shortDateFormatter.string(from: snapshot.date)
+            )
+        }
+        
+        return Chart(chartData) { point in
+            AreaMark(
+                x: .value("Datum", point.date),
+                y: .value("1RM", point.value)
+            )
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color.green.opacity(0.3), Color.green.opacity(0.05)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            
+            LineMark(
+                x: .value("Datum", point.date),
+                y: .value("1RM", point.value)
+            )
+            .foregroundStyle(Color.green)
+            .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            
+            PointMark(
+                x: .value("Datum", point.date),
+                y: .value("1RM", point.value)
+            )
+            .foregroundStyle(Color.green)
+            .symbolSize(60)
+        }
+        .chartYAxisLabel("Vikt (kg)")
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
+        .frame(height: 220)
+    }
+    
     private var chartCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Utvecklingskurva")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.primary)
             
-            // Build chart data (personal best weight per session)
-            let chartData = history.history.map { snapshot in
-                ChartDataPoint(
-                    date: snapshot.date,
-                    value: snapshot.bestSet.weight,
-                    label: shortDateFormatter.string(from: snapshot.date)
-                )
-            }
-            
-            Chart {
-                // Area under the line
-                ForEach(chartData) { point in
-                    AreaMark(
-                        x: .value("Datum", point.date),
-                        y: .value("1RM", point.value)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color.green.opacity(0.3), Color.green.opacity(0.05)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                }
-                
-                // Line
-                ForEach(chartData) { point in
-                    LineMark(
-                        x: .value("Datum", point.date),
-                        y: .value("1RM", point.value)
-                    )
-                    .foregroundStyle(Color.green)
-                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                }
-                
-                // Points
-                ForEach(chartData) { point in
-                    PointMark(
-                        x: .value("Datum", point.date),
-                        y: .value("1RM", point.value)
-                    )
-                    .foregroundStyle(Color.green)
-                    .symbolSize(60)
-                }
-                
-                // Trend line
-                if history.history.count >= 3 {
-                    let trend = history.trendInfo
-                    let first = chartData.first!
-                    let last = chartData.last!
-                    let firstY = first.value
-                    let lastY = firstY + trend.slope * Double(chartData.count - 1)
-                    
-                    LineMark(
-                        x: .value("Datum", first.date),
-                        y: .value("1RM", firstY)
-                    )
-                    .foregroundStyle(Color.orange.opacity(0.7))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                    
-                    LineMark(
-                        x: .value("Datum", last.date),
-                        y: .value("1RM", lastY)
-                    )
-                    .foregroundStyle(Color.orange.opacity(0.7))
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                }
-            }
-            .chartYAxisLabel("Vikt (kg)")
-            .chartYAxis {
-                AxisMarks(position: .leading)
-            }
-            .frame(height: 220)
+            progressChart
             
             // Legend
             HStack(spacing: 16) {
@@ -755,7 +850,7 @@ private struct ExerciseHistoryDetailView: View {
                 if history.history.count >= 3 {
                     HStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.orange.opacity(0.7))
+                            .fill(Color.secondary.opacity(0.7))
                             .frame(width: 20, height: 2)
                         Text("Trendlinje")
                             .font(.system(size: 12))
@@ -804,7 +899,7 @@ private struct ExerciseHistoryDetailView: View {
                                 let sign = delta >= 0 ? "+" : ""
                                 Text("\(sign)\(String(format: "%.1f", delta)) kg")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(delta >= 0 ? .green : .red)
+                                    .foregroundColor(delta >= 0 ? .green : .secondary)
                             }
                         }
                     }

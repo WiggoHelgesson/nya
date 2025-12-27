@@ -15,6 +15,9 @@ struct WorkoutPost: Codable, Identifiable {
     let createdAt: String
     let splits: [WorkoutSplit]?
     let exercises: [GymExercisePost]?  // For gym sessions
+    let routeData: String?  // JSON string of route coordinates for Zone War
+    let pbExerciseName: String?  // Personal Best exercise name
+    let pbValue: String?  // Personal Best value (e.g., "67.0 kg x 6 reps")
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -31,6 +34,9 @@ struct WorkoutPost: Codable, Identifiable {
         case createdAt = "created_at"
         case splits = "split_data"
         case exercises = "exercises_data"
+        case routeData = "route_data"
+        case pbExerciseName = "pb_exercise_name"
+        case pbValue = "pb_value"
     }
     
     init(from decoder: Decoder) throws {
@@ -49,6 +55,9 @@ struct WorkoutPost: Codable, Identifiable {
         createdAt = try container.decode(String.self, forKey: .createdAt)
         splits = try container.decodeIfPresent([WorkoutSplit].self, forKey: .splits)
         exercises = try container.decodeIfPresent([GymExercisePost].self, forKey: .exercises)
+        routeData = try container.decodeIfPresent(String.self, forKey: .routeData)
+        pbExerciseName = try container.decodeIfPresent(String.self, forKey: .pbExerciseName)
+        pbValue = try container.decodeIfPresent(String.self, forKey: .pbValue)
     }
     
     init(id: String = UUID().uuidString,
@@ -63,7 +72,10 @@ struct WorkoutPost: Codable, Identifiable {
          elevationGain: Double? = nil,
          maxSpeed: Double? = nil,
          splits: [WorkoutSplit]? = nil,
-         exercises: [GymExercisePost]? = nil) {
+         exercises: [GymExercisePost]? = nil,
+         routeData: String? = nil,
+         pbExerciseName: String? = nil,
+         pbValue: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -78,6 +90,9 @@ struct WorkoutPost: Codable, Identifiable {
         self.createdAt = ISO8601DateFormatter().string(from: Date())
         self.splits = splits
         self.exercises = exercises
+        self.routeData = routeData
+        self.pbExerciseName = pbExerciseName
+        self.pbValue = pbValue
     }
     
     func encode(to encoder: Encoder) throws {
@@ -96,6 +111,9 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(splits, forKey: .splits)
         try container.encodeIfPresent(exercises, forKey: .exercises)
+        try container.encodeIfPresent(routeData, forKey: .routeData)
+        try container.encodeIfPresent(pbExerciseName, forKey: .pbExerciseName)
+        try container.encodeIfPresent(pbValue, forKey: .pbValue)
     }
 }
 

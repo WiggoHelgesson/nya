@@ -79,6 +79,7 @@ struct ZoneWarView: View {
     
     // Bottom menu
     @State private var showBottomMenu = false
+    @State private var showLotteryLeaderboard = false
     @State private var selectedMenuTab: Int = 0 // 0 = Topplista, 1 = Events
     @State private var territoryEvents: [TerritoryEvent] = []
     
@@ -86,7 +87,7 @@ struct ZoneWarView: View {
     @State private var isPrizeListExpanded = false
     
     // Pro membership
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showPaywall = false
     
     // New territory celebration
@@ -370,6 +371,26 @@ struct ZoneWarView: View {
                             }
                             .buttonStyle(.plain)
                             
+                            // Lottery leaderboard button
+                            Button {
+                                showLotteryLeaderboard = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("🎰")
+                                        .font(.system(size: 12))
+                                    Text("Topplistan för lotter")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(width: 195)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.black.opacity(0.85))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            
                             lotteryCard
                         }
                         .padding(.trailing, 12)
@@ -429,6 +450,24 @@ struct ZoneWarView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden) // Hide drag indicator
                 .interactiveDismissDisabled() // Disable swipe to dismiss
+            }
+            .sheet(isPresented: $showLotteryLeaderboard) {
+                ZoneWarMenuView(
+                    selectedTab: $selectedMenuTab,
+                    leaders: localLeaders,
+                    events: territoryEvents,
+                    areaName: currentAreaName,
+                    onRefresh: {
+                        territoryStore.forceRefresh()
+                        await territoryStore.refresh()
+                        await loadAllLeaders()
+                        await loadTerritoryEvents()
+                    },
+                    initialLeaderboardTab: 2 // Open directly to lottery tab
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .interactiveDismissDisabled()
             }
         }
     }
@@ -567,7 +606,7 @@ struct ZoneWarView: View {
         .sheet(isPresented: $showPaywall) {
             PresentPaywallView()
         }
-        .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
     }
@@ -692,7 +731,7 @@ struct ZoneWarView: View {
             print("❌ Failed to load lottery stats: \(error)")
             // Fallback: Calculate from tiles (PRO multiplier applied locally)
             await MainActor.run {
-                let isPro = authViewModel.currentUser?.isProMember ?? false
+                let isPro = RevenueCatManager.shared.isProMember
                 let multiplier = isPro ? 2.0 : 1.0
                 
                 // Calculate from tiles
@@ -1469,6 +1508,14 @@ struct ZoneWarMapView: UIViewRepresentable {
             // The TerritoryStore already limits fetching to visible viewport
             let tilesToRender = tiles
             
+            print("🗺️ [MAP DEBUG] updateMap called with \(tiles.count) tiles")
+            if let firstTile = tiles.first {
+                print("🗺️ [MAP DEBUG] First tile: id=\(firstTile.id), owner=\(firstTile.ownerId ?? "nil"), coords=\(firstTile.coordinates.count)")
+                if let firstCoord = firstTile.coordinates.first {
+                    print("🗺️ [MAP DEBUG] First coord: lat=\(firstCoord.latitude), lon=\(firstCoord.longitude)")
+                }
+            }
+            
             // Create signatures for comparison
             let newTerritoryIds = Set(territories.map { $0.id })
             let newTileSignatures = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
@@ -1539,8 +1586,13 @@ struct ZoneWarMapView: UIViewRepresentable {
             allPolygons.reserveCapacity(territories.count * 2 + tilesToRender.count)
             
             // Tiles first
+            var tilesSkipped = 0
+            var tilesAdded = 0
             for tile in tilesToRender {
-                guard tile.coordinates.count >= 3 else { continue }
+                guard tile.coordinates.count >= 3 else { 
+                    tilesSkipped += 1
+                    continue 
+                }
                 var coords = tile.coordinates
                 if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
                     coords.append(first)
@@ -1550,7 +1602,9 @@ struct ZoneWarMapView: UIViewRepresentable {
                 polygonIsTile.insert(poly)
                 polygonToTile[poly] = tile
                 allPolygons.append(poly)
+                tilesAdded += 1
             }
+            print("🗺️ [MAP] Tiles: added=\(tilesAdded), skipped=\(tilesSkipped) (no coords)")
             
             // Territories
             for territory in territories {
@@ -1572,12 +1626,14 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
             
             // Batch update
+            print("🗺️ [MAP] Adding \(allPolygons.count) polygons to map, removing \(existingOverlays.count) old overlays")
             if !allPolygons.isEmpty {
                 mapView.addOverlays(allPolygons)
             }
             if !existingOverlays.isEmpty {
                 mapView.removeOverlays(existingOverlays)
             }
+            print("🗺️ [MAP] Map now has \(mapView.overlays.count) overlays")
             
             if !hasCentered {
                 // Use user's location if available, otherwise default to Stockholm
@@ -1634,7 +1690,14 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
         }
         
+        private var rendererCallCount = 0
+        
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            rendererCallCount += 1
+            if rendererCallCount <= 5 || rendererCallCount % 100 == 0 {
+                print("🎨 [RENDERER] Called \(rendererCallCount) times")
+            }
+            
             guard let polygon = overlay as? MKPolygon else {
                 return MKOverlayRenderer(overlay: overlay)
             }
@@ -1648,14 +1711,14 @@ struct ZoneWarMapView: UIViewRepresentable {
             if isTile {
                 // Neutral tile = grå; owned tile = färg
                 if ownerId.isEmpty {
-                    renderer.fillColor = UIColor.gray.withAlphaComponent(0.12)
-                    renderer.strokeColor = UIColor.gray.withAlphaComponent(0.25)
+                    renderer.fillColor = UIColor.gray.withAlphaComponent(0.2)
+                    renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)
                     renderer.lineWidth = 0.5
                 } else {
                     let color = TerritoryColors.colorForUser(ownerId)
-                    renderer.fillColor = color.withAlphaComponent(0.18)
-                    renderer.strokeColor = color.withAlphaComponent(0.5)
-                    renderer.lineWidth = 1.0
+                    renderer.fillColor = color.withAlphaComponent(0.5) // Increased visibility
+                    renderer.strokeColor = color.withAlphaComponent(0.9) // Stronger stroke
+                    renderer.lineWidth = 2.0 // Thicker lines
                 }
             } else {
                 // Territories (union per ägare)
@@ -1678,16 +1741,20 @@ struct ZoneWarMenuView: View {
     let events: [TerritoryEvent]
     let areaName: String
     var onRefresh: (() async -> Void)? = nil // Callback for pull-to-refresh
+    var initialLeaderboardTab: Int? = nil // Optional: open directly to specific tab (0=Local, 1=Sweden, 2=Lottery)
     @Environment(\.dismiss) private var dismiss
     
     // Pro membership
-    @State private var isPremium = RevenueCatManager.shared.isPremium
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showPaywall = false
     
-    // Leaderboard type toggle - Non-Pro users default to Sweden, Pro users default to local
-    @State private var isShowingSwedenLeaderboard = !RevenueCatManager.shared.isPremium
+    // Leaderboard type toggle - 0 = Local, 1 = Sweden, 2 = Lotter
+    @State private var leaderboardTab: Int = RevenueCatManager.shared.isProMember ? 0 : 1
+    @State private var hasSetInitialTab = false
     @State private var swedenLeaders: [TerritoryLeader] = []
     @State private var isLoadingSwedenLeaders = false
+    @State private var lotteryLeaders: [LotteryLeader] = []
+    @State private var isLoadingLotteryLeaders = false
     
     // Navigation state
     @State private var selectedUserId: String?
@@ -1787,55 +1854,84 @@ struct ZoneWarMenuView: View {
                     loadSwedenLeaders()
                 }
             }
+            .onAppear {
+                // Set initial leaderboard tab if specified
+                if !hasSetInitialTab, let initialTab = initialLeaderboardTab {
+                    leaderboardTab = initialTab
+                    hasSetInitialTab = true
+                    if initialTab == 2 {
+                        loadLotteryLeaders()
+                    }
+                }
+            }
         }
     }
     
     // MARK: - Leaderboard View
     
     private var leaderboardView: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 0) {
-                // Area toggle picker
+                // Area toggle picker with 3 tabs
                 HStack(spacing: 0) {
                     // Local area button
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            isShowingSwedenLeaderboard = false
+                            leaderboardTab = 0
                         }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.system(size: 12))
                             Text(areaName)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .lineLimit(1)
                         }
-                        .foregroundColor(!isShowingSwedenLeaderboard ? .black : .gray)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(!isShowingSwedenLeaderboard ? Color.yellow : Color.clear)
-                        .cornerRadius(20)
+                        .foregroundColor(leaderboardTab == 0 ? .black : .gray)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(leaderboardTab == 0 ? Color.yellow : Color.clear)
+                        .cornerRadius(16)
                     }
                     
                     // Sweden button
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            isShowingSwedenLeaderboard = true
+                            leaderboardTab = 1
                         }
-                        // Always reload Sweden leaders to get fresh data
                         loadSwedenLeaders()
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             Text("🇸🇪")
-                                .font(.system(size: 14))
-                            Text("Hela Sverige")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 12))
+                            Text("Sverige")
+                                .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundColor(isShowingSwedenLeaderboard ? .black : .gray)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(isShowingSwedenLeaderboard ? Color.yellow : Color.clear)
-                        .cornerRadius(20)
+                        .foregroundColor(leaderboardTab == 1 ? .black : .gray)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(leaderboardTab == 1 ? Color.yellow : Color.clear)
+                        .cornerRadius(16)
+                    }
+                    
+                    // Lottery button
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            leaderboardTab = 2
+                        }
+                        loadLotteryLeaders()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("🎰")
+                                .font(.system(size: 12))
+                            Text("Lotter")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(leaderboardTab == 2 ? .black : .gray)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(leaderboardTab == 2 ? Color.yellow : Color.clear)
+                        .cornerRadius(16)
                     }
                 }
                 .padding(4)
@@ -1844,86 +1940,262 @@ struct ZoneWarMenuView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 
-                // Leaderboard content - sort by tile count
-                let displayLeaders = isShowingSwedenLeaderboard ? swedenLeaders : leaders.sorted { $0.tileCount > $1.tileCount }
-                let maxCount = isShowingSwedenLeaderboard ? 20 : displayLeaders.count
-                
-                if isLoadingSwedenLeaders && isShowingSwedenLeaderboard {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                        .padding(.top, 40)
+                // Leaderboard content based on tab
+                if leaderboardTab == 2 {
+                    // Lottery leaderboard
+                    lotteryLeaderboardContent
                 } else {
-                    // Check if local leaderboard should be blurred (non-Pro viewing local)
-                    let shouldBlurLocal = !isPremium && !isShowingSwedenLeaderboard
-                    
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(displayLeaders.prefix(maxCount).enumerated()), id: \.element.id) { index, leader in
-                            if shouldBlurLocal {
-                                // Blurred row for non-Pro users on local leaderboard
-                                Button {
-                                    showPaywall = true
-                                } label: {
-                                    leaderboardRow(index: index, leader: leader)
-                                        .blur(radius: 6)
-                                        .overlay(
-                                            HStack(spacing: 6) {
-                                                Image(systemName: "lock.fill")
-                                                    .font(.system(size: 14, weight: .bold))
-                                                Text("PRO")
-                                                    .font(.system(size: 14, weight: .black))
-                                            }
-                                            .foregroundColor(.yellow)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(
-                                                Capsule()
-                                                    .fill(Color.black.opacity(0.8))
-                                            )
+                    // Territory leaderboard (local or sweden)
+                    territoryLeaderboardContent
+                }
+            }
+            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .refreshable {
+            if leaderboardTab == 2 {
+                loadLotteryLeaders()
+            } else {
+                loadSwedenLeaders()
+            }
+            await onRefresh?()
+        }
+    }
+    
+    // MARK: - Territory Leaderboard Content
+    
+    private var territoryLeaderboardContent: some View {
+        let isSweden = leaderboardTab == 1
+        let displayLeaders = isSweden ? swedenLeaders : leaders.sorted { $0.tileCount > $1.tileCount }
+        let maxCount = isSweden ? 20 : displayLeaders.count
+        
+        return Group {
+            if isLoadingSwedenLeaders && isSweden {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .padding(.top, 40)
+            } else {
+                let shouldBlurLocal = !isPremium && !isSweden
+                
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(displayLeaders.prefix(maxCount).enumerated()), id: \.element.id) { index, leader in
+                        if shouldBlurLocal {
+                            Button {
+                                showPaywall = true
+                            } label: {
+                                leaderboardRow(index: index, leader: leader)
+                                    .blur(radius: 6)
+                                    .overlay(
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "lock.fill")
+                                                .font(.system(size: 14, weight: .bold))
+                                            Text("PRO")
+                                                .font(.system(size: 14, weight: .black))
+                                        }
+                                        .foregroundColor(.yellow)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.black.opacity(0.8))
                                         )
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                // Normal row for Pro users or Sweden leaderboard
-                                Button {
-                                    selectedUserId = leader.id
-                                    showUserProfile = true
-                                } label: {
-                                    leaderboardRow(index: index, leader: leader)
-                                }
-                                .buttonStyle(.plain)
+                                    )
                             }
-                            
-                            if index < min(maxCount, displayLeaders.count) - 1 {
-                                Divider()
-                                    .background(Color.gray.opacity(0.2))
-                                    .padding(.leading, 66)
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                selectedUserId = leader.id
+                                showUserProfile = true
+                            } label: {
+                                leaderboardRow(index: index, leader: leader)
                             }
+                            .buttonStyle(.plain)
                         }
                         
-                        if displayLeaders.isEmpty {
-                            VStack(spacing: 12) {
-                                Image(systemName: "trophy")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(.gray)
-                                Text("Ingen topplista än")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
-                                Text("Var först med att erövra ett område!")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.top, 60)
+                        if index < min(maxCount, displayLeaders.count) - 1 {
+                            Divider()
+                                .background(Color.gray.opacity(0.2))
+                                .padding(.leading, 66)
+                        }
+                    }
+                    
+                    if displayLeaders.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "trophy")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            Text("Ingen topplista än")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("Var först med att erövra ett område!")
+                                .font(.system(size: 14))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.top, 60)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Lottery Leaderboard Content
+    
+    private var lotteryLeaderboardContent: some View {
+        Group {
+            if isLoadingLotteryLeaders {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .padding(.top, 40)
+            } else if lotteryLeaders.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "ticket")
+                        .font(.system(size: 48))
+                        .foregroundColor(.gray)
+                    Text("Ingen lottlista än")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Samla lotter genom att erövra områden!")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 60)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(lotteryLeaders.enumerated()), id: \.element.id) { index, leader in
+                        Button {
+                            selectedUserId = leader.id
+                            showUserProfile = true
+                        } label: {
+                            lotteryLeaderboardRow(index: index, leader: leader)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        if index < lotteryLeaders.count - 1 {
+                            Divider()
+                                .background(Color.gray.opacity(0.2))
+                                .padding(.leading, 66)
                         }
                     }
                 }
             }
-            .padding(.top, 8)
         }
-        .refreshable {
-            // Pull to refresh - reload Sweden leaders
-            loadSwedenLeaders()
-            // Call parent refresh callback
-            await onRefresh?()
+    }
+    
+    // MARK: - Lottery Leaderboard Row
+    
+    @ViewBuilder
+    private func lotteryLeaderboardRow(index: Int, leader: LotteryLeader) -> some View {
+        HStack(spacing: 14) {
+            // Rank badge
+            ZStack {
+                Circle()
+                    .fill(rankColor(for: index + 1))
+                    .frame(width: 36, height: 36)
+                Text("\(index + 1)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            // Avatar
+            if let avatarUrl = leader.avatarUrl, !avatarUrl.isEmpty {
+                OptimizedAsyncImage(url: avatarUrl, width: 44, height: 44, cornerRadius: 22)
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                    )
+            }
+            
+            // Name and PRO badge
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(leader.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if leader.isPro {
+                        Text("PRO")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.yellow)
+                            .cornerRadius(4)
+                    }
+                }
+                
+                // Crown for #1
+                if index == 0 {
+                    Text("LOTTMÄSTARE")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.yellow)
+                }
+            }
+            
+            Spacer()
+            
+            // Ticket count
+            HStack(spacing: 4) {
+                Text("🎫")
+                    .font(.system(size: 14))
+                Text("\(leader.ticketCount)")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.yellow)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+    
+    // MARK: - Load Lottery Leaders
+    
+    private func loadLotteryLeaders() {
+        guard !isLoadingLotteryLeaders else { return }
+        
+        isLoadingLotteryLeaders = true
+        
+        Task {
+            do {
+                struct LotteryLeaderResponse: Decodable {
+                    let user_id: String
+                    let name: String
+                    let avatar_url: String?
+                    let ticket_count: Int
+                    let is_pro: Bool
+                }
+                
+                let result: [LotteryLeaderResponse] = try await SupabaseConfig.supabase.database
+                    .rpc("get_lottery_leaderboard", params: ["limit_count": 20])
+                    .execute()
+                    .value
+                
+                let leaders = result.map { entry in
+                    LotteryLeader(
+                        id: entry.user_id,
+                        name: entry.name,
+                        avatarUrl: entry.avatar_url,
+                        ticketCount: entry.ticket_count,
+                        isPro: entry.is_pro
+                    )
+                }
+                
+                await MainActor.run {
+                    self.lotteryLeaders = leaders
+                    self.isLoadingLotteryLeaders = false
+                }
+                
+                print("🎫 Loaded \(leaders.count) lottery leaders")
+            } catch {
+                print("❌ Failed to load lottery leaderboard: \(error)")
+                await MainActor.run {
+                    self.isLoadingLotteryLeaders = false
+                }
+            }
         }
     }
     
@@ -1961,7 +2233,7 @@ struct ZoneWarMenuView: View {
                     HStack(spacing: 4) {
                         Text("👑")
                             .font(.system(size: 10))
-                        Text(isShowingSwedenLeaderboard ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
+                        Text(leaderboardTab == 1 ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.yellow)
                     }
@@ -2221,7 +2493,9 @@ struct ZoneWarMenuView: View {
     private var sponsors: [(name: String, imageName: String)] {
         [
             ("Fuse Energy", "46"),
-            ("Lonegolf", "14")
+            ("Lonegolf", "14"),
+            ("Pliktgolf", "15"),
+            ("Zen Energy", "22")
         ]
     }
     

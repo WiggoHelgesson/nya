@@ -14,6 +14,8 @@ struct SocialWorkoutPostRaw: Codable {
     let createdAt: String
     let splits: [WorkoutSplit]?
     let exercises: [GymExercisePost]?
+    let pbExerciseName: String?
+    let pbValue: String?
     
     // JOIN data
     let profiles: ProfileData?
@@ -33,6 +35,8 @@ struct SocialWorkoutPostRaw: Codable {
         case createdAt = "created_at"
         case splits = "split_data"
         case exercises = "exercises_data"
+        case pbExerciseName = "pb_exercise_name"
+        case pbValue = "pb_value"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -81,6 +85,10 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let splits: [WorkoutSplit]?
     let exercises: [GymExercisePost]?  // For gym sessions
     
+    // Personal Best data
+    let pbExerciseName: String?
+    let pbValue: String?
+    
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -102,6 +110,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case isLikedByCurrentUser = "is_liked_by_current_user"
         case splits = "split_data"
         case exercises = "exercises_data"
+        case pbExerciseName = "pb_exercise_name"
+        case pbValue = "pb_value"
     }
     
     // Custom decoder to handle JOIN results
@@ -134,6 +144,10 @@ struct SocialWorkoutPost: Codable, Identifiable {
         isLikedByCurrentUser = false // Will be set separately
         splits = raw.splits
         exercises = raw.exercises
+        
+        // Map PB data
+        pbExerciseName = raw.pbExerciseName
+        pbValue = raw.pbValue
     }
     
     init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
@@ -157,6 +171,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = post.splits
         self.exercises = post.exercises
+        self.pbExerciseName = post.pbExerciseName
+        self.pbValue = post.pbValue
     }
 
     // Memberwise convenience initializer to allow updating selective fields
@@ -180,7 +196,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         commentCount: Int?,
         isLikedByCurrentUser: Bool?,
         splits: [WorkoutSplit]?,
-        exercises: [GymExercisePost]? = nil
+        exercises: [GymExercisePost]? = nil,
+        pbExerciseName: String? = nil,
+        pbValue: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -202,6 +220,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = splits
         self.exercises = exercises
+        self.pbExerciseName = pbExerciseName
+        self.pbValue = pbValue
     }
 }
 

@@ -15,7 +15,7 @@ struct ActivitiesView: View {
             brandName: "PUMPLABS",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "12",
+            imageName: "54",
             category: "Gym",
             isBookmarked: false
         ),
@@ -24,7 +24,7 @@ struct ActivitiesView: View {
             brandName: "ZEN ENERGY",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "13",
+            imageName: "52",
             category: "Gym",
             isBookmarked: false
         ),
@@ -33,7 +33,7 @@ struct ActivitiesView: View {
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "4",
+            imageName: "56",
             category: "Golf",
             isBookmarked: false
         ),
@@ -42,7 +42,7 @@ struct ActivitiesView: View {
             brandName: "PEGMATE",
             discount: "5% rabatt",
             points: "200 poäng",
-            imageName: "5",
+            imageName: "49",
             category: "Golf",
             isBookmarked: false
         ),
@@ -51,7 +51,7 @@ struct ActivitiesView: View {
             brandName: "LONEGOLF",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "6",
+            imageName: "50",
             category: "Golf",
             isBookmarked: false
         ),
@@ -60,7 +60,7 @@ struct ActivitiesView: View {
             brandName: "WINWIZE",
             discount: "25% rabatt",
             points: "200 poäng",
-            imageName: "7",
+            imageName: "51",
             category: "Golf",
             isBookmarked: false
         ),
@@ -74,20 +74,11 @@ struct ActivitiesView: View {
             isBookmarked: false
         ),
         RewardCard(
-            id: 8,
-            brandName: "Exotic Golf",
-            discount: "10% rabatt",
-            points: "200 poäng",
-            imageName: "9",
-            category: "Golf",
-            isBookmarked: false
-        ),
-        RewardCard(
             id: 9,
             brandName: "HAPPYALBA",
             discount: "10% rabatt",
             points: "200 poäng",
-            imageName: "10",
+            imageName: "57",
             category: "Golf",
             isBookmarked: false
         ),

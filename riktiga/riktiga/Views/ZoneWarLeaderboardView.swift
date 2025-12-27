@@ -170,3 +170,12 @@ struct TerritoryLeader: Identifiable, Equatable {
     }
 }
 
+// Model for lottery leaderboard
+struct LotteryLeader: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let avatarUrl: String?
+    let ticketCount: Int
+    let isPro: Bool
+}
+
