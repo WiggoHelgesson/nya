@@ -347,9 +347,11 @@ extension RevenueCatManager: PurchasesDelegate {
             }
             print("🔄 Customer info updated. Premium: \(self.isPremium) id: \(self.activeEntitlementId ?? "-")")
             
-            // Update Pro status in database when subscription changes
-            Task {
-                await self.updateProStatusInDatabase(isPro: self.isPremium)
+            // Only update database to TRUE (don't overwrite database-granted Pro with false)
+            if self.isPremium {
+                Task {
+                    await self.updateProStatusInDatabase(isPro: true)
+                }
             }
         }
     }
