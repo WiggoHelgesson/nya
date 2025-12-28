@@ -1259,6 +1259,89 @@ enum TerritoryColors {
     }
 }
 
+// MARK: - Fast Tile Rendering (single overlay)
+/// A single overlay that holds many grid tiles to render efficiently.
+final class TileGridOverlay: NSObject, MKOverlay {
+    struct RenderTile: Sendable {
+        let id: Int64
+        let ownerId: String?
+        let mapRect: MKMapRect
+    }
+    
+    // MKOverlay
+    let coordinate: CLLocationCoordinate2D
+    let boundingMapRect: MKMapRect
+    
+    // Render data
+    var tiles: [RenderTile] = []
+    
+    override init() {
+        self.boundingMapRect = MKMapRect.world
+        self.coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+        super.init()
+    }
+}
+
+/// Renderer that draws all tiles in one pass (much faster than thousands of MKPolygons).
+final class TileGridRenderer: MKOverlayRenderer {
+    // Cache colors by owner for fewer allocations
+    private var colorCache: [String: UIColor] = [:]
+    
+    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
+        guard let grid = overlay as? TileGridOverlay else { return }
+        
+        // Performance knobs
+        let shouldStroke = zoomScale > 0.02
+        let maxTilesToDraw = zoomScale < 0.01 ? 2500 : 6000
+        
+        context.saveGState()
+        context.setAllowsAntialiasing(false)
+        context.setShouldAntialias(false)
+        
+        // Filter to what is actually visible
+        var visible = grid.tiles.filter { $0.mapRect.intersects(mapRect) }
+        
+        // Deterministic sampling if zoomed out / too many tiles
+        if visible.count > maxTilesToDraw {
+            visible.sort { $0.id < $1.id }
+            let step = max(1, Int(ceil(Double(visible.count) / Double(maxTilesToDraw))))
+            visible = stride(from: 0, to: visible.count, by: step).map { visible[$0] }
+        }
+        
+        // Draw
+        for tile in visible {
+            let rect = self.rect(for: tile.mapRect)
+            
+            // Fill
+            if let owner = tile.ownerId, !owner.isEmpty {
+                let fill: UIColor = colorCache[owner] ?? {
+                    let c = TerritoryColors.colorForUser(owner)
+                    colorCache[owner] = c
+                    return c
+                }()
+                context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
+            } else {
+                context.setFillColor(UIColor.gray.withAlphaComponent(0.18).cgColor)
+            }
+            context.fill(rect)
+            
+            // Stroke only when reasonably zoomed in
+            if shouldStroke {
+                context.setLineWidth(max(0.5, 1.0 / zoomScale))
+                if let owner = tile.ownerId, !owner.isEmpty {
+                    let stroke = (colorCache[owner] ?? TerritoryColors.colorForUser(owner)).withAlphaComponent(0.9)
+                    context.setStrokeColor(stroke.cgColor)
+                } else {
+                    context.setStrokeColor(UIColor.gray.withAlphaComponent(0.25).cgColor)
+                }
+                context.stroke(rect)
+            }
+        }
+        
+        context.restoreGState()
+    }
+}
+
 struct ZoneWarMapView: UIViewRepresentable {
     let territories: [Territory]
     let tiles: [Tile]
@@ -1347,9 +1430,14 @@ struct ZoneWarMapView: UIViewRepresentable {
         var onTileTapped: ((Tile) -> Void)?
         var onRegionChanged: (MKCoordinateRegion, MKMapRect) -> Void
         private var hasCentered = false
-        private var currentTileIds: Set<Int64> = []
-        private var polygonToTile: [MKPolygon: Tile] = [:]
-        private var polygonIsTile: Set<MKPolygon> = []
+        private var currentTileSignature: Set<String> = []
+        
+        // Single overlay + renderer for fast drawing
+        private let tileOverlay = TileGridOverlay()
+        private var tileRenderer: TileGridRenderer?
+        
+        // Bounds index for fast-ish tap hit testing
+        private var tileBounds: [(tile: Tile, minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)] = []
         
         // Throttling for region changes
         private var lastRegionChangeTime: Date = .distantPast
@@ -1372,169 +1460,92 @@ struct ZoneWarMapView: UIViewRepresentable {
             
             let tapPoint = gesture.location(in: mapView)
             let tapCoordinate = mapView.convert(tapPoint, toCoordinateFrom: mapView)
+
+            // Hit test against tile bounds (fast enough for a few thousand tiles)
+            let lat = tapCoordinate.latitude
+            let lon = tapCoordinate.longitude
+            guard let tapped = tileBounds.first(where: { lat >= $0.minLat && lat <= $0.maxLat && lon >= $0.minLon && lon <= $0.maxLon })?.tile,
+                  let ownerId = tapped.ownerId
+            else { return }
             
-            for overlay in mapView.overlays {
-                guard let polygon = overlay as? MKPolygon else { continue }
-                
-                let renderer = MKPolygonRenderer(polygon: polygon)
-                let mapPoint = MKMapPoint(tapCoordinate)
-                let polygonViewPoint = renderer.point(for: mapPoint)
-                
-                if renderer.path?.contains(polygonViewPoint) == true {
-                    // Check if it's a tile - find all tiles with same activity_id
-                    if let tappedTile = polygonToTile[polygon], let ownerId = tappedTile.ownerId {
-                        // Find all tiles with the same activity_id (from same workout)
-                        let connectedTiles: [Tile]
-                        if let activityId = tappedTile.activityId, !activityId.isEmpty {
-                            connectedTiles = tiles.filter { $0.activityId == activityId }
-                        } else {
-                            // Fallback to just this tile if no activity_id
-                            connectedTiles = [tappedTile]
-                        }
-                        
-                        // Calculate total area (each tile is ~625 m² = 25m x 25m)
-                        let totalArea = Double(connectedTiles.count) * 625.0
-                        
-                        // Collect all polygons for the connected tiles
-                        let allPolygons = connectedTiles.map { $0.coordinates }
-                        
-                        // Get workout metadata from the first tile (all tiles from same workout have same data)
-                        let workoutDistance = tappedTile.distanceKm
-                        let workoutDuration = tappedTile.durationSec
-                        let workoutPace = tappedTile.pace
-                        
-                        // Create aggregated territory with workout info
-                        var aggregatedTerritory = Territory(
-                            id: UUID(),
-                            ownerId: ownerId,
-                            activity: nil,
-                            area: totalArea,
-                            polygons: allPolygons,
-                            tileCount: connectedTiles.count
-                        )
-                        aggregatedTerritory.sessionDistance = workoutDistance
-                        aggregatedTerritory.sessionDuration = workoutDuration
-                        aggregatedTerritory.sessionPace = workoutPace
-                        
-                        onTerritoryTapped(aggregatedTerritory)
-                        return
-                    }
-                }
+            // Find all tiles from same activity_id (same workout) for the detail sheet
+            let connectedTiles: [Tile]
+            if let activityId = tapped.activityId, !activityId.isEmpty {
+                connectedTiles = tiles.filter { $0.activityId == activityId }
+            } else {
+                connectedTiles = [tapped]
             }
+            
+            let totalArea = Double(connectedTiles.count) * 625.0
+            let allPolygons = connectedTiles.map { $0.coordinates }
+            
+            var aggregatedTerritory = Territory(
+                id: UUID(),
+                ownerId: ownerId,
+                activity: nil,
+                area: totalArea,
+                polygons: allPolygons,
+                tileCount: connectedTiles.count
+            )
+            aggregatedTerritory.sessionDistance = tapped.distanceKm
+            aggregatedTerritory.sessionDuration = tapped.durationSec
+            aggregatedTerritory.sessionPace = tapped.pace
+            
+            onTerritoryTapped(aggregatedTerritory)
         }
         
         func updateMap(_ mapView: MKMapView, territories: [Territory], tiles: [Tile]) {
-            // No arbitrary limit - render all tiles in the current viewport
-            // The TerritoryStore already limits fetching to visible viewport
+            // Tiles are already viewport-filtered + sampled in TerritoryStore.
             let tilesToRender = tiles
-            
-            print("🗺️ [MAP DEBUG] updateMap called with \(tiles.count) tiles")
-            if let firstTile = tiles.first {
-                print("🗺️ [MAP DEBUG] First tile: id=\(firstTile.id), owner=\(firstTile.ownerId ?? "nil"), coords=\(firstTile.coordinates.count)")
-                if let firstCoord = firstTile.coordinates.first {
-                    print("🗺️ [MAP DEBUG] First coord: lat=\(firstCoord.latitude), lon=\(firstCoord.longitude)")
-                }
-            }
-            
-            // Create signatures for comparison (tiles only; owner-polygons are too heavy and cause clipping)
-            let newTileSignatures = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
-            let currentTileSignatures = Set(currentTileIds.map { id -> String in
-                if let tile = polygonToTile.values.first(where: { $0.id == id }) {
-                    return "\(tile.id)_\(tile.ownerId ?? "")"
-                }
-                return "\(id)_"
-            })
-            
-            // Skip if nothing changed
-            if newTileSignatures == currentTileSignatures && !currentTileIds.isEmpty {
+            let newSig = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
+            if newSig == currentTileSignature, !currentTileSignature.isEmpty {
                 return
             }
+            currentTileSignature = newSig
             
-            // INCREMENTAL UPDATE: Only add/remove changed tiles
-            let tilesToAdd = tilesToRender.filter { tile in
-                !currentTileIds.contains(tile.id) || 
-                polygonToTile.values.first(where: { $0.id == tile.id })?.ownerId != tile.ownerId
-            }
-            let tileIdsToRemove = currentTileIds.subtracting(Set(tilesToRender.map { $0.id }))
+            // Build render tiles (precompute map rects)
+            var renderTiles: [TileGridOverlay.RenderTile] = []
+            renderTiles.reserveCapacity(tilesToRender.count)
+            var boundsIndex: [(Tile, Double, Double, Double, Double)] = []
+            boundsIndex.reserveCapacity(tilesToRender.count)
             
-            // If small change, do incremental update (much faster)
-            let isSmallChange = tilesToAdd.count < 50 && tileIdsToRemove.count < 50
-            
-            if isSmallChange && !currentTileIds.isEmpty {
-                // Remove old overlays for tiles being removed/updated
-                var polygonsToRemove: [MKPolygon] = []
-                for overlay in mapView.overlays {
-                    guard let polygon = overlay as? MKPolygon, polygonIsTile.contains(polygon) else { continue }
-                    if let tile = polygonToTile[polygon] {
-                        if tileIdsToRemove.contains(tile.id) || tilesToAdd.contains(where: { $0.id == tile.id }) {
-                            polygonsToRemove.append(polygon)
-                            // Clean up mappings
-                            polygonIsTile.remove(polygon)
-                            polygonToTile.removeValue(forKey: polygon)
-                        }
-                    }
-                }
-                mapView.removeOverlays(polygonsToRemove)
+            for t in tilesToRender {
+                guard t.coordinates.count >= 4 else { continue }
+                let lats = t.coordinates.map { $0.latitude }
+                let lons = t.coordinates.map { $0.longitude }
+                guard let minLat = lats.min(),
+                      let maxLat = lats.max(),
+                      let minLon = lons.min(),
+                      let maxLon = lons.max()
+                else { continue }
                 
-                // Add new tiles - use the pre-normalized coordinates from TerritoryStore
-                var newPolygons: [MKPolygon] = []
-                for tile in tilesToAdd {
-                    // Tiles should have exactly 5 coords (4 corners + closing point)
-                    guard tile.coordinates.count >= 4 else { 
-                        print("⚠️ [MAP] Skipping tile \(tile.id) with only \(tile.coordinates.count) coords")
-                        continue 
-                    }
-                    let poly = MKPolygon(coordinates: tile.coordinates, count: tile.coordinates.count)
-                    poly.title = tile.ownerId ?? ""
-                    polygonIsTile.insert(poly)
-                    polygonToTile[poly] = tile
-                    newPolygons.append(poly)
-                }
-                mapView.addOverlays(newPolygons)
+                let nw = MKMapPoint(CLLocationCoordinate2D(latitude: maxLat, longitude: minLon))
+                let se = MKMapPoint(CLLocationCoordinate2D(latitude: minLat, longitude: maxLon))
+                let rect = MKMapRect(
+                    x: min(nw.x, se.x),
+                    y: min(nw.y, se.y),
+                    width: abs(se.x - nw.x),
+                    height: abs(se.y - nw.y)
+                )
                 
-                currentTileIds = Set(tilesToRender.map { $0.id })
-                return
+                renderTiles.append(.init(id: t.id, ownerId: t.ownerId, mapRect: rect))
+                boundsIndex.append((t, minLat, maxLat, minLon, maxLon))
             }
             
-            // FULL REBUILD (only when necessary)
-            currentTileIds = Set(tilesToRender.map { $0.id })
+            tileOverlay.tiles = renderTiles
+            tileBounds = boundsIndex.map { (tile: $0.0, minLat: $0.1, maxLat: $0.2, minLon: $0.3, maxLon: $0.4) }
             
-            let existingOverlays = mapView.overlays
-            
-            polygonToTile.removeAll(keepingCapacity: true)
-            polygonIsTile.removeAll(keepingCapacity: true)
-            
-            var allPolygons: [MKPolygon] = []
-            allPolygons.reserveCapacity(tilesToRender.count)
-            
-            // Tiles first - use pre-normalized coordinates (rectangles with 5 points)
-            var tilesSkipped = 0
-            var tilesAdded = 0
-            for tile in tilesToRender {
-                // Tiles should have exactly 5 coords (4 corners + closing point) after normalization
-                guard tile.coordinates.count >= 4 else { 
-                    tilesSkipped += 1
-                    continue 
+            // Ensure overlay is added once
+            if !mapView.overlays.contains(where: { $0 === tileOverlay }) {
+                // Remove old overlays (from older versions)
+                if !mapView.overlays.isEmpty {
+                    mapView.removeOverlays(mapView.overlays)
                 }
-                // Create polygon directly from normalized coordinates
-                let poly = MKPolygon(coordinates: tile.coordinates, count: tile.coordinates.count)
-                poly.title = tile.ownerId ?? ""
-                polygonIsTile.insert(poly)
-                polygonToTile[poly] = tile
-                allPolygons.append(poly)
-                tilesAdded += 1
+                mapView.addOverlay(tileOverlay, level: .aboveRoads)
+            } else {
+                // Redraw only visible area
+                tileRenderer?.setNeedsDisplay(mapView.visibleMapRect)
             }
-            print("🗺️ [MAP] Tiles: added=\(tilesAdded), skipped=\(tilesSkipped) (invalid coords)")
-            
-            // Batch update
-            print("🗺️ [MAP] Adding \(allPolygons.count) polygons to map, removing \(existingOverlays.count) old overlays")
-            if !allPolygons.isEmpty {
-                mapView.addOverlays(allPolygons)
-            }
-            if !existingOverlays.isEmpty {
-                mapView.removeOverlays(existingOverlays)
-            }
-            print("🗺️ [MAP] Map now has \(mapView.overlays.count) overlays")
             
             if !hasCentered {
                 // Use user's location if available, otherwise default to Stockholm
@@ -1594,42 +1605,13 @@ struct ZoneWarMapView: UIViewRepresentable {
         private var rendererCallCount = 0
         
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            rendererCallCount += 1
-            if rendererCallCount <= 5 || rendererCallCount % 100 == 0 {
-                print("🎨 [RENDERER] Called \(rendererCallCount) times")
+            if overlay === tileOverlay {
+                if let cached = tileRenderer { return cached }
+                let r = TileGridRenderer(overlay: overlay)
+                tileRenderer = r
+                return r
             }
-            
-            guard let polygon = overlay as? MKPolygon else {
-                return MKOverlayRenderer(overlay: overlay)
-            }
-            
-            let renderer = MKPolygonRenderer(polygon: polygon)
-            
-            // Tile vs Territory styling
-            let isTile = polygonIsTile.contains(polygon)
-            let ownerId = polygon.title ?? ""
-            
-            if isTile {
-                // Neutral tile = grå; owned tile = färg
-                if ownerId.isEmpty {
-                    renderer.fillColor = UIColor.gray.withAlphaComponent(0.2)
-                    renderer.strokeColor = UIColor.gray.withAlphaComponent(0.4)
-                    renderer.lineWidth = 0.5
-                } else {
-                    let color = TerritoryColors.colorForUser(ownerId)
-                    renderer.fillColor = color.withAlphaComponent(0.5) // Increased visibility
-                    renderer.strokeColor = color.withAlphaComponent(0.9) // Stronger stroke
-                    renderer.lineWidth = 2.0 // Thicker lines
-                }
-            } else {
-                // Territories (union per ägare)
-                let color = TerritoryColors.colorForUser(ownerId)
-                renderer.fillColor = color.withAlphaComponent(0.35)
-                renderer.strokeColor = color
-                renderer.lineWidth = 2.5
-            }
-            
-            return renderer
+            return MKOverlayRenderer(overlay: overlay)
         }
     }
 }
