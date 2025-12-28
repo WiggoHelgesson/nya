@@ -427,8 +427,7 @@ struct ZoneWarView: View {
                     }
                 )
                 .presentationDetents([.large])
-                .presentationDragIndicator(.hidden) // Hide drag indicator
-                .interactiveDismissDisabled() // Disable swipe to dismiss
+                .presentationDragIndicator(.visible) // Allow swipe-down to dismiss
                 .onAppear {
                     selectedMenuTab = 0
                 }
@@ -448,8 +447,7 @@ struct ZoneWarView: View {
                     }
                 )
                 .presentationDetents([.large])
-                .presentationDragIndicator(.hidden) // Hide drag indicator
-                .interactiveDismissDisabled() // Disable swipe to dismiss
+                .presentationDragIndicator(.visible) // Allow swipe-down to dismiss
             }
             .sheet(isPresented: $showLotteryLeaderboard) {
                 ZoneWarMenuView(
@@ -466,8 +464,7 @@ struct ZoneWarView: View {
                     initialLeaderboardTab: 2 // Open directly to lottery tab
                 )
                 .presentationDetents([.large])
-                .presentationDragIndicator(.hidden)
-                .interactiveDismissDisabled()
+                .presentationDragIndicator(.visible) // Allow swipe-down to dismiss
             }
         }
     }
