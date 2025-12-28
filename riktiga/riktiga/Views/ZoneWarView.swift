@@ -137,28 +137,25 @@ struct ZoneWarView: View {
                         updateAreaName(for: region.center)
                         // updateLeaderForVisibleArea(mapRect: mapRect) // Replaced by calculateLocalStats
                         
-                        // Viewport-based loading with debounce to reduce churn on map moves
-                        regionDebounceTask?.cancel()
-                        let work = DispatchWorkItem { [center = region.center, span = region.span, mapRect] in
-                            let minLat = center.latitude - span.latitudeDelta / 2
-                            let maxLat = center.latitude + span.latitudeDelta / 2
-                            let minLon = center.longitude - span.longitudeDelta / 2
-                            let maxLon = center.longitude + span.longitudeDelta / 2
-                            
-                            territoryStore.refreshForViewport(
-                                minLat: minLat,
-                                maxLat: maxLat,
-                                minLon: minLon,
-                                maxLon: maxLon
-                            )
-                            
-                            // Update local king when map region changes (with throttle)
-                            DispatchQueue.main.async {
-                                calculateLocalStats()
-                            }
-                        }
-                        regionDebounceTask = work
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work) // Increased debounce to reduce flicker
+                        // IMPORTANT:
+                        // Do NOT debounce here. The TerritoryStore already debounces + caches viewport fetches.
+                        // Double-debouncing caused situations where users had to press refresh to see polygons.
+                        let center = region.center
+                        let span = region.span
+                        let minLat = center.latitude - span.latitudeDelta / 2
+                        let maxLat = center.latitude + span.latitudeDelta / 2
+                        let minLon = center.longitude - span.longitudeDelta / 2
+                        let maxLon = center.longitude + span.longitudeDelta / 2
+                        
+                        territoryStore.refreshForViewport(
+                            minLat: minLat,
+                            maxLat: maxLat,
+                            minLon: minLon,
+                            maxLon: maxLon
+                        )
+                        
+                        // Update local king when map region changes (throttled inside calculateLocalStats)
+                        calculateLocalStats()
                     },
                     targetRegion: $targetMapRegion
                 )
