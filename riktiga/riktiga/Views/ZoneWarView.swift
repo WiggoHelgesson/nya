@@ -1473,24 +1473,29 @@ struct ZoneWarMapView: UIViewRepresentable {
             
             if isSmallChange && !currentTileIds.isEmpty {
                 // Remove old overlays for tiles being removed/updated
-                let overlaysToRemove = mapView.overlays.filter { overlay in
-                    guard let polygon = overlay as? MKPolygon, polygonIsTile.contains(polygon) else { return false }
+                var polygonsToRemove: [MKPolygon] = []
+                for overlay in mapView.overlays {
+                    guard let polygon = overlay as? MKPolygon, polygonIsTile.contains(polygon) else { continue }
                     if let tile = polygonToTile[polygon] {
-                        return tileIdsToRemove.contains(tile.id) || tilesToAdd.contains(where: { $0.id == tile.id })
+                        if tileIdsToRemove.contains(tile.id) || tilesToAdd.contains(where: { $0.id == tile.id }) {
+                            polygonsToRemove.append(polygon)
+                            // Clean up mappings
+                            polygonIsTile.remove(polygon)
+                            polygonToTile.removeValue(forKey: polygon)
+                        }
                     }
-                    return false
                 }
-                mapView.removeOverlays(overlaysToRemove)
+                mapView.removeOverlays(polygonsToRemove)
                 
-                // Add new tiles
+                // Add new tiles - use the pre-normalized coordinates from TerritoryStore
                 var newPolygons: [MKPolygon] = []
                 for tile in tilesToAdd {
-                    guard tile.coordinates.count >= 3 else { continue }
-                    var coords = tile.coordinates
-                    if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
-                        coords.append(first)
+                    // Tiles should have exactly 5 coords (4 corners + closing point)
+                    guard tile.coordinates.count >= 4 else { 
+                        print("⚠️ [MAP] Skipping tile \(tile.id) with only \(tile.coordinates.count) coords")
+                        continue 
                     }
-                    let poly = MKPolygon(coordinates: coords, count: coords.count)
+                    let poly = MKPolygon(coordinates: tile.coordinates, count: tile.coordinates.count)
                     poly.title = tile.ownerId ?? ""
                     polygonIsTile.insert(poly)
                     polygonToTile[poly] = tile
@@ -1515,26 +1520,24 @@ struct ZoneWarMapView: UIViewRepresentable {
             var allPolygons: [MKPolygon] = []
             allPolygons.reserveCapacity(territories.count * 2 + tilesToRender.count)
             
-            // Tiles first
+            // Tiles first - use pre-normalized coordinates (rectangles with 5 points)
             var tilesSkipped = 0
             var tilesAdded = 0
             for tile in tilesToRender {
-                guard tile.coordinates.count >= 3 else { 
+                // Tiles should have exactly 5 coords (4 corners + closing point) after normalization
+                guard tile.coordinates.count >= 4 else { 
                     tilesSkipped += 1
                     continue 
                 }
-                var coords = tile.coordinates
-                if let first = coords.first, let last = coords.last, (first.latitude != last.latitude || first.longitude != last.longitude) {
-                    coords.append(first)
-                }
-                let poly = MKPolygon(coordinates: coords, count: coords.count)
+                // Create polygon directly from normalized coordinates
+                let poly = MKPolygon(coordinates: tile.coordinates, count: tile.coordinates.count)
                 poly.title = tile.ownerId ?? ""
                 polygonIsTile.insert(poly)
                 polygonToTile[poly] = tile
                 allPolygons.append(poly)
                 tilesAdded += 1
             }
-            print("🗺️ [MAP] Tiles: added=\(tilesAdded), skipped=\(tilesSkipped) (no coords)")
+            print("🗺️ [MAP] Tiles: added=\(tilesAdded), skipped=\(tilesSkipped) (invalid coords)")
             
             // Territories
             for territory in territories {

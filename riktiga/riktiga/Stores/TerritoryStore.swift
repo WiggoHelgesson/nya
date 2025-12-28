@@ -267,12 +267,31 @@ final class TerritoryStore: ObservableObject {
                 
                 for feature in result {
                     let ring = feature.geom.coordinates.first ?? []
-                    let coords = ring.compactMap { pair -> CLLocationCoordinate2D? in
+                    var coords = ring.compactMap { pair -> CLLocationCoordinate2D? in
                         guard pair.count == 2 else { return nil }
                         return CLLocationCoordinate2D(latitude: pair[1], longitude: pair[0])
                     }
                     
-                    if coords.count >= 3 {
+                    // Normalize tile coordinates to ensure proper rendering
+                    // ST_MakeEnvelope creates rectangles, ensure they render correctly
+                    if coords.count >= 4 {
+                        // Rebuild as a clean rectangle from bounding box
+                        let lats = coords.map { $0.latitude }
+                        let lons = coords.map { $0.longitude }
+                        let minLat = lats.min() ?? 0
+                        let maxLat = lats.max() ?? 0
+                        let minLon = lons.min() ?? 0
+                        let maxLon = lons.max() ?? 0
+                        
+                        // Create rectangle in consistent counter-clockwise order
+                        // (required by MapKit for proper fill rendering)
+                        coords = [
+                            CLLocationCoordinate2D(latitude: minLat, longitude: minLon), // bottom-left
+                            CLLocationCoordinate2D(latitude: minLat, longitude: maxLon), // bottom-right
+                            CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon), // top-right
+                            CLLocationCoordinate2D(latitude: maxLat, longitude: minLon), // top-left
+                            CLLocationCoordinate2D(latitude: minLat, longitude: minLon)  // close polygon
+                        ]
                         tilesWithCoords += 1
                     } else {
                         tilesWithoutCoords += 1
