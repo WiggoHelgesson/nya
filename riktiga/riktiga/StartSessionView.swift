@@ -1975,46 +1975,110 @@ struct TakeoverSummaryView: View {
     let users: [TileTakeoverRow]
     let isLoading: Bool
     let onCreatePost: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    
+    private var peopleCountText: String {
+        users.count == 1 ? "1 person" : "\(users.count) personer"
+    }
+    
+    private var titleText: String {
+        users.count == 1 ? "Du tog över \(peopleCountText)s område" : "Du tog över \(peopleCountText)s områden"
+    }
+    
+    private var totalTilesTaken: Int {
+        users.reduce(0) { $0 + $1.tilesTaken }
+    }
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemBackground).ignoresSafeArea()
-                
+            ScrollView {
                 VStack(spacing: 16) {
-                    VStack(spacing: 6) {
-                        Text("Du tog över \(users.count) personers område")
-                            .font(.system(size: 22, weight: .black))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 8)
+                    // Hero
+                    VStack(spacing: 12) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                    )
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.yellow)
+                            }
+                            .frame(width: 46, height: 46)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(titleText)
+                                    .font(.system(size: 24, weight: .black))
+                                    .foregroundColor(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                
+                                Text("Bra jobbat! Här är alla du tog över ifrån.")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
                         
-                        Text("Bra jobbat! Här är alla du tog över ifrån.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        // Stats chips
+                        HStack(spacing: 10) {
+                            statChip(title: "Personer", value: "\(users.count)")
+                            statChip(title: "Rutor", value: "\(totalTilesTaken)")
+                            Spacer()
+                        }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     
-                    if isLoading {
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .tint(.primary)
-                            Text("Räknar övertaganden…")
+                    // List card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Övertagna spelare")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if isLoading {
+                                ProgressView().tint(.secondary)
+                            }
+                        }
+                        
+                        if isLoading {
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(.primary)
+                                Text("Räknar övertaganden…")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                        } else if users.isEmpty {
+                            Text("Inga övertaganden den här rundan.")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollView {
-                            VStack(spacing: 10) {
-                                ForEach(users) { user in
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
                                     HStack(spacing: 12) {
                                         OptimizedAsyncImage(
                                             url: user.avatarUrl,
-                                            width: 44,
-                                            height: 44,
-                                            cornerRadius: 22
+                                            width: 46,
+                                            height: 46,
+                                            cornerRadius: 23
                                         )
                                         
                                         VStack(alignment: .leading, spacing: 2) {
@@ -2027,18 +2091,82 @@ struct TakeoverSummaryView: View {
                                         }
                                         
                                         Spacer()
+                                        
+                                        Text("\(user.tilesTaken)")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color.primary.opacity(0.06))
+                                            .clipShape(Capsule())
                                     }
-                                    .padding(14)
-                                    .background(Color(.secondarySystemBackground))
-                                    .cornerRadius(14)
+                                    .padding(.vertical, 10)
+                                    
+                                    if index != users.count - 1 {
+                                        Divider()
+                                            .opacity(0.5)
+                                    }
                                 }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                            .padding(.bottom, 24)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.systemBackground))
+                            )
                         }
                     }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
                     
+                    // Extra filler card so screen doesn't feel empty for 1 person
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Tips")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("Skapa ett inlägg och visa upp ditt övertagande så dina vänner kan supporta.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 90) // space for sticky button
+                }
+                .padding(.top, 8)
+            }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(.gray, Color(.systemGray5))
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Divider().opacity(0.3)
                     Button {
                         onCreatePost()
                     } label: {
@@ -2052,16 +2180,36 @@ struct TakeoverSummaryView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(Color.black)
-                        .cornerRadius(14)
+                        .cornerRadius(16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
                     .disabled(isLoading || users.isEmpty)
                     .opacity((isLoading || users.isEmpty) ? 0.6 : 1.0)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .background(.ultraThinMaterial)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
+    }
+    
+    private func statChip(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 18, weight: .black))
+                .foregroundColor(.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
