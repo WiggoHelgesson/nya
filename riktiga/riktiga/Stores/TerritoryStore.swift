@@ -20,7 +20,7 @@ final class TerritoryStore: ObservableObject {
     private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private var lastFetchTime: Date = .distantPast
     private let cacheValidityDuration: TimeInterval = 15 // 15 seconds cache for faster sync
-    private let boundsMargin: Double = 0.2 // Extra margin around viewport (increased to show more tiles)
+    private let boundsMargin: Double = 0.2 // Used for TERRITORY owner-polygons; tiles use a dynamic margin
     
     // Tiles cache - use dictionary for O(1) lookups and stable updates
     private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
@@ -210,10 +210,11 @@ final class TerritoryStore: ObservableObject {
             let cacheValid = now.timeIntervalSince(lastTileFetchTime) < tileCacheValidity
             let boundsWithinCache: Bool = {
                 guard let last = lastTileBounds else { return false }
-                return minLat >= last.minLat - boundsMargin &&
-                       maxLat <= last.maxLat + boundsMargin &&
-                       minLon >= last.minLon - boundsMargin &&
-                       maxLon <= last.maxLon + boundsMargin
+                // lastTileBounds is already expanded; just check current viewport is inside it.
+                return minLat >= last.minLat &&
+                       maxLat <= last.maxLat &&
+                       minLon >= last.minLon &&
+                       maxLon <= last.maxLon
             }()
             
             if cacheValid && boundsWithinCache {
@@ -232,11 +233,18 @@ final class TerritoryStore: ObservableObject {
         await MainActor.run { isFetchingTiles = true }
         defer { Task { @MainActor in isFetchingTiles = false } }
         
-        // Expand fetch bounds significantly for smoother scrolling
-        let expandedMinLat = minLat - boundsMargin * 2
-        let expandedMaxLat = maxLat + boundsMargin * 2
-        let expandedMinLon = minLon - boundsMargin * 2
-        let expandedMaxLon = maxLon + boundsMargin * 2
+        // Expand fetch bounds based on zoom level.
+        // A fixed huge margin causes us to request an enormous area, which then gets truncated by API caps,
+        // making zones look "cut off". Dynamic margin keeps requests proportional to the viewport.
+        let latSpan = max(0.0001, maxLat - minLat)
+        let lonSpan = max(0.0001, maxLon - minLon)
+        let marginLat = min(max(latSpan * 0.35, 0.01), 0.08)
+        let marginLon = min(max(lonSpan * 0.35, 0.01), 0.12)
+        
+        let expandedMinLat = minLat - marginLat
+        let expandedMaxLat = maxLat + marginLat
+        let expandedMinLon = minLon - marginLon
+        let expandedMaxLon = maxLon + marginLon
 
         do {
             let result = try await service.fetchTilesInBounds(

@@ -44,6 +44,16 @@ nonisolated(unsafe) struct TileBoundsParams: Encodable, Sendable {
     let p_limit: Int
 }
 
+/// Params for fetching tiles in bounds with pagination
+nonisolated(unsafe) struct TileBoundsParamsV2: Encodable, Sendable {
+    let p_min_lat: Double
+    let p_min_lon: Double
+    let p_max_lat: Double
+    let p_max_lon: Double
+    let p_limit: Int
+    let p_offset: Int
+}
+
     struct TileFeature: Decodable {
         let tile_id: Int64
         let owner_id: String?
@@ -179,26 +189,69 @@ final class TerritoryService {
         maxLon: Double
     ) async throws -> [TileFeature] {
         try await AuthSessionManager.shared.ensureValidSession()
-        let params: [String: Double] = [
-            "p_min_lat": minLat,
-            "p_min_lon": minLon,
-            "p_max_lat": maxLat,
-            "p_max_lon": maxLon
-        ]
-        
         print("🔍 [TILES RPC] Fetching tiles with bounds: lat(\(minLat)-\(maxLat)), lon(\(minLon)-\(maxLon))")
         
+        // PostgREST commonly caps RPC results (~1000). To avoid "cut off" areas,
+        // we try a paginated RPC first (get_tiles_in_bounds_v2). If it doesn't exist,
+        // we fall back to the legacy RPC.
+        let pageSize = 1000
+        let maxTilesPerFetch = 20_000 // safety cap to avoid locking the UI on extreme zoom-out
+        var offset = 0
+        var all: [TileFeature] = []
+        
         do {
-            let tiles: [TileFeature] = try await supabase.database
-                .rpc("get_tiles_in_bounds", params: params)
-                .execute()
-                .value
+            while all.count < maxTilesPerFetch {
+                let limit = min(pageSize, maxTilesPerFetch - all.count)
+                let payload = TileBoundsParamsV2(
+                    p_min_lat: minLat,
+                    p_min_lon: minLon,
+                    p_max_lat: maxLat,
+                    p_max_lon: maxLon,
+                    p_limit: limit,
+                    p_offset: offset
+                )
+                
+                let page: [TileFeature] = try await supabase.database
+                    .rpc("get_tiles_in_bounds_v2", params: payload)
+                    .execute()
+                    .value
+                
+                all.append(contentsOf: page)
+                
+                if page.count < limit {
+                    break
+                }
+                
+                offset += page.count
+            }
             
-            print("🔍 [TILES RPC] Decoded \(tiles.count) tiles successfully")
-            return tiles
+            print("🔍 [TILES RPC] Decoded \(all.count) tiles (paged) successfully")
+            if all.count >= maxTilesPerFetch {
+                print("⚠️ [TILES RPC] Hit maxTilesPerFetch cap (\(maxTilesPerFetch)). Consider zooming in for full fidelity.")
+            }
+            return all
         } catch {
-            print("❌ [TILES RPC] Decoding error: \(error)")
-            throw error
+            print("⚠️ [TILES RPC] Paged RPC failed (\(error)). Falling back to legacy get_tiles_in_bounds...")
+            
+            let legacyParams: [String: Double] = [
+                "p_min_lat": minLat,
+                "p_min_lon": minLon,
+                "p_max_lat": maxLat,
+                "p_max_lon": maxLon
+            ]
+            
+            do {
+                let tiles: [TileFeature] = try await supabase.database
+                    .rpc("get_tiles_in_bounds", params: legacyParams)
+                    .execute()
+                    .value
+                
+                print("🔍 [TILES RPC] Decoded \(tiles.count) tiles (legacy) successfully")
+                return tiles
+            } catch {
+                print("❌ [TILES RPC] Legacy RPC failed: \(error)")
+                throw error
+            }
         }
     }
     

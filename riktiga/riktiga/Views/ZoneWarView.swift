@@ -1350,9 +1350,7 @@ struct ZoneWarMapView: UIViewRepresentable {
         var onTileTapped: ((Tile) -> Void)?
         var onRegionChanged: (MKCoordinateRegion, MKMapRect) -> Void
         private var hasCentered = false
-        private var currentTerritoryIds: Set<UUID> = []
         private var currentTileIds: Set<Int64> = []
-        private var polygonToTerritory: [MKPolygon: Territory] = [:]
         private var polygonToTile: [MKPolygon: Tile] = [:]
         private var polygonIsTile: Set<MKPolygon> = []
         
@@ -1386,11 +1384,6 @@ struct ZoneWarMapView: UIViewRepresentable {
                 let polygonViewPoint = renderer.point(for: mapPoint)
                 
                 if renderer.path?.contains(polygonViewPoint) == true {
-                    // Check if it's a territory
-                    if let territory = polygonToTerritory[polygon] {
-                        onTerritoryTapped(territory)
-                        return
-                    }
                     // Check if it's a tile - find all tiles with same activity_id
                     if let tappedTile = polygonToTile[polygon], let ownerId = tappedTile.ownerId {
                         // Find all tiles with the same activity_id (from same workout)
@@ -1446,8 +1439,7 @@ struct ZoneWarMapView: UIViewRepresentable {
                 }
             }
             
-            // Create signatures for comparison
-            let newTerritoryIds = Set(territories.map { $0.id })
+            // Create signatures for comparison (tiles only; owner-polygons are too heavy and cause clipping)
             let newTileSignatures = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
             let currentTileSignatures = Set(currentTileIds.map { id -> String in
                 if let tile = polygonToTile.values.first(where: { $0.id == id }) {
@@ -1457,7 +1449,7 @@ struct ZoneWarMapView: UIViewRepresentable {
             })
             
             // Skip if nothing changed
-            if newTerritoryIds == currentTerritoryIds && newTileSignatures == currentTileSignatures && !currentTileIds.isEmpty {
+            if newTileSignatures == currentTileSignatures && !currentTileIds.isEmpty {
                 return
             }
             
@@ -1508,17 +1500,15 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
             
             // FULL REBUILD (only when necessary)
-            currentTerritoryIds = newTerritoryIds
             currentTileIds = Set(tilesToRender.map { $0.id })
             
             let existingOverlays = mapView.overlays
             
-            polygonToTerritory.removeAll(keepingCapacity: true)
             polygonToTile.removeAll(keepingCapacity: true)
             polygonIsTile.removeAll(keepingCapacity: true)
             
             var allPolygons: [MKPolygon] = []
-            allPolygons.reserveCapacity(territories.count * 2 + tilesToRender.count)
+            allPolygons.reserveCapacity(tilesToRender.count)
             
             // Tiles first - use pre-normalized coordinates (rectangles with 5 points)
             var tilesSkipped = 0
@@ -1538,25 +1528,6 @@ struct ZoneWarMapView: UIViewRepresentable {
                 tilesAdded += 1
             }
             print("🗺️ [MAP] Tiles: added=\(tilesAdded), skipped=\(tilesSkipped) (invalid coords)")
-            
-            // Territories
-            for territory in territories {
-                for (ringIndex, ring) in territory.polygons.enumerated() {
-                    guard ring.count >= 3 else { continue }
-                    
-                    var coordinates = ring
-                    if let first = coordinates.first, let last = coordinates.last {
-                        if first.latitude != last.latitude || first.longitude != last.longitude {
-                            coordinates.append(first)
-                        }
-                    }
-                    
-                    let polygon = MKPolygon(coordinates: coordinates, count: coordinates.count)
-                    polygon.title = territory.ownerId
-                    polygonToTerritory[polygon] = territory
-                    allPolygons.append(polygon)
-                }
-            }
             
             // Batch update
             print("🗺️ [MAP] Adding \(allPolygons.count) polygons to map, removing \(existingOverlays.count) old overlays")
