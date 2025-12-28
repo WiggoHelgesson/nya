@@ -209,6 +209,8 @@ class WorkoutService {
             print("✅ Successfully deleted workout post: \(postId)")
             if let userId {
                 cache.clearCacheForUser(userId: userId)
+                // Also clear AppCacheManager to ensure social feed is refreshed
+                AppCacheManager.shared.clearCacheForUser(userId: userId)
             }
             
         } catch {

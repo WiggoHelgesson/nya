@@ -476,136 +476,66 @@ struct ZoneWarView: View {
     
     private var kingOfAreaHeader: some View {
         Button {
-            if isPremium {
-                showLeaderboard = true
-            } else {
-                showPaywall = true
-            }
+            showLeaderboard = true
         } label: {
             VStack(spacing: 0) {
-                // Main blurred content
-                ZStack {
-                    VStack(spacing: 4) {
-                        // Leader info
-                        if let leader = areaLeader {
-                            HStack(spacing: 10) {
-                                // Profile image with PRO badge for non-premium
-                                ZStack(alignment: .bottomTrailing) {
-                                    ProfileImage(url: leader.avatarUrl, size: 36)
-                                    
-                                    if !isPremium {
-                                        Text("PRO")
-                                            .font(.system(size: 8, weight: .black))
-                                            .foregroundColor(.yellow)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                Capsule()
-                                                    .fill(Color.black.opacity(0.9))
-                                            )
-                                            .offset(x: 4, y: 4)
-                                    }
-                                }
-                                
-                                // Name and area
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(leader.name)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
-                                    
-                                    // This row shows different content based on premium
-                                    if isPremium {
-                                        HStack(spacing: 4) {
-                                            Text("👑")
-                                                .font(.caption)
-                                            Text("KING OF THE AREA")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.yellow)
-                                            Text("👑")
-                                                .font(.caption)
-                                        }
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                // Total tiles
-                                Text(formatTileCount(leader.tileCount))
-                                    .font(.system(size: 15, weight: .bold))
+                VStack(spacing: 4) {
+                    // Leader info
+                    if let leader = areaLeader {
+                        HStack(spacing: 10) {
+                            ProfileImage(url: leader.avatarUrl, size: 36)
+                            
+                            // Name and area
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(leader.name)
+                                    .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.white)
+                                
+                                HStack(spacing: 4) {
+                                    Text("👑")
+                                        .font(.caption)
+                                    Text("KING OF THE AREA")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.yellow)
+                                    Text("👑")
+                                        .font(.caption)
+                                }
                             }
-                        } else {
-                            // No leader yet
-                            HStack {
-                                Image(systemName: "crown.fill")
-                                    .foregroundColor(.yellow)
-                                Text("Ingen kung än")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white)
-                                Spacer()
-                            }
+                            
+                            Spacer()
+                            
+                            // Total tiles
+                            Text(formatTileCount(leader.tileCount))
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white)
                         }
-                        
-                        // Area name subtitle - only for premium
-                        if isPremium {
-                            Text("Kungen av \(currentAreaName)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                    } else {
+                        // No leader yet
+                        HStack {
+                            Image(systemName: "crown.fill")
+                                .foregroundColor(.yellow)
+                            Text("Ingen kung än")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                            Spacer()
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .blur(radius: isPremium ? 0 : 6)
                     
-                    // PRO text for non-premium
-                    if !isPremium {
-                        Text("PRO")
-                            .font(.system(size: 14, weight: .black))
-                            .foregroundColor(.yellow)
-                    }
+                    // Area name subtitle
+                    Text("Kungen av \(currentAreaName)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .background(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 16,
-                        bottomLeadingRadius: isPremium ? 16 : 0,
-                        bottomTrailingRadius: isPremium ? 16 : 0,
-                        topTrailingRadius: 16,
-                        style: .continuous
-                    )
-                    .fill(Color.black.opacity(0.85))
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.85))
                 )
-                
-                // Bottom section with unlock text for non-premium
-                if !isPremium {
-                    HStack(spacing: 6) {
-                        Text("👑")
-                            .font(.system(size: 14))
-                        Text("KING OF THE AREA")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                        Text("👑")
-                            .font(.system(size: 14))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 0,
-                            bottomLeadingRadius: 16,
-                            bottomTrailingRadius: 16,
-                            topTrailingRadius: 0,
-                            style: .continuous
-                        )
-                        .fill(Color.black.opacity(0.75))
-                    )
-                }
             }
             .padding(.horizontal, 16)
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
-        }
         .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
@@ -1845,7 +1775,7 @@ struct ZoneWarMenuView: View {
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
             }
-            .onReceive(RevenueCatManager.shared.$isPremium) { newValue in
+            .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue
             }
             .task {

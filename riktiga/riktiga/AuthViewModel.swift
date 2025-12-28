@@ -49,7 +49,8 @@ class AuthViewModel: NSObject, ObservableObject {
         guard var user = currentUser else { return }
         
         // Pro status = RevenueCat OR database (allows granting Pro via database only)
-        let databasePro = user.isProMember
+        // Use RevenueCatManager.databasePro which is the fresh value from the database
+        let databasePro = RevenueCatManager.shared.databasePro
         let combinedProStatus = revenueCatPremium || databasePro
         
         user.isProMember = combinedProStatus
@@ -79,9 +80,13 @@ class AuthViewModel: NSObject, ObservableObject {
                     var user = self.currentUser
                     let revenueCatPro = RevenueCatManager.shared.isPremium
                     let databasePro = profile.isProMember
+                    
+                    // Update RevenueCatManager's database Pro status
+                    RevenueCatManager.shared.updateDatabaseProStatus(databasePro)
+                    
                     user?.isProMember = revenueCatPro || databasePro
                     self.currentUser = user
-                    print("🔄 Refreshed Pro status from database: \(user?.isProMember ?? false)")
+                    print("🔄 Refreshed Pro status from database: \(user?.isProMember ?? false) (RevenueCat: \(revenueCatPro), Database: \(databasePro))")
                 }
             }
         } catch {
@@ -116,7 +121,8 @@ class AuthViewModel: NSObject, ObservableObject {
                             self.showUsernameRequiredPopup = true
                         }
                         
-                        print("✅ User automatically logged in: \(profile.name), Pro: \(profile.isProMember)")
+                        print("✅ User automatically logged in: \(profile.name)")
+                        print("📊 Database Pro status from profile: \(profile.isProMember)")
                     }
                     
                     // Now login to RevenueCat (after databasePro is already set)

@@ -257,7 +257,7 @@ struct SocialView: View {
     private func fetchAndNavigateToPost(postId: String) async {
         do {
             // Try to fetch this specific post
-            let response = try await SupabaseConfig.supabase
+            let post: SocialWorkoutPost = try await SupabaseConfig.supabase
                 .from("workout_posts")
                 .select("""
                     *,
@@ -268,8 +268,8 @@ struct SocialView: View {
                 .eq("id", value: postId)
                 .single()
                 .execute()
+                .value
             
-            let post: SocialWorkoutPost = try response.value
             await MainActor.run {
                 selectedPost = post
                 pendingPostNavigation = nil

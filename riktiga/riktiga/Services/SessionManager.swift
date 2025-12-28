@@ -85,6 +85,8 @@ class SessionManager: ObservableObject {
     @Published var activeSession: ActiveSession?
     // When false, all saveActiveSession calls are ignored. Set to true when starting/resuming a session.
     private var acceptsSaves: Bool = false
+    // When true, the session has been explicitly finalized and NO saves should occur, not even forced ones
+    private var isFinalized: Bool = false
     
     private init() {
         // Load session synchronously to avoid init issues
@@ -130,6 +132,12 @@ class SessionManager: ObservableObject {
                            maxSpeed: Double? = nil,
                            gymExercises: [GymExercise]? = nil,
                            force: Bool = false) {
+        // NEVER save if session has been explicitly finalized
+        guard !isFinalized else {
+            print("⏭️ saveActiveSession ignored - session is finalized")
+            return
+        }
+        
         // Ignore saves if session is finalized (unless forced)
         guard acceptsSaves || force else {
             print("⏭️ saveActiveSession ignored (acceptsSaves=false, force=false)")
@@ -267,6 +275,7 @@ class SessionManager: ObservableObject {
         self.activeSession = nil
         self.hasActiveSession = false
         self.acceptsSaves = false
+        self.isFinalized = true  // Prevent any further saves
 
         // Broadcast that session has been finalized so UI can react
         NotificationCenter.default.post(name: NSNotification.Name("SessionFinalized"), object: nil)
@@ -282,7 +291,8 @@ class SessionManager: ObservableObject {
     /// Call when starting or resuming a session to allow saves again
     func beginSession() {
         acceptsSaves = true
-        print("✅ [SessionManager] beginSession() - acceptsSaves = true")
+        isFinalized = false  // Reset finalized flag to allow saves
+        print("✅ [SessionManager] beginSession() - acceptsSaves = true, isFinalized = false")
     }
     
     /// Debug: Print current session state

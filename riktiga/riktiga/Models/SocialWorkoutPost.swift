@@ -46,10 +46,12 @@ struct SocialWorkoutPostRaw: Codable {
 struct ProfileData: Codable {
     let username: String?
     let avatarUrl: String?
+    let isProMember: Bool?
     
     enum CodingKeys: String, CodingKey {
         case username
         case avatarUrl = "avatar_url"
+        case isProMember = "is_pro_member"
     }
 }
 
@@ -133,7 +135,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         // Map social data from JOIN results
         userName = raw.profiles?.username
         userAvatarUrl = raw.profiles?.avatarUrl
-        userIsPro = nil // Will be set from profiles table
+        userIsPro = raw.profiles?.isProMember
         location = nil // Will be set if available
         strokes = nil // Will be set if available
         
