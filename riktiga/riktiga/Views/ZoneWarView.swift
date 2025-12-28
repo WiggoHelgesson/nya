@@ -1450,6 +1450,7 @@ struct ZoneWarMapView: UIViewRepresentable {
         var onTileTapped: ((Tile) -> Void)?
         var onRegionChanged: (MKCoordinateRegion, MKMapRect) -> Void
         private var hasCentered = false
+        private var didFallbackCenter = false
         private var currentTileSignature: Set<String> = []
         
         // Single overlay + renderer for fast drawing (tile mode)
@@ -1630,31 +1631,45 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
             
             if !hasCentered {
-                // Use user's location if available, otherwise default to Stockholm
-                // Always use a wider zoom level (0.05 = ~5km view) so user sees more area
-                let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                // Centering strategy:
+                // - Prefer real GPS. Don't "lock in" fallback before userLocation is ready.
+                // - If location permission is denied / never comes, do ONE fallback.
+                let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03) // ~3km, closer to "see my area"
                 
                 if let userLocation = mapView.userLocation.location {
-                    let userRegion = MKCoordinateRegion(
-                        center: userLocation.coordinate,
-                        span: defaultSpan
-                    )
+                    let userRegion = MKCoordinateRegion(center: userLocation.coordinate, span: defaultSpan)
                     mapView.setRegion(userRegion, animated: false)
-                } else {
-                    // Fallback to Stockholm with wider zoom
+                    hasCentered = true
+                } else if !didFallbackCenter {
+                    // Temporary fallback (only once). If GPS arrives later, didUpdate will re-center.
+                    didFallbackCenter = true
                     let stockholm = MKCoordinateRegion(
                         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
-                        span: defaultSpan
+                        span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
                     )
                     mapView.setRegion(stockholm, animated: false)
+                    // NOTE: do NOT set hasCentered here, so we can still auto-center when GPS appears.
                 }
-                hasCentered = true
                 
                 // Trigger initial region callback
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak mapView] in
                     guard let self = self, let mapView = mapView else { return }
                     self.onRegionChanged(mapView.region, mapView.visibleMapRect)
                 }
+            }
+        }
+
+        func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+            // As soon as we have a real GPS coordinate, auto-center once.
+            guard !hasCentered, let loc = userLocation.location else { return }
+            let span = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            mapView.setRegion(MKCoordinateRegion(center: loc.coordinate, span: span), animated: true)
+            hasCentered = true
+            
+            // Kick region callback so we fetch data around the user immediately
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self, weak mapView] in
+                guard let self = self, let mapView = mapView else { return }
+                self.onRegionChanged(mapView.region, mapView.visibleMapRect)
             }
         }
         
