@@ -1292,7 +1292,7 @@ final class TileGridRenderer: MKOverlayRenderer {
         
         // Performance knobs
         let shouldStroke = zoomScale > 0.02
-        let maxTilesToDraw = zoomScale < 0.01 ? 2500 : 6000
+        let zoomedOut = zoomScale < 0.02
         
         context.saveGState()
         context.setAllowsAntialiasing(false)
@@ -1301,40 +1301,92 @@ final class TileGridRenderer: MKOverlayRenderer {
         // Filter to what is actually visible
         var visible = grid.tiles.filter { $0.mapRect.intersects(mapRect) }
         
-        // Deterministic sampling if zoomed out / too many tiles
-        if visible.count > maxTilesToDraw {
-            visible.sort { $0.id < $1.id }
-            let step = max(1, Int(ceil(Double(visible.count) / Double(maxTilesToDraw))))
-            visible = stride(from: 0, to: visible.count, by: step).map { visible[$0] }
-        }
-        
-        // Draw
-        for tile in visible {
-            let rect = self.rect(for: tile.mapRect)
+        if zoomedOut || visible.count > 6000 {
+            // IMPORTANT: When zoomed out, we must NOT drop tiles (it creates gaps).
+            // Instead, aggregate into larger "super-tiles" in screen-space so coverage stays solid and fast.
             
-            // Fill
-            if let owner = tile.ownerId, !owner.isEmpty {
-                let fill: UIColor = colorCache[owner] ?? {
-                    let c = TerritoryColors.colorForUser(owner)
-                    colorCache[owner] = c
-                    return c
-                }()
-                context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
-            } else {
-                context.setFillColor(UIColor.gray.withAlphaComponent(0.18).cgColor)
+            // Target bucket size in screen points (bigger when more zoomed out)
+            let bucketScreenPts: Double = zoomScale < 0.008 ? 14 : 10
+            let bucketMapPts = bucketScreenPts / Double(zoomScale) // screenPts = mapPts * zoomScale
+            
+            struct BucketKey: Hashable {
+                let x: Int
+                let y: Int
             }
-            context.fill(rect)
             
-            // Stroke only when reasonably zoomed in
-            if shouldStroke {
-                context.setLineWidth(max(0.5, 1.0 / zoomScale))
-                if let owner = tile.ownerId, !owner.isEmpty {
-                    let stroke = (colorCache[owner] ?? TerritoryColors.colorForUser(owner)).withAlphaComponent(0.9)
-                    context.setStrokeColor(stroke.cgColor)
-                } else {
-                    context.setStrokeColor(UIColor.gray.withAlphaComponent(0.25).cgColor)
+            // Count owners per bucket, pick majority owner
+            var buckets: [BucketKey: (rect: MKMapRect, counts: [String: Int], empty: Int)] = [:]
+            buckets.reserveCapacity(min(visible.count, 8000))
+            
+            for t in visible {
+                let bx = Int(floor(t.mapRect.midX / bucketMapPts))
+                let by = Int(floor(t.mapRect.midY / bucketMapPts))
+                let key = BucketKey(x: bx, y: by)
+                
+                let originX = Double(bx) * bucketMapPts
+                let originY = Double(by) * bucketMapPts
+                let bucketRect = MKMapRect(x: originX, y: originY, width: bucketMapPts, height: bucketMapPts)
+                
+                if buckets[key] == nil {
+                    buckets[key] = (bucketRect, [:], 0)
                 }
-                context.stroke(rect)
+                
+                if let owner = t.ownerId, !owner.isEmpty {
+                    buckets[key]!.counts[owner, default: 0] += 1
+                } else {
+                    buckets[key]!.empty += 1
+                }
+            }
+            
+            for (_, bucket) in buckets {
+                // Choose majority owner (or empty if no owner)
+                let owner: String? = bucket.counts.max(by: { $0.value < $1.value })?.key
+                
+                // Inflate slightly to avoid hairline seams due to pixel rounding
+                var rect = self.rect(for: bucket.rect).insetBy(dx: -0.6, dy: -0.6)
+                
+                if let owner, !owner.isEmpty {
+                    let fill: UIColor = colorCache[owner] ?? {
+                        let c = TerritoryColors.colorForUser(owner)
+                        colorCache[owner] = c
+                        return c
+                    }()
+                    context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
+                } else {
+                    context.setFillColor(UIColor.gray.withAlphaComponent(0.14).cgColor)
+                }
+                context.fill(rect)
+                
+                // No strokes when zoomed out (strokes create visible grid lines)
+            }
+        } else {
+            // Zoomed in: draw actual tiles (no gaps), with subtle stroke
+            for tile in visible {
+                // Inflate slightly to avoid hairline seams due to pixel rounding
+                let rect = self.rect(for: tile.mapRect).insetBy(dx: -0.6, dy: -0.6)
+                
+                if let owner = tile.ownerId, !owner.isEmpty {
+                    let fill: UIColor = colorCache[owner] ?? {
+                        let c = TerritoryColors.colorForUser(owner)
+                        colorCache[owner] = c
+                        return c
+                    }()
+                    context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
+                } else {
+                    context.setFillColor(UIColor.gray.withAlphaComponent(0.18).cgColor)
+                }
+                context.fill(rect)
+                
+                if shouldStroke {
+                    context.setLineWidth(max(0.35, 0.7 / zoomScale))
+                    if let owner = tile.ownerId, !owner.isEmpty {
+                        let stroke = (colorCache[owner] ?? TerritoryColors.colorForUser(owner)).withAlphaComponent(0.35)
+                        context.setStrokeColor(stroke.cgColor)
+                    } else {
+                        context.setStrokeColor(UIColor.gray.withAlphaComponent(0.15).cgColor)
+                    }
+                    context.stroke(rect)
+                }
             }
         }
         
