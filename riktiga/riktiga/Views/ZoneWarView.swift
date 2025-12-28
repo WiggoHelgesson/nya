@@ -1291,7 +1291,8 @@ final class TileGridRenderer: MKOverlayRenderer {
         guard let grid = overlay as? TileGridOverlay else { return }
         
         // Performance knobs
-        let shouldStroke = zoomScale > 0.02
+        // IMPORTANT: No strokes at any zoom level to keep tiles visually "tight" with no gaps/seams.
+        let shouldStroke = false
         let zoomedOut = zoomScale < 0.02
         
         context.saveGState()
@@ -1342,8 +1343,8 @@ final class TileGridRenderer: MKOverlayRenderer {
                 // Choose majority owner (or empty if no owner)
                 let owner: String? = bucket.counts.max(by: { $0.value < $1.value })?.key
                 
-                // Inflate slightly to avoid hairline seams due to pixel rounding
-                var rect = self.rect(for: bucket.rect).insetBy(dx: -0.6, dy: -0.6)
+                // Inflate to avoid hairline seams due to pixel rounding
+                let rect = self.rect(for: bucket.rect).insetBy(dx: -1.2, dy: -1.2)
                 
                 if let owner, !owner.isEmpty {
                     let fill: UIColor = colorCache[owner] ?? {
@@ -1351,7 +1352,7 @@ final class TileGridRenderer: MKOverlayRenderer {
                         colorCache[owner] = c
                         return c
                     }()
-                    context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
+                    context.setFillColor(fill.withAlphaComponent(0.6).cgColor)
                 } else {
                     context.setFillColor(UIColor.gray.withAlphaComponent(0.14).cgColor)
                 }
@@ -1363,7 +1364,7 @@ final class TileGridRenderer: MKOverlayRenderer {
             // Zoomed in: draw actual tiles (no gaps), with subtle stroke
             for tile in visible {
                 // Inflate slightly to avoid hairline seams due to pixel rounding
-                let rect = self.rect(for: tile.mapRect).insetBy(dx: -0.6, dy: -0.6)
+                let rect = self.rect(for: tile.mapRect).insetBy(dx: -1.2, dy: -1.2)
                 
                 if let owner = tile.ownerId, !owner.isEmpty {
                     let fill: UIColor = colorCache[owner] ?? {
@@ -1371,7 +1372,7 @@ final class TileGridRenderer: MKOverlayRenderer {
                         colorCache[owner] = c
                         return c
                     }()
-                    context.setFillColor(fill.withAlphaComponent(0.55).cgColor)
+                    context.setFillColor(fill.withAlphaComponent(0.6).cgColor)
                 } else {
                     context.setFillColor(UIColor.gray.withAlphaComponent(0.18).cgColor)
                 }
