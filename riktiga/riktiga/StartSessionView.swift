@@ -652,6 +652,9 @@ struct SessionMapView: View {
     @State private var showTerritoryAnimation = false
     @State private var territoryAnimationCoordinates: [CLLocationCoordinate2D] = []
     @State private var showSessionComplete = false
+    @State private var showTakeoverSummary = false
+    @State private var takeoverUsers: [TileTakeoverRow] = []
+    @State private var isLoadingTakeovers = false
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
     @State private var routeImage: UIImage?
@@ -1269,6 +1272,18 @@ struct SessionMapView: View {
                 }
             )
         }
+        .sheet(isPresented: $showTakeoverSummary) {
+            TakeoverSummaryView(
+                users: takeoverUsers,
+                isLoading: isLoadingTakeovers,
+                onCreatePost: {
+                    showTakeoverSummary = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        showSessionComplete = true
+                    }
+                }
+            )
+        }
         .sheet(isPresented: $showLivePhotoCapture) {
             LivePhotoCaptureView(
                 capturedImage: $sessionLivePhoto,
@@ -1709,30 +1724,53 @@ struct SessionMapView: View {
         
         // Capture territory - only if not skipped
         if !skipTerritoryCapture {
-            print("🗺️ CALLING captureTerritoryFromRouteIfNeeded with \(finalRouteCoordinates.count) points")
-            captureTerritoryFromRouteIfNeeded(
-                coordinates: finalRouteCoordinates,
-                userId: userId,
-                distance: locationManager.distance,
-                duration: sessionDuration,
-                pace: currentPace
-            )
+            // Only running and golf can take over tiles
+            if activity == .running || activity == .golf {
+                isLoadingTakeovers = true
+                Task { @MainActor in
+                    let takeovers = await TerritoryStore.shared.finalizeTerritoryCaptureAndReturnTakeovers(
+                        activity: activity,
+                        routeCoordinates: finalRouteCoordinates,
+                        userId: userId,
+                        sessionDistance: locationManager.distance,
+                        sessionDuration: sessionDuration,
+                        sessionPace: currentPace
+                    )
+                    self.takeoverUsers = takeovers.sorted { $0.tilesTaken > $1.tilesTaken }
+                    self.isLoadingTakeovers = false
+                    
+                    // If we actually took over someone, show summary page first
+                    if !takeovers.isEmpty {
+                        self.showTakeoverSummary = true
+                    } else {
+                        self.showSessionComplete = true
+                    }
+                }
+            } else {
+                print("🗺️ CALLING captureTerritoryFromRouteIfNeeded with \(finalRouteCoordinates.count) points")
+                captureTerritoryFromRouteIfNeeded(
+                    coordinates: finalRouteCoordinates,
+                    userId: userId,
+                    distance: locationManager.distance,
+                    duration: sessionDuration,
+                    pace: currentPace
+                )
+            }
             
-            // Store coordinates for territory animation
+            // Preserve coordinates for post saving
             self.territoryAnimationCoordinates = finalRouteCoordinates
-            print("🗺️ Stored \(finalRouteCoordinates.count) coordinates for territory animation")
         } else {
             print("⏭️ Skipping territory capture (user chose to save without territory)")
             self.territoryAnimationCoordinates = [] // No animation if skipped
         }
         
-        // Add small delay to ensure route image is generated before showing session complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            self.updateEarnedPoints()
-            print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
-            
-            // Go directly to session complete (skip territory animation)
-            self.showSessionComplete = true
+        // If we didn't trigger the takeover flow above, fall back to showing session complete.
+        if skipTerritoryCapture || !(activity == .running || activity == .golf) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                self.updateEarnedPoints()
+                print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
+                self.showSessionComplete = true
+            }
         }
     }
     
@@ -1928,6 +1966,101 @@ struct SessionMapView: View {
             let markerRect = CGRect(x: first.x - markerSize/2, y: first.y - markerSize/2, width: markerSize, height: markerSize)
             context.fill(Circle().path(in: markerRect), with: .color(.green))
             context.stroke(Circle().path(in: markerRect), with: .color(.white), lineWidth: 2)
+        }
+    }
+}
+
+// MARK: - Takeover Summary View
+struct TakeoverSummaryView: View {
+    let users: [TileTakeoverRow]
+    let isLoading: Bool
+    let onCreatePost: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    VStack(spacing: 6) {
+                        Text("Du tog över \(users.count) personers område")
+                            .font(.system(size: 22, weight: .black))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 8)
+                        
+                        Text("Bra jobbat! Här är alla du tog över ifrån.")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    if isLoading {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(.primary)
+                            Text("Räknar övertaganden…")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 10) {
+                                ForEach(users) { user in
+                                    HStack(spacing: 12) {
+                                        OptimizedAsyncImage(
+                                            url: user.avatarUrl,
+                                            width: 44,
+                                            height: 44,
+                                            cornerRadius: 22
+                                        )
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(user.username ?? "Användare")
+                                                .font(.system(size: 16, weight: .bold))
+                                                .foregroundColor(.primary)
+                                            Text("\(user.tilesTaken) rutor")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(14)
+                                    .background(Color(.secondarySystemBackground))
+                                    .cornerRadius(14)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 24)
+                        }
+                    }
+                    
+                    Button {
+                        onCreatePost()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Skapa inlägg")
+                                .font(.system(size: 16, weight: .black))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(14)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .disabled(isLoading || users.isEmpty)
+                    .opacity((isLoading || users.isEmpty) ? 0.6 : 1.0)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

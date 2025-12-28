@@ -10,6 +10,7 @@ final class TerritoryStore: ObservableObject {
     @Published private(set) var activeSessionTerritories: [Territory] = []
     @Published private(set) var tiles: [Tile] = []
     @Published var pendingCelebrationTerritory: Territory?
+    @Published var lastTakeovers: [TileTakeoverRow] = []
     
     private let service = TerritoryService.shared
     private let eligibleActivities: Set<ActivityType> = [.running, .golf]
@@ -571,6 +572,52 @@ final class TerritoryStore: ObservableObject {
                 if logs.count > 50 { logs = Array(logs.suffix(50)) }
                 UserDefaults.standard.set(logs, forKey: logKey)
             }
+        }
+    }
+
+    /// Claim tiles and return takeovers (used to show "Du tog över X personers område" after ending a run/golf session)
+    @MainActor
+    func finalizeTerritoryCaptureAndReturnTakeovers(
+        activity: ActivityType,
+        routeCoordinates: [CLLocationCoordinate2D],
+        userId: String,
+        sessionDistance: Double? = nil,
+        sessionDuration: Int? = nil,
+        sessionPace: String? = nil
+    ) async -> [TileTakeoverRow] {
+        guard eligibleActivities.contains(activity) else { return [] }
+        guard routeCoordinates.count >= 3 else { return [] }
+        
+        // Same polygon prep as finalizeTerritoryCapture
+        let closed = ensureClosedLoop(routeCoordinates)
+        let simplified = simplifyPolygon(closed, tolerance: 0.00001)
+        let finalCoordinates: [CLLocationCoordinate2D]
+        if simplified.count < 4 {
+            finalCoordinates = closed
+        } else if simplified.count > 1000 {
+            finalCoordinates = convexHull(simplified)
+        } else {
+            finalCoordinates = simplified
+        }
+        let validPolygon = ensureClosedLoop(finalCoordinates)
+        
+        do {
+            let activityId = UUID()
+            let takeovers = try await service.claimTilesWithTakeovers(
+                ownerId: userId,
+                activityId: activityId,
+                coordinates: validPolygon,
+                distanceKm: sessionDistance,
+                durationSec: sessionDuration,
+                pace: sessionPace
+            )
+            self.lastTakeovers = takeovers
+            self.needsForceRefresh = true
+            self.invalidateCache()
+            return takeovers
+        } catch {
+            print("❌ [TERRITORY] claimTilesWithTakeovers failed: \(error)")
+            return []
         }
     }
     

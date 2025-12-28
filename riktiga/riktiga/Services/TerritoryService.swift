@@ -35,6 +35,36 @@ nonisolated(unsafe) struct TileClaimParams: Encodable, Sendable {
     let p_pace: String?
 }
 
+/// Takeover rows returned from claim_tiles_with_takeovers
+struct TileTakeoverRow: Decodable, Sendable, Identifiable {
+    let id: String // previous_owner_id as string
+    let username: String?
+    let avatarUrl: String?
+    let tilesTaken: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case previousOwnerId = "previous_owner_id"
+        case username
+        case avatarUrl = "avatar_url"
+        case tilesTaken = "tiles_taken"
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Handle UUID as UUID or String
+        if let uuid = try? container.decode(UUID.self, forKey: .previousOwnerId) {
+            id = uuid.uuidString
+        } else {
+            id = (try? container.decode(String.self, forKey: .previousOwnerId)) ?? ""
+        }
+        
+        username = try? container.decode(String.self, forKey: .username)
+        avatarUrl = try? container.decode(String.self, forKey: .avatarUrl)
+        tilesTaken = (try? container.decode(Int.self, forKey: .tilesTaken)) ?? 0
+    }
+}
+
 /// Params for fetching tiles in bounds
 nonisolated(unsafe) struct TileBoundsParams: Encodable, Sendable {
     let p_min_lat: Double
@@ -350,6 +380,48 @@ final class TerritoryService {
         } catch {
             print("❌ [CLAIM_TILES] RPC failed with error: \(error)")
             print("❌ [CLAIM_TILES] Error type: \(type(of: error))")
+            throw error
+        }
+    }
+    
+    /// Tile-based claim that also returns who you took over tiles from
+    func claimTilesWithTakeovers(
+        ownerId: String,
+        activityId: UUID,
+        coordinates: [CLLocationCoordinate2D],
+        distanceKm: Double? = nil,
+        durationSec: Int? = nil,
+        pace: String? = nil
+    ) async throws -> [TileTakeoverRow] {
+        print("🎯 [CLAIM_TILES_TAKEOVERS] Starting claim for owner: \(ownerId)")
+        
+        guard let ownerUUID = UUID(uuidString: ownerId) else {
+            throw TerritoryServiceError.invalidOwnerId(ownerId)
+        }
+        guard coordinates.count >= 3 else { return [] }
+        
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let payload = TileClaimParams(
+            p_owner: ownerUUID,
+            p_activity: activityId,
+            p_coords: coordinates.map { [$0.latitude, $0.longitude] },
+            p_distance_km: distanceKm,
+            p_duration_sec: durationSec,
+            p_pace: pace
+        )
+        
+        do {
+            let rows: [TileTakeoverRow] = try await supabase.database
+                .rpc("claim_tiles_with_takeovers", params: payload)
+                .execute()
+                .value
+            
+            let cleaned = rows.filter { !$0.id.isEmpty && $0.tilesTaken > 0 }
+            print("✅ [CLAIM_TILES_TAKEOVERS] Claim OK. Takeovers: \(cleaned.count)")
+            return cleaned
+        } catch {
+            print("❌ [CLAIM_TILES_TAKEOVERS] RPC failed: \(error)")
             throw error
         }
     }
