@@ -199,15 +199,25 @@ final class TerritoryService {
         ]
         
         do {
+            // Prefer v2: simplified per-owner polygons (much faster than tiles)
             let result: [OwnerTerritoryFeature] = try await supabase.database
-                .rpc("get_territory_owners_in_bounds", params: params)
+                .rpc("get_territory_owners_in_bounds_v2", params: params)
                 .execute()
                 .value
             
             return result
         } catch {
-            // Fallback to full fetch if RPC doesn't exist
-            return try await fetchTerritories()
+            // Fallback to old RPC if v2 doesn't exist
+            do {
+                let result: [OwnerTerritoryFeature] = try await supabase.database
+                    .rpc("get_territory_owners_in_bounds", params: params)
+                    .execute()
+                    .value
+                return result
+            } catch {
+                // Fallback to full fetch if RPC doesn't exist
+                return try await fetchTerritories()
+            }
         }
     }
 
@@ -491,8 +501,11 @@ extension TerritoryService.OwnerTerritoryFeature {
             }
         }
         
+        // Use owner UUID as stable id so map diffs don't churn
+        let stableId = UUID(uuidString: owner_id) ?? UUID()
+        
         return Territory(
-            id: UUID(), // union has no stable id; use ephemeral
+            id: stableId,
             ownerId: owner_id,
             activity: nil,
             area: area_m2,

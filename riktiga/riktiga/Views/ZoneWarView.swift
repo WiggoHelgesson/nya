@@ -127,8 +127,8 @@ struct ZoneWarView: View {
         NavigationStack {
             ZStack {
                 ZoneWarMapView(
-                    territories: [], // Only use tiles for grid-based system
-                    tiles: territoryStore.tiles,
+                    territories: territoryStore.territories, // Owner polygons (one overlay per owner)
+                    tiles: [], // No tile rendering (avoid caps + lag)
                     onTerritoryTapped: { territory in
                         selectedTerritory = territory
                     },
@@ -151,22 +151,6 @@ struct ZoneWarView: View {
                                 minLon: minLon,
                                 maxLon: maxLon
                             )
-                            
-                            // Load tiles for current viewport (separate throttle inside)
-                            let topLeft = MKMapPoint(x: mapRect.origin.x, y: mapRect.origin.y)
-                            let bottomRight = MKMapPoint(x: mapRect.maxX, y: mapRect.maxY)
-                            let minLonTiles = min(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
-                            let maxLonTiles = max(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
-                            let minLatTiles = min(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
-                            let maxLatTiles = max(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
-                            Task {
-                                await territoryStore.loadTilesInBounds(
-                                    minLat: minLatTiles,
-                                    maxLat: maxLatTiles,
-                                    minLon: minLonTiles,
-                                    maxLon: maxLonTiles
-                                )
-                            }
                             
                             // Update local king when map region changes (with throttle)
                             DispatchQueue.main.async {
@@ -261,24 +245,7 @@ struct ZoneWarView: View {
                     group.addTask {
                         await self.loadTerritoryEvents()
                     }
-                    // Force load tiles for current visible region
-                    group.addTask {
-                        // Use visibleMapRect if set (not world and has valid size)
-                        let isValidRect = currentMapRect.size.width > 0 && 
-                                          currentMapRect.size.width < MKMapRect.world.size.width
-                        if isValidRect {
-                            let region = MKCoordinateRegion(currentMapRect)
-                            let minLat = region.center.latitude - region.span.latitudeDelta / 2
-                            let maxLat = region.center.latitude + region.span.latitudeDelta / 2
-                            let minLon = region.center.longitude - region.span.longitudeDelta / 2
-                            let maxLon = region.center.longitude + region.span.longitudeDelta / 2
-                            // Force refresh if there's a pending territory or needsRefresh flag
-                            await self.territoryStore.loadTilesInBounds(
-                                minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon,
-                                forceRefresh: hasPendingTerritory || needsRefresh
-                            )
-                        }
-                    }
+                    // No tile loading in owner-polygon mode
                 }
                 isLoading = false
             }
@@ -293,8 +260,8 @@ struct ZoneWarView: View {
                 await loadTerritoryEvents()
                 calculateLocalStats() // Recalculate with cleared city cache
             }
-            // Recalculate local stats whenever tiles update (heavily debounced to prevent lag)
-            .onChange(of: territoryStore.tiles.count) { oldCount, newCount in
+            // Recalculate local stats whenever territories update (debounced)
+            .onChange(of: territoryStore.territories.count) { oldCount, newCount in
                 // Only trigger if count changed significantly (more than 10%)
                 let threshold = max(10, oldCount / 10)
                 guard abs(newCount - oldCount) >= threshold || oldCount == 0 else { return }
@@ -661,11 +628,11 @@ struct ZoneWarView: View {
                 let isPro = RevenueCatManager.shared.isProMember
                 let multiplier = isPro ? 2.0 : 1.0
                 
-                // Calculate from tiles
-                let myTiles = territoryStore.tiles.filter { $0.ownerId == userId }
-                // Each tile is ~625 m² (25m x 25m), 1600 tiles = 1 km²
-                let myAreaKm2 = Double(myTiles.count) * 625.0 / 1_000_000.0
-                let totalAreaKm2 = Double(territoryStore.tiles.count) * 625.0 / 1_000_000.0
+                // Calculate from owner territories (area_m2 from server)
+                let myAreaM2 = territoryStore.territories.first(where: { $0.ownerId == userId })?.area ?? 0
+                let totalAreaM2 = territoryStore.territories.reduce(0) { $0 + $1.area }
+                let myAreaKm2 = myAreaM2 / 1_000_000.0
+                let totalAreaKm2 = totalAreaM2 / 1_000_000.0
                 
                 myLotteryTickets = Int(myAreaKm2 * multiplier)
                 totalLotteryTickets = max(Int(totalAreaKm2), myLotteryTickets)
@@ -1485,12 +1452,16 @@ struct ZoneWarMapView: UIViewRepresentable {
         private var hasCentered = false
         private var currentTileSignature: Set<String> = []
         
-        // Single overlay + renderer for fast drawing
+        // Single overlay + renderer for fast drawing (tile mode)
         private let tileOverlay = TileGridOverlay()
         private var tileRenderer: TileGridRenderer?
         
         // Bounds index for fast-ish tap hit testing
         private var tileBounds: [(tile: Tile, minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)] = []
+        
+        // Owner polygon mode
+        private var polygonToTerritory: [MKPolygon: Territory] = [:]
+        private var territoryPolygons: [MKPolygon] = []
         
         // Throttling for region changes
         private var lastRegionChangeTime: Date = .distantPast
@@ -1514,12 +1485,26 @@ struct ZoneWarMapView: UIViewRepresentable {
             let tapPoint = gesture.location(in: mapView)
             let tapCoordinate = mapView.convert(tapPoint, toCoordinateFrom: mapView)
 
-            // Hit test against tile bounds (fast enough for a few thousand tiles)
+            // If we're in territory-polygon mode, hit-test the polygon overlays
+            if !territoryPolygons.isEmpty {
+                for polygon in territoryPolygons {
+                    let renderer = MKPolygonRenderer(polygon: polygon)
+                    let mapPoint = MKMapPoint(tapCoordinate)
+                    let polygonViewPoint = renderer.point(for: mapPoint)
+                    if renderer.path?.contains(polygonViewPoint) == true,
+                       let territory = polygonToTerritory[polygon] {
+                        onTerritoryTapped(territory)
+                        return
+                    }
+                }
+                return
+            }
+            
+            // Otherwise, tile mode hit test against tile bounds (fast enough for a few thousand tiles)
             let lat = tapCoordinate.latitude
             let lon = tapCoordinate.longitude
             guard let tapped = tileBounds.first(where: { lat >= $0.minLat && lat <= $0.maxLat && lon >= $0.minLon && lon <= $0.maxLon })?.tile,
-                  let ownerId = tapped.ownerId
-            else { return }
+                  let ownerId = tapped.ownerId else { return }
             
             // Find all tiles from same activity_id (same workout) for the detail sheet
             let connectedTiles: [Tile]
@@ -1548,6 +1533,50 @@ struct ZoneWarMapView: UIViewRepresentable {
         }
         
         func updateMap(_ mapView: MKMapView, territories: [Territory], tiles: [Tile]) {
+            // TERRITORY (owner polygon) mode
+            if !territories.isEmpty && tiles.isEmpty {
+                // Clear tile overlay if present
+                if mapView.overlays.contains(where: { $0 === tileOverlay }) {
+                    mapView.removeOverlay(tileOverlay)
+                }
+                
+                // Build polygons
+                polygonToTerritory.removeAll(keepingCapacity: true)
+                territoryPolygons.removeAll(keepingCapacity: true)
+                
+                var polys: [MKPolygon] = []
+                polys.reserveCapacity(territories.count * 2)
+                
+                for territory in territories {
+                    for ring in territory.polygons {
+                        guard ring.count >= 3 else { continue }
+                        var coords = ring
+                        if let first = coords.first, let last = coords.last,
+                           (first.latitude != last.latitude || first.longitude != last.longitude) {
+                            coords.append(first)
+                        }
+                        let poly = MKPolygon(coordinates: coords, count: coords.count)
+                        poly.title = territory.ownerId
+                        polygonToTerritory[poly] = territory
+                        polys.append(poly)
+                    }
+                }
+                
+                // Replace overlays in one go
+                if !mapView.overlays.isEmpty {
+                    mapView.removeOverlays(mapView.overlays)
+                }
+                mapView.addOverlays(polys, level: .aboveRoads)
+                territoryPolygons = polys
+                tileBounds.removeAll(keepingCapacity: true)
+                
+                return
+            }
+            
+            // TILE mode (fallback)
+            territoryPolygons.removeAll(keepingCapacity: true)
+            polygonToTerritory.removeAll(keepingCapacity: true)
+            
             // Tiles are already viewport-filtered + sampled in TerritoryStore.
             let tilesToRender = tiles
             let newSig = Set(tilesToRender.map { "\($0.id)_\($0.ownerId ?? "")" })
@@ -1663,6 +1692,16 @@ struct ZoneWarMapView: UIViewRepresentable {
                 let r = TileGridRenderer(overlay: overlay)
                 tileRenderer = r
                 return r
+            }
+            
+            if let polygon = overlay as? MKPolygon {
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                let ownerId = polygon.title ?? ""
+                let color = TerritoryColors.colorForUser(ownerId)
+                renderer.fillColor = color.withAlphaComponent(0.55)
+                renderer.strokeColor = UIColor.clear // seamless
+                renderer.lineWidth = 0
+                return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
         }
