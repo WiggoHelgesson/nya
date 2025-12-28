@@ -1208,11 +1208,18 @@ struct TerritoryOwnerProfile: Decodable {
 // MARK: - Territory Colors
 enum TerritoryColors {
     static let colors: [UIColor] = [
-        UIColor(red: 0.2, green: 0.6, blue: 0.9, alpha: 1),   // Blue
-        UIColor(red: 0.9, green: 0.3, blue: 0.3, alpha: 1),   // Red
-        UIColor(red: 0.3, green: 0.8, blue: 0.4, alpha: 1),   // Green
-        UIColor(red: 0.95, green: 0.6, blue: 0.1, alpha: 1),  // Orange
-        UIColor(red: 0.6, green: 0.3, blue: 0.8, alpha: 1),   // Purple
+        UIColor(red: 0.20, green: 0.60, blue: 0.90, alpha: 1), // Blue
+        UIColor(red: 0.90, green: 0.30, blue: 0.30, alpha: 1), // Red
+        UIColor(red: 0.30, green: 0.80, blue: 0.40, alpha: 1), // Green
+        UIColor(red: 0.95, green: 0.60, blue: 0.10, alpha: 1), // Orange
+        UIColor(red: 0.60, green: 0.30, blue: 0.80, alpha: 1), // Purple
+        UIColor(red: 0.10, green: 0.70, blue: 0.70, alpha: 1), // Teal
+        UIColor(red: 0.95, green: 0.35, blue: 0.65, alpha: 1), // Pink
+        UIColor(red: 0.85, green: 0.75, blue: 0.15, alpha: 1), // Yellow/Gold
+        UIColor(red: 0.25, green: 0.35, blue: 0.95, alpha: 1), // Indigo
+        UIColor(red: 0.55, green: 0.45, blue: 0.25, alpha: 1), // Brown
+        UIColor(red: 0.15, green: 0.85, blue: 0.45, alpha: 1), // Mint
+        UIColor(red: 0.65, green: 0.65, blue: 0.75, alpha: 1), // Slate
     ]
     
     static func colorForUser(_ ownerId: String) -> UIColor {
@@ -1460,6 +1467,7 @@ struct ZoneWarMapView: UIViewRepresentable {
         // Owner polygon mode
         private var polygonToTerritory: [MKPolygon: Territory] = [:]
         private var territoryPolygons: [MKPolygon] = []
+        private var ownerColorMap: [String: UIColor] = [:]
         
         // Throttling for region changes
         private var lastRegionChangeTime: Date = .distantPast
@@ -1541,6 +1549,7 @@ struct ZoneWarMapView: UIViewRepresentable {
                 // Build polygons
                 polygonToTerritory.removeAll(keepingCapacity: true)
                 territoryPolygons.removeAll(keepingCapacity: true)
+                ownerColorMap.removeAll(keepingCapacity: true)
                 
                 var polys: [MKPolygon] = []
                 polys.reserveCapacity(territories.count * 2)
@@ -1559,6 +1568,12 @@ struct ZoneWarMapView: UIViewRepresentable {
                         polys.append(poly)
                     }
                 }
+
+                // Compute a better local color assignment so adjacent owners don't share colors.
+                ownerColorMap = Self.computeNonAdjacentOwnerColors(
+                    territories: territories,
+                    polygons: polys
+                )
                 
                 // Replace overlays in one go
                 if !mapView.overlays.isEmpty {
@@ -1709,7 +1724,7 @@ struct ZoneWarMapView: UIViewRepresentable {
             if let polygon = overlay as? MKPolygon {
                 let renderer = MKPolygonRenderer(polygon: polygon)
                 let ownerId = polygon.title ?? ""
-                let color = TerritoryColors.colorForUser(ownerId)
+                let color = ownerColorMap[ownerId] ?? TerritoryColors.colorForUser(ownerId)
                 renderer.fillColor = color.withAlphaComponent(0.55)
                 renderer.strokeColor = UIColor.clear // seamless
                 renderer.lineWidth = 0
@@ -1717,6 +1732,86 @@ struct ZoneWarMapView: UIViewRepresentable {
             }
             return MKOverlayRenderer(overlay: overlay)
         }
+    }
+}
+
+// MARK: - Owner color assignment (avoid same color touching)
+extension ZoneWarMapView.Coordinator {
+    /// Greedy graph coloring on owner bounding boxes (viewport-local).
+    /// This greatly reduces the chance that two neighboring owners look identical.
+    fileprivate static func computeNonAdjacentOwnerColors(
+        territories: [Territory],
+        polygons: [MKPolygon]
+    ) -> [String: UIColor] {
+        // Build one bounding rect per owner (union of all polygon bounds for that owner)
+        var ownerRects: [String: MKMapRect] = [:]
+        ownerRects.reserveCapacity(territories.count)
+        
+        for poly in polygons {
+            let ownerId = poly.title ?? ""
+            guard !ownerId.isEmpty else { continue }
+            let r = poly.boundingMapRect
+            if let existing = ownerRects[ownerId] {
+                ownerRects[ownerId] = existing.union(r)
+            } else {
+                ownerRects[ownerId] = r
+            }
+        }
+        
+        // Build adjacency using expanded rect intersection (cheap + good enough visually)
+        let ownerIds = Array(ownerRects.keys)
+        var neighbors: [String: Set<String>] = Dictionary(uniqueKeysWithValues: ownerIds.map { ($0, []) })
+        
+        // Pick padding ~40m in map points at mid-latitude of viewport
+        let avgLat: Double = {
+            let lats = territories.compactMap { $0.polygons.first?.first?.latitude }
+            return lats.reduce(0, +) / Double(max(lats.count, 1))
+        }()
+        let padMapPoints = MKMapPointsPerMeterAtLatitude(avgLat) * 40.0
+        
+        func expanded(_ rect: MKMapRect) -> MKMapRect {
+            rect.insetBy(dx: -padMapPoints, dy: -padMapPoints)
+        }
+        
+        for i in 0..<ownerIds.count {
+            let a = ownerIds[i]
+            guard let ra = ownerRects[a] else { continue }
+            let ea = expanded(ra)
+            for j in (i + 1)..<ownerIds.count {
+                let b = ownerIds[j]
+                guard let rb = ownerRects[b] else { continue }
+                if ea.intersects(expanded(rb)) {
+                    neighbors[a, default: []].insert(b)
+                    neighbors[b, default: []].insert(a)
+                }
+            }
+        }
+        
+        // Order: larger areas first (harder to color later)
+        let territoryAreaByOwner: [String: Double] = Dictionary(
+            territories.map { ($0.ownerId, $0.area) },
+            uniquingKeysWith: { max($0, $1) }
+        )
+        let ordered = ownerIds.sorted {
+            (territoryAreaByOwner[$0] ?? 0) > (territoryAreaByOwner[$1] ?? 0)
+        }
+        
+        // Greedy assignment from palette
+        let palette = TerritoryColors.colors
+        var assigned: [String: UIColor] = [:]
+        assigned.reserveCapacity(ownerIds.count)
+        
+        for owner in ordered {
+            let usedByNeighbors: Set<UIColor> = Set(neighbors[owner, default: []].compactMap { assigned[$0] })
+            if let color = palette.first(where: { !usedByNeighbors.contains($0) }) {
+                assigned[owner] = color
+            } else {
+                // Fallback if palette exhausted (rare)
+                assigned[owner] = TerritoryColors.colorForUser(owner)
+            }
+        }
+        
+        return assigned
     }
 }
 
