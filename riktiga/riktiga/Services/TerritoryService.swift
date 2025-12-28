@@ -195,7 +195,7 @@ final class TerritoryService {
         // we try a paginated RPC first (get_tiles_in_bounds_v2). If it doesn't exist,
         // we fall back to the legacy RPC.
         let pageSize = 1000
-        let maxTilesPerFetch = 20_000 // safety cap to avoid locking the UI on extreme zoom-out
+        let maxTilesPerFetch = 10_000 // safety cap to avoid locking the UI on extreme zoom-out
         var offset = 0
         var all: [TileFeature] = []
         

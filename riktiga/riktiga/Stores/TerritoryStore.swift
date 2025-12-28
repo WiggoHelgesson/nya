@@ -29,6 +29,7 @@ final class TerritoryStore: ObservableObject {
     private let tileCacheValidity: TimeInterval = 30 // 30 seconds - faster refresh for new tiles
     private var isFetchingTiles: Bool = false // Prevent concurrent fetches
     private let maxCachedTiles: Int = 100000 // Support ALL of Sweden - SQL handles smart loading
+    private let maxRenderedTiles: Int = 6000 // MapKit overlay safety cap (prevents freezes/crashes)
     
     // Track if we need force refresh (set after completing a workout)
     @Published var needsForceRefresh: Bool = false
@@ -332,13 +333,42 @@ final class TerritoryStore: ObservableObject {
                     updatedCache = Dictionary(uniqueKeysWithValues: tilesToKeep.map { ($0.id, $0) })
                 }
                 
+                // IMPORTANT: Only publish/render tiles that intersect the current (expanded) viewport bounds.
+                // Rendering the entire cache as MKPolygons will freeze/crash MapKit.
+                func tileIntersectsBounds(_ tile: Tile) -> Bool {
+                    guard tile.coordinates.count >= 4 else { return false }
+                    let lats = tile.coordinates.map { $0.latitude }
+                    let lons = tile.coordinates.map { $0.longitude }
+                    guard let tMinLat = lats.min(),
+                          let tMaxLat = lats.max(),
+                          let tMinLon = lons.min(),
+                          let tMaxLon = lons.max()
+                    else { return false }
+                    
+                    // AABB intersection
+                    if tMaxLat < expandedMinLat || tMinLat > expandedMaxLat { return false }
+                    if tMaxLon < expandedMinLon || tMinLon > expandedMaxLon { return false }
+                    return true
+                }
+                
+                var viewTiles = updatedCache.values.filter(tileIntersectsBounds)
+                
+                // Zoomed-out protection: sample deterministically if too many tiles in view.
+                if viewTiles.count > self.maxRenderedTiles {
+                    let sorted = viewTiles.sorted { $0.id < $1.id }
+                    let step = max(1, Int(ceil(Double(sorted.count) / Double(self.maxRenderedTiles))))
+                    viewTiles = stride(from: 0, to: sorted.count, by: step).map { sorted[$0] }
+                    print("⚠️ [TILES] Too many tiles for MapKit (\(sorted.count)). Rendering sampled set: \(viewTiles.count) (step=\(step))")
+                }
+                
                 // Only update published array if there are actual changes
-                let newTiles = Array(updatedCache.values)
-                if newTiles.count != self.tiles.count || 
-                   Set(newTiles.map { $0.id }) != Set(self.tiles.map { $0.id }) ||
-                   self.tilesHaveOwnershipChanges(old: self.tiles, new: newTiles) {
+                let newIds = Set(viewTiles.map { $0.id })
+                let oldIds = Set(self.tiles.map { $0.id })
+                if newIds != oldIds || self.tilesHaveOwnershipChanges(old: self.tiles, new: viewTiles) {
                     self.tileCache = updatedCache
-                    self.tiles = newTiles
+                    self.tiles = viewTiles
+                } else {
+                    self.tileCache = updatedCache
                 }
                 
                 self.lastTileFetchTime = now
