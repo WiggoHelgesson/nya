@@ -62,7 +62,7 @@ struct MainTabView: View {
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem(Zonkriget/Lektioner), 1=Socialt, 2=Starta pass (intercepted), 3=Belöningar, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem(Zonkriget), 1=Socialt, 2=Starta pass (intercepted), 3=Belöningar, 4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     
@@ -154,13 +154,6 @@ struct MainTabView: View {
             showStartSession = false
             showResumeSession = false
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToLessons"))) { _ in
-            selectedTab = 0  // Go to Hem tab
-            showStartSession = false
-            showResumeSession = false
-            // Post notification to HomeContainerView to switch to Lektioner
-            NotificationCenter.default.post(name: NSNotification.Name("NavigateToLektionerSubTab"), object: nil)
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
             selectedTab = 1  // Socialt tab
             showStartSession = false
@@ -221,18 +214,7 @@ struct MainTabView: View {
                     await MainActor.run {
                         ImageCacheManager.shared.trimCache()
                     }
-                    // Give map time to release resources
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                    await MainActor.run {
-                        TerritoryStore.shared.invalidateCache()
-                    }
-                }
-                
-                if oldTab == 3 { // Leaving Lessons
-                    await MainActor.run {
-                        ImageCacheManager.shared.trimCache()
-                        LessonsViewModel.invalidateCache()
-                    }
+                    // Don't invalidate territory cache - it causes zones to disappear when returning
                 }
                 
                 if oldTab == 1 { // Leaving Social
@@ -293,7 +275,6 @@ struct MainTabView: View {
             print("⚠️ Memory warning received - clearing caches")
             ImageCacheManager.shared.clearCache()
             TerritoryStore.shared.invalidateCache()
-            LessonsViewModel.invalidateCache()
             SocialViewModel.invalidateCache()
         }
     }
@@ -321,6 +302,19 @@ struct MainTabView: View {
                                         showStartSession = true
                                     }
                                 }
+                            }
+                        } else if selectedTab == index {
+                            // Same tab tapped - pop to root
+                            let notificationName: String
+                            switch index {
+                            case 0: notificationName = "PopToRootHem"
+                            case 1: notificationName = "PopToRootSocialt"
+                            case 3: notificationName = "PopToRootBeloningar"
+                            case 4: notificationName = "PopToRootProfil"
+                            default: notificationName = ""
+                            }
+                            if !notificationName.isEmpty {
+                                NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
                             }
                         } else {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -389,6 +383,7 @@ private struct TabBarItem: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         Button(action: action) {
@@ -400,8 +395,8 @@ private struct TabBarItem: View {
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
-                                    Color.black,
-                                    Color.gray.opacity(0.6)
+                                    colorScheme == .dark ? Color.white : Color.black,
+                                    colorScheme == .dark ? Color.gray.opacity(0.8) : Color.gray.opacity(0.6)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -417,7 +412,7 @@ private struct TabBarItem: View {
                 
                 Text(title)
                     .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? .black : .gray)
+                    .foregroundColor(isSelected ? .primary : .gray)
             }
             .frame(maxWidth: .infinity)
         }

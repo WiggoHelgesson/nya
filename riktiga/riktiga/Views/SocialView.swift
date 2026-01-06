@@ -31,9 +31,8 @@ struct SocialView: View {
     @State private var newsAvatarItem: PhotosPickerItem? = nil
     @State private var newsAvatarUrl: String? = nil
     @State private var isUploadingAvatar = false
-    @State private var golfTrainers: [GolfTrainer] = []
-    @State private var isLoadingTrainers = false
     @State private var pendingPostNavigation: String? = nil
+    @State private var navigationPath = NavigationPath()
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -49,12 +48,16 @@ struct SocialView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 mainContent
             }
             .navigationTitle("")
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootSocialt"))) { _ in
+                navigationPath = NavigationPath()
+                selectedPost = nil
+            }
             .navigationBarHidden(true)
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedPost) { post in
@@ -356,12 +359,6 @@ struct SocialView: View {
                                     
                                     if index == 4, shouldShowBrandSlider {
                                         brandSliderInlineSection
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
-                                    
-                                    if index == 6, postsToDisplay.count >= 8 {
-                                        bookLessonInlineSection
                                         Divider()
                                             .background(Color(.systemGray5))
                                     }
@@ -807,133 +804,6 @@ struct SocialView: View {
         }
         .padding(.vertical, 20)
         .background(Color(.systemBackground))
-    }
-    
-    private var bookLessonInlineSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Text("Golftränare")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Visa alla")
-                            .font(.system(size: 14, weight: .medium))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.gray)
-                }
-            }
-            .padding(.horizontal, 16)
-            
-            // Trainer slider
-            if isLoadingTrainers {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .tint(.black)
-                    Spacer()
-                }
-                .frame(height: 160)
-            } else if golfTrainers.isEmpty {
-                // Empty state - show button to navigate
-                Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToLessons"), object: nil)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "figure.golf")
-                            .font(.system(size: 24))
-                            .foregroundColor(.primary)
-                        Text("Utforska golftränare")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 80)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal, 16)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(golfTrainers.prefix(10)) { trainer in
-                            NavigationLink(destination: TrainerDetailView(trainer: trainer)) {
-                                trainerCard(trainer: trainer)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-            }
-        }
-        .padding(.vertical, 16)
-        .background(Color(.systemGray6))
-        .task {
-            await loadGolfTrainers()
-        }
-    }
-    
-    // MARK: - Trainer Card
-    private func trainerCard(trainer: GolfTrainer) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Cover image (square with rounded corners)
-            if let avatarUrl = trainer.avatarUrl, !avatarUrl.isEmpty {
-                ProfileAvatarView(path: avatarUrl, size: 120)
-                    .frame(width: 120, height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray5))
-                    .frame(width: 120, height: 120)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                    )
-            }
-            
-            // Name and price
-            VStack(alignment: .leading, spacing: 2) {
-                Text(trainer.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
-                Text("\(trainer.hourlyRate) kr/h")
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
-            }
-        }
-        .frame(width: 120)
-    }
-    
-    // MARK: - Load Golf Trainers
-    private func loadGolfTrainers() async {
-        guard golfTrainers.isEmpty else { return }
-        
-        isLoadingTrainers = true
-        
-        do {
-            let trainers = try await TrainerService.shared.fetchTrainers()
-            await MainActor.run {
-                golfTrainers = trainers
-                isLoadingTrainers = false
-            }
-        } catch {
-            print("❌ Failed to load golf trainers for social feed: \(error)")
-            await MainActor.run {
-                isLoadingTrainers = false
-            }
-        }
     }
     
     private func toggleRecommendedFollow(for userId: String) {
@@ -2684,6 +2554,15 @@ struct GymExercisesListView: View {
                                 .foregroundColor(.primary)
                         }
                     }
+                }
+                
+                // Show notes if available
+                if let notes = exercise.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .padding(.top, 4)
                 }
             }
             

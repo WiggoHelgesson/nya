@@ -2,93 +2,90 @@ import SwiftUI
 
 struct StatisticsView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var myPostsViewModel = SocialViewModel()
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    // Step statistics section
-                    StepStatisticsSectionView()
-                        .padding(.horizontal, 16)
+                VStack(spacing: 24) {
+                    // AI Coach section
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "AI Coach", icon: "sparkles")
+                        
+                        NavigationLink(destination: UppyChatView()) {
+                            StatisticsMenuRow(
+                                icon: "bubble.left.and.bubble.right.fill",
+                                title: "Prata med UPPY",
+                                subtitle: "Chatta med din AI-coach direkt i appen",
+                                iconColor: .primary
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(16)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+                    .padding(.horizontal, 16)
                     
-                    // Menu sections
-                    VStack(spacing: 16) {
-                        // AI Coach section
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(title: "AI Coach", icon: "sparkles")
-                            
-                            NavigationLink(destination: UppyChatView()) {
+                    // Statistics section
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(title: "Statistik & Rapporter", icon: "chart.bar.fill")
+                        
+                        VStack(spacing: 0) {
+                            NavigationLink(destination: MonthlyReportView()) {
                                 StatisticsMenuRow(
-                                    icon: "bubble.left.and.bubble.right.fill",
-                                    title: "Prata med UPPY",
-                                    subtitle: "Chatta med din AI-coach direkt i appen",
+                                    icon: "doc.text.magnifyingglass",
+                                    title: "Månadsrapport",
+                                    subtitle: "Sammanfattning av dina pass denna månad",
+                                    iconColor: .primary,
+                                    showDivider: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            
+                            NavigationLink(destination: CalendarOverviewView()) {
+                                StatisticsMenuRow(
+                                    icon: "calendar",
+                                    title: "Kalender",
+                                    subtitle: "Se alla träningsdagar i månad, år eller flera år",
+                                    iconColor: .primary,
+                                    showDivider: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            
+                            NavigationLink(destination: ProgressiveOverloadView()) {
+                                StatisticsMenuRow(
+                                    icon: "chart.line.uptrend.xyaxis",
+                                    title: "Progressive Overload",
+                                    subtitle: "Följ din styrkeutveckling över tid",
+                                    iconColor: .primary,
+                                    showDivider: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            
+                            NavigationLink(destination: UppyChatView(initialPrompt: "Vilken övning kör jag mest på gymmet?")) {
+                                StatisticsMenuRow(
+                                    icon: "dumbbell.fill",
+                                    title: "Mest använda gymövningar",
+                                    subtitle: "Se vilka övningar du gör mest",
                                     iconColor: .primary
                                 )
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(16)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
-                        
-                        // Statistics section
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(title: "Statistik & Rapporter", icon: "chart.bar.fill")
-                            
-                            VStack(spacing: 0) {
-                                NavigationLink(destination: MonthlyReportView()) {
-                                    StatisticsMenuRow(
-                                        icon: "doc.text.magnifyingglass",
-                                        title: "Månadsrapport",
-                                        subtitle: "Sammanfattning av dina pass denna månad",
-                                        iconColor: .primary,
-                                        showDivider: true
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                
-                                NavigationLink(destination: CalendarOverviewView()) {
-                                    StatisticsMenuRow(
-                                        icon: "calendar",
-                                        title: "Kalender",
-                                        subtitle: "Se alla träningsdagar i månad, år eller flera år",
-                                        iconColor: .primary,
-                                        showDivider: true
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                
-                                NavigationLink(destination: ProgressiveOverloadView()) {
-                                    StatisticsMenuRow(
-                                        icon: "chart.line.uptrend.xyaxis",
-                                        title: "Progressive Overload",
-                                        subtitle: "Följ din styrkeutveckling över tid",
-                                        iconColor: .primary,
-                                        showDivider: true
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                
-                                NavigationLink(destination: UppyChatView(initialPrompt: "Vilken övning kör jag mest på gymmet?")) {
-                                    StatisticsMenuRow(
-                                        icon: "dumbbell.fill",
-                                        title: "Mest använda gymövningar",
-                                        subtitle: "Se vilka övningar du gör mest",
-                                        iconColor: .primary
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(16)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(16)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                     }
+                    .padding(16)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
                     .padding(.horizontal, 16)
                 }
-                .padding(.vertical, 16)
+                .padding(.vertical, 20)
+                .padding(.bottom, 20)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Statistik")
@@ -97,6 +94,10 @@ struct StatisticsView: View {
                     Button("Stäng") { dismiss() }
                     .foregroundColor(.primary)
                 }
+            }
+            .onAppear {
+                // Posts will be empty initially, but migration will process them when available
+                // The strength score view will update when posts are loaded
             }
         }
         .enableSwipeBack()

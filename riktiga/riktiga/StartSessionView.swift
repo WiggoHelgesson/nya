@@ -80,7 +80,7 @@ struct StartSessionView: View {
             print("🔍 StartSessionView.task - activeSession: \(sessionManager.activeSession != nil), hasActiveSession: \(sessionManager.hasActiveSession)")
             Task { @MainActor in
                 locationManager.requestLocationPermission()
-                locationManager.startTracking(activityType: carouselSelection.rawValue)
+                // Vi ska INTE starta tracking här, det görs när passet faktiskt startas
             }
         }
         .onAppear {
@@ -1728,7 +1728,9 @@ struct SessionMapView: View {
             if activity == .running || activity == .golf {
                 isLoadingTakeovers = true
                 Task { @MainActor in
-                    let takeovers = await TerritoryStore.shared.finalizeTerritoryCaptureAndReturnTakeovers(
+                    let store = TerritoryStore.shared
+                    
+                    let takeovers = await store.finalizeTerritoryCaptureAndReturnTakeovers(
                         activity: activity,
                         routeCoordinates: finalRouteCoordinates,
                         userId: userId,
@@ -1736,36 +1738,37 @@ struct SessionMapView: View {
                         sessionDuration: sessionDuration,
                         sessionPace: currentPace
                     )
-                    self.takeoverUsers = takeovers.sorted { $0.tilesTaken > $1.tilesTaken }
+                    
+                    if !takeovers.isEmpty {
+                        print("🎯 Captured territory with \(takeovers.count) takeovers")
+                    } else {
+                        print("🎯 Captured territory (no takeovers)")
+                    }
+                    
+                    // Wait briefly before showing session complete
+                    try? await Task.sleep(nanoseconds: 500_000_000)
                     self.isLoadingTakeovers = false
                     
-                    // If we actually took over someone, show summary page first
-                    if !takeovers.isEmpty {
-                        self.showTakeoverSummary = true
-                    } else {
-                        self.showSessionComplete = true
-                    }
+                    // Show session complete
+                    self.updateEarnedPoints()
+                    print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
+                    self.showSessionComplete = true
                 }
+                
+                // Preserve coordinates for animation or post saving
+                self.territoryAnimationCoordinates = finalRouteCoordinates
+                
             } else {
-                print("🗺️ CALLING captureTerritoryFromRouteIfNeeded with \(finalRouteCoordinates.count) points")
-                captureTerritoryFromRouteIfNeeded(
-                    coordinates: finalRouteCoordinates,
-                    userId: userId,
-                    distance: locationManager.distance,
-                    duration: sessionDuration,
-                    pace: currentPace
-                )
+                // For other activities (biking, etc.), just show session complete
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    self.updateEarnedPoints()
+                    print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
+                    self.showSessionComplete = true
+                }
             }
-            
-            // Preserve coordinates for post saving
-            self.territoryAnimationCoordinates = finalRouteCoordinates
         } else {
             print("⏭️ Skipping territory capture (user chose to save without territory)")
             self.territoryAnimationCoordinates = [] // No animation if skipped
-        }
-        
-        // If we didn't trigger the takeover flow above, fall back to showing session complete.
-        if skipTerritoryCapture || !(activity == .running || activity == .golf) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 self.updateEarnedPoints()
                 print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
@@ -1774,32 +1777,6 @@ struct SessionMapView: View {
         }
     }
     
-    private func captureTerritoryFromRouteIfNeeded(
-        coordinates: [CLLocationCoordinate2D],
-        userId: String,
-        distance: Double,
-        duration: Int,
-        pace: String
-    ) {
-        print("🗺️ captureTerritoryFromRouteIfNeeded RECEIVED \(coordinates.count) coordinates")
-        
-        // Only running and golf create territories (not skiing)
-        let eligibleActivities: Set<ActivityType> = [.running, .golf]
-        guard eligibleActivities.contains(activity) else {
-            print("❌ Activity \(activity) not eligible for territory capture (only running and golf)")
-            return
-        }
-        
-        print("🗺️ Calling TerritoryStore.finalizeTerritoryCapture...")
-        TerritoryStore.shared.finalizeTerritoryCapture(
-            activity: activity,
-            routeCoordinates: coordinates,
-            userId: userId,
-            sessionDistance: distance,
-            sessionDuration: duration,
-            sessionPace: pace
-        )
-    }
     
     private func distancePointMultiplier() -> Double {
         switch activity {

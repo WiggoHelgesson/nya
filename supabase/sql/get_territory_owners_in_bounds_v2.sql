@@ -7,12 +7,7 @@
 -- - Fast rendering: few overlays (owners) vs many overlays (tiles).
 -- - Simplification: done in meters (EPSG:3857) to keep vertex counts low and MapKit stable.
 
-DROP FUNCTION IF EXISTS public.get_territory_owners_in_bounds_v2(
-    double precision,
-    double precision,
-    double precision,
-    double precision
-);
+DROP FUNCTION IF EXISTS public.get_territory_owners_in_bounds_v2(double precision, double precision, double precision, double precision);
 
 CREATE OR REPLACE FUNCTION public.get_territory_owners_in_bounds_v2(
     min_lat double precision,
@@ -48,45 +43,45 @@ BEGIN
     RETURN QUERY
     WITH candidate_tiles AS (
         SELECT
-            t.owner_id,
-            t.geom,
-            t.last_updated_at
+            t.owner_id AS tile_owner_id,
+            t.geom AS tile_geom,
+            t.last_updated_at AS tile_last_updated_at
         FROM public.territory_tiles t
         WHERE t.geom && env_4326
           AND t.owner_id IS NOT NULL
     ),
     per_owner AS (
         SELECT
-            owner_id,
-            max(last_updated_at) AS last_claim_ts,
+            ct.tile_owner_id,
+            max(ct.tile_last_updated_at) AS last_claim_ts,
             -- dissolve tiles for this owner (in meters)
             ST_UnaryUnion(
                 ST_Collect(
-                    ST_Transform(geom, 3857)
+                    ST_Transform(ct.tile_geom, 3857)
                 )
             ) AS geom_3857
-        FROM candidate_tiles
-        GROUP BY owner_id
+        FROM candidate_tiles ct
+        GROUP BY ct.tile_owner_id
     ),
     clipped AS (
         SELECT
-            owner_id,
-            last_claim_ts,
+            po.tile_owner_id,
+            po.last_claim_ts,
             -- clip to viewport to keep geometry small
-            ST_Intersection(geom_3857, env_3857) AS geom_clip_3857
-        FROM per_owner
-        WHERE geom_3857 IS NOT NULL AND NOT ST_IsEmpty(geom_3857)
+            ST_Intersection(po.geom_3857, env_3857) AS geom_clip_3857
+        FROM per_owner po
+        WHERE po.geom_3857 IS NOT NULL AND NOT ST_IsEmpty(po.geom_3857)
     ),
     simplified AS (
         SELECT
-            owner_id,
-            last_claim_ts,
-            ST_SimplifyPreserveTopology(geom_clip_3857, tol_m) AS geom_simpl_3857
-        FROM clipped
-        WHERE geom_clip_3857 IS NOT NULL AND NOT ST_IsEmpty(geom_clip_3857)
+            cl.tile_owner_id,
+            cl.last_claim_ts,
+            ST_SimplifyPreserveTopology(cl.geom_clip_3857, tol_m) AS geom_simpl_3857
+        FROM clipped cl
+        WHERE cl.geom_clip_3857 IS NOT NULL AND NOT ST_IsEmpty(cl.geom_clip_3857)
     )
     SELECT
-        s.owner_id::text,
+        s.tile_owner_id::text AS owner_id,
         ST_Area(ST_Transform(s.geom_simpl_3857, 4326)::geography)::double precision AS area_m2,
         ST_AsGeoJSON(ST_Transform(s.geom_simpl_3857, 4326))::jsonb AS geom,
         s.last_claim_ts::text AS last_claim

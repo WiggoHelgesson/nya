@@ -16,18 +16,18 @@ final class TerritoryStore: ObservableObject {
     private let eligibleActivities: Set<ActivityType> = [.running, .golf]
     private let localStorageKey = "LocalTerritories"
     
-    // MARK: - Caching & Performance
+    // MARK: - Caching & Performance - BULLETPROOF ANTI-FLICKER
     private var cachedTerritoryIds: Set<UUID> = []
     private var lastFetchBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private var lastFetchTime: Date = .distantPast
-    private let cacheValidityDuration: TimeInterval = 15 // 15 seconds cache for faster sync
-    private let boundsMargin: Double = 0.2 // Used for TERRITORY owner-polygons; tiles use a dynamic margin
+    private let cacheValidityDuration: TimeInterval = 45 // 45 seconds cache - BULLETPROOF (increased to reduce flicker)
+    private let boundsMargin: Double = 0.1 // Smaller margin for more responsive loading
     
-    // Tiles cache - use dictionary for O(1) lookups and stable updates
+    // Tiles cache - use dictionary for O(1) lookups and stable updates - BULLETPROOF ANTI-FLICKER
     private var tileCache: [Int64: Tile] = [:] // Dictionary by tile ID
     private var lastTileFetchTime: Date = .distantPast
     private var lastTileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
-    private let tileCacheValidity: TimeInterval = 30 // 30 seconds - faster refresh for new tiles
+    private let tileCacheValidity: TimeInterval = 45 // 45 seconds - BULLETPROOF (increased to reduce flicker)
     private var isFetchingTiles: Bool = false // Prevent concurrent fetches
     private let maxCachedTiles: Int = 100000 // Support ALL of Sweden - SQL handles smart loading
     private let maxRenderedTiles: Int = 6000 // MapKit overlay safety cap (prevents freezes/crashes)
@@ -37,7 +37,7 @@ final class TerritoryStore: ObservableObject {
     
     // Debounce
     private var debounceTask: Task<Void, Never>?
-    private let debounceInterval: TimeInterval = 0.8 // 800ms debounce (increased for smoother map)
+    private let debounceInterval: TimeInterval = 0.3 // 300ms debounce for faster response
     
     init() {
         // We do NOT load local territories anymore. Server is truth.
@@ -62,7 +62,7 @@ final class TerritoryStore: ObservableObject {
         // Clear local storage (cleanup)
         UserDefaults.standard.removeObject(forKey: localStorageKey)
         
-        print("🔄 Territory cache forcefully cleared")
+        print("🔄 Territory cache FORCE CLEARED - everything wiped, ready for fresh fetch")
     }
     
     // MARK: - Viewport-based Loading with Debounce
@@ -83,40 +83,10 @@ final class TerritoryStore: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(debounceInterval * 1_000_000_000))
             
             guard !Task.isCancelled else { return }
-            
-            // Check if we need to fetch (bounds changed significantly or cache expired)
-            let shouldFetch = shouldFetchForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
-            
-            if shouldFetch {
-                await performViewportFetch(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
-            }
+            // Server-authoritative: always fetch for current viewport.
+            // If the fetch fails, we prefer showing nothing over stale zones.
+            await performViewportFetch(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
         }
-    }
-    
-    private func shouldFetchForBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) -> Bool {
-        // Always fetch if cache is old
-        if Date().timeIntervalSince(lastFetchTime) > cacheValidityDuration {
-            return true
-        }
-        
-        // Check if bounds changed significantly
-        guard let lastBounds = lastFetchBounds else {
-            return true
-        }
-        
-        // Calculate if new bounds are outside the cached bounds (with margin)
-        let expandedMinLat = lastBounds.minLat - boundsMargin
-        let expandedMaxLat = lastBounds.maxLat + boundsMargin
-        let expandedMinLon = lastBounds.minLon - boundsMargin
-        let expandedMaxLon = lastBounds.maxLon + boundsMargin
-        
-        // If new viewport is within expanded cached bounds, no need to fetch
-        if minLat >= expandedMinLat && maxLat <= expandedMaxLat &&
-           minLon >= expandedMinLon && maxLon <= expandedMaxLon {
-            return false
-        }
-        
-        return true
     }
     
     private func performViewportFetch(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
@@ -141,25 +111,10 @@ final class TerritoryStore: ObservableObject {
             let mapped = remote.compactMap { $0.asTerritory() }
             
             await MainActor.run {
-                // Merge with existing territories (keep territories outside viewport)
-                let newIds = Set(mapped.map { $0.id })
-                
-                // Keep territories that are outside the new fetch area or in the new fetch
-                var updatedTerritories = self.territories.filter { territory in
-                    // Keep if not in the fetch area OR if it's in the new fetch
-                    if newIds.contains(territory.id) {
-                        return false // Will be replaced by new version
-                    }
-                    return true
-                }
-                
-                // Add newly fetched territories
-                updatedTerritories.append(contentsOf: mapped)
-                
-                // We do NOT add local territories anymore. Grid is truth.
-                
-                self.territories = updatedTerritories
-                self.cachedTerritoryIds = Set(updatedTerritories.map { $0.id })
+                // Server-authoritative: replace current territories with what the backend returns.
+                // This prevents stale zones from lingering when ownership changes.
+                self.territories = mapped
+                self.cachedTerritoryIds = Set(mapped.map { $0.id })
                 self.lastFetchBounds = (fetchMinLat, fetchMaxLat, fetchMinLon, fetchMaxLon)
                 self.lastFetchTime = Date()
                 
@@ -167,6 +122,13 @@ final class TerritoryStore: ObservableObject {
             }
         } catch {
             print("❌ Viewport fetch failed: \(error)")
+            await MainActor.run {
+                // If backend fetch fails, do NOT keep rendering stale zones.
+                self.territories = []
+                self.cachedTerritoryIds.removeAll()
+                self.lastFetchTime = .distantPast
+                self.lastFetchBounds = nil
+            }
         }
     }
     
@@ -614,6 +576,37 @@ final class TerritoryStore: ObservableObject {
             self.lastTakeovers = takeovers
             self.needsForceRefresh = true
             self.invalidateCache()
+            
+            // Calculate bounds from the claimed polygon for refresh
+            let lats = validPolygon.map { $0.latitude }
+            let lons = validPolygon.map { $0.longitude }
+            if let minLat = lats.min(), let maxLat = lats.max(),
+               let minLon = lons.min(), let maxLon = lons.max() {
+                // Expand by 0.05 degrees (~5km) to ensure ALL claimed tiles are loaded
+                let bounds = (minLat - 0.05, maxLat + 0.05, minLon - 0.05, maxLon + 0.05)
+                
+                print("🔄 Refreshing tiles after takeover claim in bounds: \(bounds)...")
+                // Force refresh to bypass any caching
+                await loadTilesInBounds(
+                    minLat: bounds.0,
+                    maxLat: bounds.1,
+                    minLon: bounds.2,
+                    maxLon: bounds.3,
+                    forceRefresh: true
+                )
+                print("   Tiles count after refresh: \(tiles.count)")
+            }
+            
+            // Also refresh territories
+            await refresh()
+            
+            // BULLETPROOF: Post notification so ZoneWarView refreshes
+            NotificationCenter.default.post(
+                name: NSNotification.Name("WorkoutSaved"),
+                object: nil
+            )
+            print("🔔 Posted WorkoutSaved notification")
+            
             return takeovers
         } catch {
             print("❌ [TERRITORY] claimTilesWithTakeovers failed: \(error)")

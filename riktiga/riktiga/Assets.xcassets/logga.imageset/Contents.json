@@ -1,15 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Namnlös design copy 2.pdf.png",
+      "filename" : "Namnlös design copy 2.pdf.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "logga@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "logga@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

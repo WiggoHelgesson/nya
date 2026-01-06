@@ -369,6 +369,45 @@ final class PushNotificationService: NSObject {
             print("❌ [PUSH] Failed to send news notifications: \(error)")
         }
     }
+    
+    // MARK: - Send Custom Announcement to All Users
+    
+    func sendAnnouncementToAllUsers(title: String, body: String) async {
+        print("📢 [ANNOUNCEMENT] Sending announcement to all users")
+        print("📢 Title: \(title)")
+        print("📢 Body: \(body)")
+        
+        do {
+            // Get all device tokens (all active users)
+            struct DeviceToken: Decodable {
+                let user_id: String
+            }
+            
+            let tokens: [DeviceToken] = try await SupabaseConfig.supabase
+                .from("device_tokens")
+                .select("user_id")
+                .eq("is_active", value: true)
+                .execute()
+                .value
+            
+            let uniqueUserIds = Set(tokens.map { $0.user_id })
+            print("📢 [ANNOUNCEMENT] Found \(uniqueUserIds.count) users to notify")
+            
+            // Send push to each user
+            for userId in uniqueUserIds {
+                await sendRealPushNotification(
+                    toUserId: userId,
+                    title: title,
+                    body: body,
+                    data: ["type": "announcement"]
+                )
+            }
+            
+            print("✅ [ANNOUNCEMENT] Announcement sent to \(uniqueUserIds.count) users!")
+        } catch {
+            print("❌ [ANNOUNCEMENT] Failed to send announcement: \(error)")
+        }
+    }
 }
 
 // MARK: - Notification Navigation Manager

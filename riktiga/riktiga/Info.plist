@@ -33,6 +33,9 @@
 		<string>instagram-stories</string>
 		<string>snapchat</string>
 		<string>sms</string>
+		<string>strava</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

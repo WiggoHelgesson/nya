@@ -208,6 +208,7 @@ struct OptimizedAsyncImage: View {
     @State private var image: UIImage?
     @State private var isLoading = false
     @State private var hasError = false
+    @State private var loadedUrl: String? // Track which URL we've loaded
     
     init(
         url: String?,
@@ -225,6 +226,7 @@ struct OptimizedAsyncImage: View {
            let cachedImage = ImageCacheManager.shared.getImage(for: urlString) {
             _image = State(initialValue: cachedImage)
             _isLoading = State(initialValue: false)
+            _loadedUrl = State(initialValue: urlString)
         }
     }
     
@@ -261,18 +263,25 @@ struct OptimizedAsyncImage: View {
             }
         }
         .onAppear {
-            loadImage()
+            loadImageIfNeeded()
         }
-        .onChange(of: url) { _, newUrl in
-            if newUrl != url {
-                loadImage()
+        .onChange(of: url) { oldUrl, newUrl in
+            // URL changed - reset state and reload
+            if oldUrl != newUrl {
+                image = nil
+                isLoading = false
+                hasError = false
+                loadedUrl = nil
+                loadImageIfNeeded()
             }
         }
     }
     
-    private func loadImage() {
-        // Skip if already loaded
-        if image != nil { return }
+    private func loadImageIfNeeded() {
+        // Skip if already loaded THIS URL
+        if let loaded = loadedUrl, loaded == url, image != nil {
+            return
+        }
         
         guard let urlString = url, !urlString.isEmpty else {
             hasError = true
@@ -283,6 +292,7 @@ struct OptimizedAsyncImage: View {
         if let cachedImage = ImageCacheManager.shared.getImage(for: urlString) {
             // No animation needed if loading from cache - appear instantly
             self.image = cachedImage
+            self.loadedUrl = urlString
             self.isLoading = false
             return
         }
@@ -290,18 +300,28 @@ struct OptimizedAsyncImage: View {
         isLoading = true
         hasError = false
         
+        // Capture the URL we're loading to check later
+        let urlToLoad = urlString
+        
         Task {
             do {
-                let loadedImage = try await loadImageFromURL(urlString)
+                let loadedImage = try await loadImageFromURL(urlToLoad)
                 
                 await MainActor.run {
+                    // Only set the image if the URL hasn't changed while loading
+                    guard self.url == urlToLoad else { return }
+                    
                     withAnimation(.easeInOut(duration: 0.2)) {
                         self.image = loadedImage
+                        self.loadedUrl = urlToLoad
                         self.isLoading = false
                     }
                 }
             } catch {
                 await MainActor.run {
+                    // Only set error if URL hasn't changed
+                    guard self.url == urlToLoad else { return }
+                    
                     self.isLoading = false
                     self.hasError = true
                 }
@@ -371,5 +391,7 @@ struct ProfileImage: View {
             height: size,
             cornerRadius: size / 2
         )
+        // Use URL as identity to force view recreation when URL changes
+        .id(url ?? "no-url")
     }
 }

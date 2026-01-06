@@ -150,7 +150,16 @@ struct FavoriteRewardCard: View {
         case "54": return "21" // PUMPLABS (new cover)
         case "13": return "22" // ZEN ENERGY (old)
         case "52": return "22" // ZEN ENERGY (new cover)
-        default: return "5" // Default to PEGMATE
+        case "34": return "34" // CAPSTONE
+        case "35": return "46" // FUSE ENERGY (old)
+        case "48": return "46" // FUSE ENERGY (new cover)
+        case "38": return "38" // Fjällsyn UF
+        case "39": return "39" // CLYRO (old)
+        case "53": return "39" // CLYRO (new cover)
+        case "40": return "40" // Powerwell (old)
+        case "55": return "40" // Powerwell (new cover)
+        case "44": return "45" // XEEIL
+        default: return imageName // Use the image itself as logo if no mapping
         }
     }
 }

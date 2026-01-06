@@ -59,6 +59,12 @@ struct ExerciseHistorySnapshot {
     let sets: [PreviousExerciseSet]
 }
 
+extension Collection {
+    subscript(safe index: Index) -> Element? {
+        return indices.contains(index) ? self[index] : nil
+    }
+}
+
 class GymSessionViewModel: ObservableObject {
     @Published var exercises: [GymExercise] = []
     @Published var formattedDuration: String = "00:00"
@@ -87,6 +93,31 @@ class GymSessionViewModel: ObservableObject {
     private var startTime: Date?
     private var timer: Timer?
     private let historyLimit = 60
+    private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        // Lyssna på klick från Live Activity
+        NotificationCenter.default.publisher(for: NSNotification.Name("LiveActivityCompleteSet"))
+            .sink { [weak self] _ in
+                self?.completeNextSetViaLiveActivity()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func completeNextSetViaLiveActivity() {
+        // Hitta den första övningen som har ett oavklarat set
+        guard let exerciseIndex = exercises.firstIndex(where: { exercise in
+            exercise.sets.contains { !$0.isCompleted }
+        }) else { return }
+        
+        guard let setIndex = exercises[exerciseIndex].sets.firstIndex(where: { !$0.isCompleted }) else { return }
+        
+        // Markera som klart
+        toggleSetCompletion(exerciseId: exercises[exerciseIndex].id, setIndex: setIndex)
+        
+        // Uppdatera Live Activity direkt
+        updateLiveActivity()
+    }
     
     var sessionStartTime: Date? {
         startTime
@@ -102,19 +133,70 @@ class GymSessionViewModel: ObservableObject {
         timer?.invalidate()
 
         updateDuration()
+        
+        // Start Live Activity
+        let initialState = WorkoutActivityAttributes.ContentState(
+            currentExercise: exercises.first?.name,
+            currentSet: 1,
+            totalSets: exercises.first?.sets.count ?? 0,
+            elapsedSeconds: elapsedSeconds
+        )
+        LiveActivityManager.shared.startLiveActivity(workoutType: "Gympass", initialContent: initialState)
 
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateDuration()
+            guard let self = self else { return }
+            self.updateDuration()
+            
+            // Uppdatera Live Activity var 10:e sekund för att spara batteri
+            if self.elapsedSeconds % 10 == 0 {
+                self.updateLiveActivity()
+            }
         }
+    }
+    
+    private func updateLiveActivity() {
+        // Hitta den aktiva övningen (första med oavklarade set)
+        let activeEx = exercises.first(where: { $0.sets.contains { !$0.isCompleted } }) ?? exercises.last
+        let currentSetIndex = activeEx?.sets.firstIndex(where: { !$0.isCompleted }) ?? 0
+        let currentSet = activeEx?.sets[safe: currentSetIndex]
+        
+        // Räkna antal genomförda set totalt
+        let completedSetsCount = exercises.reduce(0) { total, exercise in
+            total + exercise.sets.filter { $0.isCompleted }.count
+        }
+        
+        // Hämta historik för denna övning
+        let history = exerciseHistory[activeEx?.name ?? ""]?.sets.first
+        let prevText = history != nil ? "\(Int(history!.kg)) kg x \(history!.reps)" : "—"
+        
+        let state = WorkoutActivityAttributes.ContentState(
+            currentExercise: activeEx?.name,
+            currentSet: currentSetIndex + 1,
+            totalSets: activeEx?.sets.count ?? 0,
+            completedSets: completedSetsCount,
+            currentReps: currentSet?.reps,
+            currentWeight: currentSet?.kg,
+            previousWeight: prevText,
+            isAllSetsDone: exercises.allSatisfy { $0.sets.allSatisfy { $0.isCompleted } },
+            totalVolume: totalVolume,
+            elapsedSeconds: elapsedSeconds
+        )
+        LiveActivityManager.shared.updateLiveActivity(with: state)
     }
     
     func stopTimer() {
         timer?.invalidate()
         timer = nil
+        // Vi tar bort endLiveActivity härifrån så den fortsätter synas även om vi backar ut ur vyn
+    }
+    
+    func endLiveActivity() {
+        LiveActivityManager.shared.endLiveActivity()
     }
     
     func resetSession() {
         stopTimer()
+        endLiveActivity()
         exercises = []
         startTime = nil
         elapsedSeconds = 0
@@ -174,7 +256,8 @@ class GymSessionViewModel: ObservableObject {
                 id: post.id ?? UUID().uuidString,
                 name: post.name,
                 category: post.category,
-                sets: sets
+                sets: sets,
+                notes: nil
             )
         }
         exercises = convertedExercises
@@ -185,9 +268,41 @@ class GymSessionViewModel: ObservableObject {
             id: template.id,  // Keep the original exercise ID from the API
             name: template.name,
             category: template.category,
-            sets: []
+            sets: [],
+            notes: nil
         )
         exercises.append(newExercise)
+    }
+    
+    func loadWorkout(_ workout: SavedGymWorkout) {
+        // Convert SavedGymWorkout exercises to GymExercise format
+        let loadedExercises = workout.exercises.map { exercisePost -> GymExercise in
+            // Convert the arrays of reps and kg into ExerciseSet objects
+            let sets = zip(exercisePost.reps, exercisePost.kg).map { (reps, kg) in
+                ExerciseSet(kg: kg, reps: reps, isCompleted: false)
+            }
+            
+            return GymExercise(
+                id: exercisePost.id ?? UUID().uuidString,
+                name: exercisePost.name,
+                category: exercisePost.category,
+                sets: sets,
+                notes: nil
+            )
+        }
+        
+        // Replace current exercises with loaded ones
+        exercises = loadedExercises
+        
+        // Start the timer if not already running
+        if timer == nil {
+            startTimer()
+        }
+    }
+    
+    func updateExerciseNotes(exerciseId: String, notes: String) {
+        guard let index = exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
+        exercises[index].notes = notes.isEmpty ? nil : notes
     }
     
     func previousSets(for exerciseName: String) -> [PreviousExerciseSet] {
@@ -196,6 +311,10 @@ class GymSessionViewModel: ObservableObject {
     
     func removeExercise(_ id: String) {
         exercises.removeAll { $0.id == id }
+    }
+    
+    func moveExercise(from source: IndexSet, to destination: Int) {
+        exercises.move(fromOffsets: source, toOffset: destination)
     }
     
     func addSet(to exerciseId: String) {
@@ -219,6 +338,7 @@ class GymSessionViewModel: ObservableObject {
         exercises[exerciseIndex].sets[setIndex].kg = kg
         exercises[exerciseIndex].sets[setIndex].reps = reps
         exercises[exerciseIndex].sets[setIndex].isCompleted = kg > 0 && reps > 0
+        updateLiveActivity()
     }
     
     func deleteSet(exerciseId: String, setIndex: Int) {
@@ -226,6 +346,7 @@ class GymSessionViewModel: ObservableObject {
               setIndex < exercises[exerciseIndex].sets.count else { return }
         
         exercises[exerciseIndex].sets.remove(at: setIndex)
+        updateLiveActivity()
     }
     
     func toggleSetCompletion(exerciseId: String, setIndex: Int) {
@@ -233,6 +354,7 @@ class GymSessionViewModel: ObservableObject {
               setIndex < exercises[exerciseIndex].sets.count else { return }
         
         exercises[exerciseIndex].sets[setIndex].isCompleted.toggle()
+        updateLiveActivity()
     }
     
     func appendGeneratedExercises(_ generated: [GeneratedWorkoutEntry]) {
@@ -330,6 +452,7 @@ struct GymExercise: Identifiable, Codable {
     let name: String
     let category: String?
     var sets: [ExerciseSet]
+    var notes: String?
 }
 
 struct ExerciseSet: Codable {

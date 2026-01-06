@@ -79,12 +79,21 @@ struct UpAndDownApp: App {
                     }
                 }
             }
-            // Handle deep links (password reset, Insert Affiliate, etc.)
+            // Handle deep links (password reset, Insert Affiliate, Strava, etc.)
             .onOpenURL { url in
                 print("📱 Received deep link: \(url)")
                 
                 // Check if this is an Insert Affiliate deep link
                 let urlString = url.absoluteString
+                
+                // Handle Strava OAuth callback (upanddown://upanddown?code=...)
+                if url.scheme == "upanddown" && url.host == "upanddown" {
+                    Task {
+                        let success = await StravaService.shared.handleOAuthCallback(url: url)
+                        print(success ? "✅ Strava connected successfully" : "❌ Strava connection failed")
+                    }
+                    return
+                }
                 
                 // Handle Insert Affiliate URL scheme (ia-companycode://affiliatecode)
                 if urlString.hasPrefix("ia-") {

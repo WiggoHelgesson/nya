@@ -9,30 +9,48 @@ struct MonthlyPrizeView: View {
     @State private var countdownText: String = ""
     @State private var countdownTimer: Timer?
     @State private var autoRefreshTask: Task<Void, Never>?
+    @State private var showPaywall = false
     private let leaderboardRefreshInterval: UInt64 = 45 * 1_000_000_000
+    
+    private var isPremium: Bool {
+        authViewModel.currentUser?.isProMember ?? false
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGray6)
+                Color.white
                     .ignoresSafeArea()
                 
+                // Always show the content (will be blurred if not Pro)
                 ScrollView {
                     VStack(spacing: 20) {
+                        // Pro member notice
+                        Text("Enbart PRO medlemmar kan delta")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                        
                         // Countdown
                         VStack(spacing: 8) {
                             Text("Tid kvar av månaden")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 20)
                             Text(countdownText)
                                 .font(.system(size: 22, weight: .bold))
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 20)
                         }
-                        .padding(.top, 16)
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
                         .padding(.horizontal, 20)
 
                         HealthDataDisclosureView(
@@ -41,65 +59,116 @@ struct MonthlyPrizeView: View {
                             showsManageButton: true,
                             manageAction: openHealthSettings
                         )
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
                         .padding(.horizontal, 20)
                         
                         // Current month leaderboard
-                        Text("Topplista denna månad")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                        
-                        if isLoading {
-                            VStack(spacing: 16) {
-                                ProgressView()
-                                    .scaleEffect(1.2)
-                                Text("Laddar topplistan...")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.vertical, 60)
-                        } else if topUsers.isEmpty {
-                            // Empty state
-                            VStack(spacing: 16) {
-                                Image(systemName: "trophy")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(.gray)
-                                Text("Inga träningspass hittades den här månaden")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                Text("Starta ditt första pass för att hamna på topplistan!")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .padding(.vertical, 60)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
-                                    NavigationLink {
-                                        UserProfileView(userId: user.id)
-                                            .environmentObject(authViewModel)
-                                    } label: {
-                                        MonthlyUserRow(
-                                            rank: index + 1,
-                                            user: user
-                                        )
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    if index < topUsers.count - 1 {
-                                        Divider()
-                                            .padding(.leading, 60)
+                        VStack(spacing: 0) {
+                            Text("Topplista denna månad")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(20)
+                            
+                            if isLoading {
+                                VStack(spacing: 16) {
+                                    ProgressView()
+                                        .scaleEffect(1.2)
+                                    Text("Laddar topplistan...")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.vertical, 40)
+                            } else if topUsers.isEmpty {
+                                // Empty state
+                                VStack(spacing: 16) {
+                                    Image(systemName: "trophy")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.gray)
+                                    Text("Inga Pro-medlemmar på topplistan ännu")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                    Text("Endast Pro-medlemmar syns på topplistan")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.vertical, 40)
+                            } else {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(topUsers.enumerated()), id: \.element.id) { index, user in
+                                        NavigationLink {
+                                            UserProfileView(userId: user.id)
+                                                .environmentObject(authViewModel)
+                                        } label: {
+                                            MonthlyUserRow(
+                                                rank: index + 1,
+                                                user: user
+                                            )
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                        if index < topUsers.count - 1 {
+                                            Divider()
+                                                .padding(.leading, 60)
+                                        }
                                     }
                                 }
                             }
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
-                            .padding(.horizontal, 20)
                         }
+                        .background(Color.white)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 20)
                         
                         Spacer(minLength: 50)
                     }
+                }
+                .blur(radius: isPremium ? 0 : 10)
+                
+                // Pro guard overlay for non-Pro users
+                if !isPremium {
+                    VStack(spacing: 24) {
+                        Spacer()
+                        
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        
+                        Text("Enbart för Pro medlemmar")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                        
+                        Text("Uppgradera till Pro för att delta i månadens tävling, synas på topplistan och vinna häftiga priser!")
+                            .font(.system(size: 16))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            Text("Bli Pro medlem")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.black)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 40)
+                        .padding(.top, 8)
+                        
+                        Spacer()
+                    }
+                    .background(Color.white.opacity(0.3))
                 }
             }
             .navigationTitle("Månadens pris")
@@ -113,6 +182,9 @@ struct MonthlyPrizeView: View {
                             .foregroundColor(.primary)
                     }
                 }
+            }
+            .sheet(isPresented: $showPaywall) {
+                PresentPaywallView()
             }
             .onAppear {
                 loadMonthlyStats()

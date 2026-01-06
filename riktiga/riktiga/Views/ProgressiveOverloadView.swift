@@ -9,11 +9,6 @@ struct ProgressiveOverloadView: View {
     @State private var errorMessage: String?
     @State private var exerciseHistories: [ExerciseHistory] = []
     
-    // Pro membership
-    @State private var isPremium = RevenueCatManager.shared.isProMember
-    @State private var showPaywall = false
-    private let freeExerciseLimit = 3
-    
     // Static cache for computed histories to avoid recomputing
     private static var cachedHistories: [ExerciseHistory] = []
     private static var cacheUserId: String?
@@ -162,40 +157,12 @@ struct ProgressiveOverloadView: View {
                         // Exercise list in a card container
                         VStack(spacing: 0) {
                             ForEach(Array(exerciseHistories.enumerated()), id: \.element.id) { index, history in
-                                if isPremium || index < freeExerciseLimit {
-                                    // Full access for Pro or first 3 exercises
-                                    NavigationLink {
-                                        ExerciseHistoryDetailView(history: history, dateFormatter: Self.dateFormatter, shortDateFormatter: Self.shortDateFormatter)
-                                    } label: {
-                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter, isLast: index == exerciseHistories.count - 1)
-                                    }
-                                    .buttonStyle(.plain)
-                                } else {
-                                    // Blurred row for non-Pro users
-                                    Button {
-                                        showPaywall = true
-                                    } label: {
-                                        ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter, isLast: index == exerciseHistories.count - 1)
-                                            .blur(radius: 6)
-                                            .overlay(
-                                                HStack(spacing: 6) {
-                                                    Image(systemName: "lock.fill")
-                                                        .font(.system(size: 14, weight: .bold))
-                                                    Text("PRO")
-                                                        .font(.system(size: 14, weight: .black))
-                                                }
-                                                .foregroundColor(.primary)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 6)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(Color(.systemBackground))
-                                                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                                                )
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
+                                NavigationLink {
+                                    ExerciseHistoryDetailView(history: history, dateFormatter: Self.dateFormatter, shortDateFormatter: Self.shortDateFormatter)
+                                } label: {
+                                    ExerciseHistoryRow(history: history, dateFormatter: Self.dateFormatter, isLast: index == exerciseHistories.count - 1)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                         .background(Color(.systemBackground))
@@ -212,12 +179,6 @@ struct ProgressiveOverloadView: View {
         .navigationTitle("Progressive Overload")
         .task { await loadExercises(forceRefresh: false) }
         .refreshable { await loadExercises(forceRefresh: true) }
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
-        }
-        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
-            isPremium = newValue
-        }
     }
     
     // MARK: - Stats Summary Item

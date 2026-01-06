@@ -125,4 +125,5 @@ struct GymExercisePost: Codable {
     let sets: Int
     let reps: [Int]  // Array of reps for each set
     let kg: [Double]  // Array of kg for each set
+    let notes: String?  // Exercise notes
 }

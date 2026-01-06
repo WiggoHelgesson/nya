@@ -205,50 +205,90 @@ struct AuthenticationView: View {
         }
     }
     
-    // MARK: - Form
+    // MARK: - Form (Login Page - Strava Style)
     private var formView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
+            // Close button
             HStack {
+                Spacer()
                 Button {
                     showLanding = true
                     onboardingStep = nil
                     authViewModel.errorMessage = ""
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .padding(10)
-                        .background(Color.black.opacity(0.08))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.black.opacity(0.6))
+                        .frame(width: 36, height: 36)
+                        .background(Color(.systemGray5))
                         .clipShape(Circle())
                 }
-                Spacer()
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-                
-            VStack(spacing: 18) {
-                Text("Logga in med ditt konto")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
-                
-                LoginFormView()
-                    .environmentObject(authViewModel)
-                
-                Text("Kontoskapande är avstängt och Apple-inloggning stöds inte längre.")
-                    .font(.system(size: 14))
-                    .foregroundColor(.black.opacity(0.6))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(28)
-            .frame(maxWidth: 420)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .shadow(color: Color.black.opacity(0.35), radius: 30, x: 0, y: 18)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
             
-            Spacer()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    // Title
+                    Text("Logga in på Up&Down")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.top, 8)
+                    
+                    // Email Login Section
+                    LoginFormView()
+                        .environmentObject(authViewModel)
+                    
+                    // Divider with "or"
+                    HStack {
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
+                        Text("eller")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 16)
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
+                    }
+                    
+                    // Apple Sign In Button
+                    Button {
+                        authViewModel.signInWithApple()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Text("Fortsätt med Apple")
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 30)
+                                .stroke(Color(.systemGray3), lineWidth: 1.5)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(authViewModel.isLoading)
+                    
+                    // Terms text
+                    Text("Genom att fortsätta godkänner du våra [användarvillkor](https://wiggio.se/privacy) och [integritetspolicy](https://wiggio.se/privacy).")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .tint(.black)
+                        .padding(.top, 8)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
+            }
         }
     }
     
@@ -723,6 +763,7 @@ private extension AuthenticationView {
     var signupFormView: some View {
         ScrollView {
             VStack(spacing: 24) {
+                // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Button {
                         showSignupForm = false
@@ -740,7 +781,7 @@ private extension AuthenticationView {
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(.primary)
                     
-                    Text("Fyll i dina kontouppgifter för att slutföra onboarding.")
+                    Text("Välj hur du vill skapa ditt konto.")
                         .font(.system(size: 15))
                         .foregroundColor(.black.opacity(0.6))
                 }
@@ -748,12 +789,67 @@ private extension AuthenticationView {
                 .padding(.horizontal, 24)
                 .padding(.top, 40)
                 
-                VStack(spacing: 18) {
+                // Apple Sign In Button (recommended)
+                VStack(spacing: 12) {
+                    Button {
+                        authViewModel.signInWithApple(onboardingData: onboardingData)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.white)
+                            
+                            Text("Fortsätt med Apple")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                            
+                            Spacer()
+                            
+                            Text("Rekommenderas")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(6)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(Color.black)
+                        .cornerRadius(30)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(authViewModel.isLoading)
+                    
+                    Text("Snabbt och säkert med Face ID/Touch ID")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 24)
+                
+                // Divider
+                HStack {
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                    Text("eller med e-post")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 16)
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                }
+                .padding(.horizontal, 24)
+                
+                // Email signup form
+                VStack(spacing: 16) {
                     TextField("Fullständigt namn", text: $signupName)
                         .textInputAutocapitalization(.words)
                         .padding(14)
                         .background(Color(.systemGray6))
-                        .cornerRadius(18)
+                        .cornerRadius(12)
                     
                     TextField("E-postadress", text: $signupEmail)
                         .keyboardType(.emailAddress)
@@ -762,28 +858,29 @@ private extension AuthenticationView {
                         .autocorrectionDisabled()
                         .padding(14)
                         .background(Color(.systemGray6))
-                        .cornerRadius(18)
+                        .cornerRadius(12)
                     
                     SecureField("Lösenord (minst 6 tecken)", text: $signupPassword)
                         .padding(14)
                         .background(Color(.systemGray6))
-                        .cornerRadius(18)
+                        .cornerRadius(12)
                     
                     SecureField("Bekräfta lösenord", text: $signupConfirmPassword)
                         .padding(14)
                         .background(Color(.systemGray6))
-                        .cornerRadius(18)
+                        .cornerRadius(12)
                 }
                 .padding(.horizontal, 24)
                 
-                VStack(alignment: .leading, spacing: 12) {
+                // Username display
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Valt användarnamn")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.black.opacity(0.6))
                     
                     HStack {
                         Text("@\(onboardingData.trimmedUsername)")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "checkmark.seal.fill")
@@ -791,7 +888,7 @@ private extension AuthenticationView {
                     }
                     .padding(14)
                     .background(Color(.systemGray6))
-                    .cornerRadius(18)
+                    .cornerRadius(12)
                 }
                 .padding(.horizontal, 24)
                 
@@ -802,6 +899,7 @@ private extension AuthenticationView {
                         .padding(.horizontal, 24)
                 }
                 
+                // Email signup button
                 Button {
                     authViewModel.signup(
                         name: signupName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -812,23 +910,37 @@ private extension AuthenticationView {
                         onboardingData: onboardingData
                     )
                 } label: {
-                    if authViewModel.isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(.white)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text("Skapa konto")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
+                    HStack {
+                        Spacer()
+                        if authViewModel.isLoading {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.black.opacity(0.6))
+                        } else {
+                            Text("Skapa konto med e-post")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(canSubmitSignup ? .black : .black.opacity(0.4))
+                        }
+                        Spacer()
                     }
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 30)
+                            .fill(canSubmitSignup ? Color(red: 0.9, green: 0.88, blue: 0.85) : Color(.systemGray5))
+                    )
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 16)
-                .background(canSubmitSignup ? Color.black : Color.black.opacity(0.35))
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .buttonStyle(PlainButtonStyle())
                 .padding(.horizontal, 24)
                 .disabled(!canSubmitSignup || authViewModel.isLoading)
+                
+                // Terms
+                Text("Genom att skapa konto godkänner du våra [användarvillkor](https://wiggio.se/privacy) och [integritetspolicy](https://wiggio.se/privacy).")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .tint(.black)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
                 
                 Button {
                     showSignupForm = false
@@ -856,7 +968,7 @@ private extension AuthenticationView {
     }
 }
 
-// MARK: - Login Form
+// MARK: - Login Form (Strava Style)
 struct LoginFormView: View {
     @State private var email = ""
     @State private var password = ""
@@ -869,74 +981,95 @@ struct LoginFormView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     var body: some View {
-        VStack(spacing: 12) {
-            TextField("Email", text: $email)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .padding(12)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .autocapitalization(.none)
+        VStack(alignment: .leading, spacing: 16) {
+            // Email field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("E-post")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black)
+                
+                TextField("E-post", text: $email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                    .padding(14)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+            }
             
-            ZStack(alignment: .trailing) {
-                if isPasswordVisible {
-                    TextField("Lösenord", text: $password)
-                        .textContentType(.password)
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                } else {
-                    SecureField("Lösenord", text: $password)
-                        .textContentType(.password)
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                }
-                Button {
-                    isPasswordVisible.toggle()
-                } label: {
-                    Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
-                        .foregroundColor(.gray)
-                        .padding(.trailing, 12)
+            // Password field
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Lösenord")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black)
+                
+                ZStack(alignment: .trailing) {
+                    if isPasswordVisible {
+                        TextField("Lösenord", text: $password)
+                            .textContentType(.password)
+                            .padding(14)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    } else {
+                        SecureField("Lösenord", text: $password)
+                            .textContentType(.password)
+                            .padding(14)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                    Button {
+                        isPasswordVisible.toggle()
+                    } label: {
+                        Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill")
+                            .foregroundColor(.gray)
+                            .padding(.trailing, 14)
+                    }
                 }
             }
             
             // Forgot password link
-            HStack {
-                Spacer()
-                Button {
-                    forgotPasswordEmail = email // Pre-fill with entered email
-                    showForgotPassword = true
-                } label: {
-                    Text("Glömt lösenord?")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.black.opacity(0.7))
-                }
+            Button {
+                forgotPasswordEmail = email
+                showForgotPassword = true
+            } label: {
+                Text("Glömt lösenord?")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black.opacity(0.7))
+                    .underline()
             }
             
             if !authViewModel.errorMessage.isEmpty {
                 Text(authViewModel.errorMessage)
                     .foregroundColor(.red)
-                    .font(.caption)
+                    .font(.system(size: 13))
             }
             
+            // Login button (Strava style - beige/gray)
             Button {
                 authViewModel.login(email: email, password: password)
             } label: {
-                if authViewModel.isLoading {
-                    ProgressView().tint(.white)
-                } else {
-                    Text("LOGGA IN")
-                        .font(.system(size: 16, weight: .black))
-                        .frame(maxWidth: .infinity)
+                HStack {
+                    Spacer()
+                    if authViewModel.isLoading {
+                        ProgressView()
+                            .tint(.black.opacity(0.6))
+                    } else {
+                        Text("Logga in")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(email.isEmpty || password.isEmpty ? .black.opacity(0.4) : .black)
+                    }
+                    Spacer()
                 }
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 30)
+                        .fill(Color(red: 0.9, green: 0.88, blue: 0.85))
+                )
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity)
-            .padding(14)
-            .background(Color.black)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-            .disabled(authViewModel.isLoading)
+            .buttonStyle(PlainButtonStyle())
+            .disabled(authViewModel.isLoading || email.isEmpty || password.isEmpty)
+            .opacity(email.isEmpty || password.isEmpty ? 0.7 : 1)
         }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordSheet(

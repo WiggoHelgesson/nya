@@ -4,6 +4,7 @@ import MapKit
 import CoreLocation
 
 struct SessionCompleteView: View {
+    @StateObject private var stravaService = StravaService.shared
     let activity: ActivityType
     let distance: Double
     let duration: Int
@@ -587,6 +588,21 @@ struct SessionCompleteView: View {
             } else {
                 photoPickerButtons
             }
+            
+            // Strava sync indicator (only for running activities)
+            if stravaService.isConnected && !isGymWorkout {
+                HStack(spacing: 8) {
+                    Image("59")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                    
+                    Text("Synkar automatiskt med Strava")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(.horizontal, 16)
     }
@@ -931,7 +947,8 @@ struct SessionCompleteView: View {
                     category: exercise.category,
                     sets: exercise.sets.count,
                     reps: exercise.sets.map { $0.reps },
-                    kg: exercise.sets.map { $0.kg }
+                    kg: exercise.sets.map { $0.kg },
+                    notes: exercise.notes
                 )
             }
             
@@ -1014,6 +1031,31 @@ struct SessionCompleteView: View {
                 
                 NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
                 
+                // Notify recovery zone to refresh if it was a gym workout
+                if activity.rawValue == "Gympass", let exercisesData = exercisesData {
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("GymWorkoutCompleted"),
+                        object: nil,
+                        userInfo: ["exercises": exercisesData]
+                    )
+                    
+                    // Process XP gains for strength progression
+                    if let userId = authViewModel.currentUser?.id {
+                        let xpGains = MuscleProgressionService.shared.processGymSession(
+                            userId: userId,
+                            exercises: exercisesData
+                        )
+                        
+                        // Log XP gains
+                        for gain in xpGains {
+                            print("💪 Strength XP: +\(gain.xpGained) for \(gain.muscleGroups.joined(separator: ", "))")
+                            if !gain.bonuses.isEmpty {
+                                print("   Bonuses: \(gain.bonuses.joined(separator: ", "))")
+                            }
+                        }
+                    }
+                }
+                
                 // Send PB notification to followers if user set a new PB
                 if hasPB, let userId = authViewModel.currentUser?.id {
                     Task {
@@ -1028,12 +1070,32 @@ struct SessionCompleteView: View {
                     }
                 }
                 
+                // Upload to Strava if connected
+                if stravaService.isConnected {
+                    Task {
+                        let stravaSuccess = await stravaService.uploadActivity(
+                            title: finalTitle,
+                            description: description,
+                            activityType: activity.rawValue,
+                            startDate: Date().addingTimeInterval(TimeInterval(-duration)),
+                            duration: duration,
+                            distance: distance > 0 ? distance : nil,
+                            routeCoordinates: routeCoordinates.isEmpty ? nil : routeCoordinates
+                        )
+                        print(stravaSuccess ? "✅ Strava upload successful" : "⚠️ Strava upload failed")
+                    }
+                }
+                
                 await MainActor.run {
                     isSaving = false
                     shouldSaveTemplate = false
                     templateName = ""
                     pendingSharePost = sharePost
                     triggerSaveSuccessAnimation()
+                    
+                    // Registrera avslutat pass och visa review-popup om villkoren är uppfyllda
+                    ReviewManager.shared.recordWorkoutCompleted()
+                    ReviewManager.shared.requestReviewAfterWorkoutIfEligible()
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")

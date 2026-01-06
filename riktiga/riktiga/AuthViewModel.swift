@@ -3,6 +3,8 @@ import SwiftUI
 import Combine
 import Supabase
 import UIKit
+import AuthenticationServices
+import CryptoKit
 
 class AuthViewModel: NSObject, ObservableObject {
     static let shared = AuthViewModel()
@@ -16,6 +18,11 @@ class AuthViewModel: NSObject, ObservableObject {
     
     private let supabase = SupabaseConfig.supabase
     private var cancellables = Set<AnyCancellable>()
+    
+    // Apple Sign In
+    private var currentNonce: String?
+    var onAppleSignInComplete: ((Bool, OnboardingData?) -> Void)?
+    var pendingOnboardingData: OnboardingData?
     
     override init() {
         super.init()
@@ -183,9 +190,6 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.isLoggedIn = true
                         self.isLoading = false
                         self.prefetchAvatar(url: profile.avatarUrl)
-                        
-                        // Visa review popup efter lyckad inloggning
-                        ReviewManager.shared.requestReviewIfNeeded()
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
@@ -316,6 +320,51 @@ class AuthViewModel: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - Apple Sign In
+    
+    func signInWithApple(onboardingData: OnboardingData? = nil) {
+        isLoading = true
+        errorMessage = ""
+        pendingOnboardingData = onboardingData
+        
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+        
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
+    }
+    
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        let nonce = randomBytes.map { byte in
+            charset[Int(byte) % charset.count]
+        }
+        return String(nonce)
+    }
+    
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap {
+            String(format: "%02x", $0)
+        }.joined()
+        return hashString
+    }
+    
     func loadUserProfile() async {
         guard let userId = currentUser?.id else {
             print("❌ No user ID available for profile reload")
@@ -386,5 +435,146 @@ class AuthViewModel: NSObject, ObservableObject {
     private func prefetchAvatar(url: String?) {
         guard let url = url, !url.isEmpty else { return }
         ImageCacheManager.shared.prefetch(urls: [url])
+    }
+}
+
+// MARK: - Apple Sign In Delegate
+extension AuthViewModel: ASAuthorizationControllerDelegate {
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let nonce = currentNonce,
+              let appleIDToken = appleIDCredential.identityToken,
+              let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            DispatchQueue.main.async {
+                self.errorMessage = "Apple Sign In misslyckades"
+                self.isLoading = false
+            }
+            return
+        }
+        
+        // Get user info from Apple
+        let fullName = appleIDCredential.fullName
+        let email = appleIDCredential.email
+        let displayName = [fullName?.givenName, fullName?.familyName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        
+        Task {
+            do {
+                // Sign in with Supabase using Apple ID token
+                let session = try await supabase.auth.signInWithIdToken(
+                    credentials: .init(
+                        provider: .apple,
+                        idToken: idTokenString,
+                        nonce: nonce
+                    )
+                )
+                
+                let userId = session.user.id.uuidString
+                
+                // Check if profile exists
+                if let existingProfile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                    // Existing user - just log in
+                    await MainActor.run {
+                        self.currentUser = existingProfile
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                        self.prefetchAvatar(url: existingProfile.avatarUrl)
+                        
+                        RevenueCatManager.shared.updateDatabaseProStatus(existingProfile.isProMember)
+                        
+                        // Check if user has a valid username
+                        let hasValidUsername = !existingProfile.name.isEmpty && 
+                                              existingProfile.name != "Användare" &&
+                                              !existingProfile.name.hasPrefix("user-")
+                        
+                        if !hasValidUsername {
+                            self.showUsernameRequiredPopup = true
+                        }
+                        
+                        self.onAppleSignInComplete?(true, nil)
+                    }
+                    await RevenueCatManager.shared.logInFor(appUserId: userId)
+                } else {
+                    // New user - create profile
+                    let username = pendingOnboardingData?.trimmedUsername ?? "user-\(userId.prefix(6))"
+                    var newUser = User(
+                        id: userId,
+                        name: username,
+                        email: email ?? session.user.email ?? ""
+                    )
+                    
+                    try await ProfileService.shared.createUserProfile(newUser)
+                    
+                    // Apply onboarding data if available
+                    if let onboardingData = pendingOnboardingData {
+                        _ = await ProfileService.shared.applyOnboardingData(userId: userId, data: onboardingData)
+                    }
+                    
+                    // Fetch updated profile
+                    if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                        newUser = profile
+                    }
+                    
+                    await RevenueCatManager.shared.logInFor(appUserId: userId)
+                    
+                    await MainActor.run {
+                        self.currentUser = newUser
+                        self.isLoggedIn = true
+                        self.isLoading = false
+                        self.prefetchAvatar(url: newUser.avatarUrl)
+                        self.onAppleSignInComplete?(true, self.pendingOnboardingData)
+                    }
+                }
+                
+                await MainActor.run {
+                    self.pendingOnboardingData = nil
+                }
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Apple Sign In misslyckades: \(error.localizedDescription)"
+                    self.isLoading = false
+                    self.onAppleSignInComplete?(false, nil)
+                }
+            }
+        }
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        DispatchQueue.main.async {
+            if let authError = error as? ASAuthorizationError {
+                switch authError.code {
+                case .canceled:
+                    self.errorMessage = ""
+                case .failed:
+                    self.errorMessage = "Apple Sign In misslyckades"
+                case .invalidResponse:
+                    self.errorMessage = "Ogiltigt svar från Apple"
+                case .notHandled:
+                    self.errorMessage = "Apple Sign In kunde inte hanteras"
+                case .unknown:
+                    self.errorMessage = "Ett okänt fel uppstod"
+                case .notInteractive:
+                    self.errorMessage = "Apple Sign In kräver interaktion"
+                @unknown default:
+                    self.errorMessage = "Apple Sign In fel"
+                }
+            } else {
+                self.errorMessage = "Apple Sign In fel: \(error.localizedDescription)"
+            }
+            self.isLoading = false
+        }
+    }
+}
+
+// MARK: - Presentation Context Provider
+extension AuthViewModel: ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = scene.windows.first else {
+            return ASPresentationAnchor()
+        }
+        return window
     }
 }

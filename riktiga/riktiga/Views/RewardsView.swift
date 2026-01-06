@@ -209,10 +209,11 @@ struct RewardsView: View {
     @State private var showFavorites = false
     @State private var showMyPurchases = false
     @State private var favoritedRewards: Set<Int> = []
+    @State private var navigationPath = NavigationPath()
     @EnvironmentObject var authViewModel: AuthViewModel
     
-    private let pageBackgroundColor = Color(.systemBackground) // Adapts to dark mode
-    private let sectionBackgroundColor = Color(.systemBackground) // Adapts to dark mode
+    private let pageBackgroundColor = Color.white
+    private let sectionBackgroundColor = Color.white
     
     let heroBanners: [HeroBannerAsset] = [
         HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
@@ -413,88 +414,96 @@ struct RewardsView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 pageBackgroundColor
                     .ignoresSafeArea()
                 
-                VStack(spacing: 0) {
-                    // MARK: - Header with Search, Favorites, and Points
-                    VStack(spacing: 16) {
-                        // Top row with points and icons
-                        HStack {
-                            // Points display
-                            HStack(spacing: 8) {
-                                Image(systemName: "gift.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 16))
-                                
-                                Text("\(authViewModel.currentUser?.currentXP ?? 0)")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.black)
-                            .cornerRadius(20)
-                            
-                            Spacer()
-                            
-                            // Right side icons
-                            HStack(spacing: 16) {
-                                Button(action: {
-                                    showMyPurchases = true
-                                }) {
-                                    Image(systemName: "bag.fill")
-                                        .foregroundColor(.primary)
-                                        .font(.system(size: 20))
-                                }
-                                
-                                Button(action: {
-                                    showFavorites = true
-                                }) {
-                                    Image(systemName: "bookmark.fill")
-                                        .foregroundColor(.primary)
-                                        .font(.system(size: 20))
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // MARK: - Navigation Header
+                        RewardsHeaderView()
+                            .padding(.top, 12)
                         
-                        // Search bar
-                        Button(action: {
-                            showSearchView = true
-                        }) {
+                        // MARK: - Header with Search, Favorites, and Points
+                        VStack(spacing: 16) {
+                            // Top row with points and icons
                             HStack {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundColor(.gray)
-                                    .font(.system(size: 16))
-                                
-                                Text("Sök")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray)
+                                // Points display
+                                HStack(spacing: 8) {
+                                    Image(systemName: "gift.fill")
+                                        .foregroundColor(.white)
+                                        .font(.system(size: 16))
+                                    
+                                    Text("\(authViewModel.currentUser?.currentXP ?? 0)")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.black)
+                                .cornerRadius(20)
                                 
                                 Spacer()
+                                
+                                // Right side icons
+                                HStack(spacing: 16) {
+                                    Button(action: {
+                                        showMyPurchases = true
+                                    }) {
+                                        Image(systemName: "bag.fill")
+                                            .foregroundColor(.primary)
+                                            .font(.system(size: 20))
+                                    }
+                                    
+                                    Button(action: {
+                                        showFavorites = true
+                                    }) {
+                                        Image(systemName: "bookmark.fill")
+                                            .foregroundColor(.primary)
+                                            .font(.system(size: 20))
+                                    }
+                                }
                             }
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
+                            .padding(.top, 8)
+                            
+                            // Search bar
+                            Button(action: {
+                                showSearchView = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 16))
+                                    
+                                    Text("Sök")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.gray)
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Color.white)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                )
+                            }
+                            .padding(.horizontal, 16)
                         }
-                        .padding(.horizontal, 16)
-                    }
-                    .padding(.bottom, 16)
-                    .background(Color(.secondarySystemBackground))
-                    
-                    ScrollView {
+                        .padding(.bottom, 16)
+                        .background(Color.white)
+                        
                         LazyVStack(spacing: 12) {
                             heroBannerSection
-                                .background(Color(.secondarySystemBackground))
+                                .background(Color.white)
                             
                             categoriesSection
                                 .padding(.vertical, 16)
-                                .background(Color(.secondarySystemBackground))
+                                .background(Color.white)
                             
                             sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
                             
@@ -523,6 +532,9 @@ struct RewardsView: View {
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootBeloningar"))) { _ in
+                navigationPath = NavigationPath()
             }
         }
         .tint(.black) // Black back buttons for all navigation
@@ -560,7 +572,11 @@ struct CategoryButton: View {
         .frame(width: 80, height: 80)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? .black : Color(.systemGray5))
+                .fill(isSelected ? .black : Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isSelected ? Color.clear : Color.gray.opacity(0.2), lineWidth: 1)
         )
     }
     
@@ -653,7 +669,7 @@ struct ModernRewardCard: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Color(.secondarySystemBackground))
+                .background(Color.white)
                 .clipShape(Capsule())
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                 .padding(16)
@@ -701,10 +717,10 @@ struct ModernRewardCard: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 18)
-            .background(Color(UIColor.systemGray6).opacity(0.5))
+            .background(Color.white.opacity(0.5))
         }
         .frame(width: cardWidth)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
     }
@@ -737,7 +753,7 @@ struct ModernRewardCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
-        default: return "5" // Default to PEGMATE
+        default: return imageName // Use the image itself as logo if no mapping
         }
     }
 }
@@ -783,7 +799,7 @@ struct FullScreenRewardCard: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color(.secondarySystemBackground))
+                .background(Color.white)
                 .clipShape(Capsule())
                 .padding(18)
             }
@@ -857,7 +873,7 @@ struct FullScreenRewardCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
-        default: return "5" // Default to PEGMATE
+        default: return imageName // Use the image itself as logo if no mapping
         }
     }
 }
@@ -883,7 +899,7 @@ struct CategoryRewardsListView: View {
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
         }
-        .background(Color(.systemBackground).ignoresSafeArea())
+        .background(Color.white.ignoresSafeArea())
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
@@ -904,8 +920,8 @@ struct RewardDetailView: View {
     
     var body: some View {
         ZStack {
-            // Background adapts to dark mode
-            Color(.systemBackground)
+            // Background white
+            Color.white
                 .ignoresSafeArea()
             
             ScrollView {
@@ -941,7 +957,7 @@ struct RewardDetailView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 80, height: 80)
-                                    .background(Color(.secondarySystemBackground))
+                                    .background(Color.white)
                                     .clipShape(Circle())
                                     .overlay(
                                         Circle()
@@ -983,7 +999,7 @@ struct RewardDetailView: View {
                                     .foregroundColor(.primary)
                                     .frame(width: 280) // Shorter width
                                     .padding(.vertical, 16)
-                                    .background(Color(.secondarySystemBackground))
+                                    .background(Color.white)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
@@ -1397,7 +1413,7 @@ struct ConfirmationView: View {
                                 .foregroundColor(.primary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(Color(.secondarySystemBackground))
+                                .background(Color.white)
                                 .cornerRadius(8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
@@ -1448,7 +1464,7 @@ struct ConfirmationView: View {
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(16)
-                                .background(Color(.secondarySystemBackground))
+                                .background(Color.white)
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -1459,12 +1475,12 @@ struct ConfirmationView: View {
                     .padding(.bottom, 20)
                 }
                 .padding(.horizontal, 20)
-                .background(Color(.secondarySystemBackground))
+                .background(Color.white)
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 20)
             }
-            .background(Color(.systemGray6))
+            .background(Color.white)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1475,7 +1491,7 @@ struct ConfirmationView: View {
                         Image(systemName: "chevron.left")
                             .foregroundColor(.primary)
                             .frame(width: 32, height: 32)
-                            .background(Color(.systemGray5))
+                            .background(Color.white)
                             .cornerRadius(16)
                     }
                 }
@@ -1601,7 +1617,7 @@ struct AllRewardsCard: View {
         }
         .frame(width: 80, height: 80)
         .padding(8)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
         .drawingGroup() // Rasterize for better scroll performance
@@ -1635,7 +1651,7 @@ struct AllRewardsCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
-        default: return "5" // Default to PEGMATE
+        default: return imageName // Use the image itself as logo if no mapping
         }
     }
 }

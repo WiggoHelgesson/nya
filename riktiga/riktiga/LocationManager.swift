@@ -71,6 +71,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var recentSpeeds: [Double] = [] // Track last 5 speed readings
     private let maxRecentSpeeds = 5
     
+    private var lastLiveActivityUpdate: Date = .distantPast
+    private var activityStartTime: Date?
+    
     override init() {
         super.init()
         locationManager.delegate = self
@@ -194,6 +197,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         locationManager.startUpdatingLocation()
         
+        // Start Live Activity
+        if !preserveData {
+            let type = activityType ?? currentActivityType ?? "Löppass"
+            
+            // Starta endast Live Activity för löpning/golf/skidåkning etc.
+            // Gympass sköter sin egen Live Activity
+            if type != "Gympass" {
+                activityStartTime = Date()
+                let initialState = WorkoutActivityAttributes.ContentState(
+                    distance: 0.0,
+                    pace: "0:00",
+                    elapsedSeconds: 0
+                )
+                LiveActivityManager.shared.startLiveActivity(workoutType: type, initialContent: initialState)
+            }
+        }
+        
         print("✅ Location tracking started")
         
         // Fallback för simulator
@@ -235,6 +255,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func stopTracking() {
         isTracking = false
         locationManager.stopUpdatingLocation()
+        activityStartTime = nil
+        LiveActivityManager.shared.endLiveActivity()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -371,6 +393,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             if let maxSpd = newMaxSpeed { self.maxSpeed = maxSpd }
             if let elev = newElevationGain { self.elevationGain = elev }
             if let point = newRoutePoint { self.routeCoordinates.append(point) }
+            
+            // Uppdatera Live Activity var 10:e sekund
+            if self.isTracking && abs(self.lastLiveActivityUpdate.timeIntervalSinceNow) > 10 {
+                self.lastLiveActivityUpdate = Date()
+                let elapsed = self.activityStartTime.map { Int(Date().timeIntervalSince($0)) } ?? 0
+                let pace = self.currentSpeedKmh > 0 ? String(format: "%.2f km/h", self.currentSpeedKmh) : "0:00"
+                
+                let state = WorkoutActivityAttributes.ContentState(
+                    distance: self.distance,
+                    pace: pace,
+                    elapsedSeconds: elapsed
+                )
+                LiveActivityManager.shared.updateLiveActivity(with: state)
+            }
         }
         
     }

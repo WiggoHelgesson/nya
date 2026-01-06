@@ -135,14 +135,13 @@ BEGIN
   RETURN QUERY
   SELECT
     (e.key)::uuid AS previous_owner_id,
-    p.username::text,
-    p.avatar_url::text,
+    NULL::text AS username,
+    NULL::text AS avatar_url,
     (e.value)::int AS tiles_taken
-  FROM jsonb_each_text(takeover_counts) e
-  LEFT JOIN public.profiles p
-    ON p.id::text = e.key;
+  FROM jsonb_each_text(takeover_counts) e;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
 
 GRANT EXECUTE ON FUNCTION public.claim_tiles_with_takeovers(
   uuid,

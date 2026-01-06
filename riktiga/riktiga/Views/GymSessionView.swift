@@ -10,7 +10,6 @@ struct GymSessionView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var activeSession: SessionManager.ActiveSession? = SessionManager.shared.activeSession
-    @State private var isPremium = RevenueCatManager.shared.isProMember
     @StateObject private var viewModel = GymSessionViewModel()
     @State private var showExercisePicker = false
     @State private var showCompleteSession = false
@@ -19,181 +18,9 @@ struct GymSessionView: View {
     @State private var hasInitializedSession = false
     @State private var lastPersistedElapsedSeconds: Int = 0
     @FocusState private var focusedField: GymSessionInputField?
-    @State private var showWorkoutGenerator = false
-    @State private var generatorPrompt: String = ""
-    @State private var generatorWordCount: Int = 0
-    @State private var generatorError: String?
-    @State private var isGeneratingWorkout = false
-    @State private var showSubscriptionView = false
-    @State private var generatorResultMessage: String?
-    @State private var showGeneratorResultAlert = false
+    @State private var showWorkoutLibrary = false
     @State private var didLoadExerciseHistory = false
-    
-    private let generatorWordLimit = 100
-    
-    
-    private var uppyGeneratorButton: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button(action: handleGeneratorButtonTap) {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Skapa ett pass med UPPY")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundColor(Color(.systemBackground))
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity)
-                .background(Color.primary)
-                .cornerRadius(14)
-            }
-            
-            Text("Beta version")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 16)
-    }
-    
-    private var workoutGeneratorSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Beskriv passet du vill skapa (max 100 ord).")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                
-                ZStack(alignment: .topLeading) {
-                    if generatorPrompt.isEmpty {
-                        Text("Exempel: \"Vill ha ett 45 min benpass med fokus på explosivitet och maskiner.\"")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray.opacity(0.8))
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                    }
-                    
-                    TextEditor(text: $generatorPrompt)
-                        .frame(minHeight: 180)
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(16)
-                        .onChange(of: generatorPrompt) { newValue in
-                            updateGeneratorWordCount(for: newValue)
-                        }
-                }
-                
-                HStack {
-                    Text("\(generatorWordCount)/\(generatorWordLimit) ord")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(generatorWordCount > generatorWordLimit ? .red : .gray)
-                    Spacer()
-                    if isGeneratingWorkout {
-                        ProgressView()
-                    }
-                }
-                
-                if let generatorError {
-                    Text(generatorError)
-                        .font(.system(size: 13))
-                        .foregroundColor(.red)
-                }
-                
-                Button(action: generateWorkoutFromPrompt) {
-                    HStack {
-                        Image(systemName: "wand.and.stars")
-                        Text(isGeneratingWorkout ? "Skapar pass..." : "Generera pass")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(generatorWordCount == 0 || isGeneratingWorkout ? Color.secondary.opacity(0.3) : Color.primary)
-                    .foregroundColor(generatorWordCount == 0 || isGeneratingWorkout ? .secondary : Color(.systemBackground))
-                    .cornerRadius(16)
-                }
-                .disabled(generatorWordCount == 0 || isGeneratingWorkout)
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Skapa med UPPY")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Stäng") {
-                        showWorkoutGenerator = false
-                    }
-                }
-            }
-        }
-    }
-
-    private func handleGeneratorButtonTap() {
-        guard isPremium else {
-            showSubscriptionView = true
-            return
-        }
-        generatorError = nil
-        showWorkoutGenerator = true
-    }
-    
-    private func updateGeneratorWordCount(for text: String) {
-        let components = text
-            .split { $0.isWhitespace || $0.isNewline }
-        if components.count <= generatorWordLimit {
-            generatorWordCount = components.count
-            return
-        }
-        let trimmed = components.prefix(generatorWordLimit).joined(separator: " ")
-        generatorPrompt = trimmed
-        generatorWordCount = generatorWordLimit
-    }
-    
-    private func generateWorkoutFromPrompt() {
-        let trimmed = generatorPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            generatorError = "Beskriv passet du vill skapa."
-            return
-        }
-        guard !isGeneratingWorkout else { return }
-        
-        isGeneratingWorkout = true
-        generatorError = nil
-        
-        Task {
-            do {
-                let result = try await WorkoutGeneratorService.shared.generateWorkout(prompt: trimmed)
-                guard !result.entries.isEmpty else {
-                    await MainActor.run {
-                        generatorError = "UPPY hittade inga övningar, försök specificera passet mer."
-                    }
-                    return
-                }
-                await MainActor.run {
-                    viewModel.appendGeneratedExercises(result.entries)
-                    generatorPrompt = ""
-                    generatorWordCount = 0
-                    showWorkoutGenerator = false
-                    generatorResultMessage = generatorResultText(for: result)
-                    showGeneratorResultAlert = true
-                }
-            } catch {
-                await MainActor.run {
-                    generatorError = error.localizedDescription
-                }
-            }
-            await MainActor.run {
-                isGeneratingWorkout = false
-            }
-        }
-    }
-    
-    private func generatorResultText(for result: GeneratedWorkoutResult) -> String {
-        var summary = "UPPY lade till \(result.entries.count) övningar."
-        if !result.missingExercises.isEmpty {
-            let missing = result.missingExercises.joined(separator: ", ")
-            summary += "\nKunde inte hitta: \(missing)."
-        }
-        return summary
-    }
+    @State private var isReorderMode = false
     
     @ViewBuilder
     private var savedWorkoutsSection: some View {
@@ -239,10 +66,155 @@ struct GymSessionView: View {
                     .padding(.horizontal, 16)
                 }
             }
-            
-            uppyGeneratorButton
         }
         .padding(.top, 8)
+    }
+    
+    private var durationVolumeHeader: some View {
+        HStack(spacing: 0) {
+            metricView(title: "Tid", value: viewModel.formattedDuration)
+                .frame(maxWidth: .infinity)
+            Divider()
+                .frame(height: 40)
+            metricView(title: "Volym", value: viewModel.formattedVolume)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+    
+    private var emptyStateContent: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "dumbbell.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            Text("Lägg till övningar för att börja")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            Button(action: {
+                showExercisePicker = true
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Lägg till övning")
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+    
+    private var emptyStateView: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 120)
+                
+                emptyStateContent
+                
+                durationVolumeHeader
+                    .padding(.top, 16)
+                
+                Spacer()
+                    .frame(height: 40)
+                
+                VStack(spacing: 24) {
+                    savedWorkoutsSection
+                }
+                .padding(.bottom, 100)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var exerciseListView: some View {
+        if isReorderMode {
+            VStack(spacing: 0) {
+                durationVolumeHeader
+                    .padding(.top, 16)
+                
+                List {
+                    ForEach(viewModel.exercises) { exercise in
+                        exerciseCardView(for: exercise)
+                            .listRowInsets(EdgeInsets(top: 1.5, leading: 0, bottom: 1.5, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    .onMove { source, destination in
+                        viewModel.moveExercise(from: source, to: destination)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.editMode, .constant(.active))
+            }
+        } else {
+            ScrollView {
+                VStack(spacing: 4) {
+                    durationVolumeHeader
+                        .padding(.top, 16)
+                    
+                    ForEach(viewModel.exercises) { exercise in
+                        exerciseCardView(for: exercise)
+                    }
+                    
+                    Spacer()
+                        .frame(height: 100)
+                }
+            }
+        }
+    }
+    
+    private func exerciseCardView(for exercise: GymExercise) -> some View {
+        ExerciseCard(
+            exercise: exercise,
+            previousSets: viewModel.previousSets(for: exercise.name),
+            isReorderMode: isReorderMode,
+            onAddSet: {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    viewModel.addSet(to: exercise.id)
+                }
+            },
+            onUpdateSet: { setIndex, kg, reps in
+                viewModel.updateSet(exerciseId: exercise.id, setIndex: setIndex, kg: kg, reps: reps)
+            },
+            onDeleteSet: { setIndex in
+                viewModel.deleteSet(exerciseId: exercise.id, setIndex: setIndex)
+            },
+            onToggleSetCompletion: { setIndex in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    viewModel.toggleSetCompletion(exerciseId: exercise.id, setIndex: setIndex)
+                }
+            },
+            onDelete: {
+                viewModel.removeExercise(exercise.id)
+            },
+            onUpdateNotes: { notes in
+                viewModel.updateExerciseNotes(exerciseId: exercise.id, notes: notes)
+            },
+            onToggleReorder: {
+                withAnimation {
+                    isReorderMode.toggle()
+                }
+            },
+            focusedField: $focusedField
+        )
     }
     
     var body: some View {
@@ -252,151 +224,75 @@ struct GymSessionView: View {
                     .ignoresSafeArea()
                 
                 if viewModel.exercises.isEmpty {
-                    // Empty state with centered main content
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            // Spacer to push content to center
-                            Spacer()
-                                .frame(height: 120)
-                            
-                            // Centered empty state
-                            VStack(spacing: 24) {
-                                Image(systemName: "dumbbell.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(.secondary)
-                                
-                                Text("Lägg till övningar för att börja")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                                
-                                Button(action: {
-                                    showExercisePicker = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "plus.circle.fill")
-                                        Text("Lägg till övning")
-                                    }
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(Color(.secondarySystemBackground))
-                                    .cornerRadius(12)
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                            
-                            // Duration & Volume header - always visible
-                            HStack(spacing: 0) {
-                                metricView(title: "Tid", value: viewModel.formattedDuration)
-                                    .frame(maxWidth: .infinity)
-                                Divider()
-                                    .frame(height: 40)
-                                metricView(title: "Volym", value: viewModel.formattedVolume)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 18)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(16)
-                            .padding(.top, 16)
-                            .padding(.horizontal, 16)
-                            
-                            // Spacer before scrollable sections
-                            Spacer()
-                                .frame(height: 40)
-                            
-                            // Scrollable sections below
-                            VStack(spacing: 24) {
-                                savedWorkoutsSection
-                            }
-                            .padding(.bottom, 100)
-                        }
-                    }
+                    emptyStateView
                 } else {
-                    // Exercise list
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // Duration & Volume header
-                            HStack(spacing: 0) {
-                                metricView(title: "Tid", value: viewModel.formattedDuration)
-                                    .frame(maxWidth: .infinity)
-                                Divider()
-                                    .frame(height: 40)
-                                metricView(title: "Volym", value: viewModel.formattedVolume)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 18)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(16)
-                            .padding(.top, 16)
-                            .padding(.horizontal, 16)
-                            
-                            // Exercises
-                            ForEach(viewModel.exercises) { exercise in
-                                ExerciseCard(
-                                    exercise: exercise,
-                                    previousSets: viewModel.previousSets(for: exercise.name),
-                                    onAddSet: {
-                                        var transaction = Transaction()
-                                        transaction.disablesAnimations = true
-                                        withTransaction(transaction) {
-                                            viewModel.addSet(to: exercise.id)
-                                        }
-                                    },
-                                    onUpdateSet: { setIndex, kg, reps in
-                                        viewModel.updateSet(exerciseId: exercise.id, setIndex: setIndex, kg: kg, reps: reps)
-                                    },
-                                    onDeleteSet: { setIndex in
-                                        viewModel.deleteSet(exerciseId: exercise.id, setIndex: setIndex)
-                                    },
-                                    onToggleSetCompletion: { setIndex in
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            viewModel.toggleSetCompletion(exerciseId: exercise.id, setIndex: setIndex)
-                                        }
-                                    },
-                                    onDelete: {
-                                        viewModel.removeExercise(exercise.id)
-                                    },
-                                    focusedField: $focusedField
-                                )
-                            }
-                            
-                            // Add exercise button
-                            Button(action: {
-                                showExercisePicker = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text("Lägg till övning")
-                                }
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color(.secondarySystemBackground))
-                                .cornerRadius(12)
-                            }
-                            .padding(.horizontal, 16)
+                    exerciseListView
+                }
+                
+                if showWorkoutLibrary {
+                    WorkoutLibraryPopup(
+                        isPresented: $showWorkoutLibrary,
+                        viewModel: viewModel,
+                        onSelectWorkout: { workout in
+                            viewModel.loadWorkout(workout)
                         }
-                        .padding(.bottom, 100)
-                    }
+                    )
+                    .transition(.opacity)
                 }
             }
             .navigationTitle("Gympass")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        showCancelConfirmation = true
-                    }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.primary)
-                            .font(.system(size: 16, weight: .semibold))
+                if !showWorkoutLibrary {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showCancelConfirmation = true
+                        } label: {
+                            Text("Avbryt")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if isReorderMode {
+                            Button {
+                                withAnimation {
+                                    isReorderMode = false
+                                }
+                            } label: {
+                                Text("Klar")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        } else {
+                            Button {
+                                showExercisePicker = true
+                            } label: {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 20))
+                            }
+                        }
                     }
                 }
-                
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Klart") {
+                        focusedField = nil
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if viewModel.exercises.isEmpty {
+                    Color.clear.frame(height: 0)
+                } else {
+                    HoldToSaveButton(title: "Spara pass", duration: 1.0) {
+                        saveWorkoutTapped()
+                    }
+                    .padding()
+                    .background(Color(.systemBackground).ignoresSafeArea())
+                }
             }
             .alert("Vill du verkligen avsluta?", isPresented: $showCancelConfirmation) {
                 Button("Fortsätt", role: .cancel) {
@@ -414,11 +310,15 @@ struct GymSessionView: View {
                     viewModel.addExercise(exercise)
                 }
             }
-            .sheet(isPresented: $showWorkoutGenerator) {
-                workoutGeneratorSheet
-            }
-            .sheet(isPresented: $showSubscriptionView) {
-                PresentPaywallView()
+            .onAppear {
+                // Show workout library popup when opening gym session
+                if !hasInitializedSession {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showWorkoutLibrary = true
+                        }
+                    }
+                }
             }
             .fullScreenCover(isPresented: $showCompleteSession) {
                 if let sessionData = viewModel.sessionData {
@@ -475,43 +375,28 @@ struct GymSessionView: View {
             .onReceive(SessionManager.shared.$activeSession) { newValue in
                 activeSession = newValue
             }
-            .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
-                isPremium = newValue
-            }
-            .alert("UPPY", isPresented: $showGeneratorResultAlert, presenting: generatorResultMessage) { _ in
-                Button("Okej", role: .cancel) {}
-            } message: { message in
-                Text(message)
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Klart") {
-                        focusedField = nil
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if viewModel.exercises.isEmpty {
-                    Color.clear.frame(height: 0)
-                } else {
-                    HoldToSaveButton(title: "Spara pass", duration: 1.0) {
-                        completeSession()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                }
-            }
         }
+    }
+    
+    private func saveWorkoutTapped() {
+        focusedField = nil
+        persistSession(force: true)
+        let duration = viewModel.elapsedSeconds
+        let isPro = RevenueCatManager.shared.isProMember
+        viewModel.completeSession(duration: duration, isPro: isPro)
+        
+        // Update streak
+        StreakManager.shared.registerWorkoutCompletion()
+        
+        // Go directly to session complete
+        showCompleteSession = true
     }
     
     private func completeSession() {
         focusedField = nil
         persistSession(force: true)
         let duration = viewModel.elapsedSeconds
-        let isPro = isPremium
+        let isPro = RevenueCatManager.shared.isProMember
         viewModel.completeSession(duration: duration, isPro: isPro)
         
         // Update streak
@@ -702,14 +587,43 @@ private struct HoldToSaveButton: View {
 struct ExerciseCard: View {
     let exercise: GymExercise
     let previousSets: [PreviousExerciseSet]
+    let isReorderMode: Bool
     let onAddSet: () -> Void
     let onUpdateSet: (Int, Double, Int) -> Void
     let onDeleteSet: (Int) -> Void
     let onToggleSetCompletion: (Int) -> Void
     let onDelete: () -> Void
+    let onUpdateNotes: (String) -> Void
+    let onToggleReorder: () -> Void
     let focusedField: FocusState<GymSessionInputField?>.Binding
     
     @State private var showDeleteConfirmation = false
+    @State private var notesText: String
+    
+    init(exercise: GymExercise, 
+         previousSets: [PreviousExerciseSet],
+         isReorderMode: Bool,
+         onAddSet: @escaping () -> Void,
+         onUpdateSet: @escaping (Int, Double, Int) -> Void,
+         onDeleteSet: @escaping (Int) -> Void,
+         onToggleSetCompletion: @escaping (Int) -> Void,
+         onDelete: @escaping () -> Void,
+         onUpdateNotes: @escaping (String) -> Void,
+         onToggleReorder: @escaping () -> Void,
+         focusedField: FocusState<GymSessionInputField?>.Binding) {
+        self.exercise = exercise
+        self.previousSets = previousSets
+        self.isReorderMode = isReorderMode
+        self.onAddSet = onAddSet
+        self.onUpdateSet = onUpdateSet
+        self.onDeleteSet = onDeleteSet
+        self.onToggleSetCompletion = onToggleSetCompletion
+        self.onDelete = onDelete
+        self.onUpdateNotes = onUpdateNotes
+        self.onToggleReorder = onToggleReorder
+        self.focusedField = focusedField
+        self._notesText = State(initialValue: exercise.notes ?? "")
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -732,16 +646,45 @@ struct ExerciseCard: View {
                 
                 Spacer()
                 
-                Button(action: {
-                    showDeleteConfirmation = true
-                }) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                        .font(.system(size: 18))
+                HStack(spacing: 12) {
+                    if !isReorderMode {
+                        Button(action: {
+                            showDeleteConfirmation = true
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                                .font(.system(size: 18))
+                        }
+                        
+                        Button(action: {
+                            onToggleReorder()
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                                .foregroundColor(.gray)
+                                .font(.system(size: 18))
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+            
+            // Notes TextField
+            TextField("Skriv anteckningar här...", text: $notesText)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+                .onChange(of: notesText) { _, newValue in
+                    onUpdateNotes(newValue)
+                }
             
             // Sets header
             HStack(spacing: 8) {
@@ -805,6 +748,10 @@ struct ExerciseCard: View {
         }
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
         .padding(.horizontal, 16)
         .confirmationDialog("Ta bort övning?", isPresented: $showDeleteConfirmation) {
             Button("Ta bort", role: .destructive) {

@@ -13,6 +13,7 @@
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
 		8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8631B5092ECA305300EBACD6 /* OpenAISwift */; };
+		868BB4432F0C6AE7005227A3 /* UpDownLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269AE2EAA5E2D00A4EC93 /* Auth */; };
 		86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B02EAA5E2D00A4EC93 /* Functions */; };
 		86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B22EAA5E2D00A4EC93 /* PostgREST */; };
@@ -27,15 +28,63 @@
 		86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		868BB4442F0C6AE7005227A3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 86B269812EAA2EBB00A4EC93 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 868BB4222F0C66A6005227A3;
+			remoteInfo = UpDownLiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		868BB4462F0C6AE7005227A3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				868BB4432F0C6AE7005227A3 /* UpDownLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		860308202EAE82D00023EA7B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		86030F342EB75F430023EA7B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
+		868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UpDownLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		86549C522F0D39F1004F2168 /* Exceptions for "UpDownLiveActivity" folder in "Up&Down" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+			);
+			target = 86B269882EAA2EBB00A4EC93 /* Up&Down */;
+		};
+		868BB43A2F0C66A7005227A3 /* Exceptions for "UpDownLiveActivity" folder in "UpDownLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */;
+		};
+		868BB43D2F0C6865005227A3 /* Exceptions for "riktiga" folder in "UpDownLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				Models/WorkoutActivityAttributes.swift,
+				Services/CompleteSetIntent.swift,
+			);
+			target = 868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */;
+		};
 		86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "Up&Down" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -46,10 +95,20 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		868BB4262F0C66A6005227A3 /* UpDownLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				86549C522F0D39F1004F2168 /* Exceptions for "UpDownLiveActivity" folder in "Up&Down" target */,
+				868BB43A2F0C66A7005227A3 /* Exceptions for "UpDownLiveActivity" folder in "UpDownLiveActivityExtension" target */,
+			);
+			path = UpDownLiveActivity;
+			sourceTree = "<group>";
+		};
 		86B2698B2EAA2EBB00A4EC93 /* riktiga */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				86B26C4E2EAAAB3100A4EC93 /* Exceptions for "riktiga" folder in "Up&Down" target */,
+				868BB43D2F0C6865005227A3 /* Exceptions for "riktiga" folder in "UpDownLiveActivityExtension" target */,
 			);
 			path = riktiga;
 			sourceTree = "<group>";
@@ -57,6 +116,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		868BB4202F0C66A6005227A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		86B269862EAA2EBB00A4EC93 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -89,6 +155,7 @@
 			isa = PBXGroup;
 			children = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
+				868BB4262F0C66A6005227A3 /* UpDownLiveActivity */,
 				86B269B82EAA5E3900A4EC93 /* Frameworks */,
 				86B2698A2EAA2EBB00A4EC93 /* Products */,
 			);
@@ -98,6 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				86B269892EAA2EBB00A4EC93 /* Up&Down.app */,
+				868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -116,6 +184,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 868BB4372F0C66A7005227A3 /* Build configuration list for PBXNativeTarget "UpDownLiveActivityExtension" */;
+			buildPhases = (
+				868BB41F2F0C66A6005227A3 /* Sources */,
+				868BB4202F0C66A6005227A3 /* Frameworks */,
+				868BB4212F0C66A6005227A3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				868BB4262F0C66A6005227A3 /* UpDownLiveActivity */,
+			);
+			name = UpDownLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = UpDownLiveActivityExtension;
+			productReference = 868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		86B269882EAA2EBB00A4EC93 /* Up&Down */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 86B269942EAA2EBC00A4EC93 /* Build configuration list for PBXNativeTarget "Up&Down" */;
@@ -123,10 +213,12 @@
 				86B269852EAA2EBB00A4EC93 /* Sources */,
 				86B269862EAA2EBB00A4EC93 /* Frameworks */,
 				86B269872EAA2EBB00A4EC93 /* Resources */,
+				868BB4462F0C6AE7005227A3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				868BB4452F0C6AE7005227A3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
@@ -162,9 +254,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					868BB4222F0C66A6005227A3 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					86B269882EAA2EBB00A4EC93 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -192,11 +287,19 @@
 			projectRoot = "";
 			targets = (
 				86B269882EAA2EBB00A4EC93 /* Up&Down */,
+				868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		868BB4212F0C66A6005227A3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		86B269872EAA2EBB00A4EC93 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -207,6 +310,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		868BB41F2F0C66A6005227A3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		86B269852EAA2EBB00A4EC93 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -216,7 +326,79 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		868BB4452F0C6AE7005227A3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */;
+			targetProxy = 868BB4442F0C6AE7005227A3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		868BB4382F0C66A7005227A3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NRPNN9U77T;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UpDownLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		868BB4392F0C66A7005227A3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NRPNN9U77T;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = UpDownLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		86B269922EAA2EBC00A4EC93 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -380,7 +562,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 101.0;
+				MARKETING_VERSION = 106.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -456,7 +638,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 101.0;
+				MARKETING_VERSION = 106.0;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -493,6 +675,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		868BB4372F0C66A7005227A3 /* Build configuration list for PBXNativeTarget "UpDownLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				868BB4382F0C66A7005227A3 /* Debug */,
+				868BB4392F0C66A7005227A3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		86B269842EAA2EBB00A4EC93 /* Build configuration list for PBXProject "Up&Down" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

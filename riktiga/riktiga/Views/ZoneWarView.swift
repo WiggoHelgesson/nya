@@ -69,6 +69,10 @@ struct ZoneWarView: View {
     @State private var showLeaderboard = false
     @State private var regionDebounceTask: DispatchWorkItem?
     @State private var localStatsDebounceTask: Task<Void, Never>?
+    @State private var navigationPath = NavigationPath()
+    
+    // Track if initial load has happened (persists across view recreations)
+    private static var hasInitiallyLoaded = false
     
     // Area tracking
     @State private var currentAreaName: String = "Området"
@@ -111,20 +115,17 @@ struct ZoneWarView: View {
     private static var cachedEvents: [TerritoryEvent] = []
     private static var lastEventsCacheTime: Date = .distantPast
     
-    // Geocoding throttle
+    // Geocoding throttle - 1 second for more responsive area name updates
     @State private var lastGeocodingTime: Date = .distantPast
-    private let geocodingThrottle: TimeInterval = 2.0
+    private let geocodingThrottle: TimeInterval = 1.0
     
     // City bounds cache for local leaderboard
     @State private var cachedCityName: String = ""
     @State private var cachedCityBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)?
     private let cityBoundsGeocoder = CLGeocoder()
     
-    // Minimum radius for city bounds (15km covers most Swedish municipalities)
-    private let minimumCityRadiusMeters: Double = 15000
-    
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 ZoneWarMapView(
                     territories: territoryStore.territories, // Owner polygons (one overlay per owner)
@@ -159,7 +160,7 @@ struct ZoneWarView: View {
                     },
                     targetRegion: $targetMapRegion
                 )
-                .ignoresSafeArea(edges: .top) // Map covers full screen including top
+                // Ta bort ignoresSafeArea så kartan inte går under tab-selectorn
                 
                 if isLoading {
                     ProgressView()
@@ -257,6 +258,76 @@ struct ZoneWarView: View {
                 await loadTerritoryEvents()
                 calculateLocalStats() // Recalculate with cleared city cache
             }
+            .onAppear {
+                // On subsequent appearances (returning to tab), force refresh territories
+                if Self.hasInitiallyLoaded {
+                    // Small delay to let the map view stabilize
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        let mapRect = visibleMapRect
+                        
+                        // Only refresh if we have valid bounds (not the entire world)
+                        // Check if it's not the world rect by comparing size (world rect has huge size)
+                        let isValidViewport = mapRect.size.width > 0 && mapRect.size.width < MKMapRect.world.size.width * 0.5
+                        if isValidViewport {
+                            let region = MKCoordinateRegion(mapRect)
+                            let minLat = region.center.latitude - region.span.latitudeDelta / 2
+                            let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+                            let minLon = region.center.longitude - region.span.longitudeDelta / 2
+                            let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+                            
+                            // Force invalidate cache and refresh for current viewport
+                            territoryStore.invalidateCache()
+                            territoryStore.refreshForViewport(
+                                minLat: minLat,
+                                maxLat: maxLat,
+                                minLon: minLon,
+                                maxLon: maxLon
+                            )
+                        } else {
+                            // Fallback: general refresh
+                            Task {
+                                territoryStore.forceRefresh()
+                                await territoryStore.refresh()
+                            }
+                        }
+                    }
+                } else {
+                    // First appearance - mark flag (task handles initial load)
+                    Self.hasInitiallyLoaded = true
+                }
+            }
+            // Listen for workout saved notifications to refresh zones
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WorkoutSaved"))) { _ in
+                print("🗺️ ZoneWar: Received WorkoutSaved notification - refreshing zones")
+                Task {
+                    // FORCE refresh immediately - clear everything and fetch fresh
+                    territoryStore.forceRefresh()
+                    
+                    // Wait a tiny bit for DB to settle
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                    
+                    // Fetch fresh data
+                    await territoryStore.refresh()
+                    
+                    // Also reload tiles for current viewport
+                    let region = MKCoordinateRegion(visibleMapRect)
+                    let minLat = region.center.latitude - region.span.latitudeDelta / 2
+                    let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+                    let minLon = region.center.longitude - region.span.longitudeDelta / 2
+                    let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+                    
+                    await territoryStore.loadTilesInBounds(
+                        minLat: minLat,
+                        maxLat: maxLat,
+                        minLon: minLon,
+                        maxLon: maxLon,
+                        forceRefresh: true
+                    )
+                    
+                    await loadAllLeaders()
+                    print("✅ ZoneWar: Zones refreshed after workout")
+                }
+            }
             // Recalculate local stats whenever territories update (debounced)
             .onChange(of: territoryStore.territories.count) { oldCount, newCount in
                 // Only trigger if count changed significantly (more than 10%)
@@ -280,29 +351,6 @@ struct ZoneWarView: View {
                     guard !Task.isCancelled else { return }
                     await MainActor.run { calculateLocalStats() }
                 }
-            }
-            // Floating refresh button that clears cache and reloads - bottom right
-            .overlay(alignment: .bottomTrailing) {
-                Button {
-                    Task {
-                        territoryStore.forceRefresh()
-                        await territoryStore.refresh()
-                        await loadAllLeaders()
-                        await loadTerritoryEvents()
-                        await loadLotteryStats()
-                    }
-                } label: {
-                    Image(systemName: "arrow.clockwise.circle.fill")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(12)
-                    .background(Color.black.opacity(0.7))
-                    .clipShape(Circle())
-                    .shadow(radius: 6)
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 140) // Above tab bar and bottom menu
-                .accessibilityLabel("Uppdatera kartan")
             }
             .overlay(alignment: .top) {
                 VStack(spacing: 0) {
@@ -430,6 +478,13 @@ struct ZoneWarView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible) // Allow swipe-down to dismiss
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootHem"))) { _ in
+                navigationPath = NavigationPath()
+                showLeaderboard = false
+                showBottomMenu = false
+                showLotteryLeaderboard = false
+                selectedTerritory = nil
+            }
         }
     }
     
@@ -445,6 +500,7 @@ struct ZoneWarView: View {
                     if let leader = areaLeader {
                         HStack(spacing: 10) {
                             ProfileImage(url: leader.avatarUrl, size: 36)
+                                .id("king-avatar-\(leader.id)") // Unique ID per leader
                             
                             // Name and area
                             VStack(alignment: .leading, spacing: 2) {
@@ -782,7 +838,7 @@ struct ZoneWarView: View {
     
     // Throttle for local stats - prevent excessive database calls
     @State private var lastLocalStatsTime: Date = .distantPast
-    private let localStatsThrottle: TimeInterval = 2.0 // Update every 2 seconds for responsive local king
+    private let localStatsThrottle: TimeInterval = 1.5 // Update every 1.5 seconds for responsive local king
     
     private func calculateLocalStats() {
         // Throttle database calls
@@ -790,17 +846,22 @@ struct ZoneWarView: View {
         guard now.timeIntervalSince(lastLocalStatsTime) >= localStatsThrottle else { return }
         lastLocalStatsTime = now
         
-        // Trigger async fetch from database instead of counting local tiles
+        // Trigger async fetch from database based on CURRENT CITY/LOCALITY
         Task {
-            await loadLocalLeadersFromDatabase()
+            await loadLeadersForCurrentCity()
         }
     }
     
-    private func loadLocalLeadersFromDatabase() async {
-        // Get city bounds instead of visible map bounds
-        // This ensures we show the full city's leaderboard regardless of zoom level
+    private func loadLeadersForCurrentCity() async {
+        // Get leaderboard for the ENTIRE city/locality, not just visible area
+        // This ensures you see all of Danderyd's leaders when in Danderyd
         
         let cityName = currentAreaName
+        
+        // Skip if no valid city name
+        guard !cityName.isEmpty && cityName != "Området" else {
+            return
+        }
         
         // Check if we already have cached bounds for this city
         if cityName == cachedCityName, let bounds = cachedCityBounds {
@@ -815,20 +876,21 @@ struct ZoneWarView: View {
             if let placemark = placemarks.first {
                 let centerLat: Double
                 let centerLon: Double
-                var radiusMeters: Double = minimumCityRadiusMeters // Default 15km radius for cities
+                var radiusMeters: Double
                 
                 // Get center from region or location
                 if let region = placemark.region as? CLCircularRegion {
                     centerLat = region.center.latitude
                     centerLon = region.center.longitude
-                    // Use the larger of: geocoded radius or minimum (15km)
-                    radiusMeters = max(region.radius, minimumCityRadiusMeters)
+                    // Use the geocoded radius, but cap it to avoid overlapping with neighbors
+                    // Most Swedish municipalities are 5-20km across
+                    radiusMeters = min(region.radius, 10000) // Max 10km radius
+                    radiusMeters = max(radiusMeters, 3000)   // Min 3km radius
                 } else if let location = placemark.location {
                     centerLat = location.coordinate.latitude
                     centerLon = location.coordinate.longitude
+                    radiusMeters = 5000 // Default 5km radius for smaller areas
                 } else {
-                    // Fallback to visible bounds
-                    await fetchLeadersForVisibleBounds()
                     return
                 }
                 
@@ -836,10 +898,9 @@ struct ZoneWarView: View {
                 // 1 degree latitude ≈ 111km
                 let radiusInDegrees = radiusMeters / 111000
                 
-                // Create a generous bounding box - use 2x the radius to ensure full coverage
-                // Swedish municipalities can be quite spread out
-                let latSpan = radiusInDegrees * 2.0
-                let lonSpan = radiusInDegrees * 2.0 / cos(centerLat * .pi / 180) // Adjust for longitude
+                // Create bounding box centered on the city
+                let latSpan = radiusInDegrees
+                let lonSpan = radiusInDegrees / cos(centerLat * .pi / 180) // Adjust for longitude
                 
                 let minLat = centerLat - latSpan
                 let maxLat = centerLat + latSpan
@@ -852,31 +913,24 @@ struct ZoneWarView: View {
                     self.cachedCityBounds = (minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
                 }
                 
-                await fetchLeadersForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
-                
                 #if DEBUG
-                print("📍 City bounds for \(cityName): center(\(centerLat), \(centerLon)) radius=\(radiusMeters)m, lat \(minLat)-\(maxLat), lon \(minLon)-\(maxLon)")
+                print("📍 City bounds for \(cityName): center(\(centerLat), \(centerLon)) radius=\(Int(radiusMeters))m")
                 #endif
-            } else {
-                // Fallback: use visible map bounds if geocoding fails
-                await fetchLeadersForVisibleBounds()
+                
+                await fetchLeadersForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
             }
         } catch {
-            print("⚠️ Geocoding failed for \(cityName), using visible bounds: \(error)")
-            await fetchLeadersForVisibleBounds()
+            print("⚠️ Geocoding failed for \(cityName): \(error)")
         }
     }
     
+    // Legacy functions for backwards compatibility
+    private func loadLocalLeadersFromDatabase() async {
+        await loadLeadersForCurrentCity()
+    }
+    
     private func fetchLeadersForVisibleBounds() async {
-        let topLeft = MKMapPoint(x: visibleMapRect.origin.x, y: visibleMapRect.origin.y)
-        let bottomRight = MKMapPoint(x: visibleMapRect.maxX, y: visibleMapRect.maxY)
-        
-        let minLat = min(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
-        let maxLat = max(topLeft.coordinate.latitude, bottomRight.coordinate.latitude)
-        let minLon = min(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
-        let maxLon = max(topLeft.coordinate.longitude, bottomRight.coordinate.longitude)
-        
-        await fetchLeadersForBounds(minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon)
+        await loadLeadersForCurrentCity()
     }
     
     private func fetchLeadersForBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double) async {
@@ -903,10 +957,17 @@ struct ZoneWarView: View {
                 .execute()
                 .value
             
-            await MainActor.run {
-                let leaders = results.map { row in
-                    TerritoryLeader(
-                        id: row.owner_id.uuidString.lowercased(),
+            // Create leaders with UNIQUE IDs and properly mapped data
+            // Use a dictionary to ensure no duplicate owner IDs
+            var leaderDict: [String: TerritoryLeader] = [:]
+            
+            for row in results {
+                let odwnerId = row.owner_id.uuidString.lowercased()
+                
+                // Only add if we haven't seen this owner before (shouldn't happen, but safety check)
+                if leaderDict[odwnerId] == nil {
+                    leaderDict[odwnerId] = TerritoryLeader(
+                        id: odwnerId,
                         name: row.username ?? "Användare",
                         avatarUrl: row.avatar_url,
                         totalArea: row.area_m2,
@@ -914,18 +975,32 @@ struct ZoneWarView: View {
                         isPro: row.is_pro ?? false
                     )
                 }
-                
+            }
+            
+            // Sort by tile count descending
+            let leaders = leaderDict.values.sorted { $0.tileCount > $1.tileCount }
+            
+            // Prefetch avatar images for top leaders to ensure they're cached
+            let avatarUrls = leaders.prefix(5).compactMap { $0.avatarUrl }
+            if !avatarUrls.isEmpty {
+                ImageCacheManager.shared.prefetch(urls: avatarUrls)
+            }
+            
+            await MainActor.run {
                 self.localLeaders = leaders
                 
-                // Update Area Leader (King of the city/area)
+                // Update Area Leader (King of the visible area)
                 if let first = leaders.first {
                     self.areaLeader = first
+                    #if DEBUG
+                    print("👑 King of \(currentAreaName): \(first.name) with \(first.tileCount) tiles (avatar: \(first.avatarUrl ?? "none"))")
+                    #endif
                 } else {
                     self.areaLeader = nil
                 }
                 
                 #if DEBUG
-                print("📊 Local leaderboard from DB: \(leaders.count) leaders for \(currentAreaName)")
+                print("📊 Local leaderboard: \(leaders.count) leaders in visible area (\(currentAreaName))")
                 #endif
             }
         } catch {
@@ -1005,22 +1080,40 @@ struct ZoneWarView: View {
         
         geocoder.reverseGeocodeLocation(location) { placemarks, error in
             if let placemark = placemarks?.first {
-                // Try to get the most specific area name - prefer locality (city/town)
-                let areaName = placemark.locality 
-                    ?? placemark.subAdministrativeArea
-                    ?? placemark.subLocality
-                    ?? placemark.administrativeArea
-                    ?? "Området"
+                // Build area name - prefer specific neighborhood/suburb, then city
+                // Priority: subLocality (neighborhood) > locality (city) > subAdministrativeArea > administrativeArea
+                var areaName: String
+                
+                if let subLocality = placemark.subLocality, !subLocality.isEmpty {
+                    // Use neighborhood/suburb if available (e.g., "Vasastan", "Södermalm")
+                    areaName = subLocality
+                } else if let locality = placemark.locality, !locality.isEmpty {
+                    // Fall back to city/town (e.g., "Stockholm", "Danderyd")
+                    areaName = locality
+                } else if let subAdmin = placemark.subAdministrativeArea, !subAdmin.isEmpty {
+                    // Fall back to sub-administrative area
+                    areaName = subAdmin
+                } else if let admin = placemark.administrativeArea, !admin.isEmpty {
+                    // Fall back to administrative area (county)
+                    areaName = admin
+                } else {
+                    areaName = "Området"
+                }
                 
                 DispatchQueue.main.async {
                     let previousAreaName = self.currentAreaName
                     self.currentAreaName = areaName
                     
-                    // If the city changed, clear the city bounds cache and refresh leaderboard
+                    // If the area changed, refresh leaderboard immediately
                     if previousAreaName != areaName {
                         self.cachedCityName = ""
                         self.cachedCityBounds = nil
+                        // Immediate refresh for responsive king updates
                         self.calculateLocalStats()
+                        
+                        #if DEBUG
+                        print("📍 Area changed: \(previousAreaName) → \(areaName)")
+                        #endif
                     }
                 }
             }
@@ -1402,7 +1495,10 @@ struct ZoneWarMapView: UIViewRepresentable {
         let territoriesChanged = territories.count != context.coordinator.territories.count ||
                                 Set(territories.map { $0.id }) != Set(context.coordinator.territories.map { $0.id })
         
-        if tilesChanged || territoriesChanged {
+        // Also check if map has no overlays but we have territories to show (happens when view is recreated)
+        let mapNeedsInitialOverlays = uiView.overlays.isEmpty && !territories.isEmpty
+        
+        if tilesChanged || territoriesChanged || mapNeedsInitialOverlays {
             context.coordinator.territories = territories
             context.coordinator.tiles = tiles
             
@@ -1575,11 +1671,39 @@ struct ZoneWarMapView: UIViewRepresentable {
                     polygons: polys
                 )
                 
-                // Replace overlays in one go
-                if !mapView.overlays.isEmpty {
-                    mapView.removeOverlays(mapView.overlays)
+                // BULLETPROOF: Smart overlay update - avoid flicker
+                // Only update if there are actual changes
+                let newOwnerIds = Set(polys.compactMap { $0.title })
+                let oldOwnerIds = Set(territoryPolygons.compactMap { $0.title })
+                
+                // Check if we need to update
+                let needsUpdate = newOwnerIds != oldOwnerIds || 
+                                 polys.count != territoryPolygons.count
+                
+                if needsUpdate {
+                    // Remove overlays that are no longer needed
+                    let overlaysToRemove = mapView.overlays.filter { overlay in
+                        if let poly = overlay as? MKPolygon {
+                            return !newOwnerIds.contains(poly.title ?? "")
+                        }
+                        return overlay === tileOverlay // Don't remove tile overlay here
+                    }
+                    
+                    if !overlaysToRemove.isEmpty {
+                        mapView.removeOverlays(overlaysToRemove)
+                    }
+                    
+                    // Add only new polygons
+                    let existingOwners = Set(mapView.overlays.compactMap { ($0 as? MKPolygon)?.title })
+                    let newPolys = polys.filter { !existingOwners.contains($0.title ?? "") }
+                    
+                    if !newPolys.isEmpty {
+                        mapView.addOverlays(newPolys, level: .aboveRoads)
+                    }
+                } else {
+                    print("📍 No overlay changes detected - keeping existing overlays")
                 }
-                mapView.addOverlays(polys, level: .aboveRoads)
+                
                 territoryPolygons = polys
                 tileBounds.removeAll(keepingCapacity: true)
                 
@@ -2058,42 +2182,15 @@ struct ZoneWarMenuView: View {
                     .scaleEffect(1.2)
                     .padding(.top, 40)
             } else {
-                let shouldBlurLocal = !isPremium && !isSweden
-                
                 LazyVStack(spacing: 0) {
                     ForEach(Array(displayLeaders.prefix(maxCount).enumerated()), id: \.element.id) { index, leader in
-                        if shouldBlurLocal {
-                            Button {
-                                showPaywall = true
-                            } label: {
-                                leaderboardRow(index: index, leader: leader)
-                                    .blur(radius: 6)
-                                    .overlay(
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "lock.fill")
-                                                .font(.system(size: 14, weight: .bold))
-                                            Text("PRO")
-                                                .font(.system(size: 14, weight: .black))
-                                        }
-                                        .foregroundColor(.yellow)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule()
-                                                .fill(Color.black.opacity(0.8))
-                                        )
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Button {
-                                selectedUserId = leader.id
-                                showUserProfile = true
-                            } label: {
-                                leaderboardRow(index: index, leader: leader)
-                            }
-                            .buttonStyle(.plain)
+                        Button {
+                            selectedUserId = leader.id
+                            showUserProfile = true
+                        } label: {
+                            leaderboardRow(index: index, leader: leader)
                         }
+                        .buttonStyle(.plain)
                         
                         if index < min(maxCount, displayLeaders.count) - 1 {
                             Divider()
@@ -2201,13 +2298,11 @@ struct ZoneWarMenuView: View {
                         .lineLimit(1)
                     
                     if leader.isPro {
-                        Text("PRO")
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.yellow)
-                            .cornerRadius(4)
+                        Image("41")
+                            .resizable()
+                            .renderingMode(.original)
+                            .scaledToFit()
+                            .frame(height: 16)
                     }
                 }
                 

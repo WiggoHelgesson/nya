@@ -17,40 +17,23 @@ struct ProfileView: View {
     @State private var profileObserver: NSObjectProtocol?
     @State private var showEditProfile = false
     @State private var showPaywall = false
-    @State private var showTrainerOnboarding = false
-    @State private var showTrainerDashboard = false
-    @State private var isTrainer = false
-    @State private var pendingBookingsCount = 0
     @State private var activityCount: Int = 0
-    @State private var lastTrainerCheck: Date?
     @State private var lastStatsLoad: Date?
     @State private var isInitialLoad = true
     @StateObject private var myPostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
     @State private var showPublicProfile = false
+    @State private var navigationPath = NavigationPath()
     
-    private let trainerCheckThrottle: TimeInterval = 30
     private let statsLoadThrottle: TimeInterval = 60
     
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     // MARK: - Profile Header Card with Settings button in top right
                     HStack {
-                        if !isPremium {
-                            Button(action: {
-                                showPaywall = true
-                            }) {
-                                Image("41")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 36, height: 36)
-                                    .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
-                            }
-                        }
-                        
                         Spacer()
                         
                         Button(action: {
@@ -63,6 +46,10 @@ struct ProfileView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
+                    
+                    // MARK: - Navigation Header
+                    ProfileHeaderView()
+                        .padding(.bottom, 12)
                     
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
@@ -205,52 +192,19 @@ struct ProfileView: View {
                         )
                     }
                     
-                    // MARK: - Golf Section (List style)
-                    let showGolfTrainerFeature = true
-                    if showGolfTrainerFeature {
-                        VStack(spacing: 0) {
-                            // Mina bokningar (student's view of their bookings)
-                            NavigationLink(destination: MyBookingsView()) {
-                                ProfileListRow(
-                                    icon: "calendar.badge.clock",
-                                    title: "Mina bokningar",
-                                    subtitle: "Se dina bokade lektioner",
-                                    badgeCount: pendingBookingsCount
-                                )
-                            }
-                            
-                            Divider()
-                                .padding(.leading, 56)
-                            
-                            // Bli golftränare OR Utbetalningar & info
-                            if isTrainer {
-                                Button { showTrainerDashboard = true } label: {
-                                    ProfileListRow(
-                                        icon: "creditcard",
-                                        title: "Utbetalningar & info",
-                                        subtitle: "Hantera din tränarinfo"
-                                    )
-                                }
-                            } else {
-                                Button { showTrainerOnboarding = true } label: {
-                                    ProfileListRow(
-                                        icon: "figure.golf",
-                                        title: "Bli golftränare",
-                                        subtitle: "Erbjud lektioner och tjäna pengar"
-                                    )
-                                }
-                            }
-                        }
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
                     
                     // MARK: - Up&Down Live Gallery
                     UpAndDownLiveGallery(posts: myPostsViewModel.posts)
                     
+                    // MARK: - Recovery Zone
+                    if let userId = authViewModel.currentUser?.id {
+                        RecoveryZoneView(userId: userId)
+                            .padding(.top, 20)
+                    }
+                    
                     Divider()
                         .background(Color(.systemGray4))
-                        .padding(.top, 8)
+                        .padding(.top, 24)
                     
                     // MARK: - My Posts Section
                     VStack(alignment: .leading, spacing: 12) {
@@ -356,16 +310,6 @@ struct ProfileView: View {
                                 }
                             }
                     }
-                }
-            }
-            .sheet(isPresented: $showTrainerOnboarding) {
-                TrainerOnboardingView()
-            }
-            .sheet(isPresented: $showTrainerDashboard) {
-                TrainerDashboardView()
-                    .onDisappear {
-                        // Force refresh trainer status after dashboard closes (in case user deactivated)
-                        checkIfUserIsTrainer(force: true)
                     }
             }
             .task {
@@ -396,9 +340,6 @@ struct ProfileView: View {
                     group.addTask { @MainActor in
                         self.loadProfileStats()
                     }
-                    group.addTask { @MainActor in
-                        self.checkIfUserIsTrainer()
-                    }
                     group.addTask {
                         // Load user's own posts
                         if let userId = await self.authViewModel.currentUser?.id {
@@ -422,24 +363,14 @@ struct ProfileView: View {
             .onChange(of: myPostsViewModel.posts.count) { _, newCount in
                 activityCount = newCount
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshTrainerStatus"))) { notification in
-                // Check if the notification has immediate status info
-                if let userInfo = notification.userInfo,
-                   let immediateStatus = userInfo["isTrainer"] as? Bool {
-                    // Immediately update the UI
-                    self.isTrainer = immediateStatus
-                    self.pendingBookingsCount = 0
-                    self.lastTrainerCheck = Date() // Mark as just checked
-                } else {
-                    // Force verify with server
-                    checkIfUserIsTrainer(force: true)
-                }
-            }
             .onDisappear {
                 if let observer = profileObserver {
                     NotificationCenter.default.removeObserver(observer)
                     profileObserver = nil
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootProfil"))) { _ in
+                navigationPath = NavigationPath()
             }
         }
     }
@@ -471,30 +402,6 @@ struct ProfileView: View {
                 }
             } catch {
                 print("Error loading profile stats: \(error)")
-            }
-        }
-    }
-    
-    private func checkIfUserIsTrainer(force: Bool = false) {
-        // Throttle trainer checks to avoid excessive API calls
-        if !force,
-           let lastCheck = lastTrainerCheck,
-           Date().timeIntervalSince(lastCheck) < trainerCheckThrottle {
-            return
-        }
-        
-        Task {
-            do {
-                let isTrainerResult = try await TrainerService.shared.isUserTrainer()
-                let pendingCount = isTrainerResult ? try await TrainerService.shared.getPendingBookingsCount() : 0
-                
-                await MainActor.run {
-                    self.isTrainer = isTrainerResult
-                    self.pendingBookingsCount = pendingCount
-                    self.lastTrainerCheck = Date()
-                }
-            } catch {
-                print("❌ Error checking trainer status: \(error)")
             }
         }
     }

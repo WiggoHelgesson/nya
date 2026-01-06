@@ -1,9 +1,9 @@
 -- Updated claim_tiles with workout metadata
 -- Uses WHILE loops instead of generate_series for reliability
 -- Claims ALL tiles inside the polygon + along the edge
-DROP FUNCTION IF EXISTS claim_tiles(UUID, UUID, double precision[][], double precision, integer, text);
+DROP FUNCTION IF EXISTS public.claim_tiles(UUID, UUID, double precision[][], double precision, integer, text);
 
-CREATE OR REPLACE FUNCTION claim_tiles(
+CREATE OR REPLACE FUNCTION public.claim_tiles(
   p_owner UUID,
   p_activity UUID,
   p_coords double precision[][],   -- [lat, lon]
@@ -88,7 +88,7 @@ BEGIN
       
       -- Claim if: center is inside polygon OR tile intersects with filled area
       IF ST_Within(tile_center, new_poly) OR ST_Intersects(tile_geom, filled_poly) THEN
-        INSERT INTO territory_tiles (tile_id, geom, owner_id, activity_id, distance_km, duration_sec, pace, last_updated_at)
+        INSERT INTO public.territory_tiles (tile_id, geom, owner_id, activity_id, distance_km, duration_sec, pace, last_updated_at)
         VALUES (
           abs(hashtext(ST_AsText(ST_SnapToGrid(tile_center, grid_size))))::bigint,
           tile_geom,
@@ -117,6 +117,7 @@ BEGIN
 
   RAISE NOTICE 'Created/updated % tiles for owner %', tiles_created, p_owner;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
 
-GRANT EXECUTE ON FUNCTION claim_tiles(UUID, UUID, double precision[][], double precision, integer, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_tiles(UUID, UUID, double precision[][], double precision, integer, text) TO authenticated;

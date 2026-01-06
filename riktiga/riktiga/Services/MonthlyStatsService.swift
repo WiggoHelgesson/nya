@@ -38,26 +38,38 @@ class MonthlyStatsService {
             print("🔄 Fetching top monthly users by steps")
             let monthKey = Self.currentMonthKey()
             if !forceRemote, let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
-                print("✅ Using cached monthly leaderboard (\(cached.count) entries)")
-                return Array(cached.prefix(limit))
+                // Filter cached data to only Pro members
+                let proMembers = cached.filter { $0.isPro }
+                print("✅ Using cached monthly leaderboard (\(proMembers.count) Pro members)")
+                return Array(proMembers.prefix(limit))
             }
             struct StepRow: Decodable { let userId: String; let steps: Int; enum CodingKeys: String, CodingKey { case userId = "user_id"; case steps } }
+            // Fetch more users initially since we'll filter for Pro members only
+            let fetchLimit = limit * 5 // Fetch 5x more to ensure we get enough Pro members
             let rows: [StepRow] = try await supabase
                 .from("monthly_steps")
                 .select("user_id, steps")
                 .eq("month", value: monthKey)
                 .order("steps", ascending: false)
-                .limit(limit)
+                .limit(fetchLimit)
                 .execute()
                 .value
 
             var users: [MonthlyUser] = []
             for row in rows {
                 if let profile = try? await ProfileService.shared.fetchUserProfile(userId: row.userId) {
-                    users.append(MonthlyUser(id: row.userId, username: profile.name, avatarUrl: profile.avatarUrl, steps: row.steps, isPro: profile.isProMember))
+                    // Only include Pro members on the leaderboard
+                    if profile.isProMember {
+                        users.append(MonthlyUser(id: row.userId, username: profile.name, avatarUrl: profile.avatarUrl, steps: row.steps, isPro: profile.isProMember))
+                        // Stop once we have enough Pro members
+                        if users.count >= limit {
+                            break
+                        }
+                    }
                 }
             }
             cache.saveMonthlyLeaderboard(users, monthKey: monthKey)
+            print("✅ Filtered to \(users.count) Pro members for monthly leaderboard")
             return users
             
         } catch {
@@ -65,8 +77,10 @@ class MonthlyStatsService {
             // fallback to cache if available
             let monthKey = Self.currentMonthKey()
             if let cached = cache.getCachedMonthlyLeaderboard(monthKey: monthKey) {
-                print("⚠️ Returning cached leaderboard due to error")
-                return Array(cached.prefix(limit))
+                // Filter cached data to only Pro members
+                let proMembers = cached.filter { $0.isPro }
+                print("⚠️ Returning cached leaderboard due to error (\(proMembers.count) Pro members)")
+                return Array(proMembers.prefix(limit))
             }
             throw error
         }
