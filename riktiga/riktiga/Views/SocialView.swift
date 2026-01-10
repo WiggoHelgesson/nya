@@ -33,6 +33,15 @@ struct SocialView: View {
     @State private var isUploadingAvatar = false
     @State private var pendingPostNavigation: String? = nil
     @State private var navigationPath = NavigationPath()
+    @State private var featuredPosts: [SocialWorkoutPost] = []
+    @State private var isLoadingFeatured = false
+    @State private var carouselIndex = 0
+    @State private var weeklyActivities: Int = 0
+    @State private var weeklyTime: TimeInterval = 0
+    @State private var weeklyDistance: Double = 0
+    @State private var lastWeekActivities: Int = 0
+    @State private var lastWeekTime: TimeInterval = 0
+    @State private var lastWeekDistance: Double = 0
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -122,23 +131,35 @@ struct SocialView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        if socialViewModel.isLoading && socialViewModel.posts.isEmpty {
-            loadingView
-        } else if socialViewModel.posts.isEmpty {
-            emptyStateView
-        } else {
-            scrollContent
+        VStack(spacing: 0) {
+            // Combined header with tabs (Strava-style)
+            CombinedHeaderWithTabs(selectedTab: $selectedTab)
+                .environmentObject(authViewModel)
+                .zIndex(1)
+            
+            if socialViewModel.isLoading && socialViewModel.posts.isEmpty && featuredPosts.isEmpty {
+                loadingView
+            } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
+                // Show featured posts when user has no following
+                featuredPostsContent
+            } else if socialViewModel.posts.isEmpty {
+                emptyStateView
+            } else {
+                scrollContent
+            }
         }
     }
     
     private var loadingView: some View {
         VStack(spacing: 20) {
+            Spacer()
             ProgressView()
                 .tint(AppColors.brandBlue)
                 .scaleEffect(1.5)
             Text("Laddar inlägg...")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.gray)
+            Spacer()
         }
     }
     
@@ -181,16 +202,81 @@ struct SocialView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await loadFeaturedPosts()
+        }
+    }
+    
+    private var featuredPostsContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Strava-style swipeable cards
+                quickInsightsCarousel
+                
+                Divider()
+                
+                if selectedTab == .feed {
+                    // Header for featured posts
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Utforska")
+                            .font(.system(size: 20, weight: .bold))
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                        
+                        Text("Se vad andra tränar – följ användare för att bygga ditt flöde!")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                    }
+                    
+                    // Find friends button
+                    Button {
+                        showFindFriends = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.badge.plus")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Hitta vänner att följa")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(25)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    
+                    Divider()
+                    
+                    // Featured posts
+                    LazyVStack(spacing: 0) {
+                        ForEach(featuredPosts) { post in
+                            SocialPostCard(
+                                post: post,
+                                onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                onLikeChanged: { _, _, _ in },
+                                onCommentCountChanged: { _, _ in },
+                                onPostDeleted: { _ in }
+                            )
+                            Divider()
+                                .background(Color(.systemGray5))
+                        }
+                    }
+                } else {
+                    newsContent
+                }
+            }
+        }
     }
     
     private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HomeHeaderView()
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                
-                tabSelector
+                // Strava-style swipeable cards
+                quickInsightsCarousel
                 
                 Divider()
                 
@@ -200,6 +286,212 @@ struct SocialView: View {
                     newsContent
                 }
             }
+        }
+    }
+    
+    // MARK: - Quick Insights Carousel (Strava-style)
+    private var quickInsightsCarousel: some View {
+        VStack(spacing: 8) {
+            TabView(selection: $carouselIndex.animation(.easeInOut(duration: 0.3))) {
+                // Card 1: Weekly Snapshot
+                weeklySnapshotCard
+                    .tag(0)
+                
+                // Card 2: Progressive Overload
+                progressiveOverloadCard
+                    .tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 120)
+            
+            // Custom page indicators
+            HStack(spacing: 8) {
+                ForEach(0..<2, id: \.self) { index in
+                    Circle()
+                        .fill(carouselIndex == index ? Color.primary : Color.gray.opacity(0.4))
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(carouselIndex == index ? 1.0 : 0.85)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+    
+    private var progressiveOverloadCard: some View {
+        NavigationLink(destination: ProgressiveOverloadView()) {
+            HStack(spacing: 16) {
+                // Image
+                Image("UTVECKLING")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 70, height: 70)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Se din utveckling")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.gray)
+                        .textCase(.uppercase)
+                    
+                    Text("Progressive Overload")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Följ din styrketräning och se hur du blir starkare över tid.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.gray)
+            }
+            .padding(16)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private var weeklySnapshotCard: some View {
+        NavigationLink(destination: StatisticsView()) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Din veckostatistik")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Text("Se mer")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                
+                HStack(spacing: 0) {
+                    // Activities
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Aktiviteter")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                        Text("\(weeklyActivities)")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                        weeklyChangeLabel(current: Double(weeklyActivities), previous: Double(lastWeekActivities), suffix: "")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Time
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tid")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                        Text(formatDuration(weeklyTime))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                        weeklyChangeLabel(current: weeklyTime / 60, previous: lastWeekTime / 60, suffix: "")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Distance
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Distans")
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                        Text(String(format: "%.2f km", weeklyDistance / 1000))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                        weeklyChangeLabel(current: weeklyDistance, previous: lastWeekDistance, suffix: " km")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(16)
+        }
+        .buttonStyle(.plain)
+        .task {
+            await loadWeeklyStats()
+        }
+    }
+    
+    @ViewBuilder
+    private func weeklyChangeLabel(current: Double, previous: Double, suffix: String) -> some View {
+        let diff = current - previous
+        HStack(spacing: 2) {
+            Image(systemName: diff >= 0 ? "arrow.up" : "arrow.down")
+                .font(.system(size: 9, weight: .bold))
+            if suffix == " km" {
+                Text(String(format: "%.2f%@", abs(diff) / 1000, suffix))
+                    .font(.system(size: 11, weight: .medium))
+            } else {
+                Text("\(Int(abs(diff)))\(suffix)")
+                    .font(.system(size: 11, weight: .medium))
+            }
+        }
+        .foregroundColor(.gray)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color(.systemGray5))
+        .cornerRadius(4)
+    }
+    
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        return "\(hours)h \(minutes)m"
+    }
+    
+    private func loadWeeklyStats() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            // Current week stats
+            let calendar = Calendar.current
+            let now = Date()
+            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
+            let startOfLastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: startOfWeek) ?? now
+            
+            // Fetch posts for current week
+            let posts = try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
+            
+            // Filter this week's posts
+            let thisWeekPosts = posts.filter { post in
+                if let date = ISO8601DateFormatter().date(from: post.createdAt) {
+                    return date >= startOfWeek
+                }
+                return false
+            }
+            
+            // Filter last week's posts
+            let lastWeekPosts = posts.filter { post in
+                if let date = ISO8601DateFormatter().date(from: post.createdAt) {
+                    return date >= startOfLastWeek && date < startOfWeek
+                }
+                return false
+            }
+            
+            // Calculate stats
+            let activities = thisWeekPosts.count
+            let time = thisWeekPosts.reduce(0.0) { $0 + Double($1.duration ?? 0) }
+            let distance = thisWeekPosts.reduce(0.0) { $0 + ($1.distance ?? 0.0) }
+            
+            let lastActivities = lastWeekPosts.count
+            let lastTime = lastWeekPosts.reduce(0.0) { $0 + Double($1.duration ?? 0) }
+            let lastDistance = lastWeekPosts.reduce(0.0) { $0 + ($1.distance ?? 0.0) }
+            
+            await MainActor.run {
+                self.weeklyActivities = activities
+                self.weeklyTime = time
+                self.weeklyDistance = distance
+                self.lastWeekActivities = lastActivities
+                self.lastWeekTime = lastTime
+                self.lastWeekDistance = lastDistance
+            }
+        } catch {
+            print("❌ Error loading weekly stats: \(error)")
         }
     }
     
@@ -227,6 +519,7 @@ struct SocialView: View {
             }
         }
         .padding(.horizontal, 16)
+        .padding(.top, 12)
         .padding(.bottom, 12)
     }
     
@@ -253,6 +546,31 @@ struct SocialView: View {
                 await MainActor.run {
                     selectedPost = post
                 }
+            }
+        }
+        
+        // Load featured posts if user has no posts in feed
+        if socialViewModel.posts.isEmpty {
+            await loadFeaturedPosts()
+        }
+    }
+    
+    private func loadFeaturedPosts() async {
+        guard !isLoadingFeatured else { return }
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isLoadingFeatured = true
+        
+        do {
+            let posts = try await SocialService.shared.getFeaturedPosts(viewerId: userId, limit: 4)
+            await MainActor.run {
+                self.featuredPosts = posts
+                self.isLoadingFeatured = false
+            }
+        } catch {
+            print("❌ Error loading featured posts: \(error)")
+            await MainActor.run {
+                self.isLoadingFeatured = false
             }
         }
     }
@@ -351,7 +669,7 @@ struct SocialView: View {
                                         }
                                     }
                                     
-                                    if index == 1, shouldShowRecommendedFriendsSection {
+                                    if index == 0, shouldShowRecommendedFriendsSection {
                                         recommendedFriendsInlineSection
                                         Divider()
                                             .background(Color(.systemGray5))
@@ -877,7 +1195,6 @@ struct SocialPostCard: View {
     let onLikeChanged: (String, Bool, Int) -> Void
     let onCommentCountChanged: (String, Int) -> Void
     let onPostDeleted: (String) -> Void
-    @State private var showComments = false
     @State private var isLiked: Bool
     @State private var likeCount: Int
     @State private var commentCount: Int
@@ -923,7 +1240,10 @@ struct SocialPostCard: View {
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
 
-                Button(action: { showComments = true }) {
+                NavigationLink(destination: CommentsView(post: post) {
+                    commentCount += 1
+                    onCommentCountChanged(post.id, commentCount)
+                }) {
                     Image(systemName: "bubble.right")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.gray)
@@ -958,12 +1278,6 @@ struct SocialPostCard: View {
         }
         .onChange(of: post.isLikedByCurrentUser) { newValue in
             isLiked = newValue ?? isLiked
-        }
-        .sheet(isPresented: $showComments) {
-            CommentsView(postId: post.id, postOwnerId: post.userId) {
-                commentCount += 1
-                onCommentCountChanged(post.id, commentCount)
-            }
         }
         .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
             Button("Redigera") {
@@ -1432,9 +1746,15 @@ private extension SocialPostCard {
             
             Spacer()
             
-            Text("\(commentCount) kommentarer")
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
+            NavigationLink(destination: CommentsView(post: post) {
+                commentCount += 1
+                onCommentCountChanged(post.id, commentCount)
+            }) {
+                Text("\(commentCount) kommentarer")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -1481,113 +1801,306 @@ extension SocialView {
 }
 
 struct CommentsView: View {
-    let postId: String
-    let postOwnerId: String
+    let post: SocialWorkoutPost
     let onCommentAdded: (() -> Void)?
     @StateObject private var commentsViewModel = CommentsViewModel()
     @State private var newComment = ""
     @State private var replyTarget: PostComment?
     @State private var isSending = false
+    @State private var topLikers: [UserSearchResult] = []
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) private var dismiss
     @Namespace private var bottomID
     
+    private var isGymWorkout: Bool {
+        post.activityType.lowercased() == "gym"
+    }
+    
+    private var activityIcon: String {
+        switch post.activityType.lowercased() {
+        case "gym":
+            return "dumbbell.fill"
+        case "running", "löpning":
+            return "figure.run"
+        case "golf":
+            return "figure.golf"
+        case "skiing", "skidor":
+            return "figure.skiing.downhill"
+        default:
+            return "figure.walk"
+        }
+    }
+    
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Comments list
-                ScrollViewReader { scrollProxy in
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                                    if commentsViewModel.isLoading && commentsViewModel.threads.isEmpty {
-                                        ProgressView()
-                                            .padding(.top, 40)
-                                    } else if commentsViewModel.threads.isEmpty {
-                                        emptyStateView
-                                    } else {
-                                        ForEach(commentsViewModel.threads) { thread in
-                                            CommentRow(
-                                                comment: thread.comment,
-                                                isReply: false,
-                                                onLike: { commentsViewModel.toggleLike(for: thread.comment.id, currentUserId: authViewModel.currentUser?.id) },
-                                                onReply: { replyTarget = thread.comment }
-                                            )
-                                            .environmentObject(authViewModel)
-                                            ForEach(thread.replies) { reply in
-                                                CommentRow(
-                                                    comment: reply,
-                                                    isReply: true,
-                                                    onLike: { commentsViewModel.toggleLike(for: reply.id, currentUserId: authViewModel.currentUser?.id) },
-                                                    onReply: { replyTarget = reply }
-                                                )
-                                                .environmentObject(authViewModel)
-                                            }
-                                        }
-                                        
-                                        Color.clear
-                                            .frame(height: 1)
-                                            .id(bottomID)
+        VStack(spacing: 0) {
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Post header section (like Strava)
+                        postHeaderSection
+                        
+                        Divider()
+                        
+                        // Comments section
+                        LazyVStack(spacing: 0) {
+                            if commentsViewModel.isLoading && commentsViewModel.threads.isEmpty {
+                                ProgressView()
+                                    .padding(.top, 40)
+                            } else if commentsViewModel.threads.isEmpty {
+                                emptyStateView
+                            } else {
+                                ForEach(commentsViewModel.threads) { thread in
+                                    CommentRow(
+                                        comment: thread.comment,
+                                        isReply: false,
+                                        onLike: { commentsViewModel.toggleLike(for: thread.comment.id, currentUserId: authViewModel.currentUser?.id) },
+                                        onReply: { replyTarget = thread.comment }
+                                    )
+                                    .environmentObject(authViewModel)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .bottom)),
+                                        removal: .opacity
+                                    ))
+                                    
+                                    ForEach(thread.replies) { reply in
+                                        CommentRow(
+                                            comment: reply,
+                                            isReply: true,
+                                            onLike: { commentsViewModel.toggleLike(for: reply.id, currentUserId: authViewModel.currentUser?.id) },
+                                            onReply: { replyTarget = reply }
+                                        )
+                                        .environmentObject(authViewModel)
+                                        .transition(.asymmetric(
+                                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                                            removal: .opacity
+                                        ))
                                     }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                                .refreshable {
-                                    await reloadComments()
                                 }
+                                
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id(bottomID)
+                            }
+                        }
+                        .padding(.top, 8)
                     }
-                    .onChange(of: commentsViewModel.totalCommentCount) { _ in
-                        withAnimation {
-                            scrollProxy.scrollTo(bottomID, anchor: .bottom)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemBackground))
+                    .refreshable {
+                        await reloadComments()
+                    }
+                }
+                .onChange(of: commentsViewModel.totalCommentCount) { _ in
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        scrollProxy.scrollTo(bottomID, anchor: .bottom)
+                    }
+                }
+            }
+            
+            // Add comment section
+            commentInputSection
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("Diskussion")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await reloadComments()
+            await loadTopLikers()
+        }
+    }
+    
+    // MARK: - Post Header Section
+    private var postHeaderSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Route image (only for non-gym workouts)
+            if !isGymWorkout, let imageUrl = post.imageUrl, !imageUrl.isEmpty {
+                AsyncImage(url: URL(string: imageUrl)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 180)
+                            .clipped()
+                    case .failure(_):
+                        Color(.systemGray5)
+                            .frame(height: 180)
+                    case .empty:
+                        Color(.systemGray5)
+                            .frame(height: 180)
+                            .overlay(ProgressView())
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                // Title
+                Text(post.title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                // User info and stats
+                HStack(spacing: 4) {
+                    Text(post.userName ?? "Användare")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    
+                    Text("·")
+                        .foregroundColor(.secondary)
+                    
+                    Text(formatPostDate(post.createdAt))
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    
+                    Text("·")
+                        .foregroundColor(.secondary)
+                    
+                    // Stats based on activity type
+                    if isGymWorkout {
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text(formatGymStats())
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Icon based on activity type
+                        Image(systemName: activityIcon)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        if let distance = post.distance {
+                            Text(String(format: "%.2f km", distance))
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
                 
-                // Add comment section
-                VStack(spacing: 12) {
-                    Divider()
+                // Likes section
+                HStack(spacing: 8) {
+                    Image(systemName: "hand.thumbsup")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
                     
-                    if let replyTarget {
-                        HStack {
-                            Text("Svara på \(replyTarget.userName ?? "användare")")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.gray)
-                            Spacer()
-                            Button("Avbryt") {
-                                self.replyTarget = nil
+                    Text("\(post.likeCount ?? 0)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    // Profile pictures of likers (max 8)
+                    if !topLikers.isEmpty {
+                        HStack(spacing: -8) {
+                            ForEach(Array(topLikers.prefix(8).enumerated()), id: \.element.id) { index, liker in
+                                ProfileImage(url: liker.avatarUrl, size: 28)
+                                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                    .zIndex(Double(8 - index))
                             }
-                            .font(.system(size: 13, weight: .semibold))
                         }
-                        .padding(.horizontal, 16)
                     }
-                    
-                    HStack(spacing: 12) {
-                        TextField("Skriv en kommentar...", text: $newComment)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
-                        Button("Skicka") {
-                            addComment()
-                        }
-                        .disabled(isSending || newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    .padding(16)
                 }
-                .background(Color(.systemBackground))
+                .padding(.top, 4)
             }
-            .navigationTitle("Kommentarer")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
-                        dismiss()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Comment Input Section
+    private var commentInputSection: some View {
+        VStack(spacing: 0) {
+            Divider()
+            
+            if let replyTarget {
+                HStack {
+                    Text("Svara på \(replyTarget.userName ?? "användare")")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Button("Avbryt") {
+                        self.replyTarget = nil
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            
+            HStack(spacing: 12) {
+                TextField("Lägg till en kommentar", text: $newComment)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(20)
+                
+                Button(action: {
+                    addComment()
+                }) {
+                    if isSending {
+                        ProgressView()
+                            .tint(.primary)
+                            .frame(width: 50)
+                    } else {
+                        Text("Skicka")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .orange)
                     }
                 }
+                .disabled(isSending || newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .animation(.easeInOut, value: isSending)
             }
-            .onAppear {
-                Task {
-                    await reloadComments()
-                }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Helper Functions
+    private func formatPostDate(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        guard let date = formatter.date(from: dateString) else {
+            formatter.formatOptions = [.withInternetDateTime]
+            guard let date = formatter.date(from: dateString) else {
+                return dateString
+            }
+            return formatDate(date)
+        }
+        return formatDate(date)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let outputFormatter = DateFormatter()
+        outputFormatter.dateFormat = "d MMM yyyy"
+        outputFormatter.locale = Locale(identifier: "sv_SE")
+        return outputFormatter.string(from: date)
+    }
+    
+    private func formatGymStats() -> String {
+        guard let exercises = post.exercises else { return "" }
+        
+        var totalSets = 0
+        var totalVolume: Double = 0
+        
+        for exercise in exercises {
+            totalSets += exercise.sets
+            // Iterate through the arrays of reps and kg
+            let setCount = min(exercise.reps.count, exercise.kg.count)
+            for i in 0..<setCount {
+                let reps = Double(exercise.reps[i])
+                let kg = exercise.kg[i]
+                totalVolume += reps * kg
             }
         }
+        
+        if totalVolume > 0 {
+            return String(format: "%.0f kg", totalVolume)
+        }
+        return "\(totalSets) set"
     }
     
     private func addComment() {
@@ -1596,9 +2109,8 @@ struct CommentsView: View {
         
         let commentText = newComment.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Create optimistic comment for immediate display
         let optimisticComment = PostComment(
-            postId: postId,
+            postId: post.id,
             userId: userId,
             content: commentText,
             userName: authViewModel.currentUser?.name,
@@ -1606,19 +2118,20 @@ struct CommentsView: View {
             parentCommentId: replyTarget?.id
         )
         
-        // Add to UI immediately
-        commentsViewModel.appendComment(optimisticComment)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            commentsViewModel.appendComment(optimisticComment)
+        }
         newComment = ""
         
         isSending = true
         Task {
             do {
                 try await SocialService.shared.addComment(
-                    postId: postId,
+                    postId: post.id,
                     userId: userId,
                     content: commentText,
                     parentCommentId: replyTarget?.id,
-                    postOwnerId: postOwnerId
+                    postOwnerId: post.userId
                 )
                 print("✅ Comment added successfully")
                 
@@ -1629,7 +2142,6 @@ struct CommentsView: View {
                 }
             } catch {
                 print("❌ Error adding comment: \(error)")
-                // Remove optimistic comment on error
                 await MainActor.run {
                     commentsViewModel.removeComment(withId: optimisticComment.id)
                 }
@@ -1641,8 +2153,19 @@ struct CommentsView: View {
     }
     
     private func reloadComments() async {
-        print("🔄 Force reloading comments from database for post: \(postId)")
-        await commentsViewModel.fetchCommentsAsync(postId: postId, currentUserId: authViewModel.currentUser?.id)
+        print("🔄 Force reloading comments from database for post: \(post.id)")
+        await commentsViewModel.fetchCommentsAsync(postId: post.id, currentUserId: authViewModel.currentUser?.id)
+    }
+    
+    private func loadTopLikers() async {
+        do {
+            let likers = try await SocialService.shared.getTopPostLikers(postId: post.id, limit: 8)
+            await MainActor.run {
+                self.topLikers = likers
+            }
+        } catch {
+            print("⚠️ Could not fetch top likers: \(error)")
+        }
     }
     
     private var emptyStateView: some View {
@@ -1658,6 +2181,7 @@ struct CommentsView: View {
                 .foregroundColor(.gray)
         }
         .padding(.top, 60)
+        .padding(.horizontal, 32)
         .multilineTextAlignment(.center)
     }
 }
@@ -1673,58 +2197,56 @@ struct CommentRow: View {
         HStack(alignment: .top, spacing: 12) {
             avatarView
             
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                // Name · Time
+                HStack(spacing: 4) {
                     NavigationLink {
                         UserProfileView(userId: comment.userId)
                             .environmentObject(authViewModel)
                     } label: {
                         Text(comment.userName ?? "Användare")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.primary)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    
+                    Text("·")
+                        .foregroundColor(.secondary)
+                    
                     Text(relativeDate(comment.createdAt))
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
                 
+                // Comment text
                 Text(comment.content)
                     .font(.system(size: 15))
                     .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
                 
-                HStack(spacing: 16) {
+                // Like button with count
+                HStack(spacing: 4) {
                     Button(action: onLike) {
-                        HStack(spacing: 4) {
-                            Image(systemName: comment.isLikedByCurrentUser ? "heart.fill" : "heart")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(comment.isLikedByCurrentUser ? .red : .secondary)
-                            if comment.likeCount > 0 {
-                                Text(comment.likeCount == 1 ? "1 like" : "\(comment.likeCount) likes")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Like")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                        Image(systemName: comment.isLikedByCurrentUser ? "heart.fill" : "heart")
+                            .font(.system(size: 14))
+                            .foregroundColor(comment.isLikedByCurrentUser ? .red : .secondary)
                     }
                     
-                    Button(action: onReply) {
-                        Text("Svara")
-                            .font(.system(size: 13, weight: .semibold))
+                    if comment.likeCount > 0 {
+                        Text(comment.likeCount == 1 ? "1 like" : "\(comment.likeCount) likes")
+                            .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
                 }
+                .padding(.top, 2)
             }
-            .padding(14)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(16)
             
             Spacer()
         }
-        .padding(.leading, isReply ? 44 : 0)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .padding(.leading, isReply ? 32 : 0)
     }
     
     private var avatarView: some View {
@@ -1734,34 +2256,46 @@ struct CommentRow: View {
         } label: {
             Group {
                 if let avatarUrl = comment.userAvatarUrl, !avatarUrl.isEmpty {
-                    ProfileImage(url: avatarUrl, size: 36)
+                    ProfileImage(url: avatarUrl, size: 40)
                 } else {
                     Circle()
                         .fill(Color(.systemGray5))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 40, height: 40)
                         .overlay(
                             Image(systemName: "person.fill")
                                 .foregroundColor(.gray)
-                                .font(.system(size: 15))
+                                .font(.system(size: 16))
                         )
                 }
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .padding(.top, 4)
     }
     
     private func relativeDate(_ isoString: String) -> String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: isoString) else { return isoString }
-        let elapsed = Int(Date().timeIntervalSince(date))
-        if elapsed < 60 { return "Just nu" }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var date = formatter.date(from: isoString)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: isoString)
+        }
+        
+        guard let parsedDate = date else { return isoString }
+        
+        let elapsed = Int(Date().timeIntervalSince(parsedDate))
+        if elapsed < 60 { return "just nu" }
         let minutes = elapsed / 60
-        if minutes < 60 { return "\(minutes)m sedan" }
+        if minutes < 60 { return "\(minutes) min sedan" }
         let hours = minutes / 60
-        if hours < 24 { return "\(hours)h sedan" }
+        if hours < 24 { return "\(hours) timmar sedan" }
         let days = hours / 24
-        return "\(days)d sedan"
+        if days < 7 { return "\(days) dagar sedan" }
+        let weeks = days / 7
+        if weeks < 4 { return "\(weeks) veckor sedan" }
+        let months = days / 30
+        return "\(months) månader sedan"
     }
 }
 
@@ -2742,8 +3276,9 @@ struct EmptyStateUserCard: View {
             .disabled(isProcessing)
         }
         .padding(16)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -2752,7 +3287,7 @@ struct EmptyStateUserCard: View {
 struct InviteFriendsSheet: View {
     @Environment(\.dismiss) private var dismiss
     
-    private let appStoreLink = "https://apps.apple.com/app/id6745013790" // App Store link
+    private let appStoreLink = "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB" // App Store link
     private let inviteMessage = "Utmana mig i Zonkriget (:"
     
     var body: some View {

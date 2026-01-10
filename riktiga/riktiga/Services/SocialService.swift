@@ -1051,4 +1051,66 @@ class SocialService {
             return posts
         }
     }
+    
+    // MARK: - Featured Posts (for empty feed)
+    func getFeaturedPosts(viewerId: String, limit: Int = 4) async throws -> [SocialWorkoutPost] {
+        let featuredEmails = ["leopold.spel@gmail.com", "info@bylito.se"]
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            // First, get user IDs for the featured emails
+            struct ProfileRow: Decodable {
+                let id: String
+                let email: String?
+            }
+            
+            let profiles: [ProfileRow] = try await supabase
+                .from("profiles")
+                .select("id, email")
+                .in("email", values: featuredEmails)
+                .execute()
+                .value
+            
+            let featuredUserIds = profiles.map { $0.id }
+            
+            guard !featuredUserIds.isEmpty else {
+                print("⚠️ No featured users found")
+                return []
+            }
+            
+            // Fetch posts from featured users
+            let posts: [SocialWorkoutPost] = try await supabase
+                .from("workout_posts")
+                .select("""
+                    id,
+                    user_id,
+                    activity_type,
+                    title,
+                    description,
+                    distance,
+                    duration,
+                    image_url,
+                    user_image_url,
+                    elevation_gain,
+                    max_speed,
+                    created_at,
+                    split_data,
+                    exercises_data,
+                    profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .in("user_id", values: featuredUserIds)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            
+            return await markLikedPosts(posts, userId: viewerId)
+        } catch {
+            print("❌ Error fetching featured posts: \(error)")
+            throw error
+        }
+    }
 }

@@ -77,7 +77,7 @@ class AppVersionService: ObservableObject {
                 minimum: minVersion,
                 forceUpdate: forceUpdate,
                 message: config.updateMessageSv ?? "En uppdatering krävs.",
-                appStoreUrl: config.appStoreUrl ?? "https://apps.apple.com/app/id6744919845"
+                appStoreUrl: config.appStoreUrl ?? "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB"
             )
             
             checkResult = result

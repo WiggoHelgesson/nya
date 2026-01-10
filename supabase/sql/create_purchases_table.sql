@@ -58,3 +58,6 @@ COMMENT ON COLUMN public.purchases.purchase_date IS 'När rabattkoden löstes in
 
 
 
+
+
+

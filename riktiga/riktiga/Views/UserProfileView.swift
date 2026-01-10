@@ -18,6 +18,7 @@ struct UserProfileView: View {
     @State private var selectedLivePhotoPost: SocialWorkoutPost?
     @State private var weeklyHours: Double = 0
     @State private var dailyActivityData: [DailyActivity] = []
+    @State private var showComparison: Bool = false
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authViewModel: AuthViewModel
     
@@ -155,6 +156,19 @@ struct UserProfileView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     
+                    // MARK: - Compare Button
+                    if let currentUser = authViewModel.currentUser, currentUser.id != userId {
+                        CompareButton(
+                            myAvatarUrl: currentUser.avatarUrl,
+                            theirAvatarUrl: avatarUrl,
+                            action: {
+                                showComparison = true
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                    }
+                    
                     Divider()
                 
                     // Posts list
@@ -225,6 +239,18 @@ struct UserProfileView: View {
         }
         .sheet(item: $selectedLivePhotoPost) { post in
             LivePhotoDetailSheet(post: post)
+        }
+        .sheet(isPresented: $showComparison) {
+            if let currentUser = authViewModel.currentUser {
+                UserComparisonView(
+                    myUserId: currentUser.id,
+                    myUsername: currentUser.name,
+                    myAvatarUrl: currentUser.avatarUrl,
+                    theirUserId: userId,
+                    theirUsername: username,
+                    theirAvatarUrl: avatarUrl
+                )
+            }
         }
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
         .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
@@ -563,6 +589,1033 @@ struct LivePhotoDetailSheet: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Compare Button
+
+struct CompareButton: View {
+    let myAvatarUrl: String?
+    let theirAvatarUrl: String?
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // Profile pictures overlapping
+                HStack(spacing: -12) {
+                    ProfileAvatarView(path: myAvatarUrl ?? "", size: 36)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .zIndex(1)
+                    
+                    ProfileAvatarView(path: theirAvatarUrl ?? "", size: 36)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                }
+                
+                Text("Jämför")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - User Comparison View
+
+struct UserComparisonView: View {
+    let myUserId: String
+    let myUsername: String
+    let myAvatarUrl: String?
+    let theirUserId: String
+    let theirUsername: String
+    let theirAvatarUrl: String?
+    
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedPeriod: ComparisonPeriod = .last30Days
+    @State private var myWorkoutCount: Int = 0
+    @State private var theirWorkoutCount: Int = 0
+    @State private var myTotalTime: Int = 0 // seconds
+    @State private var theirTotalTime: Int = 0 // seconds
+    @State private var myTotalVolume: Double = 0
+    @State private var theirTotalVolume: Double = 0
+    @State private var commonExercises: [CommonExercise] = []
+    @State private var selectedExercise: CommonExercise? = nil
+    @State private var isLoading: Bool = true
+    
+    enum ComparisonPeriod: String, CaseIterable {
+        case last30Days = "Senaste 30 dagarna"
+        case last90Days = "Senaste 90 dagarna"
+        case thisYear = "Detta året"
+        case allTime = "All time"
+        
+        var days: Int? {
+            switch self {
+            case .last30Days: return 30
+            case .last90Days: return 90
+            case .thisYear: return nil // Special handling
+            case .allTime: return nil
+            }
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Period selector
+                    Menu {
+                        ForEach(ComparisonPeriod.allCases, id: \.self) { period in
+                            Button {
+                                selectedPeriod = period
+                                Task { await loadComparisonData() }
+                            } label: {
+                                HStack {
+                                    Text(period.rawValue)
+                                    if period == selectedPeriod {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(selectedPeriod.rawValue)
+                                .font(.system(size: 16, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    
+                    // VS Header
+                    HStack(spacing: 20) {
+                        // My profile
+                        VStack(spacing: 8) {
+                            ProfileAvatarView(path: myAvatarUrl ?? "", size: 80)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black, lineWidth: 3)
+                                )
+                            Text(myUsername)
+                                .font(.system(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        
+                        // VS badge
+                        Text("VS")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.black)
+                            .clipShape(Circle())
+                        
+                        // Their profile
+                        VStack(spacing: 8) {
+                            ProfileAvatarView(path: theirAvatarUrl ?? "", size: 80)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(.systemGray4), lineWidth: 3)
+                                )
+                            Text(theirUsername)
+                                .font(.system(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    
+                    if isLoading {
+                        ProgressView()
+                            .padding(.top, 40)
+                    } else {
+                        // Stats comparison
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("Stats - \(selectedPeriod.rawValue)")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 20)
+                            
+                            // Workout Count
+                            ComparisonStatRow(
+                                title: "Antal pass",
+                                myValue: myWorkoutCount,
+                                theirValue: theirWorkoutCount,
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                            
+                            // Workout Time
+                            ComparisonTimeRow(
+                                title: "Träningstid",
+                                mySeconds: myTotalTime,
+                                theirSeconds: theirTotalTime,
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                            
+                            // Total Volume
+                            ComparisonVolumeRow(
+                                title: "Total volym",
+                                myVolume: myTotalVolume,
+                                theirVolume: theirTotalVolume,
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                        }
+                        .padding(.top, 20)
+                        
+                        // Common exercises section
+                        if !commonExercises.isEmpty {
+                            VStack(alignment: .leading, spacing: 16) {
+                                HStack(spacing: 8) {
+                                    Text("Jämför övningar")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.gray)
+                                    
+                                    Image(systemName: "questionmark.circle")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.top, 24)
+                                
+                                ForEach(commonExercises) { exercise in
+                                    Button {
+                                        selectedExercise = exercise
+                                    } label: {
+                                        CommonExerciseRow(exercise: exercise)
+                                    }
+                                    .buttonStyle(.plain)
+                                    
+                                    if exercise.id != commonExercises.last?.id {
+                                        Divider()
+                                            .padding(.horizontal, 20)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(minLength: 50)
+                }
+            }
+            .navigationTitle("Jämförelse")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+        .task { await loadComparisonData() }
+        .sheet(item: $selectedExercise) { exercise in
+            ExerciseComparisonView(
+                exercise: exercise,
+                myUsername: myUsername,
+                myAvatarUrl: myAvatarUrl,
+                theirUsername: theirUsername,
+                theirAvatarUrl: theirAvatarUrl
+            )
+        }
+    }
+    
+    private func loadComparisonData() async {
+        isLoading = true
+        
+        let calendar = Calendar.current
+        let now = Date()
+        
+        var startDate: Date?
+        switch selectedPeriod {
+        case .last30Days:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now)
+        case .last90Days:
+            startDate = calendar.date(byAdding: .day, value: -90, to: now)
+        case .thisYear:
+            startDate = calendar.date(from: calendar.dateComponents([.year], from: now))
+        case .allTime:
+            startDate = nil
+        }
+        
+        // Load both users' posts
+        async let myPostsTask = WorkoutService.shared.getUserWorkoutPosts(userId: myUserId, forceRefresh: true)
+        async let theirPostsTask = WorkoutService.shared.getUserWorkoutPosts(userId: theirUserId, forceRefresh: true)
+        
+        let myPosts = (try? await myPostsTask) ?? []
+        let theirPosts = (try? await theirPostsTask) ?? []
+        
+        // Filter by date range
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoFormatterNoFrac = ISO8601DateFormatter()
+        isoFormatterNoFrac.formatOptions = [.withInternetDateTime]
+        
+        func parseDate(_ dateString: String) -> Date? {
+            return isoFormatter.date(from: dateString) ?? isoFormatterNoFrac.date(from: dateString)
+        }
+        
+        let filteredMyPosts = myPosts.filter { post in
+            guard let startDate = startDate else { return true }
+            guard let createdAt = parseDate(post.createdAt) else { return false }
+            return createdAt >= startDate
+        }
+        
+        let filteredTheirPosts = theirPosts.filter { post in
+            guard let startDate = startDate else { return true }
+            guard let createdAt = parseDate(post.createdAt) else { return false }
+            return createdAt >= startDate
+        }
+        
+        // Calculate volume from gym exercises
+        var myVolume: Double = 0
+        var theirVolume: Double = 0
+        var myExerciseStats: [String: ExerciseStats] = [:]
+        var theirExerciseStats: [String: ExerciseStats] = [:]
+        
+        for post in filteredMyPosts {
+            if let exercises = post.exercises {
+                for exercise in exercises {
+                    // Calculate volume from arrays
+                    var exerciseVolume: Double = 0
+                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
+                        exerciseVolume += exercise.kg[i] * Double(exercise.reps[i])
+                    }
+                    myVolume += exerciseVolume
+                    
+                    // Track exercise stats
+                    let name = exercise.name
+                    var stats = myExerciseStats[name] ?? ExerciseStats(exerciseName: name, exerciseId: exercise.id)
+                    
+                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
+                        let setKg = exercise.kg[i]
+                        let setReps = exercise.reps[i]
+                        let setVolume = setKg * Double(setReps)
+                        let oneRepMax = setKg * (1 + Double(setReps) / 30.0) // Epley formula
+                        
+                        if setKg > stats.heaviestWeight {
+                            stats.heaviestWeight = setKg
+                        }
+                        if oneRepMax > stats.oneRepMax {
+                            stats.oneRepMax = oneRepMax
+                        }
+                        if setVolume > stats.bestSetVolume {
+                            stats.bestSetVolume = setVolume
+                        }
+                    }
+                    myExerciseStats[name] = stats
+                }
+            }
+        }
+        
+        for post in filteredTheirPosts {
+            if let exercises = post.exercises {
+                for exercise in exercises {
+                    // Calculate volume from arrays
+                    var exerciseVolume: Double = 0
+                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
+                        exerciseVolume += exercise.kg[i] * Double(exercise.reps[i])
+                    }
+                    theirVolume += exerciseVolume
+                    
+                    // Track exercise stats
+                    let name = exercise.name
+                    var stats = theirExerciseStats[name] ?? ExerciseStats(exerciseName: name, exerciseId: exercise.id)
+                    
+                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
+                        let setKg = exercise.kg[i]
+                        let setReps = exercise.reps[i]
+                        let setVolume = setKg * Double(setReps)
+                        let oneRepMax = setKg * (1 + Double(setReps) / 30.0) // Epley formula
+                        
+                        if setKg > stats.heaviestWeight {
+                            stats.heaviestWeight = setKg
+                        }
+                        if oneRepMax > stats.oneRepMax {
+                            stats.oneRepMax = oneRepMax
+                        }
+                        if setVolume > stats.bestSetVolume {
+                            stats.bestSetVolume = setVolume
+                        }
+                    }
+                    theirExerciseStats[name] = stats
+                }
+            }
+        }
+        
+        // Find common exercises
+        let myExerciseNames = Set(myExerciseStats.keys)
+        let theirExerciseNames = Set(theirExerciseStats.keys)
+        let commonNames = myExerciseNames.intersection(theirExerciseNames)
+        
+        var common: [CommonExercise] = []
+        for name in commonNames {
+            if let myStats = myExerciseStats[name], let theirStats = theirExerciseStats[name] {
+                common.append(CommonExercise(
+                    name: name,
+                    exerciseId: myStats.exerciseId,
+                    myStats: myStats,
+                    theirStats: theirStats
+                ))
+            }
+        }
+        
+        await MainActor.run {
+            myWorkoutCount = filteredMyPosts.count
+            theirWorkoutCount = filteredTheirPosts.count
+            myTotalTime = filteredMyPosts.reduce(0) { $0 + ($1.duration ?? 0) }
+            theirTotalTime = filteredTheirPosts.reduce(0) { $0 + ($1.duration ?? 0) }
+            myTotalVolume = myVolume
+            theirTotalVolume = theirVolume
+            commonExercises = common.sorted { $0.name < $1.name }
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - Exercise Stats Helper
+struct ExerciseStats {
+    let exerciseName: String
+    let exerciseId: String?
+    var oneRepMax: Double = 0
+    var heaviestWeight: Double = 0
+    var bestSetVolume: Double = 0
+}
+
+// MARK: - Common Exercise
+struct CommonExercise: Identifiable {
+    let id = UUID()
+    let name: String
+    let exerciseId: String?
+    let myStats: ExerciseStats
+    let theirStats: ExerciseStats
+}
+
+// MARK: - Comparison Stat Row
+
+struct ComparisonStatRow: View {
+    let title: String
+    let myValue: Int
+    let theirValue: Int
+    let myAvatarUrl: String?
+    let theirAvatarUrl: String?
+    
+    private var maxValue: Int {
+        max(myValue, theirValue, 1)
+    }
+    
+    private var myProgress: CGFloat {
+        CGFloat(myValue) / CGFloat(maxValue)
+    }
+    
+    private var theirProgress: CGFloat {
+        CGFloat(theirValue) / CGFloat(maxValue)
+    }
+    
+    private var percentageDiff: Int {
+        guard theirValue > 0 else { return myValue > 0 ? 100 : 0 }
+        return Int(((Double(myValue) - Double(theirValue)) / Double(theirValue)) * 100)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                
+                if percentageDiff != 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: percentageDiff > 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("\(abs(percentageDiff))%")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(percentageDiff > 0 ? .green : .red)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            // My bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: myAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black)
+                            .frame(width: geometry.size.width * myProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text("\(myValue)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 40, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+            
+            // Their bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: theirAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray3))
+                            .frame(width: geometry.size.width * theirProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text("\(theirValue)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 40, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+}
+
+// MARK: - Comparison Time Row
+
+struct ComparisonTimeRow: View {
+    let title: String
+    let mySeconds: Int
+    let theirSeconds: Int
+    let myAvatarUrl: String?
+    let theirAvatarUrl: String?
+    
+    private var maxSeconds: Int {
+        max(mySeconds, theirSeconds, 1)
+    }
+    
+    private var myProgress: CGFloat {
+        CGFloat(mySeconds) / CGFloat(maxSeconds)
+    }
+    
+    private var theirProgress: CGFloat {
+        CGFloat(theirSeconds) / CGFloat(maxSeconds)
+    }
+    
+    private var percentageDiff: Int {
+        guard theirSeconds > 0 else { return mySeconds > 0 ? 100 : 0 }
+        return Int(((Double(mySeconds) - Double(theirSeconds)) / Double(theirSeconds)) * 100)
+    }
+    
+    private func formatTime(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h"
+        }
+        return "\(minutes)m"
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                
+                if percentageDiff != 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: percentageDiff > 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("\(abs(percentageDiff))%")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(percentageDiff > 0 ? .green : .red)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            // My bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: myAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black)
+                            .frame(width: geometry.size.width * myProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text(formatTime(mySeconds))
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 50, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+            
+            // Their bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: theirAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray3))
+                            .frame(width: geometry.size.width * theirProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text(formatTime(theirSeconds))
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 50, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+}
+
+// MARK: - Comparison Volume Row
+
+struct ComparisonVolumeRow: View {
+    let title: String
+    let myVolume: Double
+    let theirVolume: Double
+    let myAvatarUrl: String?
+    let theirAvatarUrl: String?
+    
+    private var maxVolume: Double {
+        max(myVolume, theirVolume, 1)
+    }
+    
+    private var myProgress: CGFloat {
+        CGFloat(myVolume / maxVolume)
+    }
+    
+    private var theirProgress: CGFloat {
+        CGFloat(theirVolume / maxVolume)
+    }
+    
+    private var percentageDiff: Int {
+        guard theirVolume > 0 else { return myVolume > 0 ? 100 : 0 }
+        return Int(((myVolume - theirVolume) / theirVolume) * 100)
+    }
+    
+    private func formatVolume(_ volume: Double) -> String {
+        if volume >= 1000 {
+            return String(format: "%.0f kg", volume)
+        }
+        return String(format: "%.0f kg", volume)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                
+                if percentageDiff != 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: percentageDiff > 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("\(abs(percentageDiff))%")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(percentageDiff > 0 ? .green : .red)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            // My bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: myAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black)
+                            .frame(width: geometry.size.width * myProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text(formatVolume(myVolume))
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 70, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+            
+            // Their bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: theirAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray3))
+                            .frame(width: geometry.size.width * theirProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text(formatVolume(theirVolume))
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 70, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+}
+
+// MARK: - Common Exercise Row
+
+struct CommonExerciseRow: View {
+    let exercise: CommonExercise
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Exercise image
+            if let exerciseId = exercise.exerciseId {
+                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                    .frame(width: 60, height: 60)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+            } else {
+                Image(systemName: "dumbbell.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.gray)
+                    .frame(width: 60, height: 60)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(exercise.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                Text("Tryck för att jämföra")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Exercise Comparison View
+
+struct ExerciseComparisonView: View {
+    let exercise: CommonExercise
+    let myUsername: String
+    let myAvatarUrl: String?
+    let theirUsername: String
+    let theirAvatarUrl: String?
+    
+    @Environment(\.dismiss) var dismiss
+    
+    // Determine who is stronger (wins more categories)
+    private var amIStronger: Bool {
+        var myWins = 0
+        var theirWins = 0
+        
+        if exercise.myStats.oneRepMax > exercise.theirStats.oneRepMax { myWins += 1 } else if exercise.theirStats.oneRepMax > exercise.myStats.oneRepMax { theirWins += 1 }
+        if exercise.myStats.heaviestWeight > exercise.theirStats.heaviestWeight { myWins += 1 } else if exercise.theirStats.heaviestWeight > exercise.myStats.heaviestWeight { theirWins += 1 }
+        if exercise.myStats.bestSetVolume > exercise.theirStats.bestSetVolume { myWins += 1 } else if exercise.theirStats.bestSetVolume > exercise.myStats.bestSetVolume { theirWins += 1 }
+        
+        return myWins > theirWins
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // VS Header
+                    HStack(spacing: 20) {
+                        // My profile
+                        VStack(spacing: 8) {
+                            ProfileAvatarView(path: myAvatarUrl ?? "", size: 80)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black, lineWidth: 3)
+                                )
+                            Text(myUsername)
+                                .font(.system(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                            
+                            if amIStronger {
+                                Text("STARKARE")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        
+                        // VS badge
+                        Text("VS")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.black)
+                            .clipShape(Circle())
+                        
+                        // Their profile
+                        VStack(spacing: 8) {
+                            ProfileAvatarView(path: theirAvatarUrl ?? "", size: 80)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(.systemGray4), lineWidth: 3)
+                                )
+                            Text(theirUsername)
+                                .font(.system(size: 14, weight: .semibold))
+                                .lineLimit(1)
+                            
+                            if !amIStronger {
+                                Text("STARKARE")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    
+                    // Exercise info
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Övning")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        HStack(spacing: 12) {
+                            if let exerciseId = exercise.exerciseId {
+                                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                                    .frame(width: 60, height: 60)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(exercise.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            
+                            Spacer()
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Comparison stats
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Jämförelse")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 20)
+                        
+                        VStack(spacing: 20) {
+                            // One Rep Max
+                            ExerciseStatCompareRow(
+                                title: "One Rep Max",
+                                myValue: exercise.myStats.oneRepMax,
+                                theirValue: exercise.theirStats.oneRepMax,
+                                unit: "kg",
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                            
+                            // Heaviest Weight
+                            ExerciseStatCompareRow(
+                                title: "Tyngsta vikt",
+                                myValue: exercise.myStats.heaviestWeight,
+                                theirValue: exercise.theirStats.heaviestWeight,
+                                unit: "kg",
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                            
+                            // Best Set Volume
+                            ExerciseStatCompareRow(
+                                title: "Bästa set (volym)",
+                                myValue: exercise.myStats.bestSetVolume,
+                                theirValue: exercise.theirStats.bestSetVolume,
+                                unit: "kg",
+                                myAvatarUrl: myAvatarUrl,
+                                theirAvatarUrl: theirAvatarUrl
+                            )
+                        }
+                    }
+                    .padding(.top, 8)
+                    
+                    Spacer(minLength: 50)
+                }
+            }
+            .navigationTitle("Jämförelse")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Exercise Stat Compare Row
+
+struct ExerciseStatCompareRow: View {
+    let title: String
+    let myValue: Double
+    let theirValue: Double
+    let unit: String
+    let myAvatarUrl: String?
+    let theirAvatarUrl: String?
+    
+    private var maxValue: Double {
+        max(myValue, theirValue, 1)
+    }
+    
+    private var myProgress: CGFloat {
+        CGFloat(myValue / maxValue)
+    }
+    
+    private var theirProgress: CGFloat {
+        CGFloat(theirValue / maxValue)
+    }
+    
+    private var percentageDiff: Int {
+        guard theirValue > 0 else { return myValue > 0 ? 100 : 0 }
+        return Int(((myValue - theirValue) / theirValue) * 100)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                
+                if percentageDiff != 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: percentageDiff > 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("\(abs(percentageDiff))%")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(percentageDiff > 0 ? .green : .red)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            // My bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: myAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black)
+                            .frame(width: geometry.size.width * myProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text("\(Int(myValue))\(unit)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 60, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+            
+            // Their bar
+            HStack(spacing: 12) {
+                ProfileAvatarView(path: theirAvatarUrl ?? "", size: 28)
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray5))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(.systemGray3))
+                            .frame(width: geometry.size.width * theirProgress, height: 12)
+                    }
+                }
+                .frame(height: 12)
+                
+                Text("\(Int(theirValue))\(unit)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 60, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
         }
     }
 }

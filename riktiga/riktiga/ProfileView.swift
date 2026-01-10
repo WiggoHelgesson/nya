@@ -7,7 +7,6 @@ struct ProfileView: View {
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
     @State private var showSettings = false
-    @State private var showStatistics = false
     @State private var showMyPurchases = false
     @State private var showFindFriends = false
     @State private var showFollowersList = false
@@ -30,27 +29,16 @@ struct ProfileView: View {
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    // MARK: - Profile Header Card with Settings button in top right
-                    HStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            showSettings = true
-                        }) {
-                            Image(systemName: "gearshape.fill")
-                                .font(.title2)
-                                .foregroundColor(.primary)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                    
-                    // MARK: - Navigation Header
-                    ProfileHeaderView()
-                        .padding(.bottom, 12)
-                    
+            VStack(spacing: 0) {
+                // MARK: - Fixed Strava-Style Navigation Header (with settings icon)
+                StravaStyleHeaderView(isProfilePage: true, onSettingsTapped: {
+                    showSettings = true
+                })
+                    .environmentObject(authViewModel)
+                    .zIndex(1)
+                
+                ScrollView {
+                    LazyVStack(spacing: 16) {
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
                             // Profilbild - Tappable
@@ -179,11 +167,28 @@ struct ProfileView: View {
                             action: { showMyPurchases = true }
                         )
                         
-                        ProfileCardButton(
-                            icon: "chart.bar.fill",
-                            label: "Statistik",
-                            action: { showStatistics = true }
-                        )
+                        NavigationLink(destination: StatisticsView()) {
+                            VStack(spacing: 10) {
+                                Image(systemName: "chart.bar.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Statistik")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 90)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(16)
+                            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
                         
                         ProfileCardButton(
                             icon: "person.badge.plus.fill",
@@ -260,8 +265,9 @@ struct ProfileView: View {
                     }
                     
                     Spacer()
-                }
+                    }
                 .padding(16)
+                }
             }
             .navigationBarHidden(true)
             .navigationDestination(item: $selectedPost) { post in
@@ -275,9 +281,6 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
-            }
-            .sheet(isPresented: $showStatistics) {
-                StatisticsView()
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()

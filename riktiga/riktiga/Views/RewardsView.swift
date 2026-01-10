@@ -211,9 +211,24 @@ struct RewardsView: View {
     @State private var favoritedRewards: Set<Int> = []
     @State private var navigationPath = NavigationPath()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.colorScheme) var colorScheme
     
-    private let pageBackgroundColor = Color.white
-    private let sectionBackgroundColor = Color.white
+    // Adaptive colors
+    private var pageBackgroundColor: Color {
+        colorScheme == .dark ? Color.black : Color.white
+    }
+    private var sectionBackgroundColor: Color {
+        colorScheme == .dark ? Color.black : Color.white
+    }
+    private var cardBackground: Color {
+        colorScheme == .dark ? Color(red: 0.12, green: 0.12, blue: 0.12) : Color.white
+    }
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? Color.white : Color.black
+    }
+    private var secondaryTextColor: Color {
+        Color.gray
+    }
     
     let heroBanners: [HeroBannerAsset] = [
         HeroBannerAsset(imageName: "2", url: "https://pliktgolf.se"),
@@ -332,7 +347,7 @@ struct RewardsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Kategorier")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(primaryTextColor)
                 .padding(.horizontal, 16)
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -379,7 +394,7 @@ struct RewardsView: View {
                 HStack {
                     Text(title)
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(primaryTextColor)
                     
                     Spacer()
                     
@@ -419,12 +434,14 @@ struct RewardsView: View {
                 pageBackgroundColor
                     .ignoresSafeArea()
                 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // MARK: - Navigation Header
-                        RewardsHeaderView()
-                            .padding(.top, 12)
-                        
+                VStack(spacing: 0) {
+                    // MARK: - Fixed Strava-Style Navigation Header
+                    StravaStyleHeaderView()
+                        .environmentObject(authViewModel)
+                        .zIndex(1)
+                    
+                    ScrollView {
+                        VStack(spacing: 0) {
                         // MARK: - Header with Search, Favorites, and Points
                         VStack(spacing: 16) {
                             // Top row with points and icons
@@ -432,16 +449,16 @@ struct RewardsView: View {
                                 // Points display
                                 HStack(spacing: 8) {
                                     Image(systemName: "gift.fill")
-                                        .foregroundColor(.white)
+                                        .foregroundColor(colorScheme == .dark ? .black : .white)
                                         .font(.system(size: 16))
                                     
                                     Text("\(authViewModel.currentUser?.currentXP ?? 0)")
                                         .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(colorScheme == .dark ? .black : .white)
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Color.black)
+                                .background(primaryTextColor)
                                 .cornerRadius(20)
                                 
                                 Spacer()
@@ -452,7 +469,7 @@ struct RewardsView: View {
                                         showMyPurchases = true
                                     }) {
                                         Image(systemName: "bag.fill")
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(primaryTextColor)
                                             .font(.system(size: 20))
                                     }
                                     
@@ -460,7 +477,7 @@ struct RewardsView: View {
                                         showFavorites = true
                                     }) {
                                         Image(systemName: "bookmark.fill")
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(primaryTextColor)
                                             .font(.system(size: 20))
                                     }
                                 }
@@ -474,18 +491,18 @@ struct RewardsView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "magnifyingglass")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(secondaryTextColor)
                                         .font(.system(size: 16))
                                     
                                     Text("Sök")
                                         .font(.system(size: 16))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(secondaryTextColor)
                                     
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(Color.white)
+                                .background(cardBackground)
                                 .cornerRadius(12)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
@@ -495,15 +512,15 @@ struct RewardsView: View {
                             .padding(.horizontal, 16)
                         }
                         .padding(.bottom, 16)
-                        .background(Color.white)
+                        .background(sectionBackgroundColor)
                         
                         LazyVStack(spacing: 12) {
                             heroBannerSection
-                                .background(Color.white)
+                                .background(sectionBackgroundColor)
                             
                             categoriesSection
                                 .padding(.vertical, 16)
-                                .background(Color.white)
+                                .background(sectionBackgroundColor)
                             
                             sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
                             
@@ -517,13 +534,13 @@ struct RewardsView: View {
                             
                             Spacer(minLength: 100)
                         }
+                        }
                     }
                 }
             }
-            .navigationTitle("Belöningar")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarHidden(true)
             .enableSwipeBack()
-            .tint(.black) // Black back buttons
+            .tint(primaryTextColor) // Adaptive back buttons
             .sheet(isPresented: $showSearchView) {
                 SearchRewardsView(allRewards: allRewards)
             }
@@ -537,7 +554,7 @@ struct RewardsView: View {
                 navigationPath = NavigationPath()
             }
         }
-        .tint(.black) // Black back buttons for all navigation
+        .tint(primaryTextColor) // Adaptive back buttons for all navigation
     }
 }
 
@@ -558,21 +575,30 @@ struct HeroBannerCard: View {
 struct CategoryButton: View {
     let category: String
     let isSelected: Bool
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var cardBackground: Color {
+        colorScheme == .dark ? Color(red: 0.12, green: 0.12, blue: 0.12) : Color.white
+    }
+    
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? Color.white : Color.black
+    }
     
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: iconName)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(isSelected ? .white : .gray)
+                .foregroundColor(isSelected ? (colorScheme == .dark ? .black : .white) : .gray)
             
             Text(category)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isSelected ? .white : .gray)
+                .foregroundColor(isSelected ? (colorScheme == .dark ? .black : .white) : .gray)
         }
         .frame(width: 80, height: 80)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? .black : Color.white)
+                .fill(isSelected ? primaryTextColor : cardBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -639,12 +665,21 @@ struct SnappingRewardScrollView: View {
 struct ModernRewardCard: View {
     let reward: RewardCard
     @Binding var favoritedRewards: Set<Int>
+    @Environment(\.colorScheme) var colorScheme
     
     private let cardWidth: CGFloat = UIScreen.main.bounds.width - 64
     private let imageHeight: CGFloat = 260
     
     private var isBookmarked: Bool {
         favoritedRewards.contains(reward.id)
+    }
+    
+    private var cardBackground: Color {
+        colorScheme == .dark ? Color(red: 0.12, green: 0.12, blue: 0.12) : Color.white
+    }
+    
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? Color.white : Color.black
     }
     
     var body: some View {
@@ -661,21 +696,21 @@ struct ModernRewardCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(primaryTextColor)
                     
                     Text("200")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(primaryTextColor)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Color.white)
+                .background(cardBackground)
                 .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 4, x: 0, y: 2)
                 .padding(16)
             }
             
-            // Info section - clean white
+            // Info section
             HStack(spacing: 14) {
                 // Brand logo
                 Image(getBrandLogo(for: reward.imageName))
@@ -691,7 +726,7 @@ struct ModernRewardCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reward.discount)
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(primaryTextColor)
                         .lineLimit(2)
                     
                     Text(reward.brandName)
@@ -712,17 +747,17 @@ struct ModernRewardCard: View {
                 }) {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .font(.system(size: 20))
-                        .foregroundColor(isBookmarked ? .black : .gray)
+                        .foregroundColor(isBookmarked ? primaryTextColor : .gray)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 18)
-            .background(Color.white.opacity(0.5))
+            .background(cardBackground.opacity(0.5))
         }
         .frame(width: cardWidth)
-        .background(Color.white)
+        .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 4)
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06), radius: 8, x: 0, y: 4)
     }
     
     private func getBrandLogo(for imageName: String) -> String {
@@ -882,6 +917,11 @@ struct CategoryRewardsListView: View {
     let category: String
     let rewards: [RewardCard]
     @Binding var favoritedRewards: Set<Int>
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var pageBackgroundColor: Color {
+        colorScheme == .dark ? Color.black : Color.white
+    }
     
     var body: some View {
         ScrollView {
@@ -899,7 +939,7 @@ struct CategoryRewardsListView: View {
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
         }
-        .background(Color.white.ignoresSafeArea())
+        .background(pageBackgroundColor.ignoresSafeArea())
         .navigationTitle(category)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }

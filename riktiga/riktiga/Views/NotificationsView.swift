@@ -7,105 +7,100 @@ struct NotificationsView: View {
     @State private var notifications: [AppNotification] = []
     @State private var selectedNotification: AppNotification?
     @State private var selectedProfileId: String?
-    @State private var errorMessage: String? // Added for error handling
+    @State private var errorMessage: String?
+    @State private var hasMarkedAsRead = false
     var onDismiss: (() -> Void)? = nil
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
-                
-                if isLoading && notifications.isEmpty {
+        ZStack {
+            Color(UIColor.systemGroupedBackground)
+                .ignoresSafeArea()
+            
+            if isLoading && notifications.isEmpty {
+                VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.5)
-                } else if let error = errorMessage {
-                    // Error State
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.orange)
-                        
-                        Text("Kunde inte ladda notiser")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Text(error)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        
-                        Button("Försök igen") {
-                            Task { await loadNotifications() }
-                        }
-                        .buttonStyle(.borderedProminent)
+                    Text("Laddar notiser...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+            } else if let error = errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.orange)
+                    
+                    Text("Kunde inte ladda notiser")
+                        .font(.system(size: 18, weight: .bold))
+                    
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button("Försök igen") {
+                        Task { await loadNotifications() }
                     }
-                } else if notifications.isEmpty {
-                    emptyStateView
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(notifications) { notification in
-                                NotificationRow(notification: notification) {
-                                    handleNotificationTap(notification)
-                                }
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.black)
+                    .cornerRadius(20)
+                }
+            } else if notifications.isEmpty {
+                emptyStateView
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(notifications) { notification in
+                            NotificationRowStrava(notification: notification) {
+                                handleNotificationTap(notification)
                             }
+                            
+                            Divider()
+                                .padding(.leading, 76)
                         }
-                        .padding()
                     }
+                    .background(Color(.systemBackground))
                 }
             }
-            .navigationTitle("Notiser")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if !notifications.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Markera alla som lästa") {
-                            markAllAsRead()
-                        }
-                        .font(.system(size: 13, weight: .medium))
-                    }
-                }
-            }
-            .refreshable {
-                await loadNotifications()
-            }
-            .onAppear {
-                Task {
-                    await loadNotifications()
-                }
-            }
-            .onDisappear {
-                onDismiss?()
-            }
-            .navigationDestination(isPresented: Binding(
-                get: { selectedProfileId != nil },
-                set: { newValue in
-                    if !newValue {
-                        selectedProfileId = nil
-                    }
-                }
-            )) {
-                if let userId = selectedProfileId {
-                    UserProfileView(userId: userId)
-                }
+        }
+        .navigationTitle("Notiser")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await loadNotifications()
+        }
+        .task {
+            await loadNotifications()
+            // Mark all as read when entering the page
+            await markAllAsReadOnEntry()
+        }
+        .onDisappear {
+            onDismiss?()
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { selectedProfileId != nil },
+            set: { if !$0 { selectedProfileId = nil } }
+        )) {
+            if let userId = selectedProfileId {
+                UserProfileView(userId: userId)
             }
         }
     }
     
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "bell.slash.fill")
-                .font(.system(size: 60))
+            Image(systemName: "bell.slash")
+                .font(.system(size: 50))
                 .foregroundColor(.gray)
             
-            Text("Inga notiser")
-                .font(.title2)
-                .fontWeight(.bold)
+            Text("Inga notiser ännu")
+                .font(.system(size: 18, weight: .bold))
             
-            Text("Du kommer att få notiser när någon gillar, kommenterar eller följer dig")
-                .font(.subheadline)
+            Text("När någon gillar, kommenterar eller följer dig kommer det att visas här.")
+                .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -115,51 +110,60 @@ struct NotificationsView: View {
     private func loadNotifications() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        await MainActor.run { 
-            isLoading = true 
-            errorMessage = nil
+        // Only show loading indicator on first load
+        if notifications.isEmpty {
+            await MainActor.run {
+                isLoading = true
+                errorMessage = nil
+            }
         }
+        
         do {
             let fetched = try await notificationService.fetchNotifications(userId: userId)
+            
+            // Prefetch all avatar images for faster loading
+            let avatarUrls = fetched.compactMap { $0.actorAvatarUrl }.filter { !$0.isEmpty }
+            ImageCacheManager.shared.prefetch(urls: avatarUrls)
+            
             await MainActor.run {
                 notifications = fetched
                 isLoading = false
+                errorMessage = nil
+            }
+        } catch let error as NSError {
+            // Ignore cancelled errors (happens during pull-to-refresh)
+            if error.code == NSURLErrorCancelled {
+                print("⚠️ Notification fetch cancelled (normal during refresh)")
+                return
+            }
+            
+            print("❌ Error loading notifications: \(error)")
+            await MainActor.run {
+                isLoading = false
+                // Only show error if we don't have any notifications yet
+                if notifications.isEmpty {
+                    errorMessage = error.localizedDescription
+                }
             }
         } catch {
             print("❌ Error loading notifications: \(error)")
-            await MainActor.run { 
-                isLoading = false
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-    
-    private func handleNotificationTap(_ notification: AppNotification) {
-        Task {
-            // Mark as read
-            if !notification.isRead {
-                try? await notificationService.markAsRead(notificationId: notification.id)
-                await MainActor.run {
-                    if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
-                        notifications[index].isRead = true
-                    }
-                }
-            }
-            
             await MainActor.run {
-                // Only navigate if we have a valid actorId (system notifications might not)
-                if !notification.actorId.isEmpty {
-                    selectedProfileId = notification.actorId
+                isLoading = false
+                if notifications.isEmpty {
+                    errorMessage = error.localizedDescription
                 }
             }
         }
     }
     
-    private func markAllAsRead() {
+    private func markAllAsReadOnEntry() async {
+        guard !hasMarkedAsRead else { return }
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        Task {
-            try? await notificationService.markAllAsRead(userId: userId)
+        hasMarkedAsRead = true
+        
+        do {
+            try await notificationService.markAllAsRead(userId: userId)
             await MainActor.run {
                 notifications = notifications.map { item in
                     var updated = item
@@ -167,95 +171,154 @@ struct NotificationsView: View {
                     return updated
                 }
             }
+        } catch {
+            print("⚠️ Could not mark notifications as read: \(error)")
+        }
+    }
+    
+    private func handleNotificationTap(_ notification: AppNotification) {
+        Task {
+            await MainActor.run {
+                if !notification.actorId.isEmpty {
+                    selectedProfileId = notification.actorId
+                }
+            }
         }
     }
 }
 
-struct NotificationRow: View {
+// MARK: - Strava-style Notification Row
+struct NotificationRowStrava: View {
     let notification: AppNotification
     let onTap: () -> Void
     
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                // Avatar
-                AsyncImage(url: URL(string: notification.actorAvatarUrl ?? "")) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray)
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
+            HStack(alignment: .top, spacing: 12) {
+                // Profile picture (cached)
+                ProfileImage(url: notification.actorAvatarUrl, size: 52)
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(notification.displayText)
-                        .font(.system(size: 15))
+                    // Title (bold)
+                    Text(notificationTitle)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    // Description
+                    Text(notificationDescription)
+                        .font(.system(size: 14))
                         .foregroundColor(.primary)
                         .lineLimit(2)
                     
-                    Text(relativeTime(from: notification.createdAt))
-                        .font(.system(size: 12))
+                    // Timestamp
+                    Text(formatDate(notification.createdAt))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
+                        .padding(.top, 2)
                 }
                 
                 Spacer()
-                
-                // Icon and unread indicator
-                VStack {
-                    Image(systemName: notification.icon)
-                        .font(.system(size: 16))
-                        .foregroundColor(iconColor(for: notification.iconColor))
-                    
-                    if !notification.isRead {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 8, height: 8)
-                    }
-                }
             }
-            .padding()
-            .background(notification.isRead ? Color(.systemBackground) : Color(.systemBackground).opacity(0.95))
-            .cornerRadius(12)
-            .shadow(color: notification.isRead ? Color.black.opacity(0.05) : Color.red.opacity(0.1), radius: 4, x: 0, y: 2)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(.systemBackground))
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
     
-    private func iconColor(for colorString: String) -> Color {
-        switch colorString {
-        case "red": return .red
-        case "blue": return .blue
-        case "green": return .green
-        default: return .gray
+    private var notificationTitle: String {
+        switch notification.type {
+        case .like:
+            return "Ny gilla-markering"
+        case .comment:
+            return "Ny kommentar"
+        case .follow:
+            return "Ny följare"
+        case .reply:
+            return "Svar på din kommentar"
+        case .newWorkout:
+            return "Nytt träningspass"
+        case .unknown:
+            return "Notis"
         }
     }
     
-    private func relativeTime(from isoString: String) -> String {
+    private var notificationDescription: String {
+        let name = notification.actorUsername ?? "Någon"
+        
+        switch notification.type {
+        case .like:
+            return "\(name) gillade ditt inlägg"
+        case .comment:
+            if let text = notification.commentText, !text.isEmpty {
+                return "\(name) kommenterade: \"\(text)\""
+            }
+            return "\(name) kommenterade på ditt inlägg"
+        case .follow:
+            return "\(name) började följa dig"
+        case .reply:
+            if let text = notification.commentText, !text.isEmpty {
+                return "\(name) svarade: \"\(text)\""
+            }
+            return "\(name) svarade på din kommentar"
+        case .newWorkout:
+            return "\(name) har avslutat ett träningspass!"
+        case .unknown:
+            return "\(name) skickade en notis"
+        }
+    }
+    
+    private func formatDate(_ isoString: String) -> String {
         let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: isoString) else { return "" }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var date = formatter.date(from: isoString)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: isoString)
+        }
+        
+        guard let parsedDate = date else { return isoString }
         
         let now = Date()
-        let diff = now.timeIntervalSince(date)
+        let diff = now.timeIntervalSince(parsedDate)
         
-        if diff < 60 {
-            return "Just nu"
-        } else if diff < 3600 {
-            let minutes = Int(diff / 60)
-            return "\(minutes)m sedan"
-        } else if diff < 86400 {
-            let hours = Int(diff / 3600)
-            return "\(hours)h sedan"
-        } else if diff < 604800 {
-            let days = Int(diff / 86400)
-            return "\(days)d sedan"
-        } else {
-            let weeks = Int(diff / 604800)
-            return "\(weeks)v sedan"
+        // If today, show time
+        let calendar = Calendar.current
+        if calendar.isDateInToday(parsedDate) {
+            let timeFormatter = DateFormatter()
+            timeFormatter.dateFormat = "HH:mm"
+            timeFormatter.locale = Locale(identifier: "sv_SE")
+            return "Idag kl \(timeFormatter.string(from: parsedDate))"
         }
+        
+        // If yesterday
+        if calendar.isDateInYesterday(parsedDate) {
+            let timeFormatter = DateFormatter()
+            timeFormatter.dateFormat = "HH:mm"
+            timeFormatter.locale = Locale(identifier: "sv_SE")
+            return "Igår kl \(timeFormatter.string(from: parsedDate))"
+        }
+        
+        // If within last 7 days
+        if diff < 604800 {
+            let days = Int(diff / 86400)
+            return "\(days) dagar sedan"
+        }
+        
+        // Otherwise show full date
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d MMM yyyy 'kl' HH:mm"
+        dateFormatter.locale = Locale(identifier: "sv_SE")
+        return dateFormatter.string(from: parsedDate)
+    }
+}
+
+#Preview {
+    NavigationStack {
+        NotificationsView()
+            .environmentObject(AuthViewModel())
     }
 }

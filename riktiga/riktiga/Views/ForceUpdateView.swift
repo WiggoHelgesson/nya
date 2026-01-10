@@ -68,7 +68,7 @@ struct ForceUpdateView: View {
     
     private func openAppStore() {
         // Opens App Store app directly (not Safari)
-        if let url = URL(string: "itms-apps://apps.apple.com") {
+        if let url = URL(string: "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB") {
             UIApplication.shared.open(url)
         }
     }

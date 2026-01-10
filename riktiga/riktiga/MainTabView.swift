@@ -68,7 +68,15 @@ struct MainTabView: View {
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
-    // Tab items data
+    // Check if iOS 26+ for Liquid Glass
+    private var supportsLiquidGlass: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+    
+    // Tab items data for legacy tab bar
     private let tabItems: [(icon: String, title: String)] = [
         ("house.fill", "Hem"),
         ("person.2.fill", "Socialt"),
@@ -78,28 +86,15 @@ struct MainTabView: View {
     ]
     
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Content views based on selected tab
-            Group {
-                switch selectedTab {
-                case 0:
-                    HomeContainerView()
-                case 1:
-                    SocialView()
-                case 3:
-                    RewardsView()
-                case 4:
-                    ProfileView()
-                default:
-                    Color.clear
-                }
+        Group {
+            if #available(iOS 26.0, *) {
+                // iOS 26+ : Native Liquid Glass TabView
+                liquidGlassTabView
+            } else {
+                // iOS 25 and earlier: Custom Tab Bar
+                legacyTabView
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            // Custom Tab Bar
-            customTabBar
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .fullScreenCover(isPresented: $showStartSession) {
             StartSessionView(initialActivity: startActivityType ?? .running)
                 .id(startActivityType ?? .running)
@@ -204,6 +199,27 @@ struct MainTabView: View {
             }
         }
         .onChange(of: selectedTab) { oldTab, newTab in
+            // Intercept "Starta pass" tab (index 2)
+            if newTab == 2 {
+                // Revert to previous tab
+                selectedTab = oldTab
+                
+                // Trigger start session
+                triggerHeavyHaptic()
+                Task {
+                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                    await MainActor.run {
+                        if hasActiveSession {
+                            showResumeSession = true
+                        } else {
+                            startActivityType = .running
+                            showStartSession = true
+                        }
+                    }
+                }
+                return
+            }
+            
             // Reset to root view when switching tabs
             navigationTracker.resetToRoot()
             
@@ -279,12 +295,74 @@ struct MainTabView: View {
         }
     }
     
-    // MARK: - Custom Tab Bar
+    // MARK: - iOS 26+ Liquid Glass Tab View
+    @available(iOS 26.0, *)
+    private var liquidGlassTabView: some View {
+        TabView(selection: $selectedTab) {
+            HomeContainerView()
+                .tabItem {
+                    Label("Hem", systemImage: "house.fill")
+                }
+                .tag(0)
+            
+            SocialView()
+                .tabItem {
+                    Label("Socialt", systemImage: "person.2.fill")
+                }
+                .tag(1)
+            
+            Color.clear
+                .tabItem {
+                    Label("Starta pass", systemImage: "figure.run")
+                }
+                .tag(2)
+            
+            RewardsView()
+                .tabItem {
+                    Label("Belöningar", systemImage: "gift.fill")
+                }
+                .tag(3)
+            
+            ProfileView()
+                .tabItem {
+                    Label("Profil", systemImage: "person.fill")
+                }
+                .tag(4)
+        }
+        .tint(.primary)
+    }
     
-    private var customTabBar: some View {
+    // MARK: - Legacy Tab View (iOS 25 and earlier)
+    private var legacyTabView: some View {
+        ZStack(alignment: .bottom) {
+            // Content views based on selected tab
+            Group {
+                switch selectedTab {
+                case 0:
+                    HomeContainerView()
+                case 1:
+                    SocialView()
+                case 3:
+                    RewardsView()
+                case 4:
+                    ProfileView()
+                default:
+                    Color.clear
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Custom Tab Bar
+            legacyCustomTabBar
+        }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+    
+    // MARK: - Legacy Custom Tab Bar
+    private var legacyCustomTabBar: some View {
         HStack(spacing: 0) {
             ForEach(0..<tabItems.count, id: \.self) { index in
-                TabBarItem(
+                LegacyTabBarItem(
                     icon: tabItems[index].icon,
                     title: tabItems[index].title,
                     isSelected: selectedTab == index,
@@ -326,8 +404,7 @@ struct MainTabView: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .padding(.bottom, 16)
+        .padding(.vertical, 12)
         .background(
             Rectangle()
                 .fill(Color(.systemBackground))
@@ -336,49 +413,14 @@ struct MainTabView: View {
         )
     }
     
-    // MARK: - Floating Start Button
-    
-    private var floatingStartButton: some View {
-        Button {
-            triggerHeavyHaptic()
-            Task {
-                await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                await MainActor.run {
-                    if hasActiveSession {
-                        showResumeSession = true
-                    } else {
-                        startActivityType = .running
-                        showStartSession = true
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 16, weight: .bold))
-                Text("Starta pass")
-                    .font(.system(size: 16, weight: .bold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 14)
-            .background(
-                Capsule()
-                    .fill(Color.black)
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-            )
-        }
-        .padding(.bottom, 60) // Position above tab bar
-    }
-    
     private func triggerHeavyHaptic() {
         hapticGenerator.prepare()
         hapticGenerator.impactOccurred(intensity: 1.0)
     }
 }
 
-// MARK: - Tab Bar Item Component
-private struct TabBarItem: View {
+// MARK: - Legacy Tab Bar Item Component
+private struct LegacyTabBarItem: View {
     let icon: String
     let title: String
     let isSelected: Bool
@@ -387,11 +429,10 @@ private struct TabBarItem: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                // Icon with gradient when selected
+            VStack(spacing: 4) {
                 if isSelected {
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
@@ -402,16 +443,16 @@ private struct TabBarItem: View {
                                 endPoint: .bottom
                             )
                         )
-                        .frame(height: 28)
+                        .frame(height: 26)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .regular))
+                        .font(.system(size: 20, weight: .regular))
                         .foregroundColor(.gray)
-                        .frame(height: 28)
+                        .frame(height: 26)
                 }
                 
                 Text(title)
-                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
                     .foregroundColor(isSelected ? .primary : .gray)
             }
             .frame(maxWidth: .infinity)
