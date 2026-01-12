@@ -10,6 +10,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>upanddown</string>
+				<string>updown</string>
 			</array>
 		</dict>
 		<dict>
@@ -21,12 +22,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Vi använder detta tillstånd för att kunna förbättra träningsupplevelsen och hålla din statistik synkad. Ingen reklamspårning sker.</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>instagram</string>
@@ -35,7 +30,21 @@
 		<string>sms</string>
 		<string>strava</string>
 	</array>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>processing</string>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>co.tryterra.data.post.request</string>
+	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Up&amp;Down använder hälsodata för att spåra dina träningspass, steg och aktiviteter för att ge dig en komplett bild av din träning.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Up&amp;Down kan spara träningsdata till Apple Health för att hålla din hälsodata synkroniserad.</string>
+	<key>NSHealthClinicalHealthRecordsShareUsageDescription</key>
+	<string>Up&amp;Down kan använda hälsojournaler för att ge dig mer detaljerad träningsstatistik.</string>
 </dict>
 </plist>

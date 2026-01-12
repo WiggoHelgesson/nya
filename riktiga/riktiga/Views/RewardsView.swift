@@ -213,6 +213,12 @@ struct RewardsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     
+    // Animation states
+    @State private var showHeader = false
+    @State private var showHeroBanner = false
+    @State private var showCategories = false
+    @State private var showRewardSections = false
+    
     // Adaptive colors
     private var pageBackgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -513,24 +519,34 @@ struct RewardsView: View {
                         }
                         .padding(.bottom, 16)
                         .background(sectionBackgroundColor)
+                        .opacity(showHeader ? 1 : 0)
+                        .offset(y: showHeader ? 0 : 10)
                         
                         LazyVStack(spacing: 12) {
                             heroBannerSection
                                 .background(sectionBackgroundColor)
+                                .opacity(showHeroBanner ? 1 : 0)
+                                .offset(y: showHeroBanner ? 0 : 15)
                             
                             categoriesSection
                                 .padding(.vertical, 16)
                                 .background(sectionBackgroundColor)
+                                .opacity(showCategories ? 1 : 0)
+                                .offset(y: showCategories ? 0 : 15)
                             
-                            sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
-                            
-                            sliderSectionOptimized(title: "Gym", rewards: gymRewards)
-                            
-                            sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
-                            
-                            sliderSectionOptimized(title: "Golf", rewards: golfRewards)
-                            
-                            sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
+                            Group {
+                                sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
+                                
+                                sliderSectionOptimized(title: "Gym", rewards: gymRewards)
+                                
+                                sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
+                                
+                                sliderSectionOptimized(title: "Golf", rewards: golfRewards)
+                                
+                                sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
+                            }
+                            .opacity(showRewardSections ? 1 : 0)
+                            .offset(y: showRewardSections ? 0 : 15)
                             
                             Spacer(minLength: 100)
                         }
@@ -550,11 +566,29 @@ struct RewardsView: View {
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
             }
+            .onAppear {
+                animateRewardsContent()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootBeloningar"))) { _ in
                 navigationPath = NavigationPath()
             }
         }
         .tint(primaryTextColor) // Adaptive back buttons for all navigation
+    }
+    
+    private func animateRewardsContent() {
+        withAnimation(.easeOut(duration: 0.4)) {
+            showHeader = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+            showHeroBanner = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+            showCategories = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+            showRewardSections = true
+        }
     }
 }
 

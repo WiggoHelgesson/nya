@@ -68,6 +68,9 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
   try {
     const jwt = await createJWT()
     
+    // Check if we have an avatar to attach (triggers Notification Service Extension)
+    const hasAvatar = data?.actor_avatar && data.actor_avatar.length > 0
+    
     const payload = {
       aps: {
         alert: {
@@ -76,7 +79,10 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
         },
         sound: 'default',
         badge: 1,
+        // mutable-content: 1 allows the Notification Service Extension to modify the notification
+        ...(hasAvatar && { 'mutable-content': 1 }),
       },
+      // Include all data including actor_avatar for the extension to use
       ...data,
     }
     

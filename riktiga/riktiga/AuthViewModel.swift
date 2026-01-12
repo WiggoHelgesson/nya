@@ -496,20 +496,16 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: userId)
                 } else {
-                    // New user - create profile
-                    let username = pendingOnboardingData?.trimmedUsername ?? "user-\(userId.prefix(6))"
+                    // New user - create profile but DON'T set isLoggedIn = true yet
+                    // User needs to complete onboarding first
+                    let placeholderUsername = "user-\(userId.prefix(6))"
                     var newUser = User(
                         id: userId,
-                        name: username,
+                        name: placeholderUsername,
                         email: email ?? session.user.email ?? ""
                     )
                     
                     try await ProfileService.shared.createUserProfile(newUser)
-                    
-                    // Apply onboarding data if available
-                    if let onboardingData = pendingOnboardingData {
-                        _ = await ProfileService.shared.applyOnboardingData(userId: userId, data: onboardingData)
-                    }
                     
                     // Fetch updated profile
                     if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
@@ -520,10 +516,11 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     
                     await MainActor.run {
                         self.currentUser = newUser
-                        self.isLoggedIn = true
+                        // DON'T set isLoggedIn = true here - wait for onboarding to complete
                         self.isLoading = false
                         self.prefetchAvatar(url: newUser.avatarUrl)
-                        self.onAppleSignInComplete?(true, self.pendingOnboardingData)
+                        // Signal that this is a new user who needs onboarding (isNewUser = true)
+                        self.onAppleSignInComplete?(true, OnboardingData())
                     }
                 }
                 

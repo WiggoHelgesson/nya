@@ -17,13 +17,17 @@ struct NotificationsView: View {
                 .ignoresSafeArea()
             
             if isLoading && notifications.isEmpty {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                    Text("Laddar notiser...")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
+                // Skeleton loading for notifications
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(0..<6, id: \.self) { _ in
+                            SkeletonNotificationRow()
+                            Divider()
+                                .padding(.leading, 72)
+                        }
+                    }
                 }
+                .scrollDisabled(true)
             } else if let error = errorMessage {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle.fill")

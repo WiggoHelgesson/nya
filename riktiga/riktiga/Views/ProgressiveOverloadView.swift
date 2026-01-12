@@ -51,8 +51,43 @@ struct ProgressiveOverloadView: View {
                 .ignoresSafeArea()
             
             if isLoading && exerciseHistories.isEmpty {
-                ProgressView()
-                    .progressViewStyle(.circular)
+                // Skeleton loading for exercise list
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Header skeleton
+                        VStack(alignment: .leading, spacing: 8) {
+                            SkeletonLine(width: 200, height: 24)
+                            SkeletonLine(width: 280, height: 14)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        
+                        // Exercise cards skeleton
+                        VStack(spacing: 12) {
+                            ForEach(0..<6, id: \.self) { _ in
+                                HStack(spacing: 14) {
+                                    SkeletonRectangle(height: 48, cornerRadius: 12)
+                                        .frame(width: 48)
+                                    
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        SkeletonLine(width: 140, height: 15)
+                                        SkeletonLine(width: 100, height: 13)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    SkeletonLine(width: 50, height: 16)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(16)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
+                .scrollDisabled(true)
             } else if let errorMessage, exerciseHistories.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
@@ -669,7 +704,7 @@ private struct ExerciseHistoryDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(Color(.systemGroupedBackground))
+        .background(Color.white)
         .navigationTitle(history.name)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -680,15 +715,17 @@ private struct ExerciseHistoryDetailView: View {
             VStack(spacing: 4) {
                 Text(history.name)
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                 if let category = history.category {
                     Text(category)
                         .font(.system(size: 15))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.black.opacity(0.5))
                 }
             }
             
-            Divider()
+            Rectangle()
+                .fill(Color.black.opacity(0.1))
+                .frame(height: 1)
             
             // Stats row
             HStack(spacing: 0) {
@@ -696,10 +733,10 @@ private struct ExerciseHistoryDetailView: View {
                 VStack(spacing: 4) {
                     Text("\(String(format: "%.0f", history.latestSnapshot?.bestSet.weight ?? 0))")
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                     Text("Senaste vikt")
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.black.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -710,7 +747,7 @@ private struct ExerciseHistoryDetailView: View {
                         .foregroundColor(.green)
                     Text("Personbästa")
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.black.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity)
                 
@@ -718,32 +755,21 @@ private struct ExerciseHistoryDetailView: View {
                 VStack(spacing: 4) {
                     Text("\(history.history.count)")
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                     Text("Pass")
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.black.opacity(0.5))
                 }
                 .frame(maxWidth: .infinity)
             }
-            
-            // Trend badge
-            let trend = history.trendInfo
-            HStack(spacing: 8) {
-                Image(systemName: trend.type.icon)
-                    .font(.system(size: 15, weight: .bold))
-                Text(trend.message)
-                    .font(.system(size: 15, weight: .semibold))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(trend.type.color)
-            .clipShape(Capsule())
         }
         .padding(20)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
     }
     
     private var progressChart: some View {
@@ -784,7 +810,20 @@ private struct ExerciseHistoryDetailView: View {
         }
         .chartYAxisLabel("Vikt (kg)")
         .chartYAxis {
-            AxisMarks(position: .leading)
+            AxisMarks(position: .leading) { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                    .foregroundStyle(Color.black.opacity(0.1))
+                AxisValueLabel()
+                    .foregroundStyle(Color.black.opacity(0.6))
+            }
+        }
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                    .foregroundStyle(Color.black.opacity(0.1))
+                AxisValueLabel()
+                    .foregroundStyle(Color.black.opacity(0.6))
+            }
         }
         .frame(height: 220)
     }
@@ -793,7 +832,7 @@ private struct ExerciseHistoryDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Utvecklingskurva")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.primary)
+                .foregroundColor(.black)
             
             progressChart
             
@@ -805,32 +844,24 @@ private struct ExerciseHistoryDetailView: View {
                         .frame(width: 10, height: 10)
                     Text("Max vikt")
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                }
-                
-                if history.history.count >= 3 {
-                    HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.secondary.opacity(0.7))
-                            .frame(width: 20, height: 2)
-                        Text("Trendlinje")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                    }
+                        .foregroundColor(.black.opacity(0.5))
                 }
             }
         }
         .padding(20)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
     }
     
     private var historyCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Historik")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.primary)
+                .foregroundColor(.black)
             
             ForEach(Array(history.history.enumerated().reversed()), id: \.element.id) { index, snapshot in
                 let previousSnapshot: ExerciseSnapshot? = index > 0 ? history.history[index - 1] : nil
@@ -840,11 +871,11 @@ private struct ExerciseHistoryDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(dateFormatter.string(from: snapshot.date))
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .foregroundColor(.black)
                             
                             Text("\(String(format: "%.1f", snapshot.bestSet.weight)) kg × \(snapshot.bestSet.reps) reps")
                                 .font(.system(size: 14))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.black.opacity(0.5))
                         }
                         
                         Spacer()
@@ -852,7 +883,7 @@ private struct ExerciseHistoryDetailView: View {
                         VStack(alignment: .trailing, spacing: 4) {
                             Text("\(String(format: "%.0f", snapshot.bestSet.weight)) kg")
                                 .font(.system(size: 17, weight: .bold))
-                                .foregroundColor(.primary)
+                                .foregroundColor(.black)
                             
                             // Change from previous
                             if let prev = previousSnapshot {
@@ -860,21 +891,26 @@ private struct ExerciseHistoryDetailView: View {
                                 let sign = delta >= 0 ? "+" : ""
                                 Text("\(sign)\(String(format: "%.1f", delta)) kg")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(delta >= 0 ? .green : .secondary)
+                                    .foregroundColor(delta >= 0 ? .green : .black.opacity(0.4))
                             }
                         }
                     }
                     .padding(.vertical, 12)
                     
                     if index > 0 {
-                        Divider()
+                        Rectangle()
+                            .fill(Color.black.opacity(0.08))
+                            .frame(height: 1)
                     }
                 }
             }
         }
         .padding(20)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
     }
 }

@@ -98,7 +98,7 @@ struct StravaStyleHeaderView: View {
                                 // Notification badge
                                 if unreadNotifications > 0 {
                                     Circle()
-                                        .fill(Color.orange)
+                                        .fill(Color.black)
                                         .frame(width: 18, height: 18)
                                         .overlay(
                                             Text("\(min(unreadNotifications, 99))")

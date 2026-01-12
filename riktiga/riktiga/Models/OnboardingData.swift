@@ -2,6 +2,11 @@ import Foundation
 
 struct OnboardingData {
     var username: String = ""
+    var firstName: String = ""
+    var lastName: String = ""
+    var selectedSports: [String] = []
+    var fitnessLevel: String = ""
+    var goals: [String] = []
     var locationAuthorized: Bool = false
     var appleHealthAuthorized: Bool = true
     var golfHcp: Int?

@@ -6,44 +6,87 @@ import UIKit
 import Combine
 
 private enum OnboardingStep: Int, CaseIterable, Identifiable {
-    case username
+    case name
+    case sports
+    case fitnessLevel
+    case goals
     case location
     case appleHealth
-    case golfHcp
-    case runningPB
     case notifications
     
     var id: Int { rawValue }
     
     var title: String {
         switch self {
-        case .username: return "Välj ditt användarnamn"
+        case .name: return "Vad heter du?"
+        case .sports: return "Vilka aktiviteter gillar du?"
+        case .fitnessLevel: return "Var är du i din träningsresa?"
+        case .goals: return "Vad planerar du använda Up&Down för?"
         case .location: return "Aktivera platsinfo"
         case .appleHealth: return "Aktivera Apple Health"
-        case .golfHcp: return "Vad är ditt Golf HCP?"
-        case .runningPB: return "Vad är dina PB inom löpning?"
         case .notifications: return "Aktivera notiser"
         }
     }
     
     var subtitle: String {
         switch self {
-        case .username: return "Detta blir ditt namn i appen (max 10 tecken)."
+        case .name: return "Så här kan dina vänner hitta dig på Up&Down."
+        case .sports: return "Välj de sporter du vill fokusera på."
+        case .fitnessLevel: return "Alla nivåer är välkomna, från nybörjare till proffs."
+        case .goals: return "Välj så många som passar."
         case .location: return "Aktivera 'Tillåt alltid' för att spåra dina pass korrekt även i bakgrunden."
         case .appleHealth: return "Appen behöver hälsodata för att logga dina pass."
-        case .golfHcp: return "Används för att anpassa rekommendationer."
-        case .runningPB: return "Fyll i dina personbästa eller hoppa över."
         case .notifications: return "Så vi kan påminna dig om mål och belöningar."
         }
     }
     
     var allowsSkip: Bool {
-        switch self {
-        case .golfHcp, .runningPB: return true
-        default: return false
-        }
+        return false
     }
 }
+
+// Sports options
+private struct SportOption: Identifiable {
+    let id = UUID()
+    let name: String
+    let icon: String
+}
+
+private let availableSports: [SportOption] = [
+    SportOption(name: "Gym", icon: "dumbbell.fill"),
+    SportOption(name: "Löpning", icon: "figure.run"),
+    SportOption(name: "Golf", icon: "figure.golf"),
+    SportOption(name: "Skidåkning", icon: "figure.skiing.downhill")
+]
+
+// Fitness levels
+private struct FitnessLevel: Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+}
+
+private let fitnessLevels: [FitnessLevel] = [
+    FitnessLevel(title: "Nybörjare", description: "Jag är ny inom träning eller börjar om."),
+    FitnessLevel(title: "Medel", description: "Jag tränar regelbundet med lätta-medelsvåra pass."),
+    FitnessLevel(title: "Avancerad", description: "Jag gillar att utmana mig med tuffa pass."),
+    FitnessLevel(title: "Proffs", description: "Jag är en professionell idrottare.")
+]
+
+// Goals
+private struct GoalOption: Identifiable {
+    let id = UUID()
+    let title: String
+}
+
+private let goalOptions: [GoalOption] = [
+    GoalOption(title: "Bygga en träningsvana"),
+    GoalOption(title: "Förbättra min hälsa"),
+    GoalOption(title: "Träna mot ett mål eller event"),
+    GoalOption(title: "Utforska nya platser"),
+    GoalOption(title: "Tävla med andra"),
+    GoalOption(title: "Få kontakt med andra aktiva")
+]
 
 struct AuthenticationView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -68,7 +111,14 @@ struct AuthenticationView: View {
     @State private var signupPassword: String = ""
     @State private var signupConfirmPassword: String = ""
     
-    private let heroImages = ["27", "28", "29"]
+    // New onboarding state
+    @State private var firstName: String = ""
+    @State private var lastName: String = ""
+    @State private var selectedSports: Set<String> = []
+    @State private var selectedFitnessLevel: String = ""
+    @State private var selectedGoals: Set<String> = []
+    
+    private let heroImages = ["61", "63", "62"]
     private let onboardingSteps = OnboardingStep.allCases
     
     var body: some View {
@@ -105,7 +155,23 @@ struct AuthenticationView: View {
              }
             
             updateLocationAuthorizationState(locationAuthStatus)
-        scheduleUsernameAvailabilityCheck(for: onboardingData.username)
+            scheduleUsernameAvailabilityCheck(for: onboardingData.username)
+            
+            // Set up Apple Sign In callback
+            authViewModel.onAppleSignInComplete = { success, onboardingDataFromApple in
+                if success {
+                    if onboardingDataFromApple != nil {
+                        // New user from Apple Sign In - start onboarding
+                        showLanding = false
+                        showSignupForm = false
+                        onboardingStep = onboardingSteps.first
+                        print("✅ Apple Sign In complete for NEW user, starting onboarding")
+                    } else {
+                        // Existing user from Apple Sign In - already logged in
+                        print("✅ Apple Sign In complete for EXISTING user")
+                    }
+                }
+            }
         }
         .onChange(of: locationAuthStatus) { status in
             updateLocationAuthorizationState(status)
@@ -140,68 +206,74 @@ struct AuthenticationView: View {
         }
     }
     
-    // MARK: - Landing
+    // MARK: - Landing (Strava Style)
     private var landingView: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 60)
-            ZStack {
-                Image(heroImages[currentHeroIndex])
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: min(UIScreen.main.bounds.width * 0.82, 360),
-                           maxHeight: UIScreen.main.bounds.height * 0.45)
-                    .shadow(color: Color.black.opacity(0.12), radius: 28, x: 0, y: 18)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            
-            Spacer().frame(height: 48)
-            
-            Text("Träna, få belöningar")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
-                .padding(.bottom, 32)
-            
-            VStack(spacing: 18) {
-                Button {
-                    if currentHeroIndex < heroImages.count - 1 {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                            currentHeroIndex += 1
-                        }
-                    } else {
-                        // Start onboarding flow
-                        showLanding = false
-                        onboardingStep = onboardingSteps.first
-                    }
-                } label: {
-                    Text(currentHeroIndex < heroImages.count - 1 ? "Nästa" : "Skapa konto")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(
-                            Color.black
-                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        )
-                        .shadow(color: Color.black.opacity(0.15), radius: 18, x: 0, y: 14)
+        let autoSwipeTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
+        
+        return VStack(spacing: 0) {
+            // Swipeable hero images - fills to top
+            TabView(selection: $currentHeroIndex) {
+                ForEach(0..<heroImages.count, id: \.self) { index in
+                    Image(heroImages[index])
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .tag(index)
                 }
-                .padding(.horizontal, 32)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea(edges: .top)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8, blendDuration: 0.3), value: currentHeroIndex)
+            .onReceive(autoSwipeTimer) { _ in
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8, blendDuration: 0.3)) {
+                    currentHeroIndex = (currentHeroIndex + 1) % heroImages.count
+                }
+            }
+            
+            // Bottom section: dots right above buttons
+            VStack(spacing: 24) {
+                // Page indicator dots
+                HStack(spacing: 8) {
+                    ForEach(0..<heroImages.count, id: \.self) { index in
+                        Circle()
+                            .fill(index == currentHeroIndex ? Color.black : Color.black.opacity(0.25))
+                            .frame(width: 8, height: 8)
+                            .scaleEffect(index == currentHeroIndex ? 1.2 : 1.0)
+                            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: currentHeroIndex)
+                    }
+                }
                 
-                Button {
-                    showLanding = false
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Har du redan ett konto?")
-                            .foregroundColor(.black.opacity(0.6))
-                        Text("Logga in här")
-                            .foregroundColor(.primary)
-                            .fontWeight(.semibold)
+                // Buttons
+                VStack(spacing: 14) {
+                    // Create account button
+                    Button {
+                        showLanding = false
+                        showSignupForm = true
+                    } label: {
+                        Text("Skapa konto helt gratis")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .clipShape(Capsule())
                     }
-                    .font(.system(size: 15))
+                    .padding(.horizontal, 24)
+                    
+                    // Login button
+                    Button {
+                        showLanding = false
+                        showSignupForm = false
+                    } label: {
+                        Text("Logga in")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.black)
+                    }
                 }
             }
-            
-            Spacer(minLength: 60)
+            .padding(.vertical, 24)
+            .background(Color.white)
         }
     }
     
@@ -292,144 +364,184 @@ struct AuthenticationView: View {
         }
     }
     
-    // MARK: - Onboarding Steps
+    // MARK: - Onboarding Steps (Strava Style)
     private func onboardingView(for step: OnboardingStep) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
-            progressBar
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Title
+                    Text(step.title)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.top, 60)
+                    
+                    // Subtitle
+                    Text(step.subtitle)
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                        .padding(.bottom, 8)
+                    
+                    // Content
+                    onboardingContent(for: step)
+                }
                 .padding(.horizontal, 24)
-                .padding(.top, 40)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text(step.title)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-                Text(step.subtitle)
-                    .font(.system(size: 16))
-                    .foregroundColor(.black.opacity(0.6))
             }
-            .padding(.horizontal, 24)
             
-            onboardingContent(for: step)
-                .padding(.horizontal, 24)
-            
-            Spacer()
-            
-            VStack(spacing: 12) {
+            // Bottom button
+            VStack(spacing: 0) {
                 Button(action: { continueFromStep(step) }) {
-                    Text(primaryButtonTitle(for: step))
+                    Text("Fortsätt")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(canContinue(step) ? .white : .gray)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(canContinue(step) ? Color.black : Color.black.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding(.vertical, 18)
+                        .background(canContinue(step) ? Color.black : Color(.systemGray5))
+                        .clipShape(Capsule())
                 }
                 .disabled(!canContinue(step))
                 .padding(.horizontal, 24)
-                
-                if step.allowsSkip {
-                    Button(action: { skipStep(step) }) {
-                        Text("Hoppa över")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.6))
-                    }
-                }
+                .padding(.vertical, 16)
             }
-            .padding(.bottom, 32)
+            .background(Color.white)
         }
-    }
-    
-    private var progressBar: some View {
-        GeometryReader { geometry in
-            let progress = CGFloat(currentOnboardingIndex + 1) / CGFloat(onboardingSteps.count)
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.black.opacity(0.08))
-                    .frame(height: 6)
-                Capsule()
-                    .fill(Color.black)
-                    .frame(width: geometry.size.width * progress, height: 6)
-                    .animation(.easeInOut(duration: 0.3), value: progress)
-            }
-        }
-        .frame(height: 6)
     }
     
     private func onboardingContent(for step: OnboardingStep) -> some View {
         Group {
             switch step {
-            case .username:
+            case .name:
+                // Name input (Strava style)
                 VStack(alignment: .leading, spacing: 20) {
-                    TextField("Användarnamn", text: Binding(
-                        get: { onboardingData.username },
-                        set: { onboardingData.username = String($0.prefix(10)) }
-                    ))
-                    .textInputAutocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .padding(14)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(18)
-                    
-                    Text("Tecken kvar: \(max(0, 10 - onboardingData.username.count))")
-                        .foregroundColor(.black.opacity(0.5))
-                        .font(.system(size: 14))
-                    
-                    let trimmedUsername = onboardingData.trimmedUsername
-                    if trimmedUsername.count >= 2 {
-                        if isCheckingUsername {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                                Text("Kontrollerar användarnamn…")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.black.opacity(0.6))
-                            }
-                        } else {
-                            Text(isUsernameAvailable ? "Användarnamnet är ledigt" : "Användarnamnet är upptaget")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(isUsernameAvailable ? .green : .red)
-                        }
+                    // First name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Förnamn")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                        
+                        TextField("", text: $firstName)
+                            .textInputAutocapitalization(.words)
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray3), lineWidth: 1)
+                            )
                     }
                     
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 16) {
-                            ZStack {
-                                if let profileImage = profileImage {
-                                    Image(uiImage: profileImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 96, height: 96)
-                                        .clipShape(Circle())
-                                } else {
-                                    Circle()
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 96, height: 96)
-                                        .overlay(
-                                            Image(systemName: "camera.fill")
-                                                .font(.system(size: 32, weight: .medium))
-                                                .foregroundColor(.black.opacity(0.4))
-                                        )
-                                }
-                            }
-                            
-                            Text("Allt blir roligare med en profilbild (:")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.black.opacity(0.7))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    // Last name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Efternamn")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
                         
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                            Text(profileImage == nil ? "Lägg till profilbild" : "Byt profilbild")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(Color.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        TextField("", text: $lastName)
+                            .textInputAutocapitalization(.words)
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray3), lineWidth: 1)
+                            )
+                    }
+                    
+                    Text("Din profil är offentlig som standard.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                
+            case .sports:
+                // Sports selection (2x2 grid)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(availableSports) { sport in
+                        Button {
+                            if selectedSports.contains(sport.name) {
+                                selectedSports.remove(sport.name)
+                            } else {
+                                selectedSports.insert(sport.name)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Image(systemName: sport.icon)
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.black)
+                                
+                                Text(sport.name)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.black)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(selectedSports.contains(sport.name) ? Color.black.opacity(0.1) : Color(.systemGray6))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selectedSports.contains(sport.name) ? Color.black : Color.clear, lineWidth: 2)
+                                    )
+                            )
                         }
-                        .photosPickerStyle(.presentation)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
+                
+            case .fitnessLevel:
+                // Fitness level selection
+                VStack(spacing: 12) {
+                    ForEach(fitnessLevels) { level in
+                        Button {
+                            selectedFitnessLevel = level.title
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(level.title)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.black)
+                                
+                                Text(level.description)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(selectedFitnessLevel == level.title ? Color.black.opacity(0.1) : Color(.systemGray6))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selectedFitnessLevel == level.title ? Color.black : Color.clear, lineWidth: 2)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                
+            case .goals:
+                // Goals selection (multiple choice)
+                VStack(spacing: 12) {
+                    ForEach(goalOptions) { goal in
+                        Button {
+                            if selectedGoals.contains(goal.title) {
+                                selectedGoals.remove(goal.title)
+                            } else {
+                                selectedGoals.insert(goal.title)
+                            }
+                        } label: {
+                            Text(goal.title)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(18)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedGoals.contains(goal.title) ? Color.black.opacity(0.1) : Color(.systemGray6))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(selectedGoals.contains(goal.title) ? Color.black : Color.clear, lineWidth: 2)
+                                        )
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                
             case .location:
                 VStack(spacing: 18) {
                     Image(systemName: "location.circle.fill")
@@ -512,61 +624,6 @@ struct AuthenticationView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-            case .golfHcp:
-                VStack(alignment: .leading, spacing: 24) {
-                    Picker("HCP", selection: Binding(
-                        get: { onboardingData.golfHcp ?? 0 },
-                        set: { onboardingData.golfHcp = $0 }
-                    )) {
-                        ForEach(0...54, id: \.self) { value in
-                            Text("\(value)")
-                        }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(height: 140)
-                    .clipped()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(18)
-                    
-                    if let hcp = onboardingData.golfHcp {
-                        Text("Valt HCP: \(hcp)")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black.opacity(0.7))
-                    }
-                }
-            case .runningPB:
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("Fyll i de PB du vill (kan ändras senare)")
-                        .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.6))
-                    
-                    VStack(spacing: 12) {
-                        pbField(title: "5 km (min)", binding: Binding(
-                            get: { onboardingData.pb5kmMinutes?.description ?? "" },
-                            set: { onboardingData.pb5kmMinutes = Int($0.filter({ $0.isNumber })) }
-                        ))
-                        HStack(spacing: 12) {
-                            pbField(title: "10 km (h)", binding: Binding(
-                                get: { onboardingData.pb10kmHours?.description ?? "" },
-                                set: { onboardingData.pb10kmHours = Int($0.filter({ $0.isNumber })) }
-                            ))
-                            pbField(title: "10 km (min)", binding: Binding(
-                                get: { onboardingData.pb10kmMinutes?.description ?? "" },
-                                set: { onboardingData.pb10kmMinutes = Int($0.filter({ $0.isNumber })) }
-                            ))
-                        }
-                        HStack(spacing: 12) {
-                            pbField(title: "Marathon (h)", binding: Binding(
-                                get: { onboardingData.pbMarathonHours?.description ?? "" },
-                                set: { onboardingData.pbMarathonHours = Int($0.filter({ $0.isNumber })) }
-                            ))
-                            pbField(title: "Marathon (min)", binding: Binding(
-                                get: { onboardingData.pbMarathonMinutes?.description ?? "" },
-                                set: { onboardingData.pbMarathonMinutes = Int($0.filter({ $0.isNumber })) }
-                            ))
-                        }
-                    }
-                }
             case .notifications:
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Få påminnelser om pass och nya belöningar.")
@@ -647,9 +704,22 @@ struct AuthenticationView: View {
     
     private func continueFromStep(_ step: OnboardingStep) {
         switch step {
-        case .username:
-            onboardingData.username = onboardingData.trimmedUsername
-            usernameCheckTask?.cancel()
+        case .name:
+            // Set username from full first name + last name
+            let fullName = "\(firstName.trimmingCharacters(in: .whitespaces)) \(lastName.trimmingCharacters(in: .whitespaces))"
+            onboardingData.username = fullName.trimmingCharacters(in: .whitespaces)
+            goToNextStep()
+        case .sports:
+            // Store selected sports
+            onboardingData.selectedSports = Array(selectedSports)
+            goToNextStep()
+        case .fitnessLevel:
+            // Store fitness level
+            onboardingData.fitnessLevel = selectedFitnessLevel
+            goToNextStep()
+        case .goals:
+            // Store goals
+            onboardingData.goals = Array(selectedGoals)
             goToNextStep()
         case .location:
             if onboardingData.locationAuthorized {
@@ -661,36 +731,23 @@ struct AuthenticationView: View {
         case .appleHealth:
             requestHealthAuthorization()
             goToNextStep()
-        case .golfHcp:
-            goToNextStep()
-        case .runningPB:
-            goToNextStep()
         case .notifications:
             if onboardingData.notificationsAuthorized {
                 goToNextStep()
             } else {
                 NotificationManager.shared.requestAuthorization { granted in
-                    onboardingData.notificationsAuthorized = granted
-                    notificationsStatus = granted ? "Notiser aktiverade" : "Notiser nekades"
-                    // Daily steps reminder removed - users found it annoying
+                    DispatchQueue.main.async {
+                        onboardingData.notificationsAuthorized = granted
+                        notificationsStatus = granted ? "Notiser aktiverade" : "Notiser nekades"
+                        // Auto-advance after authorization (whether granted or denied)
+                        goToNextStep()
+                    }
                 }
             }
         }
     }
     
     private func skipStep(_ step: OnboardingStep) {
-        switch step {
-        case .golfHcp:
-            onboardingData.golfHcp = nil
-        case .runningPB:
-            onboardingData.pb5kmMinutes = nil
-            onboardingData.pb10kmHours = nil
-            onboardingData.pb10kmMinutes = nil
-            onboardingData.pbMarathonHours = nil
-            onboardingData.pbMarathonMinutes = nil
-        default:
-            break
-        }
         goToNextStep()
     }
     
@@ -698,24 +755,92 @@ struct AuthenticationView: View {
         if let step = onboardingStep, let index = onboardingSteps.firstIndex(of: step), index < onboardingSteps.count - 1 {
             onboardingStep = onboardingSteps[index + 1]
         } else {
-            onboardingStep = nil
-            showSignupForm = true
-            showLanding = false
-            authViewModel.errorMessage = ""
-            signupName = ""
-            signupEmail = ""
-            signupPassword = ""
-            signupConfirmPassword = ""
+            // Onboarding complete - enter the app
+            completeOnboarding()
+        }
+    }
+    
+    private func completeOnboarding() {
+        // Save onboarding data to user profile
+        Task {
+            if let userId = authViewModel.currentUser?.id {
+                // Use full first name + last name as username
+                let fullName = "\(firstName.trimmingCharacters(in: .whitespaces)) \(lastName.trimmingCharacters(in: .whitespaces))"
+                let finalUsername = fullName.trimmingCharacters(in: .whitespaces)
+                
+                print("📝 Saving username: '\(finalUsername)' for user: \(userId)")
+                
+                // Update user profile with onboarding data
+                do {
+                    // Update profile using ProfileService (profiles table)
+                    try await ProfileService.shared.updateUsername(userId: userId, username: finalUsername)
+                    
+                    // Update additional onboarding fields
+                    try await SupabaseConfig.supabase
+                        .from("profiles")
+                        .update([
+                            "fitness_level": selectedFitnessLevel,
+                            "selected_sports": Array(selectedSports).joined(separator: ","),
+                            "goals": Array(selectedGoals).joined(separator: ",")
+                        ])
+                        .eq("id", value: userId)
+                        .execute()
+                    
+                    print("✅ Onboarding data saved successfully")
+                } catch {
+                    print("⚠️ Failed to save onboarding data: \(error)")
+                }
+                
+                // ALWAYS refresh user profile to get the latest username before entering the app
+                // This ensures the user never sees "user-XXXXX"
+                if let updatedProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
+                    await MainActor.run {
+                        authViewModel.currentUser = updatedProfile
+                        print("✅ Profile refreshed with username: '\(updatedProfile.name)'")
+                    }
+                } else {
+                    // If we can't fetch the profile, at least update the local user with the name
+                    await MainActor.run {
+                        if var user = authViewModel.currentUser {
+                            user.name = finalUsername
+                            authViewModel.currentUser = user
+                            print("⚠️ Could not fetch profile, using local username: '\(finalUsername)'")
+                        }
+                    }
+                }
+                
+                // Onboarding complete - NOW set isLoggedIn = true to enter the app
+                await MainActor.run {
+                    onboardingStep = nil
+                    showSignupForm = false
+                    showLanding = false
+                    authViewModel.isLoggedIn = true  // This triggers MainTabView to show
+                    print("✅ Onboarding complete, entering app with username: '\(authViewModel.currentUser?.name ?? "unknown")'")
+                }
+            } else {
+                // User is not logged in yet - this shouldn't happen normally
+                // but if it does, reset to landing
+                await MainActor.run {
+                    onboardingStep = nil
+                    showSignupForm = false
+                    showLanding = true
+                    print("⚠️ No user logged in after onboarding, returning to landing")
+                }
+            }
         }
     }
     
     private func canContinue(_ step: OnboardingStep) -> Bool {
         switch step {
-        case .username:
-            return onboardingData.trimmedUsername.count >= 2 &&
-                   onboardingData.profileImageData != nil &&
-                   isUsernameAvailable &&
-                   !isCheckingUsername
+        case .name:
+            return !firstName.trimmingCharacters(in: .whitespaces).isEmpty &&
+                   !lastName.trimmingCharacters(in: .whitespaces).isEmpty
+        case .sports:
+            return !selectedSports.isEmpty
+        case .fitnessLevel:
+            return !selectedFitnessLevel.isEmpty
+        case .goals:
+            return !selectedGoals.isEmpty
         default:
             return true
         }
@@ -761,197 +886,143 @@ private extension AuthenticationView {
 
 private extension AuthenticationView {
     var signupFormView: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Button {
-                        showSignupForm = false
-                        onboardingStep = onboardingSteps.first
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .padding(10)
-                            .background(Color.black.opacity(0.05))
-                            .clipShape(Circle())
-                    }
-                    
-                    Text("Skapa konto")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(.primary)
-                    
-                    Text("Välj hur du vill skapa ditt konto.")
-                        .font(.system(size: 15))
+        VStack(spacing: 0) {
+            // Close button top right
+            HStack {
+                Spacer()
+                Button {
+                    showSignupForm = false
+                    showLanding = true
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black.opacity(0.6))
+                        .frame(width: 36, height: 36)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.top, 40)
-                
-                // Apple Sign In Button (recommended)
-                VStack(spacing: 12) {
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Title
+                    Text("Skapa konto")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.black)
+                        .padding(.top, 8)
+                    
+                    // Apple Sign In Button (outline style)
                     Button {
                         authViewModel.signInWithApple(onboardingData: onboardingData)
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                             
                             Text("Fortsätt med Apple")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                            
-                            Spacer()
-                            
-                            Text("Rekommenderas")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.2))
-                                .cornerRadius(6)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.black)
                         }
-                        .padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.black)
-                        .cornerRadius(30)
-                        .contentShape(Rectangle())
+                        .background(
+                            RoundedRectangle(cornerRadius: 30)
+                                .stroke(Color(.systemGray3), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(authViewModel.isLoading)
                     
-                    Text("Snabbt och säkert med Face ID/Touch ID")
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                }
-                .padding(.horizontal, 24)
-                
-                // Divider
-                HStack {
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 1)
-                    Text("eller med e-post")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 16)
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 1)
-                }
-                .padding(.horizontal, 24)
-                
-                // Email signup form
-                VStack(spacing: 16) {
-                    TextField("Fullständigt namn", text: $signupName)
-                        .textInputAutocapitalization(.words)
-                        .padding(14)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    
-                    TextField("E-postadress", text: $signupEmail)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .textContentType(.emailAddress)
-                        .autocorrectionDisabled()
-                        .padding(14)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    
-                    SecureField("Lösenord (minst 6 tecken)", text: $signupPassword)
-                        .padding(14)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    
-                    SecureField("Bekräfta lösenord", text: $signupConfirmPassword)
-                        .padding(14)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal, 24)
-                
-                // Username display
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Valt användarnamn")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.black.opacity(0.6))
-                    
+                    // Divider
                     HStack {
-                        Text("@\(onboardingData.trimmedUsername)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(.green)
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
+                        Text("eller")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 16)
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
                     }
-                    .padding(14)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal, 24)
-                
-                if !authViewModel.errorMessage.isEmpty {
-                    Text(authViewModel.errorMessage)
-                        .font(.system(size: 14))
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 24)
-                }
-                
-                // Email signup button
-                Button {
-                    authViewModel.signup(
-                        name: signupName.trimmingCharacters(in: .whitespacesAndNewlines),
-                        username: onboardingData.trimmedUsername,
-                        email: signupEmail.trimmingCharacters(in: .whitespacesAndNewlines),
-                        password: signupPassword,
-                        confirmPassword: signupConfirmPassword,
-                        onboardingData: onboardingData
-                    )
-                } label: {
-                    HStack {
-                        Spacer()
+                    
+                    // Email field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("E-post")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                        
+                        TextField("E-post", text: $signupEmail)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .textContentType(.emailAddress)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray4), lineWidth: 1)
+                            )
+                    }
+                    
+                    // Password field
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Lösenord")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black)
+                        
+                        SecureField("Minst 6 tecken", text: $signupPassword)
+                            .textContentType(.newPassword)
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(.systemGray4), lineWidth: 1)
+                            )
+                    }
+                    
+                    // Sign Up button
+                    Button {
+                        // Create account first, then go to onboarding
+                        createAccountAndStartOnboarding()
+                    } label: {
                         if authViewModel.isLoading {
                             ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.black.opacity(0.6))
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.black)
+                                .clipShape(Capsule())
                         } else {
-                            Text("Skapa konto med e-post")
+                            Text("Registrera dig")
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(canSubmitSignup ? .black : .black.opacity(0.4))
+                                .foregroundColor(canCreateAccount ? .white : .gray)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(canCreateAccount ? Color.black : Color(.systemGray5))
+                                .clipShape(Capsule())
                         }
-                        Spacer()
                     }
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 30)
-                            .fill(canSubmitSignup ? Color(red: 0.9, green: 0.88, blue: 0.85) : Color(.systemGray5))
-                    )
-                    .contentShape(Rectangle())
+                    .disabled(!canCreateAccount || authViewModel.isLoading)
+                    
+                    if !authViewModel.errorMessage.isEmpty {
+                        Text(authViewModel.errorMessage)
+                            .font(.system(size: 14))
+                            .foregroundColor(.red)
+                    }
+                    
+                    // Terms text
+                    Text("Genom att fortsätta godkänner du våra [Användarvillkor](https://www.upanddownapp.com/terms) och [Integritetspolicy](https://www.upanddownapp.com/privacy).")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .tint(.black)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(.horizontal, 24)
-                .disabled(!canSubmitSignup || authViewModel.isLoading)
-                
-                // Terms
-                Text("Genom att skapa konto godkänner du våra [användarvillkor](https://wiggio.se/privacy) och [integritetspolicy](https://wiggio.se/privacy).")
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
-                    .tint(.black)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                
-                Button {
-                    showSignupForm = false
-                    onboardingStep = nil
-                    showLanding = true
-                } label: {
-                    Text("Avbryt")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black.opacity(0.6))
-                }
-                .padding(.bottom, 32)
+                .padding(.bottom, 40)
             }
         }
     }
@@ -965,6 +1036,61 @@ private extension AuthenticationView {
                signupPassword.count >= 6 &&
                signupPassword == signupConfirmPassword &&
                !onboardingData.trimmedUsername.isEmpty
+    }
+    
+    var canCreateAccount: Bool {
+        let trimmedEmail = signupEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emailValid = trimmedEmail.range(of: #"^\S+@\S+\.\S+$"#, options: .regularExpression) != nil
+        return emailValid && signupPassword.count >= 6
+    }
+    
+    private func createAccountAndStartOnboarding() {
+        let trimmedEmail = signupEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        Task {
+            await MainActor.run {
+                authViewModel.isLoading = true
+                authViewModel.errorMessage = ""
+            }
+            
+            do {
+                // Create the account in Supabase
+                let response = try await SupabaseConfig.supabase.auth.signUp(
+                    email: trimmedEmail,
+                    password: signupPassword
+                )
+                
+                let userId = response.user.id.uuidString
+                
+                // Create a basic user profile with placeholder username
+                let placeholderUsername = "user-\(userId.prefix(6))"
+                let newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
+                try await ProfileService.shared.createUserProfile(newUser)
+                
+                // Configure RevenueCat
+                await RevenueCatManager.shared.logInFor(appUserId: userId)
+                
+                await MainActor.run {
+                    // Store the user but DON'T set isLoggedIn = true yet!
+                    // This keeps us in AuthenticationView for onboarding
+                    authViewModel.currentUser = newUser
+                    // authViewModel.isLoggedIn stays FALSE until onboarding completes
+                    authViewModel.isLoading = false
+                    
+                    // Navigate to onboarding
+                    showSignupForm = false
+                    onboardingStep = onboardingSteps.first
+                    
+                    print("✅ Account created successfully, starting onboarding (isLoggedIn: \(authViewModel.isLoggedIn))")
+                }
+            } catch {
+                await MainActor.run {
+                    authViewModel.errorMessage = "Kunde inte skapa konto: \(error.localizedDescription)"
+                    authViewModel.isLoading = false
+                    print("❌ Account creation failed: \(error)")
+                }
+            }
+        }
     }
 }
 

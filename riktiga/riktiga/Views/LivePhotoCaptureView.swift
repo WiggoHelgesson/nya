@@ -333,11 +333,12 @@ class DualCameraManager: NSObject, ObservableObject {
         drawImageFill(backImage, in: CGRect(origin: .zero, size: size))
         
         // Draw front image (selfie) - positioned so it's visible when cropped
-        let selfieWidth: CGFloat = 280
-        let selfieHeight: CGFloat = 360
+        // Position further inward to avoid being cut off by rounded corners
+        let selfieWidth: CGFloat = 260
+        let selfieHeight: CGFloat = 340
         let selfieRect = CGRect(
-            x: 80,  // Moved right so it's fully visible in feed
-            y: 40,
+            x: 100,  // More margin from left edge to clear rounded corners
+            y: 70,   // More margin from top to clear rounded corners
             width: selfieWidth,
             height: selfieHeight
         )

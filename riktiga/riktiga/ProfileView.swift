@@ -23,6 +23,7 @@ struct ProfileView: View {
     @State private var selectedPost: SocialWorkoutPost?
     @State private var showPublicProfile = false
     @State private var navigationPath = NavigationPath()
+    @State private var showRoutines = false
     
     private let statsLoadThrottle: TimeInterval = 60
     
@@ -159,42 +160,54 @@ struct ProfileView: View {
                             .stroke(Color.primary, lineWidth: 2)
                     )
                     
-                    // MARK: - Action Buttons (3x1 top row)
-                    HStack(spacing: 10) {
-                        ProfileCardButton(
-                            icon: "cart.fill",
-                            label: "Mina köp",
-                            action: { showMyPurchases = true }
-                        )
-                        
-                        NavigationLink(destination: StatisticsView()) {
-                            VStack(spacing: 10) {
-                                Image(systemName: "chart.bar.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.primary)
-                                
-                                Text("Statistik")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
+                    // MARK: - Action Buttons (2x2 grid)
+                    VStack(spacing: 10) {
+                        // First row
+                        HStack(spacing: 10) {
+                            ProfileCardButton(
+                                icon: "cart.fill",
+                                label: "Mina köp",
+                                action: { showMyPurchases = true }
+                            )
+                            
+                            NavigationLink(destination: StatisticsView()) {
+                                VStack(spacing: 10) {
+                                    Image(systemName: "chart.bar.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.primary)
+                                    
+                                    Text("Statistik")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 90)
+                                .background(Color(.secondarySystemBackground))
+                                .cornerRadius(16)
+                                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 90)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(16)
-                            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                            .buttonStyle(.plain)
+                        }
+                        
+                        // Second row
+                        HStack(spacing: 10) {
+                            ProfileCardButton(
+                                icon: "person.badge.plus.fill",
+                                label: "Hitta vänner",
+                                action: { showFindFriends = true }
+                            )
+                            
+                            ProfileCardButton(
+                                icon: "bookmark.fill",
+                                label: "Sparade pass",
+                                action: { showRoutines = true }
                             )
                         }
-                        .buttonStyle(.plain)
-                        
-                        ProfileCardButton(
-                            icon: "person.badge.plus.fill",
-                            label: "Hitta vänner",
-                            action: { showFindFriends = true }
-                        )
                     }
                     
                     
@@ -300,6 +313,12 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showEditProfile) {
                 EditProfileView()
+            }
+            .sheet(isPresented: $showRoutines) {
+                NavigationStack {
+                    RoutinesView()
+                        .environmentObject(authViewModel)
+                }
             }
             .sheet(isPresented: $showPublicProfile) {
                 if let userId = authViewModel.currentUser?.id {

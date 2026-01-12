@@ -54,6 +54,42 @@ struct HomeView: View {
     @State private var selectedStep: Int = 1
     @State private var showSearchView = false
     
+    // Animation states
+    @State private var showSearch = false
+    @State private var showWelcome = false
+    @State private var showStores = false
+    @State private var showHowItWorks = false
+    @State private var showButtons = false
+    
+    // Welcome/Onboarding task states
+    @State private var hasFirstActivity = false
+    @State private var followingCount = 0
+    @State private var hasProfilePicture = false
+    @State private var hasConnectedDevice = false
+    @State private var showFindFriends = false
+    @State private var showEditProfile = false
+    @State private var showConnectDevice = false
+    @State private var welcomeTasksDismissed = false
+    
+    // Key for storing per-user welcome dismissed state
+    private var welcomeDismissedKey: String {
+        guard let userId = authViewModel.currentUser?.id else { return "welcomeTasksDismissed_unknown" }
+        return "welcomeTasksDismissed_\(userId)"
+    }
+    
+    private var allWelcomeTasksCompleted: Bool {
+        hasFirstActivity && followingCount >= 3 && hasProfilePicture && hasConnectedDevice
+    }
+    
+    private var completedTasksCount: Int {
+        var count = 0
+        if hasFirstActivity { count += 1 }
+        if followingCount >= 3 { count += 1 }
+        if hasProfilePicture { count += 1 }
+        if hasConnectedDevice { count += 1 }
+        return count
+    }
+    
     private let popularStores = PopularStoreItem.all
     
     // Adaptive gradient colors for background
@@ -66,10 +102,10 @@ struct HomeView: View {
             ]
         } else {
             return [
-                Color(red: 1.0, green: 1.0, blue: 1.0),
-                Color(red: 0.98, green: 0.98, blue: 0.99),
-                Color(red: 0.96, green: 0.96, blue: 0.97)
-            ]
+        Color(red: 1.0, green: 1.0, blue: 1.0),
+        Color(red: 0.98, green: 0.98, blue: 0.99),
+        Color(red: 0.96, green: 0.96, blue: 0.97)
+    ]
         }
     }
     
@@ -105,32 +141,71 @@ struct HomeView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
+                        // MARK: - Welcome Section (Onboarding Tasks)
+                        if !welcomeTasksDismissed && !allWelcomeTasksCompleted {
+                            welcomeSection
+                                .padding(.top, 8)
+                                .opacity(showWelcome ? 1 : 0)
+                                .offset(y: showWelcome ? 0 : 15)
+                        }
+                        
                         // MARK: - Search Bar
                         searchBar
                             .padding(.horizontal, 20)
-                            .padding(.top, 16)
+                            .opacity(showSearch ? 1 : 0)
+                            .offset(y: showSearch ? 0 : 10)
                         
                     // MARK: - Popular Stores Section
                     popularStoresSection
                             .padding(.horizontal, 20)
+                            .opacity(showStores ? 1 : 0)
+                            .offset(y: showStores ? 0 : 15)
                         
                     // MARK: - How It Works Section
                     howItWorksSection
                                     .padding(.horizontal, 20)
+                            .opacity(showHowItWorks ? 1 : 0)
+                            .offset(y: showHowItWorks ? 0 : 15)
                     
                     // MARK: - Action Buttons
                     actionButtons
                         .padding(.horizontal, 20)
+                        .opacity(showButtons ? 1 : 0)
+                        .offset(y: showButtons ? 0 : 15)
 
                     Spacer(minLength: 100)
                     }
                 }
+            }
+        .onAppear {
+            animateHomeContent()
+        }
+        .task {
+            await loadWelcomeTasks()
             }
         .sheet(item: $selectedReward) { reward in
             RewardDetailView(reward: reward)
         }
         .sheet(isPresented: $showSearchView) {
             SearchRewardsView(allRewards: RewardCatalog.all)
+        }
+        .sheet(isPresented: $showFindFriends) {
+            NavigationStack {
+                FindFriendsView()
+            }
+        }
+        .sheet(isPresented: $showEditProfile) {
+            NavigationStack {
+                EditProfileView()
+            }
+        }
+        .sheet(isPresented: $showConnectDevice) {
+            ConnectDeviceView()
+                .environmentObject(authViewModel)
+                .onDisappear {
+                    // Refresh device connection status when sheet closes
+                    checkDeviceConnection()
+                }
         }
         .sheet(item: $pendingRewardCelebration, onDismiss: {
             presentNextRewardIfAvailable()
@@ -178,6 +253,113 @@ struct HomeView: View {
             .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.06), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+    }
+    
+    // MARK: - Welcome Section (Onboarding Tasks)
+    private var welcomeSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Decorative curved element at top
+            HStack {
+                // Black curved accent
+                ZStack(alignment: .topLeading) {
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 120, height: 120)
+                        .offset(x: -60, y: -60)
+                }
+                .frame(width: 60, height: 60)
+                .clipped()
+                
+                Spacer()
+            }
+            
+            // Header text
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Välkommen till gemenskapen!")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text("Så här kommer du igång med Up&Down:")
+                    .font(.system(size: 15))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+            
+            // Segmented progress bar
+            HStack(spacing: 6) {
+                ForEach(0..<4, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(index < completedTasksCount ? Color.black : Color(.systemGray4))
+                        .frame(height: 5)
+                        .animation(.spring(response: 0.4), value: completedTasksCount)
+                }
+                
+                Text("\(completedTasksCount)/4")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.gray)
+                    .frame(width: 30)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 20)
+            
+            // Task cards - each in its own gray box
+            VStack(spacing: 12) {
+                // Task 1: First Activity
+                WelcomeTaskCard(
+                    icon: "figure.run",
+                    title: "Ladda upp din första aktivitet",
+                    subtitle: "Du kan spela in det direkt i appen.",
+                    isCompleted: hasFirstActivity,
+                    action: {
+                        // Start a new session (same as "Starta pass" tab)
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("SwitchActivity"),
+                            object: nil,
+                            userInfo: ["activity": "running"]
+                        )
+                    }
+                )
+                
+                // Task 2: Follow three people
+                WelcomeTaskCard(
+                    icon: "person.2.fill",
+                    title: "Följ tre personer (\(min(followingCount, 3))/3)",
+                    subtitle: "Hitta vänner och favoriter att följa.",
+                    isCompleted: followingCount >= 3,
+                    action: {
+                        showFindFriends = true
+                    }
+                )
+                
+                // Task 3: Add profile picture
+                WelcomeTaskCard(
+                    icon: "person.crop.circle",
+                    title: "Lägg till en profilbild",
+                    subtitle: "Det hjälper andra att känna igen dig.",
+                    isCompleted: hasProfilePicture,
+                    action: {
+                        showEditProfile = true
+                    }
+                )
+                
+                // Task 4: Connect a device
+                WelcomeTaskCard(
+                    icon: "applewatch",
+                    title: "Anslut en enhet",
+                    subtitle: "Synka med Garmin, Apple Watch och fler.",
+                    isCompleted: hasConnectedDevice,
+                    action: {
+                        showConnectDevice = true
+                    }
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 0))
     }
     
     // MARK: - Popular Stores Section
@@ -372,6 +554,25 @@ struct HomeView: View {
         }
     }
     
+    // MARK: - Animation
+    private func animateHomeContent() {
+        withAnimation(.easeOut(duration: 0.4)) {
+            showSearch = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.08)) {
+            showWelcome = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.16)) {
+            showStores = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.24)) {
+            showHowItWorks = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.32)) {
+            showButtons = true
+        }
+    }
+    
     // MARK: - Helper Functions
     private func presentNextRewardIfAvailable() {
         guard pendingRewardCelebration == nil else { return }
@@ -379,8 +580,204 @@ struct HomeView: View {
             pendingRewardCelebration = reward
         }
     }
+    
+    // MARK: - Load Welcome Tasks
+    private func loadWelcomeTasks() async {
+        guard let userId = authViewModel.currentUser?.id else { 
+            print("⚠️ Welcome tasks: No user ID found")
+            return 
+        }
+        
+        // Load per-user dismissed state
+        await MainActor.run {
+            welcomeTasksDismissed = UserDefaults.standard.bool(forKey: welcomeDismissedKey)
+        }
+        
+        print("📊 Loading welcome tasks for user: \(userId) (dismissed: \(welcomeTasksDismissed))")
+        
+        do {
+            // Check if user has any activities/posts
+            let postsResponse: [WelcomePostRecord] = try await SupabaseConfig.supabase
+                .from("workout_posts")
+                .select("id")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            
+            await MainActor.run {
+                hasFirstActivity = !postsResponse.isEmpty
+                print("✅ Has first activity: \(hasFirstActivity) (found \(postsResponse.count) posts)")
+            }
+            
+            // Check following count - use correct table name "user_follows"
+            let followingResponse: [Follow] = try await SupabaseConfig.supabase
+                .from("user_follows")
+                .select("id, follower_id, following_id, created_at")
+                .eq("follower_id", value: userId)
+                .execute()
+                .value
+            
+            await MainActor.run {
+                followingCount = followingResponse.count
+                print("✅ Following count: \(followingCount)")
+            }
+            
+            // Check if user has profile picture - use profiles table
+            let profileResponse: [UserAvatarRecord] = try await SupabaseConfig.supabase
+                .from("profiles")
+                .select("avatar_url")
+                .eq("id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            
+            await MainActor.run {
+                if let profile = profileResponse.first {
+                    hasProfilePicture = profile.avatarUrl != nil && !profile.avatarUrl!.isEmpty
+                    print("✅ Has profile picture: \(hasProfilePicture) (url: \(profile.avatarUrl ?? "nil"))")
+                } else {
+                    hasProfilePicture = false
+                    print("⚠️ No profile record found for avatar check")
+                }
+            }
+            
+            // Check if user has connected a device (via Terra)
+            let deviceResponse: [TerraConnectionRecord] = try await SupabaseConfig.supabase
+                .from("terra_connections")
+                .select("id")
+                .eq("user_id", value: userId)
+                .eq("is_active", value: true)
+                .limit(1)
+                .execute()
+                .value
+            
+            await MainActor.run {
+                hasConnectedDevice = !deviceResponse.isEmpty
+                print("✅ Has connected device: \(hasConnectedDevice)")
+            }
+            
+            // Auto-dismiss if all tasks completed
+            await MainActor.run {
+                print("📊 Completed tasks: \(completedTasksCount)/4 - Activity: \(hasFirstActivity), Following: \(followingCount >= 3), Picture: \(hasProfilePicture), Device: \(hasConnectedDevice)")
+                if allWelcomeTasksCompleted {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        welcomeTasksDismissed = true
+                        UserDefaults.standard.set(true, forKey: welcomeDismissedKey)
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error loading welcome tasks: \(error)")
+        }
+    }
+    
+    private func checkDeviceConnection() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        Task {
+            do {
+                let deviceResponse: [TerraConnectionRecord] = try await SupabaseConfig.supabase
+                    .from("terra_connections")
+                    .select("id")
+                    .eq("user_id", value: userId)
+                    .eq("is_active", value: true)
+                    .limit(1)
+                    .execute()
+                    .value
+                
+                await MainActor.run {
+                    hasConnectedDevice = !deviceResponse.isEmpty
+                }
+            } catch {
+                print("❌ Error checking device connection: \(error)")
+            }
+        }
+    }
 }
 
+// MARK: - Welcome Task Helper Records
+private struct WelcomePostRecord: Codable {
+    let id: String
+}
+
+private struct UserAvatarRecord: Codable {
+    let avatarUrl: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case avatarUrl = "avatar_url"
+    }
+}
+
+private struct TerraConnectionRecord: Codable {
+    let id: String
+}
+
+// MARK: - Welcome Task Row
+struct WelcomeTaskCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let isCompleted: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                // Checkbox circle on the left
+                ZStack {
+                    Circle()
+                        .stroke(isCompleted ? Color.black : Color(.systemGray3), lineWidth: 1.5)
+                        .frame(width: 22, height: 22)
+                    
+                    if isCompleted {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.black)
+                    }
+                }
+                
+                // Icon in rounded square
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray5))
+                        .frame(width: 48, height: 48)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.black)
+                }
+                
+                // Text content
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.black)
+                    
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.systemGray3))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .background(Color(.systemGray6))
+            .cornerRadius(16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Follow Record for Query
 // MARK: - Featured User Model
 struct FeaturedUser: Identifiable {
     let id: String

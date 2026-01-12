@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 860308202EAE82D00023EA7B /* StoreKit.framework */; };
 		860C82212EF8A5F900A317BD /* InsertAffiliateSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 860C82202EF8A5F900A317BD /* InsertAffiliateSwift */; };
+		861411592F152368005BF8CF /* TerraiOS in Frameworks */ = {isa = PBXBuildFile; productRef = 861411582F152368005BF8CF /* TerraiOS */; };
+		861411652F158FE9005BF8CF /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
@@ -29,6 +31,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		861411632F158FE9005BF8CF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 86B269812EAA2EBB00A4EC93 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8614115D2F158FE9005BF8CF;
+			remoteInfo = NotificationServiceExtension;
+		};
 		868BB4442F0C6AE7005227A3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 86B269812EAA2EBB00A4EC93 /* Project object */;
@@ -46,6 +55,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				868BB4432F0C6AE7005227A3 /* UpDownLiveActivityExtension.appex in Embed Foundation Extensions */,
+				861411652F158FE9005BF8CF /* NotificationServiceExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -56,12 +66,20 @@
 		860308202EAE82D00023EA7B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		86030F342EB75F430023EA7B /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
 		868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UpDownLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		861411692F158FE9005BF8CF /* Exceptions for "NotificationServiceExtension" folder in "NotificationServiceExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8614115D2F158FE9005BF8CF /* NotificationServiceExtension */;
+		};
 		86549C522F0D39F1004F2168 /* Exceptions for "UpDownLiveActivity" folder in "Up&Down" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -95,6 +113,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		8614115F2F158FE9005BF8CF /* NotificationServiceExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				861411692F158FE9005BF8CF /* Exceptions for "NotificationServiceExtension" folder in "NotificationServiceExtension" target */,
+			);
+			path = NotificationServiceExtension;
+			sourceTree = "<group>";
+		};
 		868BB4262F0C66A6005227A3 /* UpDownLiveActivity */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -116,6 +142,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		8614115B2F158FE9005BF8CF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		868BB4202F0C66A6005227A3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +170,7 @@
 				86D759BB2EDC536B00CE3755 /* Stripe in Frameworks */,
 				86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */,
 				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
+				861411592F152368005BF8CF /* TerraiOS in Frameworks */,
 				86D759C32EDC536B00CE3755 /* StripeFinancialConnections in Frameworks */,
 				86D759BD2EDC536B00CE3755 /* StripeApplePay in Frameworks */,
 				86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */,
@@ -156,6 +190,7 @@
 			children = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 				868BB4262F0C66A6005227A3 /* UpDownLiveActivity */,
+				8614115F2F158FE9005BF8CF /* NotificationServiceExtension */,
 				86B269B82EAA5E3900A4EC93 /* Frameworks */,
 				86B2698A2EAA2EBB00A4EC93 /* Products */,
 			);
@@ -166,6 +201,7 @@
 			children = (
 				86B269892EAA2EBB00A4EC93 /* Up&Down.app */,
 				868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */,
+				8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -184,6 +220,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		8614115D2F158FE9005BF8CF /* NotificationServiceExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 861411662F158FE9005BF8CF /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */;
+			buildPhases = (
+				8614115A2F158FE9005BF8CF /* Sources */,
+				8614115B2F158FE9005BF8CF /* Frameworks */,
+				8614115C2F158FE9005BF8CF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8614115F2F158FE9005BF8CF /* NotificationServiceExtension */,
+			);
+			name = NotificationServiceExtension;
+			packageProductDependencies = (
+			);
+			productName = NotificationServiceExtension;
+			productReference = 8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 868BB4372F0C66A7005227A3 /* Build configuration list for PBXNativeTarget "UpDownLiveActivityExtension" */;
@@ -219,6 +277,7 @@
 			);
 			dependencies = (
 				868BB4452F0C6AE7005227A3 /* PBXTargetDependency */,
+				861411642F158FE9005BF8CF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
@@ -242,6 +301,7 @@
 				86D759C22EDC536B00CE3755 /* StripeFinancialConnections */,
 				86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */,
 				860C82202EF8A5F900A317BD /* InsertAffiliateSwift */,
+				861411582F152368005BF8CF /* TerraiOS */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -257,6 +317,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					8614115D2F158FE9005BF8CF = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					868BB4222F0C66A6005227A3 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -280,6 +343,7 @@
 				8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */,
 				86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 				860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */,
+				861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -288,11 +352,19 @@
 			targets = (
 				86B269882EAA2EBB00A4EC93 /* Up&Down */,
 				868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */,
+				8614115D2F158FE9005BF8CF /* NotificationServiceExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		8614115C2F158FE9005BF8CF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		868BB4212F0C66A6005227A3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -310,6 +382,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		8614115A2F158FE9005BF8CF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		868BB41F2F0C66A6005227A3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -327,6 +406,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		861411642F158FE9005BF8CF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8614115D2F158FE9005BF8CF /* NotificationServiceExtension */;
+			targetProxy = 861411632F158FE9005BF8CF /* PBXContainerItemProxy */;
+		};
 		868BB4452F0C6AE7005227A3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 868BB4222F0C66A6005227A3 /* UpDownLiveActivityExtension */;
@@ -335,6 +419,66 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		861411672F158FE9005BF8CF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NRPNN9U77T;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		861411682F158FE9005BF8CF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NRPNN9U77T;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		868BB4382F0C66A7005227A3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -532,7 +676,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 109;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -552,7 +696,8 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Appen behöver åtkomst till ditt bildbibliotek för att välja en profilbild.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi ber om tillstånd att spåra så att vi kan förbättra upplevelsen och hålla koll på dina aktiviteter.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi använder detta tillstånd för att kunna förbättra träningsupplevelsen och hålla din statistik synkad. Ingen reklamspårning sker.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -562,7 +707,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 107.0;
+				MARKETING_VERSION = 1.0.9;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -608,7 +753,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 109;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -628,7 +773,8 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Denna app behöver tillgång till mikrofonen för att spela in ljud under träningspass.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Denna app kan använda motion data för att förbättra träningsspårningen.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Appen behöver åtkomst till ditt bildbibliotek för att välja en profilbild.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi ber om tillstånd att spåra så att vi kan förbättra upplevelsen och hålla koll på dina aktiviteter.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Vi använder detta tillstånd för att kunna förbättra träningsupplevelsen och hålla din statistik synkad. Ingen reklamspårning sker.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -638,7 +784,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 107.0;
+				MARKETING_VERSION = 1.0.9;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -675,6 +821,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		861411662F158FE9005BF8CF /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				861411672F158FE9005BF8CF /* Debug */,
+				861411682F158FE9005BF8CF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		868BB4372F0C66A7005227A3 /* Build configuration list for PBXNativeTarget "UpDownLiveActivityExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -711,6 +866,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.0.0;
+			};
+		};
+		861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tryterra/TerraiOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.31;
 			};
 		};
 		86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
@@ -752,6 +915,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */;
 			productName = InsertAffiliateSwift;
+		};
+		861411582F152368005BF8CF /* TerraiOS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */;
+			productName = TerraiOS;
 		};
 		86158EAC2EACDAA400064CAA /* ReceiptParser */ = {
 			isa = XCSwiftPackageProductDependency;

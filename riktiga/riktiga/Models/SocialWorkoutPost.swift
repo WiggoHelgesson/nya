@@ -9,6 +9,7 @@ struct SocialWorkoutPostRaw: Codable {
     let description: String?
     let distance: Double?
     let duration: Int?
+    let elevationGain: Double?
     let imageUrl: String?
     let userImageUrl: String?
     let createdAt: String
@@ -16,6 +17,8 @@ struct SocialWorkoutPostRaw: Codable {
     let exercises: [GymExercisePost]?
     let pbExerciseName: String?
     let pbValue: String?
+    let source: String?
+    let deviceName: String?
     
     // JOIN data
     let profiles: ProfileData?
@@ -30,6 +33,7 @@ struct SocialWorkoutPostRaw: Codable {
         case description
         case distance
         case duration
+        case elevationGain = "elevation_gain"
         case imageUrl = "image_url"
         case userImageUrl = "user_image_url"
         case createdAt = "created_at"
@@ -37,6 +41,8 @@ struct SocialWorkoutPostRaw: Codable {
         case exercises = "exercises_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case source
+        case deviceName = "device_name"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -71,6 +77,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let description: String?
     let distance: Double?
     let duration: Int?
+    let elevationGain: Double?
     let imageUrl: String? // Route image
     let userImageUrl: String? // User's own image
     let createdAt: String
@@ -91,6 +98,25 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let pbExerciseName: String?
     let pbValue: String?
     
+    // External tracking data
+    let source: String?
+    let deviceName: String?
+    
+    // Computed property to check if it's an external post
+    var isExternalPost: Bool {
+        source != nil && source != "app"
+    }
+    
+    // Computed property for swimming (show meters)
+    var isSwimmingPost: Bool {
+        activityType == "Simning"
+    }
+    
+    // Computed property for cycling
+    var isCyclingPost: Bool {
+        activityType == "Cykling"
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -99,6 +125,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case description
         case distance
         case duration
+        case elevationGain = "elevation_gain"
         case imageUrl = "image_url"
         case userImageUrl = "user_image_url"
         case createdAt = "created_at"
@@ -114,6 +141,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case exercises = "exercises_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case source
+        case deviceName = "device_name"
     }
     
     // Custom decoder to handle JOIN results
@@ -128,6 +157,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         description = raw.description
         distance = raw.distance
         duration = raw.duration
+        elevationGain = raw.elevationGain
         imageUrl = raw.imageUrl
         userImageUrl = raw.userImageUrl
         createdAt = raw.createdAt
@@ -150,9 +180,13 @@ struct SocialWorkoutPost: Codable, Identifiable {
         // Map PB data
         pbExerciseName = raw.pbExerciseName
         pbValue = raw.pbValue
+        
+        // Map external tracking data
+        source = raw.source
+        deviceName = raw.deviceName
     }
     
-    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false) {
+    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil) {
         self.id = post.id
         self.userId = post.userId
         self.activityType = post.activityType
@@ -160,6 +194,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.description = post.description
         self.distance = post.distance
         self.duration = post.duration
+        self.elevationGain = post.elevationGain
         self.imageUrl = post.imageUrl
         self.userImageUrl = post.userImageUrl
         self.createdAt = post.createdAt
@@ -175,6 +210,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.exercises = post.exercises
         self.pbExerciseName = post.pbExerciseName
         self.pbValue = post.pbValue
+        self.source = source ?? post.source
+        self.deviceName = deviceName ?? post.deviceName
     }
 
     // Memberwise convenience initializer to allow updating selective fields
@@ -186,6 +223,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         description: String?,
         distance: Double?,
         duration: Int?,
+        elevationGain: Double? = nil,
         imageUrl: String?,
         userImageUrl: String?,
         createdAt: String,
@@ -200,7 +238,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         splits: [WorkoutSplit]?,
         exercises: [GymExercisePost]? = nil,
         pbExerciseName: String? = nil,
-        pbValue: String? = nil
+        pbValue: String? = nil,
+        source: String? = nil,
+        deviceName: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -209,6 +249,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.description = description
         self.distance = distance
         self.duration = duration
+        self.elevationGain = elevationGain
         self.imageUrl = imageUrl
         self.userImageUrl = userImageUrl
         self.createdAt = createdAt
@@ -224,6 +265,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.exercises = exercises
         self.pbExerciseName = pbExerciseName
         self.pbValue = pbValue
+        self.source = source
+        self.deviceName = deviceName
     }
 }
 

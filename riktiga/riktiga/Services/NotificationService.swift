@@ -89,6 +89,27 @@ final class NotificationService {
         postId: String,
         postTitle: String
     ) async throws {
+        // Check for existing notification to prevent duplicates
+        struct ExistingNotification: Decodable {
+            let id: String
+        }
+        
+        let existing: [ExistingNotification] = try await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", value: userId)
+            .eq("actor_id", value: likedByUserId)
+            .eq("post_id", value: postId)
+            .eq("type", value: "like")
+            .limit(1)
+            .execute()
+            .value
+        
+        if !existing.isEmpty {
+            print("⚠️ Like notification already exists, skipping duplicate")
+            return
+        }
+        
         struct Payload: Encodable {
             let user_id: String
             let actor_id: String
@@ -114,12 +135,13 @@ final class NotificationService {
         
         print("✅ Created like notification")
         
-        // Send push notification
+        // Send push notification with post title
+        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : "'\(postTitle)'"
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Ny like",
-            body: "\(likedByUserName) gillade ditt inlägg",
-            data: ["type": "like", "post_id": postId, "actor_id": likedByUserId]
+            body: "\(likedByUserName) gav dig en like på \(displayTitle)",
+            data: ["type": "like", "post_id": postId, "actor_id": likedByUserId, "actor_avatar": likedByUserAvatar ?? ""]
         )
     }
     
@@ -158,12 +180,57 @@ final class NotificationService {
         
         print("✅ Created comment notification")
         
-        // Send push notification
+        // Send push notification with post title
+        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : "'\(postTitle)'"
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Ny kommentar",
-            body: "\(commentedByUserName) kommenterade ditt inlägg",
-            data: ["type": "comment", "post_id": postId, "actor_id": commentedByUserId]
+            body: "\(commentedByUserName) kommenterade på \(displayTitle)",
+            data: ["type": "comment", "post_id": postId, "actor_id": commentedByUserId, "actor_avatar": commentedByUserAvatar ?? ""]
+        )
+    }
+    
+    /// Create a reply notification (when someone replies to your comment)
+    func createReplyNotification(
+        userId: String,
+        repliedByUserId: String,
+        repliedByUserName: String,
+        repliedByUserAvatar: String?,
+        postId: String,
+        postTitle: String
+    ) async throws {
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
+            let post_id: String
+        }
+        
+        let payload = Payload(
+            user_id: userId,
+            actor_id: repliedByUserId,
+            actor_username: repliedByUserName,
+            actor_avatar_url: repliedByUserAvatar,
+            type: "reply",
+            post_id: postId
+        )
+        
+        try await supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+        
+        print("✅ Created reply notification")
+        
+        // Send push notification
+        let displayTitle = postTitle.isEmpty ? "ett inlägg" : "'\(postTitle)'"
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: "Nytt svar",
+            body: "\(repliedByUserName) svarade på din kommentar på \(displayTitle)",
+            data: ["type": "reply", "post_id": postId, "actor_id": repliedByUserId, "actor_avatar": repliedByUserAvatar ?? ""]
         )
     }
     
@@ -174,6 +241,26 @@ final class NotificationService {
         followedByUserName: String,
         followedByUserAvatar: String?
     ) async throws {
+        // Check for existing notification to prevent duplicates
+        struct ExistingNotification: Decodable {
+            let id: String
+        }
+        
+        let existing: [ExistingNotification] = try await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", value: userId)
+            .eq("actor_id", value: followedByUserId)
+            .eq("type", value: "follow")
+            .limit(1)
+            .execute()
+            .value
+        
+        if !existing.isEmpty {
+            print("⚠️ Follow notification already exists, skipping duplicate")
+            return
+        }
+        
         struct Payload: Encodable {
             let user_id: String
             let actor_id: String
@@ -197,12 +284,12 @@ final class NotificationService {
         
         print("✅ Created follow notification")
         
-        // Send push notification
+        // Send push notification with avatar
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Ny följare",
             body: "\(followedByUserName) började följa dig",
-            data: ["type": "follow", "actor_id": followedByUserId]
+            data: ["type": "follow", "actor_id": followedByUserId, "actor_avatar": followedByUserAvatar ?? ""]
         )
     }
 }

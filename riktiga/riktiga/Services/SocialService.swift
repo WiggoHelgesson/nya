@@ -453,25 +453,73 @@ class SocialService {
                 .execute()
             print("✅ Comment added successfully")
             
-            // Create notification if we have post owner info
-            if let postOwnerId = postOwnerId, postOwnerId != userId {
-                do {
-                    // Fetch current user info
-                    let currentUser = try await supabase.auth.user()
-                    
-                    struct ProfileInfo: Codable {
-                        let username: String?
-                        let avatar_url: String?
+            // Fetch current user info for notifications
+            do {
+                let currentUser = try await supabase.auth.user()
+                
+                struct ProfileInfo: Codable {
+                    let username: String?
+                    let avatar_url: String?
+                }
+                
+                let userProfile: [ProfileInfo] = try await supabase
+                    .from("profiles")
+                    .select("username, avatar_url")
+                    .eq("id", value: currentUser.id.uuidString)
+                    .execute()
+                    .value
+                
+                guard let profile = userProfile.first else { return }
+                
+                // If this is a reply to another comment, notify the parent comment author
+                if let parentCommentId = parentCommentId {
+                    // Fetch parent comment author
+                    struct ParentComment: Codable {
+                        let user_id: String
                     }
                     
-                    let userProfile: [ProfileInfo] = try await supabase
-                        .from("profiles")
-                        .select("username, avatar_url")
-                        .eq("id", value: currentUser.id.uuidString)
+                    let parentComments: [ParentComment] = try await supabase
+                        .from("workout_post_comments")
+                        .select("user_id")
+                        .eq("id", value: parentCommentId)
+                        .limit(1)
                         .execute()
                         .value
                     
-                    if let profile = userProfile.first {
+                    if let parentComment = parentComments.first, parentComment.user_id != userId {
+                        // Send reply notification to parent comment author
+                        try await NotificationService.shared.createReplyNotification(
+                            userId: parentComment.user_id,
+                            repliedByUserId: userId,
+                            repliedByUserName: profile.username ?? "Användare",
+                            repliedByUserAvatar: profile.avatar_url,
+                            postId: postId,
+                            postTitle: postTitle
+                        )
+                    }
+                }
+                
+                // Also notify post owner if it's a new comment (not a reply to yourself)
+                if let postOwnerId = postOwnerId, postOwnerId != userId {
+                    // Don't notify post owner if they're already being notified as parent comment author
+                    let shouldNotifyPostOwner: Bool
+                    if let parentCommentId = parentCommentId {
+                        struct ParentComment: Codable {
+                            let user_id: String
+                        }
+                        let parentComments: [ParentComment] = try await supabase
+                            .from("workout_post_comments")
+                            .select("user_id")
+                            .eq("id", value: parentCommentId)
+                            .limit(1)
+                            .execute()
+                            .value
+                        shouldNotifyPostOwner = parentComments.first?.user_id != postOwnerId
+                    } else {
+                        shouldNotifyPostOwner = true
+                    }
+                    
+                    if shouldNotifyPostOwner {
                         try await NotificationService.shared.createCommentNotification(
                             userId: postOwnerId,
                             commentedByUserId: userId,
@@ -482,13 +530,31 @@ class SocialService {
                             commentText: content
                         )
                     }
-                } catch {
-                    print("⚠️ Could not create notification: \(error)")
-                    // Don't fail the comment operation if notification fails
                 }
+            } catch {
+                print("⚠️ Could not create notification: \(error)")
+                // Don't fail the comment operation if notification fails
             }
         } catch {
             print("❌ Error adding comment: \(error)")
+            throw error
+        }
+    }
+    
+    func deleteComment(commentId: String) async throws {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            
+            // Delete the comment
+            try await supabase
+                .from("workout_post_comments")
+                .delete()
+                .eq("id", value: commentId)
+                .execute()
+            
+            print("✅ Comment deleted successfully")
+        } catch {
+            print("❌ Error deleting comment: \(error)")
             throw error
         }
     }
@@ -795,6 +861,8 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    source,
+                    device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -868,6 +936,8 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    source,
+                    device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1097,6 +1167,8 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    source,
+                    device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)

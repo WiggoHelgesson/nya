@@ -18,6 +18,8 @@ struct WorkoutPost: Codable, Identifiable {
     let routeData: String?  // JSON string of route coordinates for Zone War
     let pbExerciseName: String?  // Personal Best exercise name
     let pbValue: String?  // Personal Best value (e.g., "67.0 kg x 6 reps")
+    let source: String?  // "app", "garmin", "fitbit", etc.
+    let deviceName: String?  // "Garmin Forerunner 265", etc.
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -37,6 +39,8 @@ struct WorkoutPost: Codable, Identifiable {
         case routeData = "route_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case source
+        case deviceName = "device_name"
     }
     
     init(from decoder: Decoder) throws {
@@ -58,6 +62,8 @@ struct WorkoutPost: Codable, Identifiable {
         routeData = try container.decodeIfPresent(String.self, forKey: .routeData)
         pbExerciseName = try container.decodeIfPresent(String.self, forKey: .pbExerciseName)
         pbValue = try container.decodeIfPresent(String.self, forKey: .pbValue)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
     }
     
     init(id: String = UUID().uuidString,
@@ -75,7 +81,9 @@ struct WorkoutPost: Codable, Identifiable {
          exercises: [GymExercisePost]? = nil,
          routeData: String? = nil,
          pbExerciseName: String? = nil,
-         pbValue: String? = nil) {
+         pbValue: String? = nil,
+         source: String? = "app",
+         deviceName: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -93,6 +101,8 @@ struct WorkoutPost: Codable, Identifiable {
         self.routeData = routeData
         self.pbExerciseName = pbExerciseName
         self.pbValue = pbValue
+        self.source = source
+        self.deviceName = deviceName
     }
     
     func encode(to encoder: Encoder) throws {
@@ -114,6 +124,8 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(routeData, forKey: .routeData)
         try container.encodeIfPresent(pbExerciseName, forKey: .pbExerciseName)
         try container.encodeIfPresent(pbValue, forKey: .pbValue)
+        try container.encodeIfPresent(source, forKey: .source)
+        try container.encodeIfPresent(deviceName, forKey: .deviceName)
     }
 }
 

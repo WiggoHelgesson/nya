@@ -439,6 +439,7 @@ class NotificationNavigationManager: ObservableObject {
 // MARK: - App Delegate for Push Notifications
 
 import InsertAffiliateSwift
+import TerraiOS
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     
@@ -450,6 +451,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             companyCode: "Ooc4ERYgmYaZtJeCBnR7TjZb1BL2",
             verboseLogging: false
         )
+        
+        // Set up Terra background delivery for Apple Health
+        Terra.setUpBackgroundDelivery()
+        print("✅ Terra background delivery set up")
         
         return true
     }

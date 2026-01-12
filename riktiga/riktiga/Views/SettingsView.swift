@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showReferralView = false
     @StateObject private var stravaService = StravaService.shared
     @State private var showStravaDisconnectConfirmation = false
+    @State private var showConnectDevices = false
     
     var body: some View {
         NavigationStack {
@@ -65,45 +66,78 @@ struct SettingsView: View {
                     
                     // MARK: - KOPPLINGAR Section
                     SettingsSectionView(title: "KOPPLINGAR") {
-                        Button(action: {
-                            if stravaService.isConnected {
-                                showStravaDisconnectConfirmation = true
-                            } else {
-                                stravaService.startOAuthFlow()
-                            }
-                        }) {
-                            HStack(spacing: 14) {
-                                Image("59")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 24, height: 24)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Synka med Strava")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.primary)
-                                    
-                                    if stravaService.isConnected {
-                                        Text(stravaService.athleteName != nil ? "Ansluten som \(stravaService.athleteName!)" : "Ansluten")
-                                            .font(.system(size: 13))
-                                            .foregroundColor(.green)
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                if stravaService.isConnected {
-                                    Image(systemName: "checkmark.circle.fill")
+                        VStack(spacing: 0) {
+                            // Connect Devices (Terra API)
+                            Button(action: { showConnectDevices = true }) {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "applewatch.and.arrow.forward")
                                         .font(.system(size: 18))
-                                        .foregroundColor(.green)
-                                } else {
+                                        .foregroundColor(.black)
+                                        .frame(width: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Anslut din utrustning")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("Garmin, Fitbit, Polar m.fl.")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(Color(.systemGray3))
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
+                            
+                            SettingsItemDivider()
+                            
+                            // Strava
+                            Button(action: {
+                                if stravaService.isConnected {
+                                    showStravaDisconnectConfirmation = true
+                                } else {
+                                    stravaService.startOAuthFlow()
+                                }
+                            }) {
+                                HStack(spacing: 14) {
+                                    Image("59")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 24, height: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Synka med Strava")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.primary)
+                                        
+                                        if stravaService.isConnected {
+                                            Text(stravaService.athleteName != nil ? "Ansluten som \(stravaService.athleteName!)" : "Ansluten")
+                                                .font(.system(size: 13))
+                                                .foregroundColor(.green)
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if stravaService.isConnected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(Color(.systemGray3))
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
                         }
                     }
                     
@@ -248,6 +282,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showReferralView) {
                 ReferralView()
+            }
+            .sheet(isPresented: $showConnectDevices) {
+                ConnectDeviceView()
             }
             .task {
                 guard !hasLoadedOnce else { return }
