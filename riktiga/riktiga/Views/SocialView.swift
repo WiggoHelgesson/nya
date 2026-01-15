@@ -38,10 +38,10 @@ struct SocialView: View {
     @State private var carouselIndex = 0
     @State private var weeklyActivities: Int = 0
     @State private var weeklyTime: TimeInterval = 0
-    @State private var weeklyDistance: Double = 0
+    @State private var weeklyWeight: Double = 0
     @State private var lastWeekActivities: Int = 0
     @State private var lastWeekTime: TimeInterval = 0
-    @State private var lastWeekDistance: Double = 0
+    @State private var lastWeekWeight: Double = 0
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -289,7 +289,7 @@ struct SocialView: View {
     }
     
     private var progressiveOverloadCard: some View {
-        NavigationLink(destination: ProgressiveOverloadView()) {
+        NavigationLink(destination: AllExercisesListView()) {
             HStack(spacing: 16) {
                 // Image
                 Image("UTVECKLING")
@@ -365,15 +365,15 @@ struct SocialView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    // Distance
+                    // Weight (Kg)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Distans")
+                        Text("Kg")
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
-                        Text(String(format: "%.2f km", weeklyDistance / 1000))
+                        Text(formatWeight(weeklyWeight))
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.primary)
-                        weeklyChangeLabel(current: weeklyDistance, previous: lastWeekDistance, suffix: " km")
+                        weeklyChangeLabel(current: weeklyWeight, previous: lastWeekWeight, suffix: " kg")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -413,6 +413,13 @@ struct SocialView: View {
         return "\(hours)h \(minutes)m"
     }
     
+    private func formatWeight(_ kg: Double) -> String {
+        if kg >= 1000 {
+            return String(format: "%.1fk", kg / 1000)
+        }
+        return String(format: "%.0f", kg)
+    }
+    
     private func loadWeeklyStats() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
@@ -445,19 +452,37 @@ struct SocialView: View {
             // Calculate stats
             let activities = thisWeekPosts.count
             let time = thisWeekPosts.reduce(0.0) { $0 + Double($1.duration ?? 0) }
-            let distance = thisWeekPosts.reduce(0.0) { $0 + ($1.distance ?? 0.0) }
+            
+            // Calculate total weight lifted from gym exercises
+            let weight = thisWeekPosts.reduce(0.0) { total, post in
+                guard let exercises = post.exercises else { return total }
+                return total + exercises.reduce(0.0) { exerciseTotal, exercise in
+                    let setCount = min(exercise.reps.count, exercise.kg.count)
+                    return exerciseTotal + (0..<setCount).reduce(0.0) { setTotal, i in
+                        return setTotal + (Double(exercise.reps[i]) * exercise.kg[i])
+                    }
+                }
+            }
             
             let lastActivities = lastWeekPosts.count
             let lastTime = lastWeekPosts.reduce(0.0) { $0 + Double($1.duration ?? 0) }
-            let lastDistance = lastWeekPosts.reduce(0.0) { $0 + ($1.distance ?? 0.0) }
+            let lastWeight = lastWeekPosts.reduce(0.0) { total, post in
+                guard let exercises = post.exercises else { return total }
+                return total + exercises.reduce(0.0) { exerciseTotal, exercise in
+                    let setCount = min(exercise.reps.count, exercise.kg.count)
+                    return exerciseTotal + (0..<setCount).reduce(0.0) { setTotal, i in
+                        return setTotal + (Double(exercise.reps[i]) * exercise.kg[i])
+                    }
+                }
+            }
             
             await MainActor.run {
                 self.weeklyActivities = activities
                 self.weeklyTime = time
-                self.weeklyDistance = distance
+                self.weeklyWeight = weight
                 self.lastWeekActivities = lastActivities
                 self.lastWeekTime = lastTime
-                self.lastWeekDistance = lastDistance
+                self.lastWeekWeight = lastWeight
             }
         } catch {
             print("❌ Error loading weekly stats: \(error)")
@@ -1653,7 +1678,7 @@ struct SocialPostCard: View {
                             postId: post.id,
                             userId: userId,
                             postOwnerId: post.userId,
-                            postTitle: post.activityType
+                            postTitle: post.title
                         )
                         print("✅ Post liked successfully")
                     } else {
@@ -1878,6 +1903,11 @@ struct CommentsView: View {
     @Namespace private var bottomID
     @FocusState private var isCommentFieldFocused: Bool
     
+    // Animation states
+    @State private var headerAppeared = false
+    @State private var commentsAppeared = false
+    @State private var inputAppeared = false
+    
     private var isGymWorkout: Bool {
         post.activityType.lowercased() == "gym"
     }
@@ -1904,8 +1934,11 @@ struct CommentsView: View {
                     VStack(spacing: 0) {
                         // Post header section (like Strava)
                         postHeaderSection
+                            .opacity(headerAppeared ? 1 : 0)
+                            .offset(y: headerAppeared ? 0 : -10)
                         
                         Divider()
+                            .opacity(headerAppeared ? 1 : 0)
                         
                         // Comments section
                         LazyVStack(spacing: 0) {
@@ -1914,8 +1947,10 @@ struct CommentsView: View {
                                     .padding(.top, 40)
                             } else if commentsViewModel.threads.isEmpty {
                                 emptyStateView
+                                    .opacity(commentsAppeared ? 1 : 0)
+                                    .offset(y: commentsAppeared ? 0 : 15)
                             } else {
-                                ForEach(commentsViewModel.threads) { thread in
+                                ForEach(Array(commentsViewModel.threads.enumerated()), id: \.element.id) { index, thread in
                                     CommentRow(
                                         comment: thread.comment,
                                         isReply: false,
@@ -1924,10 +1959,13 @@ struct CommentsView: View {
                                         onDelete: { deleteComment(thread.comment) }
                                     )
                                     .environmentObject(authViewModel)
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                        removal: .opacity
-                                    ))
+                                    .opacity(commentsAppeared ? 1 : 0)
+                                    .offset(y: commentsAppeared ? 0 : 20)
+                                    .animation(
+                                        .spring(response: 0.5, dampingFraction: 0.8)
+                                        .delay(Double(index) * 0.05),
+                                        value: commentsAppeared
+                                    )
                                     
                                     ForEach(thread.replies) { reply in
                                         CommentRow(
@@ -1938,10 +1976,8 @@ struct CommentsView: View {
                                             onDelete: { deleteComment(reply) }
                                         )
                                         .environmentObject(authViewModel)
-                                        .transition(.asymmetric(
-                                            insertion: .opacity.combined(with: .move(edge: .bottom)),
-                                            removal: .opacity
-                                        ))
+                                        .opacity(commentsAppeared ? 1 : 0)
+                                        .offset(y: commentsAppeared ? 0 : 20)
                                     }
                                 }
                                 
@@ -1951,6 +1987,7 @@ struct CommentsView: View {
                             }
                         }
                         .padding(.top, 8)
+                        .padding(.bottom, 20) // Extra space at bottom for scrolling
                     }
                     .frame(maxWidth: .infinity)
                     .background(Color(.systemBackground))
@@ -1958,6 +1995,7 @@ struct CommentsView: View {
                         await reloadComments()
                     }
                 }
+                .scrollBounceBehavior(.always) // Allow bounce scrolling
                 .onChange(of: commentsViewModel.totalCommentCount) { _ in
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         scrollProxy.scrollTo(bottomID, anchor: .bottom)
@@ -1967,6 +2005,8 @@ struct CommentsView: View {
             
             // Add comment section
             commentInputSection
+                .opacity(inputAppeared ? 1 : 0)
+                .offset(y: inputAppeared ? 0 : 30)
         }
         .background(Color(.systemBackground))
         .navigationTitle("Diskussion")
@@ -1974,6 +2014,24 @@ struct CommentsView: View {
         .task {
             await reloadComments()
             await loadTopLikers()
+        }
+        .onAppear {
+            // Elegant staggered entrance animation
+            withAnimation(.easeOut(duration: 0.4)) {
+                headerAppeared = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    commentsAppeared = true
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    inputAppeared = true
+                }
+            }
         }
     }
     
@@ -2137,9 +2195,9 @@ struct CommentsView: View {
     private func startReplyTo(_ comment: PostComment) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             replyTarget = comment
-            // Insert username in the text field
+            // Insert @username: in the text field (colon marks end of mention)
             if let userName = comment.userName, !userName.isEmpty {
-                newComment = "\(userName) "
+                newComment = "@\(userName): "
             }
         }
         // Focus the text field with a slight delay for better UX
@@ -2380,19 +2438,39 @@ struct CommentRow: View {
             // Main comment content
             commentContent
                 .offset(x: currentOffset)
-                .gesture(
-                    DragGesture(minimumDistance: 10)
+                .contentShape(Rectangle()) // Ensure the entire area is tappable/draggable
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 8, coordinateSpace: .local)
                         .updating($dragOffset) { value, state, _ in
-                            // Only allow horizontal swipes that are primarily leftward
-                            if abs(value.translation.width) > abs(value.translation.height) {
+                            // Only capture horizontal swipes (left swipe primarily)
+                            let horizontalAmount = abs(value.translation.width)
+                            let verticalAmount = abs(value.translation.height)
+                            
+                            // Must be more horizontal than vertical and moving left
+                            if horizontalAmount > verticalAmount * 1.5 && value.translation.width < 0 {
                                 state = value.translation.width
                             }
                         }
-                        .onChanged { _ in
-                            isDragging = true
+                        .onChanged { value in
+                            let horizontalAmount = abs(value.translation.width)
+                            let verticalAmount = abs(value.translation.height)
+                            if horizontalAmount > verticalAmount * 1.5 && value.translation.width < 0 {
+                                isDragging = true
+                            }
                         }
                         .onEnded { value in
                             isDragging = false
+                            
+                            // Only process if it was a horizontal swipe
+                            let horizontalAmount = abs(value.translation.width)
+                            let verticalAmount = abs(value.translation.height)
+                            guard horizontalAmount > verticalAmount else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    swipeOffset = 0
+                                }
+                                return
+                            }
+                            
                             let finalOffset = swipeOffset + value.translation.width
                             
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -2481,37 +2559,30 @@ struct CommentRow: View {
     }
     
     private var commentTextView: some View {
-        // Check if the comment starts with a username (reply pattern)
+        // Check if the comment starts with @username: (reply pattern)
         let content = comment.content
         
-        // Try to find username at the start of the comment
-        if let spaceIndex = content.firstIndex(of: " "),
-           content.first?.isLetter == true || content.first?.isNumber == true {
-            let potentialUsername = String(content[..<spaceIndex])
-            let restOfComment = String(content[content.index(after: spaceIndex)...])
-            
-            // Check if it looks like a username (no special chars except underscore/dot)
-            let isUsername = potentialUsername.allSatisfy { 
-                $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." || $0 == "-"
-            } && potentialUsername.count > 1
-            
-            if isUsername {
+        // Look for @username: pattern at the start (colon marks end of mention)
+        if content.hasPrefix("@") {
+            // Find the colon that ends the @mention
+            if let colonIndex = content.firstIndex(of: ":") {
+                let mention = String(content[...colonIndex]) // includes @ and :
+                let afterColon = content.index(after: colonIndex)
+                let restOfComment = afterColon < content.endIndex ? String(content[afterColon...]).trimmingCharacters(in: .whitespaces) : ""
+                
                 return AnyView(
-                    HStack(spacing: 0) {
-                        Text(potentialUsername)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text(" " + restOfComment)
-                            .font(.system(size: 15))
-                            .foregroundColor(.primary)
-                    }
+                    (Text(mention)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.primary)
+                    + Text(" " + restOfComment)
+                        .font(.system(size: 15))
+                        .foregroundColor(.primary))
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 )
             }
         }
         
-        // Regular comment without username prefix
+        // Regular comment without @mention prefix
         return AnyView(
             Text(content)
                 .font(.system(size: 15))
@@ -3430,8 +3501,8 @@ struct FullFrameAsyncImage: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geometry.size.width, height: height)
-                        // For live photos, align to leading edge so selfie is visible
-                        .frame(width: geometry.size.width, height: height, alignment: isLivePhoto ? .leading : .center)
+                        // For live photos, align to top leading corner so selfie is visible
+                        .frame(width: geometry.size.width, height: height, alignment: isLivePhoto ? .topLeading : .center)
                         .clipped()
                 }
                 .frame(height: height)

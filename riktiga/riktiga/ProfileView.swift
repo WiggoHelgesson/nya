@@ -1,12 +1,12 @@
 import SwiftUI
 import Combine
 
-struct ProfileView: View {
+// MARK: - ProfileActivitiesView (Activities tab content)
+struct ProfileActivitiesView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showImagePicker = false
     @State private var profileImage: UIImage?
-    @State private var showSettings = false
     @State private var showMyPurchases = false
     @State private var showFindFriends = false
     @State private var showFollowersList = false
@@ -29,15 +29,7 @@ struct ProfileView: View {
     
     
     var body: some View {
-        NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
-                // MARK: - Fixed Strava-Style Navigation Header (with settings icon)
-                StravaStyleHeaderView(isProfilePage: true, onSettingsTapped: {
-                    showSettings = true
-                })
-                    .environmentObject(authViewModel)
-                    .zIndex(1)
-                
                 ScrollView {
                     LazyVStack(spacing: 16) {
                     VStack(spacing: 16) {
@@ -160,54 +152,25 @@ struct ProfileView: View {
                             .stroke(Color.primary, lineWidth: 2)
                     )
                     
-                    // MARK: - Action Buttons (2x2 grid)
-                    VStack(spacing: 10) {
-                        // First row
-                        HStack(spacing: 10) {
-                            ProfileCardButton(
-                                icon: "cart.fill",
-                                label: "Mina köp",
-                                action: { showMyPurchases = true }
-                            )
-                            
-                            NavigationLink(destination: StatisticsView()) {
-                                VStack(spacing: 10) {
-                                    Image(systemName: "chart.bar.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.primary)
-                                    
-                                    Text("Statistik")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(1)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 90)
-                                .background(Color(.secondarySystemBackground))
-                                .cornerRadius(16)
-                                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    // MARK: - Action Buttons (3 in a row)
+                    HStack(spacing: 10) {
+                        ProfileCardButton(
+                            icon: "cart.fill",
+                            label: "Mina köp",
+                            action: { showMyPurchases = true }
+                        )
                         
-                        // Second row
-                        HStack(spacing: 10) {
-                            ProfileCardButton(
-                                icon: "person.badge.plus.fill",
-                                label: "Hitta vänner",
-                                action: { showFindFriends = true }
-                            )
-                            
-                            ProfileCardButton(
-                                icon: "bookmark.fill",
-                                label: "Sparade pass",
-                                action: { showRoutines = true }
-                            )
-                        }
+                        ProfileCardButton(
+                            icon: "person.badge.plus.fill",
+                            label: "Hitta vänner",
+                            action: { showFindFriends = true }
+                        )
+                        
+                        ProfileCardButton(
+                            icon: "bookmark.fill",
+                            label: "Sparade pass",
+                            action: { showRoutines = true }
+                        )
                     }
                     
                     
@@ -282,15 +245,11 @@ struct ProfileView: View {
                 .padding(16)
                 }
             }
-            .navigationBarHidden(true)
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
             }
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
             }
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
@@ -394,7 +353,6 @@ struct ProfileView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootProfil"))) { _ in
                 navigationPath = NavigationPath()
             }
-        }
     }
     
     private func loadProfileStats(force: Bool = false) {
@@ -590,7 +548,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 }
 
 #Preview {
-    ProfileView()
+    ProfileActivitiesView()
         .environmentObject(AuthViewModel())
 }
 

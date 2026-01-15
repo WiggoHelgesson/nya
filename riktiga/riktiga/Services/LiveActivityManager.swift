@@ -47,12 +47,26 @@ class LiveActivityManager {
     
     // MARK: - End Activity
     func endLiveActivity() {
-        Task {
-            for activity in ActivityKit.Activity<WorkoutActivityAttributes>.activities {
+        print("🛑 Attempting to end all Live Activities...")
+        
+        // End synchronously on main thread to ensure it completes
+        Task { @MainActor in
+            let activities = ActivityKit.Activity<WorkoutActivityAttributes>.activities
+            print("🛑 Found \(activities.count) active Live Activities to end")
+            
+            for activity in activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
                 print("🛑 Live Activity \(activity.id) avslutad")
             }
-            currentActivity = nil
+            self.currentActivity = nil
         }
+        
+        // Also try ending immediately without waiting
+        for activity in ActivityKit.Activity<WorkoutActivityAttributes>.activities {
+            Task {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+        currentActivity = nil
     }
 }

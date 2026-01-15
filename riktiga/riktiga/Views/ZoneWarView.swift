@@ -383,26 +383,6 @@ struct ZoneWarView: View {
                             }
                             .buttonStyle(.plain)
                             
-                            // Lottery leaderboard button
-                            Button {
-                                showLotteryLeaderboard = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text("🎰")
-                                        .font(.system(size: 12))
-                                    Text("Topplistan för lotter")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(.white)
-                                }
-                                .frame(width: 195)
-                                .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.black.opacity(0.85))
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            
                             lotteryCard
                         }
                         .padding(.trailing, 12)

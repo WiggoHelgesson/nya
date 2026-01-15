@@ -67,7 +67,8 @@ struct SettingsView: View {
                     // MARK: - KOPPLINGAR Section
                     SettingsSectionView(title: "KOPPLINGAR") {
                         VStack(spacing: 0) {
-                            // Connect Devices (Terra API)
+                            // Connect Devices (Terra API) - Hidden for now
+                            /*
                             Button(action: { showConnectDevices = true }) {
                                 HStack(spacing: 14) {
                                     Image(systemName: "applewatch.and.arrow.forward")
@@ -96,6 +97,7 @@ struct SettingsView: View {
                             }
                             
                             SettingsItemDivider()
+                            */
                             
                             // Strava
                             Button(action: {

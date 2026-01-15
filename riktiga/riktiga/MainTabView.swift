@@ -57,14 +57,19 @@ struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var navigationTracker = NavigationDepthTracker.shared
     @ObservedObject private var notificationNav = NotificationNavigationManager.shared
+    @ObservedObject private var sessionManager = SessionManager.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var hasActiveSession = SessionManager.shared.hasActiveSession
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem(Zonkriget), 1=Socialt, 2=Starta pass (intercepted), 3=Belöningar, 4=Profil
+    @State private var selectedTab = 0  // 0=Hem, 1=Socialt, 2=Belöningar, 3=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
+    @State private var showDiscardConfirmation = false
+    @State private var showAddMealSheet = false
+    @State private var showFoodScanner = false
+    @State private var initialScannerMode: FoodScanMode = .ai
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -76,11 +81,10 @@ struct MainTabView: View {
         return false
     }
     
-    // Tab items data for legacy tab bar
+    // Tab items data - 4 tabs now (removed Starta pass)
     private let tabItems: [(icon: String, title: String)] = [
         ("house.fill", "Hem"),
         ("person.2.fill", "Socialt"),
-        ("figure.run", "Starta pass"),
         ("gift.fill", "Belöningar"),
         ("person.fill", "Profil")
     ]
@@ -103,6 +107,9 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $showResumeSession) {
             StartSessionView()
                 .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $showFoodScanner) {
+            FoodScannerView(initialMode: initialScannerMode)
         }
         .onAppear {
             if hasActiveSession && !showStartSession && !showResumeSession {
@@ -145,7 +152,7 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
-            selectedTab = 3  // Belöningar is now at index 3
+            selectedTab = 2  // Belöningar is now at index 2
             showStartSession = false
             showResumeSession = false
         }
@@ -199,38 +206,16 @@ struct MainTabView: View {
             }
         }
         .onChange(of: selectedTab) { oldTab, newTab in
-            // Intercept "Starta pass" tab (index 2)
-            if newTab == 2 {
-                // Revert to previous tab
-                selectedTab = oldTab
-                
-                // Trigger start session
-                triggerHeavyHaptic()
-                Task {
-                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                    await MainActor.run {
-                        if hasActiveSession {
-                            showResumeSession = true
-                        } else {
-                            startActivityType = .running
-                            showStartSession = true
-                        }
-                    }
-                }
-                return
-            }
-            
             // Reset to root view when switching tabs
             navigationTracker.resetToRoot()
             
             // Smart memory cleanup based on which tabs are involved
             Task.detached(priority: .utility) {
                 // Light cleanup when leaving map-heavy views
-                if oldTab == 0 { // Leaving ZoneWar
+                if oldTab == 0 { // Leaving Home/ZoneWar
                     await MainActor.run {
                         ImageCacheManager.shared.trimCache()
                     }
-                    // Don't invalidate territory cache - it causes zones to disappear when returning
                 }
                 
                 if oldTab == 1 { // Leaving Social
@@ -298,38 +283,126 @@ struct MainTabView: View {
     // MARK: - iOS 26+ Liquid Glass Tab View
     @available(iOS 26.0, *)
     private var liquidGlassTabView: some View {
-        TabView(selection: $selectedTab) {
-            HomeContainerView()
-                .tabItem {
-                    Label("Hem", systemImage: "house.fill")
+        ZStack(alignment: .bottom) {
+            // Native TabView with built-in Liquid Glass effect
+            TabView(selection: $selectedTab) {
+                Tab("Hem", systemImage: "house.fill", value: 0) {
+                    HomeContainerView()
                 }
-                .tag(0)
+                
+                Tab("Socialt", systemImage: "person.2.fill", value: 1) {
+                    SocialView()
+                }
+                
+                Tab("Belöningar", systemImage: "gift.fill", value: 2) {
+                    RewardsView()
+                }
+                
+                Tab("Profil", systemImage: "person.fill", value: 3) {
+                    ProfileContainerView()
+                }
+            }
+            .tint(.primary)
+            .opacity(showAddMealSheet ? 0.3 : 1.0)
+            .blur(radius: showAddMealSheet ? 10 : 0)
             
-            SocialView()
-                .tabItem {
-                    Label("Socialt", systemImage: "person.2.fill")
-                }
-                .tag(1)
+            // Add Meal Overlay
+            if showAddMealSheet {
+                addMealOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
             
-            Color.clear
-                .tabItem {
-                    Label("Starta pass", systemImage: "figure.run")
+            // Floating + button container
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if !showAddMealSheet {
+                        floatingAddButton
+                    }
                 }
-                .tag(2)
+                .padding(.trailing, 16)
+                .padding(.bottom, 90) // Above the tab bar
+            }
             
-            RewardsView()
-                .tabItem {
-                    Label("Belöningar", systemImage: "gift.fill")
-                }
-                .tag(3)
-            
-            ProfileView()
-                .tabItem {
-                    Label("Profil", systemImage: "person.fill")
-                }
-                .tag(4)
+            // Floating active session banner
+            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+                activeSessionBanner
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .tint(.primary)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showAddMealSheet)
+    }
+    
+    // MARK: - Add Meal Overlay
+    private var addMealOverlay: some View {
+        ZStack {
+            // Semi-transparent background that closes the menu when tapped
+            Color.black.opacity(0.15) // Slightly darker for better contrast
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showAddMealSheet = false
+                    }
+                }
+            
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        addMealOption(icon: "figure.run", title: "Starta pass") {
+                            withAnimation { showAddMealSheet = false }
+                            showStartSession = true
+                        }
+                        addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
+                            withAnimation { showAddMealSheet = false }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                initialScannerMode = .barcode
+                                showFoodScanner = true
+                            }
+                        }
+                    }
+                    
+                    HStack(spacing: 12) {
+                        addMealOption(icon: "fork.knife", title: "Måltid") {
+                            withAnimation { showAddMealSheet = false }
+                            NotificationCenter.default.post(name: NSNotification.Name("OpenAddMealView"), object: nil)
+                        }
+                        addMealOption(icon: "camera.fill", title: "Ta bild med AI") {
+                            withAnimation { showAddMealSheet = false }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                initialScannerMode = .ai
+                                showFoodScanner = true
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40) // Bottom part of the screen
+            }
+        }
+    }
+    
+    private func addMealOption(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(.black)
+                
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black)
+            }
+            .frame(width: 150, height: 120)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 10)
+        }
     }
     
     // MARK: - Legacy Tab View (iOS 25 and earlier)
@@ -342,80 +415,191 @@ struct MainTabView: View {
                     HomeContainerView()
                 case 1:
                     SocialView()
-                case 3:
+                case 2:
                     RewardsView()
-                case 4:
-                    ProfileView()
+                case 3:
+                    ProfileContainerView()
                 default:
                     Color.clear
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .opacity(showAddMealSheet ? 0.3 : 1.0)
+            .blur(radius: showAddMealSheet ? 10 : 0)
             
-            // Custom Tab Bar
-            legacyCustomTabBar
+            // Add Meal Overlay
+            if showAddMealSheet {
+                addMealOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+            
+            // Floating active session banner
+            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+                activeSessionBanner
+                    .padding(.bottom, 100) // Above tab bar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            
+            // Custom Tab Bar with + button
+            if !showAddMealSheet {
+                legacyCustomTabBar
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showAddMealSheet)
+    }
+    
+    // MARK: - Floating Add Button
+    private var floatingAddButton: some View {
+        Button {
+            triggerHeavyHaptic()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showAddMealSheet.toggle()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.15, green: 0.15, blue: 0.17))
+                    .frame(width: 56, height: 56)
+                    .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
+                
+                Image(systemName: showAddMealSheet ? "xmark" : "plus")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.white)
+                    .rotationEffect(.degrees(showAddMealSheet ? 0 : 0))
+            }
+        }
     }
     
     // MARK: - Legacy Custom Tab Bar
     private var legacyCustomTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<tabItems.count, id: \.self) { index in
-                LegacyTabBarItem(
-                    icon: tabItems[index].icon,
-                    title: tabItems[index].title,
-                    isSelected: selectedTab == index,
-                    action: {
-                        if index == 2 {
-                            // Starta pass - special handling
-                            triggerHeavyHaptic()
-                            Task {
-                                await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                                await MainActor.run {
-                                    if hasActiveSession {
-                                        showResumeSession = true
-                                    } else {
-                                        startActivityType = .running
-                                        showStartSession = true
-                                    }
+        HStack(alignment: .center, spacing: 12) {
+            // Tab items container with glass style background
+            HStack(spacing: 0) {
+                ForEach(0..<tabItems.count, id: \.self) { index in
+                    LegacyTabBarItem(
+                        icon: tabItems[index].icon,
+                        title: tabItems[index].title,
+                        isSelected: selectedTab == index,
+                        action: {
+                            if selectedTab == index {
+                                // Same tab tapped - pop to root
+                                let notificationName: String
+                                switch index {
+                                case 0: notificationName = "PopToRootHem"
+                                case 1: notificationName = "PopToRootSocialt"
+                                case 2: notificationName = "PopToRootBeloningar"
+                                case 3: notificationName = "PopToRootProfil"
+                                default: notificationName = ""
+                                }
+                                if !notificationName.isEmpty {
+                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
+                                }
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTab = index
                                 }
                             }
-                        } else if selectedTab == index {
-                            // Same tab tapped - pop to root
-                            let notificationName: String
-                            switch index {
-                            case 0: notificationName = "PopToRootHem"
-                            case 1: notificationName = "PopToRootSocialt"
-                            case 3: notificationName = "PopToRootBeloningar"
-                            case 4: notificationName = "PopToRootProfil"
-                            default: notificationName = ""
-                            }
-                            if !notificationName.isEmpty {
-                                NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
-                            }
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTab = index
-                            }
                         }
-                    }
-                )
+                    )
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                ZStack {
+                    // Glass effect layers
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(Color.white.opacity(0.7))
+                    
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
+            )
+            
+            // + button on the right - same height level
+            floatingAddButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 12)
-        .background(
-            Rectangle()
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: -2)
-                .ignoresSafeArea(edges: .bottom)
-        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 28)
     }
     
     private func triggerHeavyHaptic() {
         hapticGenerator.prepare()
         hapticGenerator.impactOccurred(intensity: 1.0)
+    }
+    
+    // MARK: - Active Session Banner
+    private var activeSessionBanner: some View {
+        VStack(spacing: 0) {
+            // Main banner content
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pågående pass")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+                
+                Spacer()
+                
+                // Resume button
+                Button {
+                    showResumeSession = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 10))
+                        Text("Återuppta")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.green)
+                }
+                
+                Text("•")
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 8)
+                
+                // Discard button
+                Button {
+                    showDiscardConfirmation = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Avsluta")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.red)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 16)
+        .alert("Avsluta pass?", isPresented: $showDiscardConfirmation) {
+            Button("Fortsätt träna", role: .cancel) { }
+            Button("Avsluta", role: .destructive) {
+                // End Live Activity first, then finalize session
+                LiveActivityManager.shared.endLiveActivity()
+                SessionManager.shared.finalizeSession()
+            }
+        } message: {
+            Text("Ditt pågående pass kommer att förkastas och inte sparas.")
+        }
     }
 }
 
@@ -430,29 +614,22 @@ private struct LegacyTabBarItem: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                if isSelected {
+                ZStack {
+                    if isSelected {
+                        // Selected background pill
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: 56, height: 32)
+                    }
+                    
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    colorScheme == .dark ? Color.white : Color.black,
-                                    colorScheme == .dark ? Color.gray.opacity(0.8) : Color.gray.opacity(0.6)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(height: 26)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundColor(.gray)
-                        .frame(height: 26)
+                        .font(.system(size: isSelected ? 20 : 18, weight: isSelected ? .bold : .regular))
+                        .foregroundColor(isSelected ? .primary : .gray)
                 }
+                .frame(height: 32)
                 
                 Text(title)
-                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? .primary : .gray)
             }
             .frame(maxWidth: .infinity)

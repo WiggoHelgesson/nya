@@ -1,39 +1,56 @@
 import SwiftUI
 
-struct HomeContainerView: View {
+enum ProfileTab: String, CaseIterable {
+    case statistik = "Statistik"
+    case aktiviteter = "Aktiviteter"
+}
+
+struct ProfileContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var showAddMealView = false
+    @State private var selectedTab: ProfileTab = .statistik
+    @State private var showSettings = false
     
     var body: some View {
         NavigationStack {
-            HomeView()
-                .environmentObject(authViewModel)
-                .navigationTitle("")
-                .navigationBarHidden(true)
-                .fullScreenCover(isPresented: $showAddMealView) {
-                    AddMealView()
+            VStack(spacing: 0) {
+                // MARK: - Combined Header with Tabs (Strava-style)
+                ProfileHeaderWithTabs(selectedTab: $selectedTab, onSettingsTapped: {
+                    showSettings = true
+                })
+                    .environmentObject(authViewModel)
+                    .zIndex(1)
+                
+                // Swipeable content
+                TabView(selection: $selectedTab) {
+                    StatisticsView()
+                        .environmentObject(authViewModel)
+                        .tag(ProfileTab.statistik)
+                    
+                    ProfileActivitiesView()
+                        .environmentObject(authViewModel)
+                        .tag(ProfileTab.aktiviteter)
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAddMealView"))) { _ in
-                    showAddMealView = true
-                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+            }
+            .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 }
 
-// MARK: - Combined Header with Tabs (Strava-style)
-struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: View where Tab.RawValue == String, Tab.AllCases: RandomAccessCollection {
+// MARK: - Profile Header with Tabs
+struct ProfileHeaderWithTabs: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @Binding var selectedTab: Tab
+    @Binding var selectedTab: ProfileTab
     
-    @State private var unreadNotifications = 0
-    @State private var isFetchingUnread = false
     @State private var showMonthlyPrize = false
     @State private var showNonProAlert = false
     @State private var showPaywall = false
-    @State private var showFindFriends = false
     @State private var showPublicProfile = false
     
-    var isProfilePage: Bool = false
     var onSettingsTapped: (() -> Void)? = nil
     
     private var isPremium: Bool {
@@ -82,59 +99,17 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                     
                     Spacer()
                     
-                    // Right side actions
-                    if isProfilePage {
-                        Button {
-                            onSettingsTapped?()
-                        } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.system(size: 22, weight: .regular))
-                                .foregroundColor(.primary)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        HStack(spacing: 12) {
-                            // Notifications - NavigationLink to separate page
-                            NavigationLink(destination: NotificationsView(onDismiss: {
-                                Task { await refreshUnreadCount() }
-                            }).environmentObject(authViewModel)) {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "bell")
-                                        .font(.system(size: 22, weight: .regular))
-                                        .foregroundColor(.primary)
-                                    
-                                    if unreadNotifications > 0 {
-                                        Circle()
-                                            .fill(Color.black)
-                                            .frame(width: 18, height: 18)
-                                            .overlay(
-                                                Text("\(min(unreadNotifications, 99))")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white)
-                                            )
-                                            .offset(x: 8, y: -6)
-                                    }
-                                }
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Find friends last (rightmost)
-                            Button {
-                                showFindFriends = true
-                            } label: {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 22, weight: .regular))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    // Settings button
+                    Button {
+                        onSettingsTapped?()
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundColor(.primary)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
@@ -143,7 +118,7 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
             
             // MARK: - Tab Selector (Strava-style)
             HStack(spacing: 0) {
-                ForEach(Array(Tab.allCases), id: \.self) { tab in
+                ForEach(ProfileTab.allCases, id: \.self) { tab in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = tab
@@ -154,7 +129,7 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                                 .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
                                 .foregroundColor(selectedTab == tab ? .primary : .gray)
                             
-                            // Black underline indicator (50% width)
+                            // Black underline indicator
                             Rectangle()
                                 .fill(selectedTab == tab ? Color.primary : Color.clear)
                                 .frame(height: 3)
@@ -175,10 +150,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         }
         .sheet(isPresented: $showPaywall) {
             PresentPaywallView()
-        }
-        .sheet(isPresented: $showFindFriends) {
-            FindFriendsView()
-                .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
@@ -206,34 +177,11 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         } message: {
             Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
-        .task {
-            await refreshUnreadCount()
-        }
-        .onAppear {
-            Task { await refreshUnreadCount() }
-        }
-    }
-    
-    private func refreshUnreadCount() async {
-        guard !isFetchingUnread else { return }
-        guard let userId = authViewModel.currentUser?.id else {
-            await MainActor.run { unreadNotifications = 0 }
-            return
-        }
-        isFetchingUnread = true
-        do {
-            let count = try await NotificationService.shared.fetchUnreadCount(userId: userId)
-            await MainActor.run {
-                unreadNotifications = count
-            }
-        } catch {
-            print("⚠️ Failed to fetch unread notifications: \(error)")
-        }
-        isFetchingUnread = false
     }
 }
 
 #Preview {
-    HomeContainerView()
+    ProfileContainerView()
         .environmentObject(AuthViewModel())
 }
+

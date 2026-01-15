@@ -136,7 +136,7 @@ final class NotificationService {
         print("✅ Created like notification")
         
         // Send push notification with post title
-        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : "'\(postTitle)'"
+        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : postTitle
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Ny like",
@@ -181,7 +181,7 @@ final class NotificationService {
         print("✅ Created comment notification")
         
         // Send push notification with post title
-        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : "'\(postTitle)'"
+        let displayTitle = postTitle.isEmpty ? "ditt inlägg" : postTitle
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Ny kommentar",
@@ -225,7 +225,7 @@ final class NotificationService {
         print("✅ Created reply notification")
         
         // Send push notification
-        let displayTitle = postTitle.isEmpty ? "ett inlägg" : "'\(postTitle)'"
+        let displayTitle = postTitle.isEmpty ? "ett inlägg" : postTitle
         await PushNotificationService.shared.sendRealPushNotification(
             toUserId: userId,
             title: "Nytt svar",

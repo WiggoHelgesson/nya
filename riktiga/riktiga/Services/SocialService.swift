@@ -960,6 +960,50 @@ class SocialService {
         }
     }
     
+    /// Fetch a single post by ID
+    func getPost(postId: String) async throws -> SocialWorkoutPost {
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            let posts: [SocialWorkoutPost] = try await supabase
+                .from("workout_posts")
+                .select("""
+                    id,
+                    user_id,
+                    activity_type,
+                    title,
+                    description,
+                    distance,
+                    duration,
+                    image_url,
+                    user_image_url,
+                    elevation_gain,
+                    max_speed,
+                    created_at,
+                    split_data,
+                    exercises_data,
+                    source,
+                    device_name,
+                    profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .eq("id", value: postId)
+                .limit(1)
+                .execute()
+                .value
+            
+            guard let post = posts.first else {
+                throw NSError(domain: "SocialService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Post not found"])
+            }
+            
+            print("✅ Fetched post: \(post.title)")
+            return post
+        } catch {
+            print("❌ Error fetching post \(postId): \(error)")
+            throw error
+        }
+    }
+    
     private func buildFallbackFeed(userId: String) async -> [SocialWorkoutPost] {
         var userIdSet: Set<String> = [userId]
         if let following = try? await getFollowing(userId: userId) {

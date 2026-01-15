@@ -40,6 +40,13 @@ struct StatisticsView: View {
     @State private var currentStreak: Int = 0
     @State private var streakActivities: Int = 0
     @State private var exerciseHistories: [StatExerciseHistory] = []
+    @State private var aiPredictions: [OneRepMaxPredictionService.AIPrediction] = []
+    @State private var isLoadingPredictions = false
+    @State private var predictionError: String? = nil
+    
+    // Premium status
+    @State private var isPremium = RevenueCatManager.shared.isProMember
+    @State private var showPaywall = false
     
     // Animation states
     @State private var showFilter = false
@@ -48,6 +55,12 @@ struct StatisticsView: View {
     @State private var showMonthly = false
     @State private var showCalendar = false
     @State private var showProgressive = false
+    @State private var show1RMPredictions = false
+    @State private var showMuscleBalance = false
+    @State private var showTopExercises = false
+    
+    // Muscle distribution filter
+    @State private var muscleTimePeriod: MuscleTimePeriod = .last30Days
     
     private let calendar = Calendar.current
     
@@ -79,16 +92,68 @@ struct StatisticsView: View {
                     .opacity(showChart ? 1 : 0)
                     .offset(y: showChart ? 0 : 15)
                 
-                // MARK: - Progressive Overload Section
-                if !exerciseHistories.isEmpty {
+                // MARK: - Calendar Section
+                Divider()
+                    .padding(.vertical, 24)
+                    .opacity(showCalendar ? 1 : 0)
+                
+                calendarSection
+                    .opacity(showCalendar ? 1 : 0)
+                    .offset(y: showCalendar ? 0 : 15)
+                
+                // MARK: - Premium Features Section
+                if !isPremium {
+                    // Unlock potential header for non-premium users
                     Divider()
                         .padding(.vertical, 24)
                         .opacity(showProgressive ? 1 : 0)
                     
-                    progressiveOverloadSection
-                        .opacity(showProgressive ? 1 : 0)
-                        .offset(y: showProgressive ? 0 : 15)
+                    VStack(spacing: 12) {
+                        Text("Lås upp din fulla potential")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                        
+                        Text("Tracka din utveckling & nå din fulla potential med prenumerations funktioner")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        
+                        Button {
+                            showPaywall = true
+                        } label: {
+                            Text("Testa 7 dagar gratis")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.black)
+                                .cornerRadius(12)
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                    .opacity(showProgressive ? 1 : 0)
+                    .offset(y: showProgressive ? 0 : 15)
                 }
+                
+                // MARK: - Progressive Overload Section
+                if isPremium {
+                    Divider()
+                        .padding(.vertical, 24)
+                        .opacity(showProgressive ? 1 : 0)
+                }
+                
+                progressiveOverloadSection
+                    .opacity(showProgressive ? 1 : 0)
+                    .offset(y: showProgressive ? 0 : 15)
+                    .blur(radius: isPremium ? 0 : 6)
+                    .onTapGesture {
+                        if !isPremium {
+                            showPaywall = true
+                        }
+                    }
+                    .allowsHitTesting(!isPremium ? true : true)
                 
                 Divider()
                     .padding(.vertical, 24)
@@ -98,15 +163,68 @@ struct StatisticsView: View {
                 monthlyRecapSection
                     .opacity(showMonthly ? 1 : 0)
                     .offset(y: showMonthly ? 0 : 15)
+                    .blur(radius: isPremium ? 0 : 6)
+                    .onTapGesture {
+                        if !isPremium {
+                            showPaywall = true
+                        }
+                    }
                 
                 Divider()
                     .padding(.vertical, 24)
-                    .opacity(showCalendar ? 1 : 0)
+                    .opacity(show1RMPredictions ? 1 : 0)
                 
-                // MARK: - Calendar Section
-                calendarSection
-                    .opacity(showCalendar ? 1 : 0)
-                    .offset(y: showCalendar ? 0 : 15)
+                // MARK: - 1RM Predictions Section
+                oneRepMaxPredictionsSection
+                    .opacity(show1RMPredictions ? 1 : 0)
+                    .offset(y: show1RMPredictions ? 0 : 15)
+                    .blur(radius: isPremium ? 0 : 6)
+                    .onTapGesture {
+                        if !isPremium {
+                            showPaywall = true
+                        }
+                    }
+                
+                // MARK: - Muscle Distribution Section
+                muscleDistributionSection
+                    .opacity(showMuscleBalance ? 1 : 0)
+                    .offset(y: showMuscleBalance ? 0 : 15)
+                    .padding(.top, 24)
+                    .blur(radius: isPremium ? 0 : 6)
+                    .onTapGesture {
+                        if !isPremium {
+                            showPaywall = true
+                        }
+                    }
+                
+                // MARK: - Top Exercises Section
+                topExercisesSection
+                    .opacity(showTopExercises ? 1 : 0)
+                    .offset(y: showTopExercises ? 0 : 15)
+                    .padding(.top, 24)
+                    .blur(radius: isPremium ? 0 : 6)
+                    .onTapGesture {
+                        if !isPremium {
+                            showPaywall = true
+                        }
+                    }
+                
+                // MARK: - Free Trial Button (for non-Pro users)
+                if !isPremium {
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        Text("Testa 30 dagar gratis")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.black)
+                            .cornerRadius(16)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 32)
+                }
                 
                 Spacer(minLength: 100)
             }
@@ -120,33 +238,65 @@ struct StatisticsView: View {
         .onAppear {
             animateContent()
         }
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
+            isPremium = newValue
+        }
+        .sheet(isPresented: $showPaywall) {
+            PresentPaywallView()
+        }
         .enableSwipeBack()
     }
     
     private func animateContent() {
+        // Reset states if needed to ensure animation re-runs smoothly
+        showFilter = false
+        showWeekStats = false
+        showChart = false
+        showCalendar = false
+        showProgressive = false
+        showMonthly = false
+        show1RMPredictions = false
+        showMuscleBalance = false
+        showTopExercises = false
+        
         // Staggered animations for smooth appearance
-        withAnimation(.easeOut(duration: 0.4)) {
+        let duration = 0.45
+        let delay = 0.08
+        
+        withAnimation(.easeOut(duration: duration)) {
             showFilter = true
         }
         
-        withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+        withAnimation(.easeOut(duration: duration).delay(delay * 1)) {
             showWeekStats = true
         }
         
-        withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+        withAnimation(.easeOut(duration: duration).delay(delay * 2)) {
             showChart = true
         }
         
-        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
-            showMonthly = true
-        }
-        
-        withAnimation(.easeOut(duration: 0.4).delay(0.4)) {
+        withAnimation(.easeOut(duration: duration).delay(delay * 3)) {
             showCalendar = true
         }
         
-        withAnimation(.easeOut(duration: 0.4).delay(0.5)) {
+        withAnimation(.easeOut(duration: duration).delay(delay * 4)) {
             showProgressive = true
+        }
+        
+        withAnimation(.easeOut(duration: duration).delay(delay * 5)) {
+            showMonthly = true
+        }
+        
+        withAnimation(.easeOut(duration: duration).delay(delay * 6)) {
+            show1RMPredictions = true
+        }
+        
+        withAnimation(.easeOut(duration: duration).delay(delay * 7)) {
+            showMuscleBalance = true
+        }
+        
+        withAnimation(.easeOut(duration: duration).delay(delay * 8)) {
+            showTopExercises = true
         }
     }
     
@@ -515,60 +665,576 @@ struct StatisticsView: View {
                 
                 Spacer()
                 
-                NavigationLink {
-                    ProgressiveOverloadView()
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Se alla")
-                            .font(.system(size: 14, weight: .semibold))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(.black)
-                }
-            }
-            
-            // Exercise cards
-            VStack(spacing: 0) {
-                ForEach(Array(exerciseHistories.prefix(5).enumerated()), id: \.element.id) { index, history in
+                if !exerciseHistories.isEmpty {
                     NavigationLink {
-                        StatExerciseDetailView(history: history)
+                        AllExercisesListView(exerciseHistories: exerciseHistories)
                     } label: {
-                        StatExerciseRow(history: history, isLast: index == min(4, exerciseHistories.count - 1))
+                        HStack(spacing: 4) {
+                            Text("Se alla")
+                                .font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.primary)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .background(Color.white)
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
-            )
             
-            // See all button
-            if exerciseHistories.count > 5 {
-                NavigationLink {
-                    ProgressiveOverloadView()
-                } label: {
-                    HStack {
-                        Text("Se alla \(exerciseHistories.count) övningar")
-                            .font(.system(size: 15, weight: .semibold))
-                        
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
+            // Exercise cards or empty state
+            if exerciseHistories.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "dumbbell.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    
+                    Text("Inga gympass ännu")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Kör ditt första gympass för att se din utveckling")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(exerciseHistories.prefix(5).enumerated()), id: \.element.id) { index, history in
+                        NavigationLink {
+                            StatExerciseDetailView(history: history)
+                        } label: {
+                            StatExerciseRow(history: history, isLast: index == min(4, exerciseHistories.count - 1))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.black)
-                    )
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+                
+                // See all button
+                if exerciseHistories.count > 5 {
+                    NavigationLink {
+                        AllExercisesListView(exerciseHistories: exerciseHistories)
+                    } label: {
+                        HStack {
+                            Text("Se alla \(exerciseHistories.count) övningar")
+                                .font(.system(size: 15, weight: .semibold))
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.primary)
+                        )
+                    }
                 }
             }
         }
         .padding(.horizontal, 20)
+    }
+    
+    // MARK: - 1RM Predictions Section
+    private var oneRepMaxPredictionsSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Image("64")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 56)
+                    
+                    Text("1 Rep Max")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text("AI-analyserad maxstyrka per övning")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if !exerciseHistories.isEmpty && !aiPredictions.isEmpty {
+                    NavigationLink {
+                        All1RMPredictionsView(exerciseHistories: exerciseHistories, aiPredictions: aiPredictions)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Se alla")
+                                .font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+            
+            // Exercise cards or empty state
+            if exerciseHistories.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    
+                    Text("Inga gympass ännu")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Kör ditt första gympass för att se dina 1RM prediktioner")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else if isLoadingPredictions {
+                // Loading state
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    
+                    Text("AI analyserar din träningsdata...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 50)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else if let error = predictionError {
+                // Error state
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray)
+                    
+                    Text(error)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button {
+                        Task {
+                            await loadAIPredictions()
+                        }
+                    } label: {
+                        Text("Försök igen")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.green)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else {
+                // Show top 3 exercises with AI predictions
+                VStack(spacing: 0) {
+                    ForEach(Array(exerciseHistories.prefix(3).enumerated()), id: \.element.id) { index, history in
+                        let aiPrediction = aiPredictions.first { $0.exerciseName.lowercased() == history.name.lowercased() }
+                        NavigationLink {
+                            OneRepMaxDetailView(history: history, aiPrediction: aiPrediction)
+                        } label: {
+                            OneRMPredictionRow(
+                                history: history, 
+                                aiPrediction: aiPrediction,
+                                isLast: index == min(2, exerciseHistories.count - 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                
+                // See all button
+                if exerciseHistories.count > 3 {
+                    NavigationLink {
+                        All1RMPredictionsView(exerciseHistories: exerciseHistories, aiPredictions: aiPredictions)
+                    } label: {
+                        HStack {
+                            Text("Se alla \(exerciseHistories.count) övningar")
+                                .font(.system(size: 15, weight: .semibold))
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.primary)
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private func loadAIPredictions(retryCount: Int = 0) async {
+        guard !exerciseHistories.isEmpty else { return }
+        
+        await MainActor.run {
+            isLoadingPredictions = true
+            predictionError = nil
+        }
+        
+        do {
+            let predictions = try await OneRepMaxPredictionService.shared.getPredictions(for: exerciseHistories)
+            await MainActor.run {
+                aiPredictions = predictions
+                isLoadingPredictions = false
+            }
+        } catch {
+            // Auto-retry once after cache is cleared (which happens automatically on error)
+            if retryCount < 1 {
+                print("🔄 Auto-retrying AI predictions after error...")
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                await loadAIPredictions(retryCount: retryCount + 1)
+            } else {
+                await MainActor.run {
+                    predictionError = error.localizedDescription
+                    isLoadingPredictions = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Muscle Distribution Section
+    private var muscleDistributionSection: some View {
+        let muscleData = computeMuscleDistribution(for: muscleTimePeriod)
+        
+        return VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                Text("Muskeldistribution")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                
+                Spacer()
+                
+                Menu {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            muscleTimePeriod = .last30Days
+                        }
+                    } label: {
+                        HStack {
+                            Text("Senaste 30 dagarna")
+                            if muscleTimePeriod == .last30Days {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            muscleTimePeriod = .last90Days
+                        }
+                    } label: {
+                        HStack {
+                            Text("Senaste 90 dagarna")
+                            if muscleTimePeriod == .last90Days {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            muscleTimePeriod = .total
+                        }
+                    } label: {
+                        HStack {
+                            Text("Totalt")
+                            if muscleTimePeriod == .total {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(muscleTimePeriod.displayName)
+                            .font(.system(size: 13, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.15))
+                    .cornerRadius(8)
+                }
+            }
+            
+            // Radar chart
+            MuscleRadarChart(muscleData: muscleData)
+                .frame(height: 280)
+            
+            // Legend - top muscle group
+            if let topMuscle = muscleData.max(by: { $0.value < $1.value }), topMuscle.value > 0 {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                    
+                    Text(topMuscle.key)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Text("\(topMuscle.value) sets")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.6))
+                    
+                    Text("100%")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                // Progress bar
+                GeometryReader { geometry in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white)
+                        .frame(width: geometry.size.width, height: 6)
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(20)
+        .background(Color.black)
+        .cornerRadius(20)
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Top Exercises Section
+    private var topExercisesSection: some View {
+        let topExercises = computeTopExercises()
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            // Header (same style as Progressive Overload)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("RANKING")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .tracking(1.5)
+                    
+                    Text("Top Övningar")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Dina mest tränade övningar")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if topExercises.count > 3 {
+                    NavigationLink {
+                        AllTopExercisesView(exercises: topExercises, exerciseHistories: exerciseHistories)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Se alla")
+                                .font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+            
+            // Exercise list (same style as Progressive Overload)
+            if topExercises.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "list.number")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    
+                    Text("Inga övningar ännu")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Kör ditt första gympass för att se din ranking")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(topExercises.prefix(3).enumerated()), id: \.element.name) { index, exercise in
+                        TopExerciseRow(
+                            rank: index + 1,
+                            exercise: exercise,
+                            exerciseId: getExerciseId(for: exercise.name),
+                            isLast: index == min(2, topExercises.count - 1)
+                        )
+                    }
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                
+                // See all button
+                if topExercises.count > 3 {
+                    NavigationLink {
+                        AllTopExercisesView(exercises: topExercises, exerciseHistories: exerciseHistories)
+                    } label: {
+                        HStack {
+                            Text("Se alla \(topExercises.count) övningar")
+                                .font(.system(size: 15, weight: .semibold))
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.primary)
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private func getExerciseId(for exerciseName: String) -> String? {
+        exerciseHistories.first { $0.name == exerciseName }?.exerciseId
+    }
+    
+    // MARK: - Compute Muscle Distribution
+    private func computeMuscleDistribution(for timePeriod: MuscleTimePeriod) -> [String: Int] {
+        var muscleSetCounts: [String: Int] = [
+            "Chest": 0,
+            "Shoulders": 0,
+            "Back": 0,
+            "Biceps": 0,
+            "Triceps": 0,
+            "Quads": 0,
+            "Hams": 0,
+            "Glutes": 0
+        ]
+        
+        let cutoffDate: Date? = {
+            switch timePeriod {
+            case .last30Days:
+                return Calendar.current.date(byAdding: .day, value: -30, to: Date())
+            case .last90Days:
+                return Calendar.current.date(byAdding: .day, value: -90, to: Date())
+            case .total:
+                return nil
+            }
+        }()
+        
+        for post in allPosts {
+            let type = post.activityType.lowercased()
+            guard type.contains("gym") else { continue }
+            guard let exercises = post.exercises else { continue }
+            
+            // Filter by date if cutoff is set
+            if let cutoff = cutoffDate, let postDate = parseDate(post.createdAt) {
+                guard postDate >= cutoff else { continue }
+            }
+            
+            for exercise in exercises {
+                let category = (exercise.category ?? "").lowercased()
+                let setCount = exercise.kg.count
+                
+                // Map categories to muscle groups
+                if category.contains("chest") || category.contains("bröst") {
+                    muscleSetCounts["Chest", default: 0] += setCount
+                } else if category.contains("shoulder") || category.contains("axlar") || category.contains("delt") {
+                    muscleSetCounts["Shoulders", default: 0] += setCount
+                } else if category.contains("back") || category.contains("rygg") || category.contains("lat") {
+                    muscleSetCounts["Back", default: 0] += setCount
+                } else if category.contains("bicep") {
+                    muscleSetCounts["Biceps", default: 0] += setCount
+                } else if category.contains("tricep") {
+                    muscleSetCounts["Triceps", default: 0] += setCount
+                } else if category.contains("quad") || category.contains("leg") || category.contains("ben") {
+                    muscleSetCounts["Quads", default: 0] += setCount
+                } else if category.contains("ham") || category.contains("hamstring") {
+                    muscleSetCounts["Hams", default: 0] += setCount
+                } else if category.contains("glute") || category.contains("rumpa") {
+                    muscleSetCounts["Glutes", default: 0] += setCount
+                }
+            }
+        }
+        
+        return muscleSetCounts
+    }
+    
+    // MARK: - Compute Top Exercises
+    private func computeTopExercises() -> [TopExerciseData] {
+        var exerciseMap: [String: TopExerciseData] = [:]
+        
+        for post in allPosts {
+            let type = post.activityType.lowercased()
+            guard type.contains("gym") else { continue }
+            guard let exercises = post.exercises else { continue }
+            guard let date = parseDate(post.createdAt) else { continue }
+            
+            for exercise in exercises {
+                let name = exercise.name
+                let setCount = exercise.kg.count
+                let maxWeight = exercise.kg.max() ?? 0
+                
+                if var existing = exerciseMap[name] {
+                    existing.totalSets += setCount
+                    existing.sessionCount += 1
+                    if date > existing.lastDate {
+                        existing.lastDate = date
+                    }
+                    if maxWeight > existing.bestWeight {
+                        existing.bestWeight = maxWeight
+                    }
+                    exerciseMap[name] = existing
+                } else {
+                    exerciseMap[name] = TopExerciseData(
+                        name: name,
+                        totalSets: setCount,
+                        sessionCount: 1,
+                        lastDate: date,
+                        bestWeight: maxWeight
+                    )
+                }
+            }
+        }
+        
+        return exerciseMap.values.sorted { $0.totalSets > $1.totalSets }
     }
     
     // MARK: - Helper Functions
@@ -578,13 +1244,18 @@ struct StatisticsView: View {
         do {
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: true)
             await MainActor.run {
-                self.allPosts = posts
-                updateStats()
-                calculateCalendarData()
-                calculateStreaks()
-                computeExerciseHistories()
-                isLoading = false
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.allPosts = posts
+                    updateStats()
+                    calculateCalendarData()
+                    calculateStreaks()
+                    computeExerciseHistories()
+                    isLoading = false
+                }
             }
+            
+            // Load AI predictions after exercise histories are computed
+            await loadAIPredictions()
         } catch {
             print("Error loading stats: \(error)")
             await MainActor.run {
@@ -650,14 +1321,15 @@ struct StatisticsView: View {
     }
     
     private func updateStats() {
-        let posts = filteredPosts
-        let now = Date()
-        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
-        
-        let thisWeekPosts = posts.filter { post in
-            guard let date = parseDate(post.createdAt) else { return false }
-            return date >= startOfWeek
-        }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            let posts = filteredPosts
+            let now = Date()
+            let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+            
+            let thisWeekPosts = posts.filter { post in
+                guard let date = parseDate(post.createdAt) else { return false }
+                return date >= startOfWeek
+            }
         
         if selectedSport == .gym {
             // Calculate volume and sets for gym
@@ -720,54 +1392,59 @@ struct StatisticsView: View {
         }
         weeklyData = data
     }
+}
     
     private func calculateCalendarData() {
-        let posts = filteredPosts
-        let thisMonth = calendar.dateComponents([.year, .month], from: Date())
-        
-        var days: Set<Int> = []
-        for post in posts {
-            if let date = parseDate(post.createdAt) {
-                let postComponents = calendar.dateComponents([.year, .month, .day], from: date)
-                if postComponents.year == thisMonth.year && postComponents.month == thisMonth.month {
-                    if let day = postComponents.day {
-                        days.insert(day)
+        withAnimation(.easeInOut(duration: 0.3)) {
+            let posts = filteredPosts
+            let thisMonth = calendar.dateComponents([.year, .month], from: Date())
+            
+            var days: Set<Int> = []
+            for post in posts {
+                if let date = parseDate(post.createdAt) {
+                    let postComponents = calendar.dateComponents([.year, .month, .day], from: date)
+                    if postComponents.year == thisMonth.year && postComponents.month == thisMonth.month {
+                        if let day = postComponents.day {
+                            days.insert(day)
+                        }
                     }
                 }
             }
+            workoutDays = days
         }
-        workoutDays = days
     }
     
     private func calculateStreaks() {
-        // Simple streak calculation
-        let posts = filteredPosts.sorted { parseDate($0.createdAt) ?? Date.distantPast > parseDate($1.createdAt) ?? Date.distantPast }
-        
-        var streak = 0
-        var activities = 0
-        var lastWeek: Int?
-        
-        for post in posts {
-            guard let date = parseDate(post.createdAt) else { continue }
-            let week = calendar.component(.weekOfYear, from: date)
+        withAnimation(.easeInOut(duration: 0.3)) {
+            // Simple streak calculation
+            let posts = filteredPosts.sorted { parseDate($0.createdAt) ?? Date.distantPast > parseDate($1.createdAt) ?? Date.distantPast }
             
-            if lastWeek == nil {
-                lastWeek = week
-                streak = 1
-                activities = 1
-            } else if week == lastWeek {
-                activities += 1
-            } else if week == lastWeek! - 1 || (lastWeek == 1 && week >= 52) {
-                streak += 1
-                activities += 1
-                lastWeek = week
-            } else {
-                break
+            var streak = 0
+            var activities = 0
+            var lastWeek: Int?
+            
+            for post in posts {
+                guard let date = parseDate(post.createdAt) else { continue }
+                let week = calendar.component(.weekOfYear, from: date)
+                
+                if lastWeek == nil {
+                    lastWeek = week
+                    streak = 1
+                    activities = 1
+                } else if week == lastWeek {
+                    activities += 1
+                } else if week == lastWeek! - 1 || (lastWeek == 1 && week >= 52) {
+                    streak += 1
+                    activities += 1
+                    lastWeek = week
+                } else {
+                    break
+                }
             }
+            
+            currentStreak = streak
+            streakActivities = activities
         }
-        
-        currentStreak = streak
-        streakActivities = activities
     }
     
     private func parseDate(_ dateString: String) -> Date? {
@@ -2065,39 +2742,46 @@ struct MonthlyReportView: View {
                         errorView(errorMessage)
                             .frame(width: geometry.size.width, height: geometry.size.height)
                     } else {
-                        // Black header section
+                        // Black header section - elegant fade and scale
                         headerSection(geometry: geometry)
                             .opacity(showHeader ? 1 : 0)
+                            .scaleEffect(showHeader ? 1 : 0.97)
                         
-                        // Year chart
+                        // Year chart - slide up with fade
                         yearChartSection(geometry: geometry)
                             .opacity(showYearChart ? 1 : 0)
-                            .offset(y: showYearChart ? 0 : 20)
+                            .offset(y: showYearChart ? 0 : 25)
+                            .scaleEffect(showYearChart ? 1 : 0.98)
                         
-                        // Month totals
+                        // Month totals - elegant reveal
                         monthTotalsSection(geometry: geometry)
                             .opacity(showTotals ? 1 : 0)
-                            .offset(y: showTotals ? 0 : 20)
+                            .offset(y: showTotals ? 0 : 25)
+                            .scaleEffect(showTotals ? 1 : 0.98)
                         
-                        // Calendar
+                        // Calendar - smooth appearance
                         calendarSection(geometry: geometry)
                             .opacity(showCalendar ? 1 : 0)
-                            .offset(y: showCalendar ? 0 : 20)
+                            .offset(y: showCalendar ? 0 : 25)
+                            .scaleEffect(showCalendar ? 1 : 0.98)
                         
-                        // Top Sports
+                        // Top Sports - refined animation
                         topSportsSection(geometry: geometry)
                             .opacity(showSports ? 1 : 0)
-                            .offset(y: showSports ? 0 : 20)
+                            .offset(y: showSports ? 0 : 25)
+                            .scaleEffect(showSports ? 1 : 0.98)
                         
-                        // Longest Activity
+                        // Longest Activity - gentle reveal
                         longestActivitySection(geometry: geometry)
                             .opacity(showLongest ? 1 : 0)
-                            .offset(y: showLongest ? 0 : 20)
+                            .offset(y: showLongest ? 0 : 25)
+                            .scaleEffect(showLongest ? 1 : 0.98)
                         
-                        // Kudos section
+                        // Kudos section - final elegant touch
                         kudosSection(geometry: geometry)
                             .opacity(showKudos ? 1 : 0)
-                            .offset(y: showKudos ? 0 : 20)
+                            .offset(y: showKudos ? 0 : 25)
+                            .scaleEffect(showKudos ? 1 : 0.98)
                     }
                 }
             }
@@ -2129,32 +2813,32 @@ struct MonthlyReportView: View {
         showLongest = false
         showKudos = false
         
-        // Staggered animations
-        withAnimation(.easeOut(duration: 0.5)) {
+        // Elegant staggered animations with smooth spring curves
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
             showHeader = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.15)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.12)) {
             showYearChart = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.25)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.22)) {
             showTotals = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.35)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.32)) {
             showCalendar = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.45)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.42)) {
             showSports = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.55)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.52)) {
             showLongest = true
         }
         
-        withAnimation(.easeOut(duration: 0.5).delay(0.65)) {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.62)) {
             showKudos = true
         }
     }
@@ -2909,6 +3593,78 @@ struct StatExerciseHistory: Identifiable {
         if change < 0 { return "arrow.down.right" }
         return "pause.fill"
     }
+    
+    // MARK: - 1RM Predictions
+    
+    /// Current 1RM = the HEAVIEST weight the user has actually lifted
+    var current1RM: Double {
+        // Find the heaviest weight lifted across all history
+        let allWeights = history.flatMap { $0.sets }.map { $0.weight }
+        return allWeights.max() ?? 0
+    }
+    
+    /// Latest 1RM = heaviest weight from most recent workout
+    var latest1RM: Double {
+        latestSnapshot?.bestSet.weight ?? 0
+    }
+    
+    /// Max weight from 30 days ago (or earliest if less than 30 days of data)
+    var thirtyDaysAgo1RM: Double? {
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        // Find snapshot closest to 30 days ago
+        let oldSnapshots = history.filter { $0.date <= thirtyDaysAgo }
+        return oldSnapshots.last?.bestSet.weight ?? history.first?.bestSet.weight
+    }
+    
+    /// Change in max weight over last 30 days (in kg)
+    var thirtyDayChange: Double {
+        guard let old1RM = thirtyDaysAgo1RM, old1RM > 0 else { return 0 }
+        return latest1RM - old1RM
+    }
+    
+    /// Monthly progression rate (kg per month) based on historical data
+    var monthlyProgressionRate: Double {
+        guard history.count >= 2,
+              let firstDate = history.first?.date,
+              let lastDate = history.last?.date else { return 0 }
+        
+        let firstWeight = history.first?.bestSet.weight ?? 0
+        let lastWeight = history.last?.bestSet.weight ?? 0
+        
+        let daysDiff = Calendar.current.dateComponents([.day], from: firstDate, to: lastDate).day ?? 0
+        guard daysDiff > 7 else { return 0 } // Need at least a week of data
+        
+        let monthsDiff = Double(daysDiff) / 30.0
+        return (lastWeight - firstWeight) / max(monthsDiff, 0.5)
+    }
+    
+    /// Predicted 1RM in 3 months
+    var prediction3Months: Double {
+        let rate = monthlyProgressionRate
+        // Cap progression rate to realistic values (max ~2.5kg/month for most exercises)
+        let cappedRate = min(max(rate, 0), 5.0)
+        return latest1RM + (cappedRate * 3)
+    }
+    
+    /// Predicted 1RM in 6 months
+    var prediction6Months: Double {
+        let rate = monthlyProgressionRate
+        let cappedRate = min(max(rate, 0), 5.0)
+        return latest1RM + (cappedRate * 6)
+    }
+    
+    /// Predicted 1RM in 1 year
+    var prediction1Year: Double {
+        let rate = monthlyProgressionRate
+        // Diminishing returns over longer periods - reduce rate by 20% for year prediction
+        let cappedRate = min(max(rate * 0.8, 0), 4.0)
+        return latest1RM + (cappedRate * 12)
+    }
+    
+    /// Whether we have enough data to make predictions
+    var canPredict: Bool {
+        history.count >= 2 && monthlyProgressionRate > 0
+    }
 }
 
 // MARK: - Exercise Row for Statistics
@@ -2999,11 +3755,28 @@ struct StatExerciseRow: View {
 
 // MARK: - All Exercises List View
 struct AllExercisesListView: View {
-    let exerciseHistories: [StatExerciseHistory]
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    private let providedHistories: [StatExerciseHistory]?
+    @State private var loadedHistories: [StatExerciseHistory] = []
+    @State private var isLoading = false
     @State private var searchText = ""
     @State private var showStats = false
     @State private var showSearch = false
     @State private var showList = false
+    
+    // Initialize with provided histories (from StatisticsView)
+    init(exerciseHistories: [StatExerciseHistory]) {
+        self.providedHistories = exerciseHistories
+    }
+    
+    // Initialize without histories (will load its own - from SocialView)
+    init() {
+        self.providedHistories = nil
+    }
+    
+    private var exerciseHistories: [StatExerciseHistory] {
+        providedHistories ?? loadedHistories
+    }
     
     private var filteredExercises: [StatExerciseHistory] {
         if searchText.isEmpty {
@@ -3016,57 +3789,74 @@ struct AllExercisesListView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Search bar
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.4))
-                    
-                    TextField("Sök övning...", text: $searchText)
-                        .font(.system(size: 16))
-                        .foregroundColor(.black)
+        ZStack {
+            if isLoading && exerciseHistories.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text("Laddar övningar...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(Color.white)
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                )
-                .padding(.horizontal, 16)
-                .opacity(showSearch ? 1 : 0)
-                .offset(y: showSearch ? 0 : 10)
-                
-                // Exercise list
-                VStack(spacing: 0) {
-                    ForEach(Array(filteredExercises.enumerated()), id: \.element.id) { index, history in
-                        NavigationLink {
-                            StatExerciseDetailView(history: history)
-                        } label: {
-                            CleanExerciseRow(history: history, isLast: index == filteredExercises.count - 1)
+            } else {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Search bar
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+                            
+                            TextField("Sök övning...", text: $searchText)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 16)
+                        .opacity(showSearch ? 1 : 0)
+                        .offset(y: showSearch ? 0 : 10)
+                        
+                        // Exercise list
+                        VStack(spacing: 0) {
+                            ForEach(Array(filteredExercises.enumerated()), id: \.element.id) { index, history in
+                                NavigationLink {
+                                    StatExerciseDetailView(history: history)
+                                } label: {
+                                    CleanExerciseRow(history: history, isLast: index == filteredExercises.count - 1)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 20)
+                        .opacity(showList ? 1 : 0)
+                        .offset(y: showList ? 0 : 15)
                     }
+                    .padding(.top, 16)
                 }
-                .background(Color.white)
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 20)
-                .opacity(showList ? 1 : 0)
-                .offset(y: showList ? 0 : 15)
             }
-            .padding(.top, 16)
         }
-        .background(Color.white)
+        .background(Color(.systemBackground))
         .navigationTitle("Alla övningar")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // Only load if no histories were provided
+            if providedHistories == nil {
+                await loadExerciseHistories()
+            }
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.4)) {
                 showStats = true
@@ -3076,6 +3866,85 @@ struct AllExercisesListView: View {
             }
             withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
                 showList = true
+            }
+        }
+    }
+    
+    private func loadExerciseHistories() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        await MainActor.run { isLoading = true }
+        
+        do {
+            let posts = try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
+            let gymPosts = posts.filter { $0.activityType.lowercased().contains("gym") }
+            
+            // Group by exercise name
+            var exerciseDict: [String: (name: String, exerciseId: String?, snapshots: [StatExerciseSnapshot])] = [:]
+            
+            for post in gymPosts {
+                guard let exercises = post.exercises else { continue }
+                
+                for exercise in exercises {
+                    let normalizedName = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    
+                    // Build sets for this session
+                    var sets: [StatSetSnapshot] = []
+                    var bestSet: StatSetSnapshot?
+                    
+                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
+                        let setSnapshot = StatSetSnapshot(weight: exercise.kg[i], reps: exercise.reps[i])
+                        sets.append(setSnapshot)
+                        
+                        if bestSet == nil || exercise.kg[i] > bestSet!.weight || 
+                           (exercise.kg[i] == bestSet!.weight && exercise.reps[i] > bestSet!.reps) {
+                            bestSet = setSnapshot
+                        }
+                    }
+                    
+                    guard let best = bestSet else { continue }
+                    
+                    let sessionDate = ISO8601DateFormatter().date(from: post.createdAt) ?? Date()
+                    
+                    let snapshot = StatExerciseSnapshot(
+                        date: sessionDate,
+                        bestSet: best,
+                        sets: sets,
+                        category: nil
+                    )
+                    
+                    if var existing = exerciseDict[normalizedName] {
+                        existing.snapshots.append(snapshot)
+                        existing.snapshots.sort { $0.date < $1.date }
+                        exerciseDict[normalizedName] = existing
+                    } else {
+                        exerciseDict[normalizedName] = (
+                            name: exercise.name,
+                            exerciseId: exercise.id,
+                            snapshots: [snapshot]
+                        )
+                    }
+                }
+            }
+            
+            // Convert to StatExerciseHistory array
+            let histories: [StatExerciseHistory] = exerciseDict.values.map { item in
+                StatExerciseHistory(
+                    name: item.name,
+                    category: nil,
+                    exerciseId: item.exerciseId,
+                    history: item.snapshots
+                )
+            }.sorted { $0.history.count > $1.history.count }
+            
+            await MainActor.run {
+                loadedHistories = histories
+                isLoading = false
+            }
+        } catch {
+            print("❌ Error loading exercise histories: \(error)")
+            await MainActor.run {
+                isLoading = false
             }
         }
     }
@@ -3098,12 +3967,12 @@ private struct CleanExerciseRow: View {
                     // Fallback icon
                     ZStack {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.black.opacity(0.05))
+                            .fill(Color.primary.opacity(0.05))
                             .frame(width: 56, height: 56)
                         
                         Image(systemName: "dumbbell.fill")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                     }
                 }
                 
@@ -3111,23 +3980,23 @@ private struct CleanExerciseRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(history.name)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     HStack(spacing: 6) {
                         if let category = history.category {
                             Text(category)
                                 .font(.system(size: 13))
-                                .foregroundColor(.black.opacity(0.5))
+                                .foregroundColor(.secondary)
                         }
                         
                         Text("•")
                             .font(.system(size: 8))
-                            .foregroundColor(.black.opacity(0.3))
+                            .foregroundColor(.secondary.opacity(0.5))
                         
                         Text("\(history.history.count) pass")
                             .font(.system(size: 13))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -3138,23 +4007,23 @@ private struct CleanExerciseRow: View {
                     HStack(spacing: 2) {
                         Text("\(String(format: "%.0f", bestWeight))")
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         Text("kg")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(.secondary)
                     }
                 }
                 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.3))
+                    .foregroundColor(.secondary.opacity(0.5))
             }
             .padding(.vertical, 14)
             .padding(.horizontal, 16)
             
             if !isLast {
                 Rectangle()
-                    .fill(Color.black.opacity(0.08))
+                    .fill(Color.primary.opacity(0.08))
                     .frame(height: 1)
                     .padding(.leading, 86)
             }
@@ -3213,7 +4082,7 @@ struct StatExerciseDetailView: View {
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(Color(.systemBackground))
         .navigationTitle(history.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -3242,39 +4111,39 @@ struct StatExerciseDetailView: View {
             } else {
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.black.opacity(0.05))
+                        .fill(Color.primary.opacity(0.05))
                         .frame(width: 120, height: 120)
                     
                     Image(systemName: "dumbbell.fill")
                         .font(.system(size: 44, weight: .medium))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
             }
             
             VStack(spacing: 6) {
                 Text(history.name)
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                 
                 if let category = history.category {
                     Text(category)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
-                        .background(Color.black.opacity(0.05))
+                        .background(Color.primary.opacity(0.05))
                         .cornerRadius(8)
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
     
@@ -3305,7 +4174,7 @@ struct StatExerciseDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Utvecklingskurva")
                 .font(.system(size: 17, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
             
             // Simple line chart
             GeometryReader { geometry in
@@ -3322,7 +4191,7 @@ struct StatExerciseDetailView: View {
                     VStack(spacing: 0) {
                         ForEach(0..<4) { i in
                             Rectangle()
-                                .fill(Color.black.opacity(0.08))
+                                .fill(Color.primary.opacity(0.08))
                                 .frame(height: 1)
                             if i < 3 { Spacer() }
                         }
@@ -3373,7 +4242,7 @@ struct StatExerciseDetailView: View {
                             let y = chartHeight - normalizedY * chartHeight
                             
                             Circle()
-                                .fill(Color.white)
+                                .fill(Color(.systemBackground))
                                 .frame(width: 12, height: 12)
                                 .overlay(
                                     Circle()
@@ -3388,15 +4257,15 @@ struct StatExerciseDetailView: View {
                     VStack {
                         Text("\(Int(maxWeight)) kg")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(.secondary)
                         Spacer()
                         Text("\(Int((maxWeight + minWeight) / 2)) kg")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(.secondary)
                         Spacer()
                         Text("\(Int(minWeight)) kg")
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(.secondary)
                     }
                     .frame(height: chartHeight)
                     .offset(x: chartWidth + 10)
@@ -3406,11 +4275,11 @@ struct StatExerciseDetailView: View {
             .frame(height: 180)
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
     
@@ -3419,13 +4288,13 @@ struct StatExerciseDetailView: View {
             HStack {
                 Text("Historik")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
                 Text("\(history.history.count) pass")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(.secondary)
             }
             
             ForEach(Array(history.history.enumerated().reversed()), id: \.element.id) { index, snapshot in
@@ -3436,17 +4305,17 @@ struct StatExerciseDetailView: View {
                     HStack(spacing: 12) {
                         // Timeline indicator
                         Circle()
-                            .fill(isLatest ? Color.green : Color.black.opacity(0.2))
+                            .fill(isLatest ? Color.green : Color.primary.opacity(0.2))
                             .frame(width: 10, height: 10)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text(dateFormatter.string(from: snapshot.date))
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(isLatest ? .black : .black.opacity(0.6))
+                                .foregroundColor(isLatest ? .primary : .secondary)
                             
                             Text("\(String(format: "%.1f", snapshot.bestSet.weight)) kg × \(snapshot.bestSet.reps) reps")
                                 .font(.system(size: 13))
-                                .foregroundColor(.black.opacity(0.5))
+                                .foregroundColor(.secondary)
                         }
                         
                         Spacer()
@@ -3455,10 +4324,10 @@ struct StatExerciseDetailView: View {
                             HStack(spacing: 2) {
                                 Text("\(String(format: "%.0f", snapshot.bestSet.weight))")
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(isLatest ? .black : .black.opacity(0.6))
+                                    .foregroundColor(isLatest ? .primary : .secondary)
                                 Text("kg")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.black.opacity(0.5))
+                                    .foregroundColor(.secondary)
                             }
                             
                             if let prev = previousSnapshot {
@@ -3466,7 +4335,7 @@ struct StatExerciseDetailView: View {
                                 let sign = delta >= 0 ? "+" : ""
                                 Text("\(sign)\(String(format: "%.1f", delta)) kg")
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(delta >= 0 ? .green : .black.opacity(0.4))
+                                    .foregroundColor(delta >= 0 ? .green : .secondary)
                             }
                         }
                     }
@@ -3474,7 +4343,7 @@ struct StatExerciseDetailView: View {
                     
                     if index > 0 {
                         Rectangle()
-                            .fill(Color.black.opacity(0.08))
+                            .fill(Color.primary.opacity(0.08))
                             .frame(height: 1)
                             .padding(.leading, 22)
                     }
@@ -3482,16 +4351,16 @@ struct StatExerciseDetailView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
 }
 
-// MARK: - Clean Stat Card (White/Black/Green only)
+// MARK: - Clean Stat Card (Adaptive colors)
 private struct CleanStatCard: View {
     let value: String
     let unit: String
@@ -3503,26 +4372,902 @@ private struct CleanStatCard: View {
             HStack(spacing: 2) {
                 Text(value)
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(isHighlighted ? .green : .black)
+                    .foregroundColor(isHighlighted ? .green : .primary)
                 if !unit.isEmpty {
                     Text(unit)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(.secondary)
                 }
             }
             
             Text(label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - 1RM Prediction Row (Strava-style)
+struct OneRMPredictionRow: View {
+    let history: StatExerciseHistory
+    var aiPrediction: OneRepMaxPredictionService.AIPrediction? = nil
+    var isLast: Bool = false
+    
+    // Show 1-year prediction as the main value
+    private var prediction1Year: Double {
+        aiPrediction?.prediction1Year ?? history.prediction1Year
+    }
+    
+    private var current1RM: Double {
+        aiPrediction?.current1RM ?? history.latest1RM
+    }
+    
+    private var increase: Double {
+        prediction1Year - current1RM
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                // Exercise GIF with clean rounded corners
+                if let exerciseId = history.exerciseId {
+                    ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    // Fallback icon
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 52, height: 52)
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                // Exercise name and current
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(history.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Text("Nu: \(String(format: "%.0f", current1RM)) kg")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // 1-year prediction as main value
+                VStack(alignment: .trailing, spacing: 3) {
+                    HStack(spacing: 2) {
+                        Text("\(String(format: "%.0f", prediction1Year))")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("kg")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("+\(String(format: "%.0f", increase)) kg")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.green)
+                }
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.3))
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            
+            if !isLast {
+                Divider()
+                    .padding(.leading, 86)
+            }
+        }
+    }
+}
+
+// Wavy circle shape (like Strava's distance badges)
+struct WavyCircleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let waveCount = 12
+        let waveDepth: CGFloat = 3
+        
+        var path = Path()
+        
+        for i in 0..<360 {
+            let angle = Double(i) * .pi / 180
+            let wave = sin(Double(i * waveCount) * .pi / 180) * waveDepth
+            let r = radius + wave
+            let x = center.x + r * cos(angle)
+            let y = center.y + r * sin(angle)
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
+// MARK: - All 1RM Predictions View
+struct All1RMPredictionsView: View {
+    let exerciseHistories: [StatExerciseHistory]
+    var aiPredictions: [OneRepMaxPredictionService.AIPrediction] = []
+    @State private var searchText = ""
+    @State private var showContent = false
+    
+    private var filteredExercises: [StatExerciseHistory] {
+        if searchText.isEmpty {
+            return exerciseHistories
+        }
+        return exerciseHistories.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            ($0.category?.localizedCaseInsensitiveContains(searchText) ?? false)
+        }
+    }
+    
+    private func getPrediction(for exerciseName: String) -> OneRepMaxPredictionService.AIPrediction? {
+        aiPredictions.first { $0.exerciseName.lowercased() == exerciseName.lowercased() }
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Search bar
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Sök övning...", text: $searchText)
+                        .font(.system(size: 16))
+                        .foregroundColor(.primary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+                .padding(.horizontal, 16)
+                
+                // Exercise list
+                VStack(spacing: 0) {
+                    ForEach(Array(filteredExercises.enumerated()), id: \.element.id) { index, history in
+                        let aiPrediction = getPrediction(for: history.name)
+                        NavigationLink {
+                            OneRepMaxDetailView(history: history, aiPrediction: aiPrediction)
+                        } label: {
+                            OneRMPredictionRow(
+                                history: history, 
+                                aiPrediction: aiPrediction,
+                                isLast: index == filteredExercises.count - 1
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .padding(.horizontal, 16)
+            }
+            .padding(.top, 16)
+            .opacity(showContent ? 1 : 0)
+            .offset(y: showContent ? 0 : 15)
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("1RM Prediktioner")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4)) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - 1RM Detail View with Future Predictions
+struct OneRepMaxDetailView: View {
+    let history: StatExerciseHistory
+    var aiPrediction: OneRepMaxPredictionService.AIPrediction? = nil
+    
+    @State private var showHero = false
+    @State private var showCurrent = false
+    @State private var showPredictions = false
+    @State private var showChart = false
+    @State private var showTips = false
+    
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter
+    }()
+    
+    // Use AI predictions if available, fallback to formula-based
+    private var current1RM: Double {
+        aiPrediction?.current1RM ?? history.latest1RM
+    }
+    
+    private var prediction3M: Double {
+        aiPrediction?.prediction3Months ?? history.prediction3Months
+    }
+    
+    private var prediction6M: Double {
+        aiPrediction?.prediction6Months ?? history.prediction6Months
+    }
+    
+    private var prediction1Y: Double {
+        aiPrediction?.prediction1Year ?? history.prediction1Year
+    }
+    
+    private var monthlyRate: Double {
+        aiPrediction?.monthlyProgressRate ?? history.monthlyProgressionRate
+    }
+    
+    private var hasAIPrediction: Bool {
+        aiPrediction != nil
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Hero card with exercise image
+                heroCard
+                    .opacity(showHero ? 1 : 0)
+                    .scaleEffect(showHero ? 1 : 0.95)
+                
+                // Current 1RM card
+                current1RMCard
+                    .opacity(showCurrent ? 1 : 0)
+                    .offset(y: showCurrent ? 0 : 15)
+                
+                // AI Tips card (if available)
+                if let tips = aiPrediction?.tips, !tips.isEmpty {
+                    aiTipsCard(tips: tips)
+                        .opacity(showTips ? 1 : 0)
+                        .offset(y: showTips ? 0 : 15)
+                }
+                
+                // Future predictions
+                if hasAIPrediction || history.canPredict {
+                    futurePredictionsCard
+                        .opacity(showPredictions ? 1 : 0)
+                        .offset(y: showPredictions ? 0 : 15)
+                }
+                
+                // 1RM progression chart
+                if history.history.count >= 2 {
+                    oneRMChartCard
+                        .opacity(showChart ? 1 : 0)
+                        .offset(y: showChart ? 0 : 15)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle(history.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4)) {
+                showHero = true
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+                showCurrent = true
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.15)) {
+                showTips = true
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+                showPredictions = true
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+                showChart = true
+            }
+        }
+    }
+    
+    private var heroCard: some View {
+        VStack(spacing: 16) {
+            // Exercise GIF with clean rounded corners
+            if let exerciseId = history.exerciseId {
+                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.gray.opacity(0.1))
+                        .frame(width: 100, height: 100)
+                    Image(systemName: "dumbbell.fill")
+                        .font(.system(size: 40, weight: .medium))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            VStack(spacing: 6) {
+                Text(history.name)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                
+                if let category = history.category {
+                    Text(category)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(20)
+    }
+    
+    private var current1RMCard: some View {
+        VStack(spacing: 20) {
+            // Current max weight
+            VStack(spacing: 4) {
+                Text("Nuvarande Max")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text("\(String(format: "%.0f", current1RM))")
+                        .font(.system(size: 52, weight: .bold))
+                        .foregroundColor(.primary)
+                    Text("kg")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // Progression badge
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("+\(String(format: "%.1f", max(monthlyRate, 0))) kg/månad")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(.green)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(20)
+            
+            // Info
+            Text("Baserat på \(history.history.count) träningspass")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .padding(20)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(20)
+    }
+    
+    private func aiTipsCard(tips: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                Text("Tips")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+            
+            Text(tips)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+        )
+    }
+    
+    private var futurePredictionsCard: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Prediktioner")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            
+            // Prediction timeline with cleaner Apple style
+            VStack(spacing: 12) {
+                PredictionTimelineRow(
+                    timeLabel: "3 månader",
+                    prediction: prediction3M,
+                    current: current1RM,
+                    color: .green.opacity(0.6),
+                    isLast: false
+                )
+                
+                PredictionTimelineRow(
+                    timeLabel: "6 månader",
+                    prediction: prediction6M,
+                    current: current1RM,
+                    color: .green.opacity(0.8),
+                    isLast: false
+                )
+                
+                PredictionTimelineRow(
+                    timeLabel: "1 år",
+                    prediction: prediction1Y,
+                    current: current1RM,
+                    color: .green,
+                    isLast: true
+                )
+            }
+        }
+        .padding(20)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(20)
+    }
+    
+    private var oneRMChartCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("1RM utveckling")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.primary)
+            
+            // Chart showing estimated 1RM over time
+            GeometryReader { geometry in
+                let data = history.history
+                let oneRMs = data.map { $0.estimated1RM }
+                let maxRM = oneRMs.max() ?? 1
+                let minRM = oneRMs.min() ?? 0
+                let range = maxRM - minRM > 0 ? maxRM - minRM : 1
+                let chartWidth = geometry.size.width - 50
+                let chartHeight: CGFloat = 180
+                let pointSpacing = chartWidth / CGFloat(max(data.count - 1, 1))
+                
+                ZStack(alignment: .bottomLeading) {
+                    // Grid lines
+                    VStack(spacing: 0) {
+                        ForEach(0..<4) { i in
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 1)
+                            if i < 3 { Spacer() }
+                        }
+                    }
+                    .frame(height: chartHeight)
+                    .padding(.trailing, 50)
+                    
+                    // Area fill with gradient
+                    if data.count > 1 {
+                        Path { path in
+                            path.move(to: CGPoint(x: 0, y: chartHeight))
+                            for (index, snapshot) in data.enumerated() {
+                                let x = CGFloat(index) * pointSpacing
+                                let normalizedY = (snapshot.estimated1RM - minRM) / range
+                                let y = chartHeight - normalizedY * chartHeight
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+                            path.addLine(to: CGPoint(x: CGFloat(data.count - 1) * pointSpacing, y: chartHeight))
+                            path.closeSubpath()
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.green.opacity(0.3), Color.green.opacity(0.05)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        
+                        // Line
+                        Path { path in
+                            for (index, snapshot) in data.enumerated() {
+                                let x = CGFloat(index) * pointSpacing
+                                let normalizedY = (snapshot.estimated1RM - minRM) / range
+                                let y = chartHeight - normalizedY * chartHeight
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .stroke(Color.green, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                        
+                        // Points
+                        ForEach(data.indices, id: \.self) { index in
+                            let x = CGFloat(index) * pointSpacing
+                            let normalizedY = (data[index].estimated1RM - minRM) / range
+                            let y = chartHeight - normalizedY * chartHeight
+                            
+                            Circle()
+                                .fill(Color(.systemBackground))
+                                .frame(width: 12, height: 12)
+                                .overlay(
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 8, height: 8)
+                                )
+                                .position(x: x, y: y)
+                        }
+                    }
+                    
+                    // Y-axis labels
+                    VStack {
+                        Text("\(Int(maxRM)) kg")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(Int((maxRM + minRM) / 2)) kg")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(Int(minRM)) kg")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(height: chartHeight)
+                    .offset(x: chartWidth + 10)
+                }
+                .frame(height: chartHeight)
+            }
+            .frame(height: 180)
+        }
+        .padding(20)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(20)
+    }
+}
+
+// MARK: - Prediction Timeline Row
+private struct PredictionTimelineRow: View {
+    let timeLabel: String
+    let prediction: Double
+    let current: Double
+    let color: Color
+    let isLast: Bool
+    
+    private var increase: Double {
+        prediction - current
+    }
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Time label
+            Text(timeLabel)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            
+            Spacer()
+            
+            // Prediction value
+            HStack(spacing: 4) {
+                Text("\(String(format: "%.0f", prediction))")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                Text("kg")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Increase badge
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("+\(String(format: "%.0f", increase))")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.15))
+            .cornerRadius(8)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 4)
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Top Exercise Data Model
+struct TopExerciseData {
+    let name: String
+    var totalSets: Int
+    var sessionCount: Int
+    var lastDate: Date
+    var bestWeight: Double
+}
+
+// MARK: - Muscle Radar Chart
+// MARK: - Muscle Time Period
+enum MuscleTimePeriod: String, CaseIterable {
+    case last30Days = "30"
+    case last90Days = "90"
+    case total = "total"
+    
+    var displayName: String {
+        switch self {
+        case .last30Days: return "Senaste 30 dagarna"
+        case .last90Days: return "Senaste 90 dagarna"
+        case .total: return "Totalt"
+        }
+    }
+}
+
+struct MuscleRadarChart: View {
+    let muscleData: [String: Int]
+    
+    private let muscles = ["Chest", "Shoulders", "Back", "Biceps", "Triceps", "Quads", "Hams", "Glutes"]
+    
+    private var maxValue: Int {
+        max(muscleData.values.max() ?? 1, 1)
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            let radius = min(geometry.size.width, geometry.size.height) / 2 - 40
+            
+            ZStack {
+                // Grid circles
+                ForEach(1...4, id: \.self) { level in
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                        .frame(width: radius * 2 * CGFloat(level) / 4, height: radius * 2 * CGFloat(level) / 4)
+                }
+                
+                // Grid lines from center
+                ForEach(0..<muscles.count, id: \.self) { index in
+                    let angle = angleFor(index: index)
+                    Path { path in
+                        path.move(to: center)
+                        path.addLine(to: pointFor(angle: angle, radius: radius, center: center))
+                    }
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                }
+                
+                // Data polygon fill
+                Path { path in
+                    for (index, muscle) in muscles.enumerated() {
+                        let value = muscleData[muscle] ?? 0
+                        let normalizedValue = maxValue > 0 ? CGFloat(value) / CGFloat(maxValue) : 0
+                        let angle = angleFor(index: index)
+                        let point = pointFor(angle: angle, radius: radius * normalizedValue, center: center)
+                        
+                        if index == 0 {
+                            path.move(to: point)
+                        } else {
+                            path.addLine(to: point)
+                        }
+                    }
+                    path.closeSubpath()
+                }
+                .fill(Color.white.opacity(0.2))
+                
+                // Data polygon stroke
+                Path { path in
+                    for (index, muscle) in muscles.enumerated() {
+                        let value = muscleData[muscle] ?? 0
+                        let normalizedValue = maxValue > 0 ? CGFloat(value) / CGFloat(maxValue) : 0
+                        let angle = angleFor(index: index)
+                        let point = pointFor(angle: angle, radius: radius * normalizedValue, center: center)
+                        
+                        if index == 0 {
+                            path.move(to: point)
+                        } else {
+                            path.addLine(to: point)
+                        }
+                    }
+                    path.closeSubpath()
+                }
+                .stroke(Color.white, lineWidth: 2)
+                
+                // Data points
+                ForEach(0..<muscles.count, id: \.self) { index in
+                    let muscle = muscles[index]
+                    let value = muscleData[muscle] ?? 0
+                    let normalizedValue = maxValue > 0 ? CGFloat(value) / CGFloat(maxValue) : 0
+                    let angle = angleFor(index: index)
+                    let point = pointFor(angle: angle, radius: radius * normalizedValue, center: center)
+                    
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 8, height: 8)
+                        .position(point)
+                }
+                
+                // Labels
+                ForEach(0..<muscles.count, id: \.self) { index in
+                    let muscle = muscles[index]
+                    let angle = angleFor(index: index)
+                    let labelRadius = radius + 25
+                    let point = pointFor(angle: angle, radius: labelRadius, center: center)
+                    
+                    Text(muscle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                        .position(point)
+                }
+            }
+        }
+    }
+    
+    private func angleFor(index: Int) -> Double {
+        let sliceAngle = 360.0 / Double(muscles.count)
+        return (sliceAngle * Double(index) - 90) * .pi / 180
+    }
+    
+    private func pointFor(angle: Double, radius: CGFloat, center: CGPoint) -> CGPoint {
+        CGPoint(
+            x: center.x + radius * CGFloat(cos(angle)),
+            y: center.y + radius * CGFloat(sin(angle))
+        )
+    }
+}
+
+// MARK: - Top Exercise Row
+struct TopExerciseRow: View {
+    let rank: Int
+    let exercise: TopExerciseData
+    let exerciseId: String?
+    var isLast: Bool = false
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                // Exercise GIF or fallback with rank badge
+                ZStack(alignment: .bottomTrailing) {
+                    if let exerciseId = exerciseId {
+                        ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        // Fallback icon
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.primary.opacity(0.05))
+                                .frame(width: 56, height: 56)
+                            
+                            Image(systemName: "dumbbell.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    // Rank badge
+                    Text("#\(rank)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.primary)
+                        .cornerRadius(4)
+                        .offset(x: 4, y: 4)
+                }
+                
+                // Exercise info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exercise.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        Text("\(exercise.totalSets) sets")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        
+                        Text("•")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary.opacity(0.4))
+                        
+                        Text("\(exercise.sessionCount) pass")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Best weight
+                HStack(spacing: 2) {
+                    Text("\(String(format: "%.0f", exercise.bestWeight))")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+                    Text("kg")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.4))
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            
+            if !isLast {
+                Divider()
+                    .padding(.leading, 86)
+            }
+        }
+    }
+}
+
+// MARK: - All Top Exercises View
+struct AllTopExercisesView: View {
+    let exercises: [TopExerciseData]
+    let exerciseHistories: [StatExerciseHistory]
+    @State private var showContent = false
+    
+    private func getExerciseId(for exerciseName: String) -> String? {
+        exerciseHistories.first { $0.name == exerciseName }?.exerciseId
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(Array(exercises.enumerated()), id: \.element.name) { index, exercise in
+                    TopExerciseRow(
+                        rank: index + 1,
+                        exercise: exercise,
+                        exerciseId: getExerciseId(for: exercise.name),
+                        isLast: index == exercises.count - 1
+                    )
+                }
+            }
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(20)
+            .padding(16)
+            .opacity(showContent ? 1 : 0)
+            .offset(y: showContent ? 0 : 15)
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("Top Övningar")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4)) {
+                showContent = true
+            }
+        }
     }
 }
 

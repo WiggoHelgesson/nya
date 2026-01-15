@@ -7,6 +7,7 @@ struct NotificationsView: View {
     @State private var notifications: [AppNotification] = []
     @State private var selectedNotification: AppNotification?
     @State private var selectedProfileId: String?
+    @State private var selectedPostForComments: SocialWorkoutPost?
     @State private var errorMessage: String?
     @State private var hasMarkedAsRead = false
     var onDismiss: (() -> Void)? = nil
@@ -90,6 +91,15 @@ struct NotificationsView: View {
         )) {
             if let userId = selectedProfileId {
                 UserProfileView(userId: userId)
+            }
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { selectedPostForComments != nil },
+            set: { if !$0 { selectedPostForComments = nil } }
+        )) {
+            if let post = selectedPostForComments {
+                CommentsView(post: post, onCommentAdded: nil)
+                    .environmentObject(authViewModel)
             }
         }
     }
@@ -182,9 +192,48 @@ struct NotificationsView: View {
     
     private func handleNotificationTap(_ notification: AppNotification) {
         Task {
-            await MainActor.run {
-                if !notification.actorId.isEmpty {
-                    selectedProfileId = notification.actorId
+            // For comment, reply, and like notifications, navigate to the post's comments
+            switch notification.type {
+            case .comment, .reply, .like:
+                if let postId = notification.postId, !postId.isEmpty {
+                    do {
+                        // Fetch the post
+                        let post = try await SocialService.shared.getPost(postId: postId)
+                        await MainActor.run {
+                            selectedPostForComments = post
+                        }
+                    } catch {
+                        print("❌ Error fetching post for notification: \(error)")
+                        // Fallback to profile navigation
+                        await MainActor.run {
+                            if !notification.actorId.isEmpty {
+                                selectedProfileId = notification.actorId
+                            }
+                        }
+                    }
+                } else {
+                    // No post ID, go to profile
+                    await MainActor.run {
+                        if !notification.actorId.isEmpty {
+                            selectedProfileId = notification.actorId
+                        }
+                    }
+                }
+                
+            case .follow:
+                // For follow notifications, go to the user's profile
+                await MainActor.run {
+                    if !notification.actorId.isEmpty {
+                        selectedProfileId = notification.actorId
+                    }
+                }
+                
+            default:
+                // Default: go to profile
+                await MainActor.run {
+                    if !notification.actorId.isEmpty {
+                        selectedProfileId = notification.actorId
+                    }
                 }
             }
         }

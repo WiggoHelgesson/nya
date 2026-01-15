@@ -68,6 +68,7 @@ struct UpDownLiveActivityLiveActivity: Widget {
                 }
             }
             .activityBackgroundTint(Color.black)
+            .activitySystemActionForegroundColor(Color.white)
 
         } dynamicIsland: { context in
             DynamicIsland {
@@ -266,6 +267,7 @@ struct GymWorkoutView: View {
             .padding(.top, 2)
         }
         .padding(20)
+        .background(Color.black)
     }
 }
 
@@ -310,6 +312,7 @@ struct RunningWorkoutView: View {
             .padding(.bottom, 10)
         }
         .padding(20)
+        .background(Color.black)
     }
 }
 

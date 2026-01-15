@@ -21,6 +21,9 @@ struct GymSessionView: View {
     @State private var showWorkoutLibrary = false
     @State private var didLoadExerciseHistory = false
     @State private var isReorderMode = false
+    @State private var isResumingSession = false
+    @State private var showNoExercisesAlert = false
+    @State private var showMissingInfoAlert = false
     
     @ViewBuilder
     private var savedWorkoutsSection: some View {
@@ -78,6 +81,10 @@ struct GymSessionView: View {
                 .frame(height: 40)
             metricView(title: "Volym", value: viewModel.formattedVolume)
                 .frame(maxWidth: .infinity)
+            Divider()
+                .frame(height: 40)
+            metricView(title: "Sets", value: "\(viewModel.completedSetsCount)")
+                .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 18)
@@ -104,14 +111,15 @@ struct GymSessionView: View {
                 showExercisePicker = true
             }) {
                 HStack {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
                     Text("Lägg till övning")
+                        .font(.system(size: 16, weight: .semibold))
                 }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
+                .foregroundColor(Color(.systemBackground))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color(.secondarySystemBackground))
+                .background(Color.primary)
                 .cornerRadius(12)
             }
             .padding(.horizontal, 16)
@@ -121,21 +129,33 @@ struct GymSessionView: View {
     private var emptyStateView: some View {
         ScrollView {
             VStack(spacing: 0) {
-                Spacer()
-                    .frame(height: 120)
-                
-                emptyStateContent
-                
                 durationVolumeHeader
                     .padding(.top, 16)
                 
                 Spacer()
-                    .frame(height: 40)
+                    .frame(height: 60)
                 
-                VStack(spacing: 24) {
-                    savedWorkoutsSection
+                emptyStateContent
+                
+                // Bottom action button
+                Button(action: {
+                    showCancelConfirmation = true
+                }) {
+                    Text("Avbryt pass")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
                 }
-                .padding(.bottom, 100)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 40)
             }
         }
     }
@@ -161,6 +181,9 @@ struct GymSessionView: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .environment(\.editMode, .constant(.active))
+                
+                Spacer()
+                    .frame(height: 20)
             }
         } else {
             ScrollView {
@@ -170,10 +193,53 @@ struct GymSessionView: View {
                     
                     ForEach(viewModel.exercises) { exercise in
                         exerciseCardView(for: exercise)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.95).combined(with: .opacity),
+                                removal: .scale(scale: 0.95).combined(with: .opacity)
+                            ))
                     }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.exercises.count)
+                    
+                    // Add Exercise Button
+                    Button(action: {
+                        showExercisePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Lägg till övning")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.primary)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    
+                    // Bottom action button
+                    Button(action: {
+                        showCancelConfirmation = true
+                    }) {
+                        Text("Avbryt pass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
                     
                     Spacer()
-                        .frame(height: 100)
+                        .frame(height: 40)
                 }
             }
         }
@@ -240,16 +306,19 @@ struct GymSessionView: View {
                     .transition(.opacity)
                 }
             }
-            .navigationTitle("Gympass")
+            .navigationTitle("Logga pass")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !showWorkoutLibrary {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
-                            showCancelConfirmation = true
+                            // Minimize workout - keep it active but go back
+                            persistSession(force: true)
+                            dismiss()
                         } label: {
-                            Text("Avbryt")
-                                .foregroundColor(.red)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
                         }
                     }
                     
@@ -265,10 +334,11 @@ struct GymSessionView: View {
                             }
                         } else {
                             Button {
-                                showExercisePicker = true
+                                saveWorkoutTapped()
                             } label: {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 20))
+                                Text("Avsluta")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
                             }
                         }
                     }
@@ -283,17 +353,6 @@ struct GymSessionView: View {
                     .font(.system(size: 16, weight: .semibold))
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                if viewModel.exercises.isEmpty {
-                    Color.clear.frame(height: 0)
-                } else {
-                    HoldToSaveButton(title: "Spara pass", duration: 1.0) {
-                        saveWorkoutTapped()
-                    }
-                    .padding()
-                    .background(Color(.systemBackground).ignoresSafeArea())
-                }
-            }
             .alert("Vill du verkligen avsluta?", isPresented: $showCancelConfirmation) {
                 Button("Fortsätt", role: .cancel) {
                     // Do nothing, just dismiss the alert
@@ -305,14 +364,30 @@ struct GymSessionView: View {
             } message: {
                 Text("Ditt pass kommer inte att sparas om du avbryter nu.")
             }
+            .alert("Lägg till en övning", isPresented: $showNoExercisesAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Du behöver lägga till minst en övning innan du kan avsluta passet.")
+            }
+            .alert("Din övning saknar info", isPresented: $showMissingInfoAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Alla övningar behöver ha minst ett set med kg och reps ifyllt.")
+            }
             .sheet(isPresented: $showExercisePicker) {
                 ExercisePickerView { exercise in
                     viewModel.addExercise(exercise)
                 }
             }
             .onAppear {
-                // Show workout library popup when opening gym session
-                if !hasInitializedSession {
+                // Check if we're resuming an existing session
+                if let activeSession = activeSession,
+                   activeSession.activityType == ActivityType.walking.rawValue {
+                    isResumingSession = true
+                }
+                
+                // Show workout library popup ONLY when starting a NEW gym session (not resuming)
+                if !hasInitializedSession && !isResumingSession {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showWorkoutLibrary = true
@@ -352,7 +427,6 @@ struct GymSessionView: View {
                 persistSession(force: true)
                 viewModel.stopTimer()
             }
-            .interactiveDismissDisabled()
             .onReceive(NotificationCenter.default.publisher(for: .savedGymWorkoutCreated)) { _ in
                 guard let userId = authViewModel.currentUser?.id else { return }
                 Task {
@@ -380,6 +454,25 @@ struct GymSessionView: View {
     
     private func saveWorkoutTapped() {
         focusedField = nil
+        
+        // Validation: Check if there are any exercises
+        guard !viewModel.exercises.isEmpty else {
+            showNoExercisesAlert = true
+            return
+        }
+        
+        // Validation: Check if all exercises have at least one set with kg and reps
+        let hasValidData = viewModel.exercises.allSatisfy { exercise in
+            exercise.sets.contains { set in
+                set.kg > 0 && set.reps > 0
+            }
+        }
+        
+        guard hasValidData else {
+            showMissingInfoAlert = true
+            return
+        }
+        
         persistSession(force: true)
         let duration = viewModel.elapsedSeconds
         let isPro = RevenueCatManager.shared.isProMember
@@ -729,8 +822,12 @@ struct ExerciseCard: View {
                         onDeleteSet(index)
                     }
                 )
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
-            .animation(.none, value: exercise.sets.count)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: exercise.sets.count)
             
             // Add set button
             Button(action: onAddSet) {
@@ -739,7 +836,7 @@ struct ExerciseCard: View {
                     Text("Lägg till set")
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.blue)
+                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
             }
@@ -1595,4 +1692,5 @@ private extension String {
     GymSessionView()
         .environmentObject(AuthViewModel())
 }
+
 

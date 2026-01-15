@@ -4,6 +4,7 @@ import UIKit
 struct MonthlyPrizeView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var topUsers: [MonthlyUser] = []
     @State private var isLoading = false
     @State private var countdownText: String = ""
@@ -19,7 +20,7 @@ struct MonthlyPrizeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color(.systemBackground)
                     .ignoresSafeArea()
                 
                 // Always show the content (will be blurred if not Pro)
@@ -45,11 +46,11 @@ struct MonthlyPrizeView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(20)
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                         )
                         .padding(.horizontal, 20)
 
@@ -119,11 +120,11 @@ struct MonthlyPrizeView: View {
                                 }
                             }
                         }
-                        .background(Color.white)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                         )
                         .padding(.horizontal, 20)
                         
@@ -157,10 +158,10 @@ struct MonthlyPrizeView: View {
                         } label: {
                             Text("Bli Pro medlem")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(colorScheme == .dark ? .black : .white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(Color.black)
+                                .background(Color.primary)
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal, 40)
@@ -168,7 +169,7 @@ struct MonthlyPrizeView: View {
                         
                         Spacer()
                     }
-                    .background(Color.white.opacity(0.3))
+                    .background(Color(.systemBackground).opacity(0.3))
                 }
             }
             .navigationTitle("Månadens pris")
@@ -318,7 +319,7 @@ struct MonthlyUserRow: View {
             // Rank number
             Text("\(rank)")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(rank == 1 ? Color(red: 0.95, green: 0.75, blue: 0.18) : .black)
+                .foregroundColor(rank == 1 ? Color(red: 0.95, green: 0.75, blue: 0.18) : .primary)
                 .frame(width: 30)
             
             // Profile picture

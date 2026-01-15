@@ -90,6 +90,12 @@ class GymSessionViewModel: ObservableObject {
         return "\(text) kg"
     }
     
+    var completedSetsCount: Int {
+        exercises.reduce(0) { result, exercise in
+            result + exercise.sets.filter { $0.isCompleted }.count
+        }
+    }
+    
     private var startTime: Date?
     private var timer: Timer?
     private let historyLimit = 60
@@ -271,7 +277,9 @@ class GymSessionViewModel: ObservableObject {
             sets: [],
             notes: nil
         )
-        exercises.append(newExercise)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            exercises.append(newExercise)
+        }
     }
     
     func loadWorkout(_ workout: SavedGymWorkout) {
@@ -310,11 +318,15 @@ class GymSessionViewModel: ObservableObject {
     }
     
     func removeExercise(_ id: String) {
-        exercises.removeAll { $0.id == id }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            exercises.removeAll { $0.id == id }
+        }
     }
     
     func moveExercise(from source: IndexSet, to destination: Int) {
-        exercises.move(fromOffsets: source, toOffset: destination)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            exercises.move(fromOffsets: source, toOffset: destination)
+        }
     }
     
     func addSet(to exerciseId: String) {
@@ -345,7 +357,9 @@ class GymSessionViewModel: ObservableObject {
         guard let exerciseIndex = exercises.firstIndex(where: { $0.id == exerciseId }),
               setIndex < exercises[exerciseIndex].sets.count else { return }
         
-        exercises[exerciseIndex].sets.remove(at: setIndex)
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            exercises[exerciseIndex].sets.remove(at: setIndex)
+        }
         updateLiveActivity()
     }
     

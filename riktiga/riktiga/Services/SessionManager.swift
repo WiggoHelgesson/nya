@@ -276,6 +276,9 @@ class SessionManager: ObservableObject {
         self.hasActiveSession = false
         self.acceptsSaves = false
         self.isFinalized = true  // Prevent any further saves
+        
+        // End Live Activity when session is finalized
+        LiveActivityManager.shared.endLiveActivity()
 
         // Broadcast that session has been finalized so UI can react
         NotificationCenter.default.post(name: NSNotification.Name("SessionFinalized"), object: nil)
