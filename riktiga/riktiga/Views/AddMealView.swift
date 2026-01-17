@@ -17,10 +17,25 @@ struct FoodItem: Identifiable {
     let imageUrl: String?
     let servingSize: String?
     let servingQuantity: Double?
+    let nutriScore: String? // A, B, C, D, E
+    let novaGroup: Int? // 1-4
     
     enum FoodSource {
         case livsmedelsverket
         case openFoodFacts
+        case fatSecret
+    }
+    
+    // Nutri-Score color
+    var nutriScoreColor: Color {
+        switch nutriScore?.uppercased() {
+        case "A": return Color(red: 0.0, green: 0.5, blue: 0.2) // Dark green
+        case "B": return Color(red: 0.5, green: 0.7, blue: 0.2) // Light green
+        case "C": return Color(red: 0.9, green: 0.7, blue: 0.1) // Yellow
+        case "D": return Color(red: 0.9, green: 0.5, blue: 0.1) // Orange
+        case "E": return Color(red: 0.8, green: 0.2, blue: 0.1) // Red
+        default: return Color.gray
+        }
     }
 }
 
@@ -60,7 +75,9 @@ struct LivsmedelsverketFood: Codable, Identifiable {
             source: .livsmedelsverket,
             imageUrl: nil,
             servingSize: "100g",
-            servingQuantity: 100
+            servingQuantity: 100,
+            nutriScore: nil,
+            novaGroup: nil
         )
     }
 }
@@ -94,7 +111,9 @@ struct LivsmedelsverketFoodItem: Codable, Identifiable {
             source: .livsmedelsverket,
             imageUrl: nil,
             servingSize: "100g",
-            servingQuantity: 100
+            servingQuantity: 100,
+            nutriScore: nil,
+            novaGroup: nil
         )
     }
 }
@@ -120,8 +139,11 @@ struct OpenFoodFactsProduct: Codable, Identifiable {
     let nutriments: OpenFoodFactsNutriments?
     let imageUrl: String?
     let imageFrontUrl: String?
+    let imageFrontSmallUrl: String?
     let servingSize: String?
     let servingQuantity: Double?
+    let nutriscoreGrade: String?
+    let novaGroup: Int?
     
     var id: String { code ?? UUID().uuidString }
     
@@ -131,8 +153,11 @@ struct OpenFoodFactsProduct: Codable, Identifiable {
         case categoriesTags = "categories_tags"
         case imageUrl = "image_url"
         case imageFrontUrl = "image_front_url"
+        case imageFrontSmallUrl = "image_front_small_url"
         case servingSize = "serving_size"
         case servingQuantity = "serving_quantity"
+        case nutriscoreGrade = "nutriscore_grade"
+        case novaGroup = "nova_group"
     }
     
     func toFoodItem() -> FoodItem? {
@@ -162,9 +187,11 @@ struct OpenFoodFactsProduct: Codable, Identifiable {
             fat: nutriments?.bestFat,
             barcode: code,
             source: .openFoodFacts,
-            imageUrl: imageFrontUrl ?? imageUrl,
+            imageUrl: imageFrontSmallUrl ?? imageFrontUrl ?? imageUrl,
             servingSize: servingSize ?? "100g",
-            servingQuantity: servingQuantity ?? 100
+            servingQuantity: servingQuantity ?? 100,
+            nutriScore: nutriscoreGrade,
+            novaGroup: novaGroup
         )
     }
 }
@@ -541,16 +568,17 @@ struct AddMealView: View {
                 .multilineTextAlignment(.center)
             
             Button {
-                showCreateMeal = true
+                // Coming soon - disabled
             } label: {
-                Text("Skapa måltid")
+                Text("Lanseras inom kort")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.white.opacity(0.7))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.black)
+                    .background(Color.black.opacity(0.4))
                     .cornerRadius(30)
             }
+            .disabled(true)
             .padding(.horizontal, 40)
             .padding(.top, 8)
             
@@ -822,9 +850,6 @@ class AddMealViewModel: ObservableObject {
     @Published var isSearching = false
     @Published var isLoading = false
     
-    // Cached foods from Livsmedelsverket
-    private var livsmedelsverketFoods: [LivsmedelsverketFoodItem] = []
-    
     // Daily goals (can be customized per user)
     let calorieGoal = 1862
     let carbsGoal = 233
@@ -854,8 +879,8 @@ class AddMealViewModel: ObservableObject {
         let currentQuery = query // Capture the query
         
         searchTask = Task { @MainActor in
-            // Debounce - wait for user to stop typing
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            // Short debounce - just 200ms for snappy search
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
             
             // Check if this search is still relevant
             guard !Task.isCancelled, self.searchText == currentQuery else {
@@ -863,40 +888,75 @@ class AddMealViewModel: ObservableObject {
                 return
             }
             
-            await searchAllSources(query: currentQuery)
+            await searchOpenFoodFactsFallback(query: currentQuery)
         }
     }
     
     @MainActor
-    private func searchAllSources(query: String) async {
-        print("\n🔎 === Starting search for '\(query)' ===")
-        var combinedResults: [FoodItem] = []
+    private func searchWithFatSecret(query: String) async {
+        print("\n🔎 === FatSecret search for '\(query)' ===")
         
-        // Search both APIs in parallel
-        await withTaskGroup(of: (String, [FoodItem]).self) { group in
-            // Search Livsmedelsverket
-            group.addTask {
-                let results = await self.searchLivsmedelsverket(query: query)
-                return ("Livsmedelsverket", results)
+        do {
+            let fatSecretResults = try await FatSecretService.shared.searchFoods(query: query, maxResults: 30)
+            
+            // Convert FatSecret results to FoodItem
+            let results = fatSecretResults.map { food -> FoodItem in
+                FoodItem(
+                    id: food.foodId,
+                    name: food.displayName,
+                    brand: food.brandName,
+                    category: nil,
+                    calories: Double(food.calories),
+                    protein: food.protein,
+                    carbs: food.carbs,
+                    fat: food.fat,
+                    barcode: nil,
+                    source: .fatSecret,
+                    imageUrl: nil, // FatSecret doesn't provide images in search results
+                    servingSize: food.servingSize,
+                    servingQuantity: nil,
+                    nutriScore: nil,
+                    novaGroup: nil
+                )
             }
             
-            // Search Open Food Facts
-            group.addTask {
-                let results = await self.searchOpenFoodFacts(query: query)
-                return ("OpenFoodFacts", results)
+            // Sort by relevance
+            let lowercasedQuery = query.lowercased()
+            let sortedResults = results.sorted { item1, item2 in
+                let name1 = item1.name.lowercased()
+                let name2 = item2.name.lowercased()
+                
+                let exact1 = name1 == lowercasedQuery
+                let exact2 = name2 == lowercasedQuery
+                let starts1 = name1.hasPrefix(lowercasedQuery)
+                let starts2 = name2.hasPrefix(lowercasedQuery)
+                
+                if exact1 != exact2 { return exact1 }
+                if starts1 != starts2 { return starts1 }
+                return name1 < name2
             }
             
-            for await (source, results) in group {
-                print("📊 \(source): \(results.count) results")
-                combinedResults.append(contentsOf: results)
-            }
+            searchResults = Array(sortedResults.prefix(50))
+            isLoading = false
+            print("✅ FatSecret showing \(searchResults.count) results to user\n")
+            
+        } catch {
+            print("❌ FatSecret search error: \(error)")
+            // Fallback to Open Food Facts if FatSecret fails
+            print("⚠️ Falling back to Open Food Facts...")
+            await searchOpenFoodFactsFallback(query: query)
         }
+    }
+    
+    @MainActor
+    private func searchOpenFoodFactsFallback(query: String) async {
+        print("\n🔎 === Fallback Open Food Facts search for '\(query)' ===")
         
-        print("📊 Total combined: \(combinedResults.count) results")
+        let results = await searchOpenFoodFacts(query: query)
         
-        // Sort by relevance (exact matches first)
+        // Sort by relevance (exact matches first, then by name)
         let lowercasedQuery = query.lowercased()
-        combinedResults.sort { item1, item2 in
+        let sortedResults = results.sorted { item1, item2 in
             let name1 = item1.name.lowercased()
             let name2 = item2.name.lowercased()
             
@@ -910,225 +970,140 @@ class AddMealViewModel: ObservableObject {
             return name1 < name2
         }
         
-        searchResults = Array(combinedResults.prefix(50))
+        searchResults = Array(sortedResults.prefix(50))
         isLoading = false
         print("✅ Showing \(searchResults.count) results to user\n")
     }
     
-    private func searchLivsmedelsverket(query: String) async -> [FoodItem] {
-        // Fetch all foods if not cached
-        if livsmedelsverketFoods.isEmpty {
-            await fetchLivsmedelsverketFoods()
-        }
-        
-        print("🔍 Searching Livsmedelsverket for '\(query)' in \(livsmedelsverketFoods.count) items")
-        
-        // Filter locally
-        let lowercasedQuery = query.lowercased()
-        let filtered = livsmedelsverketFoods.filter { food in
-            food.namn.lowercased().contains(lowercasedQuery) ||
-            (food.huvudgrupp?.lowercased().contains(lowercasedQuery) ?? false)
-        }
-        
-        print("🇸🇪 Found \(filtered.count) matches from Livsmedelsverket")
-        return Array(filtered.prefix(25)).map { $0.toFoodItem() }
-    }
-    
-    private func fetchLivsmedelsverketFoods() async {
-        // Don't fetch again if already loaded
-        guard livsmedelsverketFoods.isEmpty else { return }
-        
-        let baseURL = "https://dataportal.livsmedelsverket.se/livsmedel/api/v1/livsmedel"
-        
-        guard let url = URL(string: "\(baseURL)?offset=0&limit=3000&sppirak=false") else {
-            print("❌ Invalid Livsmedelsverket URL")
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 60
-        
-        print("📡 Fetching foods from Livsmedelsverket...")
-        
-        // Use completion handler to avoid task cancellation issues
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-                defer { continuation.resume() }
-                
-                if let error = error {
-                    if (error as NSError).code == NSURLErrorCancelled {
-                        print("⏭️ Livsmedelsverket request cancelled")
-                        return
-                    }
-                    print("❌ Livsmedelsverket network error: \(error.localizedDescription)")
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ Livsmedelsverket: Invalid response type")
-                    return
-                }
-                
-                print("📡 Livsmedelsverket response status: \(httpResponse.statusCode)")
-                
-                guard httpResponse.statusCode == 200, let data = data else {
-                    print("❌ Livsmedelsverket API error: status \(httpResponse.statusCode)")
-                    return
-                }
-                
-                let decoder = JSONDecoder()
-                
-                // Try decoding as array first
-                if let foods = try? decoder.decode([LivsmedelsverketFoodItem].self, from: data) {
-                    DispatchQueue.main.async {
-                        self?.livsmedelsverketFoods = foods
-                    }
-                    print("✅ Loaded \(foods.count) foods from Livsmedelsverket (array format)")
-                } else if let wrapper = try? decoder.decode(LivsmedelsverketListResponse.self, from: data) {
-                    DispatchQueue.main.async {
-                        self?.livsmedelsverketFoods = wrapper.livsmedel
-                    }
-                    print("✅ Loaded \(wrapper.livsmedel.count) foods from Livsmedelsverket (wrapper format)")
-                } else {
-                    print("❌ Livsmedelsverket decode failed")
-                    if let jsonString = String(data: data, encoding: .utf8) {
-                        print("📄 Raw response (first 500 chars): \(String(jsonString.prefix(500)))")
-                    }
-                }
-            }
-            task.resume()
-        }
-    }
-    
     private func searchOpenFoodFacts(query: String) async -> [FoodItem] {
-        // Open Food Facts Search API
-        // Reference: https://openfoodfacts.github.io/openfoodfacts-server/api/tutorial-off-api/
+        // Open Food Facts Search API - Fast and simple
         
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             print("❌ Failed to encode query: \(query)")
             return []
         }
         
-        let urlString = "https://world.openfoodfacts.org/cgi/search.pl?search_terms=\(encodedQuery)&search_simple=1&action=process&json=1&page_size=30&fields=code,product_name,brands,categories_tags,nutriments,image_front_url,serving_size,serving_quantity"
+        // Use simple text search - fastest and most reliable
+        let urlString = "https://world.openfoodfacts.org/cgi/search.pl?search_terms=\(encodedQuery)&search_simple=1&action=process&json=1&page_size=30&fields=code,product_name,brands,nutriments,image_front_small_url,serving_size,serving_quantity,nutriscore_grade,nova_group"
         
+        print("📡 Searching Open Food Facts for: '\(query)'")
+        
+        if let results = await performOpenFoodFactsSearch(urlString: urlString), !results.isEmpty {
+            return results
+        }
+        
+        return []
+    }
+    
+    private func performOpenFoodFactsSearch(urlString: String) async -> [FoodItem]? {
         guard let url = URL(string: urlString) else {
             print("❌ Invalid Open Food Facts URL")
-            return []
+            return nil
         }
         
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("UpAndDown iOS App - Contact: support@upanddown.app", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 20
+        request.setValue("UpAndDown/1.0 iOS", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 10
+        request.cachePolicy = .returnCacheDataElseLoad
         
-        print("📡 Searching Open Food Facts for: '\(query)'")
-        
-        // Use withCheckedContinuation to prevent task cancellation from cancelling the request
-        return await withCheckedContinuation { continuation in
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    // Ignore cancellation errors silently
-                    if (error as NSError).code == NSURLErrorCancelled {
-                        print("⏭️ Open Food Facts request cancelled (user typing)")
-                        continuation.resume(returning: [])
-                        return
-                    }
-                    print("❌ Open Food Facts network error: \(error.localizedDescription)")
-                    continuation.resume(returning: [])
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ Open Food Facts: Invalid response type")
-                    continuation.resume(returning: [])
-                    return
-                }
-                
-                print("📡 Open Food Facts response status: \(httpResponse.statusCode)")
-                
-                guard httpResponse.statusCode == 200, let data = data else {
-                    print("❌ Open Food Facts API error: status \(httpResponse.statusCode)")
-                    continuation.resume(returning: [])
-                    return
-                }
-                
-                let decoder = JSONDecoder()
-                
-                // First try standard decoding
-                if let searchResponse = try? decoder.decode(OpenFoodFactsSearchResponse.self, from: data) {
-                    let products = searchResponse.products ?? []
-                    let foodItems = products.compactMap { $0.toFoodItem() }
-                    print("🌍 Found \(foodItems.count) products from Open Food Facts")
-                    continuation.resume(returning: foodItems)
-                    return
-                }
-                
-                // Fallback: Manual JSON parsing
-                print("⚠️ Standard decode failed, trying manual parsing...")
-                
-                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let productsArray = json["products"] as? [[String: Any]] else {
-                    print("❌ Could not parse Open Food Facts response")
-                    continuation.resume(returning: [])
-                    return
-                }
-                
-                var foodItems: [FoodItem] = []
-                
-                for product in productsArray {
-                    guard let name = product["product_name"] as? String, !name.isEmpty else { continue }
-                    
-                    let code = product["code"] as? String
-                    let brands = product["brands"] as? String
-                    let imageUrl = product["image_front_url"] as? String ?? product["image_url"] as? String
-                    let servingSize = product["serving_size"] as? String
-                    let servingQty = product["serving_quantity"] as? Double
-                    
-                    // Parse nutriments
-                    var calories: Double? = nil
-                    var protein: Double? = nil
-                    var carbs: Double? = nil
-                    var fat: Double? = nil
-                    
-                    if let nutriments = product["nutriments"] as? [String: Any] {
-                        calories = nutriments["energy-kcal_100g"] as? Double
-                            ?? nutriments["energy-kcal"] as? Double
-                            ?? (nutriments["energy_100g"] as? Double).map { $0 / 4.184 } // Convert kJ to kcal
-                        protein = nutriments["proteins_100g"] as? Double ?? nutriments["proteins"] as? Double
-                        carbs = nutriments["carbohydrates_100g"] as? Double ?? nutriments["carbohydrates"] as? Double
-                        fat = nutriments["fat_100g"] as? Double ?? nutriments["fat"] as? Double
-                    }
-                    
-                    let foodItem = FoodItem(
-                        id: "off_\(code ?? UUID().uuidString)",
-                        name: name,
-                        brand: brands,
-                        category: nil,
-                        calories: calories,
-                        protein: protein,
-                        carbs: carbs,
-                        fat: fat,
-                        barcode: code,
-                        source: .openFoodFacts,
-                        imageUrl: imageUrl,
-                        servingSize: servingSize ?? "100g",
-                        servingQuantity: servingQty ?? 100
-                    )
-                    foodItems.append(foodItem)
-                }
-                
-                print("🌍 Manually parsed \(foodItems.count) products from Open Food Facts")
-                continuation.resume(returning: foodItems)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                print("❌ Open Food Facts API error")
+                return nil
             }
-            task.resume()
+            
+            print("✅ Open Food Facts response received")
+            return parseOpenFoodFactsResponse(data: data)
+            
+        } catch {
+            print("❌ Open Food Facts error: \(error.localizedDescription)")
+            return nil
         }
+    }
+    
+    private func parseOpenFoodFactsResponse(data: Data) -> [FoodItem] {
+        let decoder = JSONDecoder()
+        
+        // First try standard decoding
+        if let searchResponse = try? decoder.decode(OpenFoodFactsSearchResponse.self, from: data) {
+            let products = searchResponse.products ?? []
+            let foodItems = products.compactMap { $0.toFoodItem() }
+            print("🌍 Found \(foodItems.count) products from Open Food Facts")
+            return foodItems
+        }
+        
+        // Fallback: Manual JSON parsing
+        print("⚠️ Standard decode failed, trying manual parsing...")
+        
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let productsArray = json["products"] as? [[String: Any]] else {
+            print("❌ Could not parse Open Food Facts response")
+            return []
+        }
+        
+        var foodItems: [FoodItem] = []
+        
+        for product in productsArray {
+            guard let name = product["product_name"] as? String, !name.isEmpty else { continue }
+            
+            let code = product["code"] as? String
+            let brands = product["brands"] as? String
+            let imageUrl = product["image_front_small_url"] as? String 
+                ?? product["image_front_url"] as? String 
+                ?? product["image_url"] as? String
+            let servingSize = product["serving_size"] as? String
+            let servingQty = product["serving_quantity"] as? Double
+            
+            // Parse nutriments
+            var calories: Double? = nil
+            var protein: Double? = nil
+            var carbs: Double? = nil
+            var fat: Double? = nil
+            
+            if let nutriments = product["nutriments"] as? [String: Any] {
+                calories = nutriments["energy-kcal_100g"] as? Double
+                    ?? nutriments["energy-kcal"] as? Double
+                    ?? (nutriments["energy_100g"] as? Double).map { $0 / 4.184 }
+                protein = nutriments["proteins_100g"] as? Double ?? nutriments["proteins"] as? Double
+                carbs = nutriments["carbohydrates_100g"] as? Double ?? nutriments["carbohydrates"] as? Double
+                fat = nutriments["fat_100g"] as? Double ?? nutriments["fat"] as? Double
+            }
+            
+            let nutriScore = product["nutriscore_grade"] as? String
+            let novaGroup = product["nova_group"] as? Int
+            
+            let foodItem = FoodItem(
+                id: "off_\(code ?? UUID().uuidString)",
+                name: name,
+                brand: brands,
+                category: nil,
+                calories: calories,
+                protein: protein,
+                carbs: carbs,
+                fat: fat,
+                barcode: code,
+                source: .openFoodFacts,
+                imageUrl: imageUrl,
+                servingSize: servingSize ?? "100g",
+                servingQuantity: servingQty ?? 100,
+                nutriScore: nutriScore,
+                novaGroup: novaGroup
+            )
+            foodItems.append(foodItem)
+        }
+        
+        print("🌍 Parsed \(foodItems.count) products from Open Food Facts")
+        return foodItems
     }
     
     // Search by barcode using Open Food Facts
     func searchByBarcode(_ barcode: String) async -> FoodItem? {
         // Reference: https://openfoodfacts.github.io/openfoodfacts-server/api/tutorial-off-api/
-        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(barcode)?fields=code,product_name,brands,categories_tags,nutriments,image_front_url,serving_size,serving_quantity") else {
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(barcode)?fields=code,product_name,brands,categories_tags,nutriments,image_front_url,serving_size,serving_quantity,nutriscore_grade,nova_group") else {
             return nil
         }
         
@@ -1183,7 +1158,9 @@ class AddMealViewModel: ObservableObject {
                     mealType: "snack",
                     loggedAt: ISO8601DateFormatter().string(from: Date()),
                     servingSize: food.servingSize ?? "100g",
-                    servingQuantity: 1.0
+                    servingQuantity: 1.0,
+                    nutriScore: food.nutriScore,
+                    imageUrl: food.imageUrl
                 )
                 
                 try await SupabaseConfig.supabase
@@ -1191,7 +1168,7 @@ class AddMealViewModel: ObservableObject {
                     .insert(entry)
                     .execute()
                 
-                print("✅ Quick added: \(food.name) - \(food.calories ?? 0) kcal")
+                print("✅ Quick added: \(food.name) - \(food.calories ?? 0) kcal (image: \(food.imageUrl != nil))")
                 
                 await MainActor.run {
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
@@ -1217,6 +1194,8 @@ struct FoodLogInsertModel: Codable {
     let loggedAt: String
     let servingSize: String
     let servingQuantity: Double
+    let nutriScore: String?
+    let imageUrl: String?
     
     enum CodingKeys: String, CodingKey {
         case id, name, calories, protein, carbs, fat
@@ -1225,6 +1204,8 @@ struct FoodLogInsertModel: Codable {
         case loggedAt = "logged_at"
         case servingSize = "serving_size"
         case servingQuantity = "serving_quantity"
+        case nutriScore = "nutri_score"
+        case imageUrl = "image_url"
     }
 }
 
@@ -1271,7 +1252,7 @@ struct FoodDetailView: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
-                            // Food name and save button
+                            // Food name and save button - FIRST
                             HStack {
                                 Text(food.name)
                                     .font(.system(size: 26, weight: .bold))
@@ -1290,6 +1271,11 @@ struct FoodDetailView: View {
                                 }
                             }
                             .padding(.top, 8)
+                            
+                            // Nutri-Score Badge - After title
+                            if let nutriScore = food.nutriScore, !nutriScore.isEmpty {
+                                NutriScoreBadge(grade: nutriScore)
+                            }
                             
                             // Measurement selector
                             VStack(alignment: .leading, spacing: 12) {
@@ -1353,26 +1339,6 @@ struct FoodDetailView: View {
                             }
                             .tabViewStyle(.page(indexDisplayMode: .always))
                             .frame(height: 200)
-                            
-                            // Other nutrition facts
-                            Button {
-                                // Show more nutrition info
-                            } label: {
-                                HStack {
-                                    Text("Övrig näringsinformation")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.black)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.gray)
-                                }
-                                .padding(16)
-                                .background(Color.white)
-                                .cornerRadius(12)
-                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100)
@@ -1413,19 +1379,6 @@ struct FoodDetailView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "arrow.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 40, height: 40)
-                            .background(Color.gray.opacity(0.15))
-                            .clipShape(Circle())
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        // More options
-                    } label: {
-                        Image(systemName: "ellipsis")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.black)
                             .frame(width: 40, height: 40)
@@ -1538,7 +1491,9 @@ struct FoodDetailView: View {
                     mealType: "snack",
                     loggedAt: ISO8601DateFormatter().string(from: Date()),
                     servingSize: food.servingSize ?? "100g",
-                    servingQuantity: numberOfServings
+                    servingQuantity: numberOfServings,
+                    nutriScore: food.nutriScore,
+                    imageUrl: food.imageUrl
                 )
                 
                 try await SupabaseConfig.supabase
@@ -1546,7 +1501,7 @@ struct FoodDetailView: View {
                     .insert(entry)
                     .execute()
                 
-                print("✅ Logged: \(food.name) - \(displayCalories) kcal")
+                print("✅ Logged: \(food.name) - \(displayCalories) kcal (image: \(food.imageUrl != nil))")
                 
                 await MainActor.run {
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
@@ -1828,6 +1783,97 @@ struct CreateMealView: View {
                 .cornerRadius(12)
             }
         }
+    }
+}
+
+// MARK: - Nutri-Score Badge
+struct NutriScoreBadge: View {
+    let grade: String
+    
+    private let grades = ["A", "B", "C", "D", "E"]
+    
+    private func colorFor(_ g: String) -> Color {
+        switch g {
+        case "A": return Color(red: 0.0, green: 0.52, blue: 0.26) // Dark green
+        case "B": return Color(red: 0.52, green: 0.73, blue: 0.18) // Light green
+        case "C": return Color(red: 0.96, green: 0.78, blue: 0.15) // Yellow
+        case "D": return Color(red: 0.93, green: 0.55, blue: 0.14) // Orange
+        case "E": return Color(red: 0.88, green: 0.27, blue: 0.14) // Red
+        default: return Color.gray
+        }
+    }
+    
+    private var gradeDescription: String {
+        switch grade.uppercased() {
+        case "A": return "Utmärkt näringsvärde"
+        case "B": return "Bra näringsvärde"
+        case "C": return "Genomsnittligt näringsvärde"
+        case "D": return "Lågt näringsvärde"
+        case "E": return "Dåligt näringsvärde"
+        default: return "Näringsvärde"
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Official Nutri-Score badge design
+            VStack(spacing: 0) {
+                // NUTRI-SCORE header
+                Text("NUTRI-SCORE")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                    .padding(.bottom, 4)
+                
+                // Grade bar
+                HStack(spacing: 0) {
+                    ForEach(grades, id: \.self) { g in
+                        let isSelected = g == grade.uppercased()
+                        
+                        ZStack {
+                            // Background color bar
+                            Rectangle()
+                                .fill(colorFor(g))
+                            
+                            // Letter
+                            Text(g)
+                                .font(.system(size: isSelected ? 24 : 14, weight: .black))
+                                .foregroundColor(isSelected ? colorFor(g) : .white.opacity(0.7))
+                                .background(
+                                    Group {
+                                        if isSelected {
+                                            Circle()
+                                                .fill(Color.white)
+                                                .frame(width: 38, height: 38)
+                                        }
+                                    }
+                                )
+                        }
+                        .frame(width: isSelected ? 48 : 32, height: 48)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+            }
+            
+            // Description
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Nutri-Score")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Text(gradeDescription)
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
     }
 }
 

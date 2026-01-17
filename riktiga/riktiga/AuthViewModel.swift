@@ -118,6 +118,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.isLoggedIn = true
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
+                        // Set current user for AI scan limit manager
+                        AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
+                        
                         // Update database Pro status in RevenueCatManager FIRST
                         RevenueCatManager.shared.updateDatabaseProStatus(profile.isProMember)
                         
@@ -190,6 +193,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.isLoggedIn = true
                         self.isLoading = false
                         self.prefetchAvatar(url: profile.avatarUrl)
+                        
+                        // Set current user for AI scan limit manager
+                        AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
@@ -276,6 +282,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     self.isLoggedIn = true
                     self.isLoading = false
                     self.prefetchAvatar(url: newUser.avatarUrl)
+                    
+                    // Set current user for AI scan limit manager
+                    AIScanLimitManager.shared.setCurrentUser(userId: newUser.id)
                 }
             } catch {
                 await MainActor.run {
@@ -303,6 +312,10 @@ class AuthViewModel: NSObject, ObservableObject {
                 await MainActor.run {
                     // Clear local state and caches regardless
                     AppCacheManager.shared.clearAllCache()
+                    
+                    // Clear AI scan limit manager user
+                    AIScanLimitManager.shared.setCurrentUser(userId: nil)
+                    
                     self.isLoggedIn = false
                     self.currentUser = nil
                     print("✅ User logged out successfully (graceful)")
@@ -311,6 +324,10 @@ class AuthViewModel: NSObject, ObservableObject {
                 await MainActor.run {
                     // Even if network signOut fails, force local logout so user isn't stuck
                     AppCacheManager.shared.clearAllCache()
+                    
+                    // Clear AI scan limit manager user
+                    AIScanLimitManager.shared.setCurrentUser(userId: nil)
+                    
                     self.isLoggedIn = false
                     self.currentUser = nil
                     self.errorMessage = "Logout: \(error.localizedDescription) – fortsätter lokalt"
@@ -480,6 +497,9 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         self.isLoggedIn = true
                         self.isLoading = false
                         self.prefetchAvatar(url: existingProfile.avatarUrl)
+                        
+                        // Set current user for AI scan limit manager
+                        AIScanLimitManager.shared.setCurrentUser(userId: existingProfile.id)
                         
                         RevenueCatManager.shared.updateDatabaseProStatus(existingProfile.isProMember)
                         

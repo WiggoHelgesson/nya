@@ -30,3 +30,4 @@ GRANT EXECUTE ON FUNCTION get_users_by_emails(text[]) TO authenticated;
 
 
 
+

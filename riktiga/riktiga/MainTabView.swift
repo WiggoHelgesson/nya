@@ -58,6 +58,8 @@ struct MainTabView: View {
     @ObservedObject private var navigationTracker = NavigationDepthTracker.shared
     @ObservedObject private var notificationNav = NotificationNavigationManager.shared
     @ObservedObject private var sessionManager = SessionManager.shared
+    @ObservedObject private var scanLimitManager = AIScanLimitManager.shared
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var hasActiveSession = SessionManager.shared.hasActiveSession
     @State private var showStartSession = false
@@ -70,6 +72,8 @@ struct MainTabView: View {
     @State private var showAddMealSheet = false
     @State private var showFoodScanner = false
     @State private var initialScannerMode: FoodScanMode = .ai
+    @State private var showAIScanPaywall = false
+    @State private var showManualEntry = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -110,6 +114,13 @@ struct MainTabView: View {
         }
         .fullScreenCover(isPresented: $showFoodScanner) {
             FoodScannerView(initialMode: initialScannerMode)
+        }
+        .sheet(isPresented: $showAIScanPaywall) {
+            PresentPaywallView()
+        }
+        .fullScreenCover(isPresented: $showManualEntry) {
+            ManualFoodEntryView()
+                .environmentObject(authViewModel)
         }
         .onAppear {
             if hasActiveSession && !showStartSession && !showResumeSession {
@@ -206,6 +217,11 @@ struct MainTabView: View {
             }
         }
         .onChange(of: selectedTab) { oldTab, newTab in
+            // Haptic feedback when switching tabs
+            if oldTab != newTab {
+                triggerTabSwitchHaptic()
+            }
+            
             // Reset to root view when switching tabs
             navigationTracker.resetToRoot()
             
@@ -312,18 +328,20 @@ struct MainTabView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
             
-            // Floating + button container
+            // Floating + button container - hide when navigating to sub-pages
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
-                    if !showAddMealSheet {
+                    if !showAddMealSheet && navigationTracker.isAtRootView {
                         floatingAddButton
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, 90) // Above the tab bar
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             
             // Floating active session banner
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
@@ -354,7 +372,7 @@ struct MainTabView: View {
                 
                 VStack(spacing: 12) {
                     HStack(spacing: 12) {
-                        addMealOption(icon: "figure.run", title: "Starta pass") {
+                        addMealOption(icon: "dumbbell.fill", title: "Starta pass") {
                             withAnimation { showAddMealSheet = false }
                             showStartSession = true
                         }
@@ -368,15 +386,25 @@ struct MainTabView: View {
                     }
                     
                     HStack(spacing: 12) {
-                        addMealOption(icon: "fork.knife", title: "Måltid") {
-                            withAnimation { showAddMealSheet = false }
-                            NotificationCenter.default.post(name: NSNotification.Name("OpenAddMealView"), object: nil)
-                        }
-                        addMealOption(icon: "camera.fill", title: "Ta bild med AI") {
+                        // Regga manuellt
+                        addMealOption(icon: "pencil.line", title: "Regga manuellt") {
                             withAnimation { showAddMealSheet = false }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                initialScannerMode = .ai
-                                showFoodScanner = true
+                                showManualEntry = true
+                            }
+                        }
+                        
+                        // AI Scan - check if limit reached for non-pro users
+                        if !revenueCatManager.isProMember && scanLimitManager.isAtLimit() {
+                            // Grayed out AI scan button
+                            aiScanLimitedOption()
+                        } else {
+                            aiScanOption {
+                                withAnimation { showAddMealSheet = false }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    initialScannerMode = .ai
+                                    showFoodScanner = true
+                                }
                             }
                         }
                     }
@@ -402,6 +430,118 @@ struct MainTabView: View {
             .background(Color.white)
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 10)
+        }
+    }
+    
+    // AI Scan option with logo and stars
+    private func aiScanOption(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    // Stars around the logo
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.black)
+                        .offset(x: -20, y: -12)
+                    
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.black)
+                        .offset(x: 18, y: -14)
+                    
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.black.opacity(0.6))
+                        .offset(x: 22, y: 2)
+                    
+                    // App logo with rounded corners
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 36, height: 36)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .frame(height: 44)
+                
+                Text("Ta bild med AI")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.black)
+            }
+            .frame(width: 150, height: 120)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 10)
+        }
+    }
+    
+    private func disabledMealOption(icon: String, title: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray.opacity(0.5))
+        }
+        .frame(width: 150, height: 120)
+        .background(Color.white.opacity(0.7))
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 5)
+    }
+    
+    // AI Scan limited option (shows paywall when tapped)
+    private func aiScanLimitedOption() -> some View {
+        Button {
+            withAnimation { showAddMealSheet = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showAIScanPaywall = true
+            }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    // Stars around the logo (grayed)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.gray.opacity(0.3))
+                        .offset(x: -20, y: -12)
+                    
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.gray.opacity(0.3))
+                        .offset(x: 18, y: -14)
+                    
+                    // App logo (grayed) with rounded corners
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 36, height: 36)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .opacity(0.4)
+                    
+                    // Lock badge
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(5)
+                        .background(Color.gray)
+                        .clipShape(Circle())
+                        .offset(x: 20, y: -8)
+                }
+                .frame(height: 44)
+                
+                Text("Ta bild med AI")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.5))
+                
+                Text("0 kvar")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.orange)
+            }
+            .frame(width: 150, height: 120)
+            .background(Color.white.opacity(0.7))
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 5)
         }
     }
     
@@ -440,9 +580,10 @@ struct MainTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Custom Tab Bar with + button
+            // Custom Tab Bar with + button - hide + when navigating
             if !showAddMealSheet {
                 legacyCustomTabBar
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -522,16 +663,33 @@ struct MainTabView: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
             )
             
-            // + button on the right - same height level
-            floatingAddButton
+            // + button on the right - hide when navigating to sub-pages
+            if navigationTracker.isAtRootView {
+                floatingAddButton
+                    .transition(.scale.combined(with: .opacity))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 28)
     }
     
     private func triggerHeavyHaptic() {
+        // Double haptic for more noticeable feedback on + button
         hapticGenerator.prepare()
         hapticGenerator.impactOccurred(intensity: 1.0)
+        
+        // Second lighter tap after a tiny delay for "click" feel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            let lightHaptic = UIImpactFeedbackGenerator(style: .light)
+            lightHaptic.impactOccurred(intensity: 0.6)
+        }
+    }
+    
+    private func triggerTabSwitchHaptic() {
+        // Medium haptic for tab switching - noticeable but not too strong
+        let tabHaptic = UIImpactFeedbackGenerator(style: .medium)
+        tabHaptic.prepare()
+        tabHaptic.impactOccurred(intensity: 0.7)
     }
     
     // MARK: - Active Session Banner
@@ -611,8 +769,15 @@ private struct LegacyTabBarItem: View {
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     
+    private let selectionHaptic = UIImpactFeedbackGenerator(style: .medium)
+    
     var body: some View {
-        Button(action: action) {
+        Button {
+            // Strong haptic feedback on tab selection
+            selectionHaptic.prepare()
+            selectionHaptic.impactOccurred(intensity: 0.8)
+            action()
+        } label: {
             VStack(spacing: 4) {
                 ZStack {
                     if isSelected {

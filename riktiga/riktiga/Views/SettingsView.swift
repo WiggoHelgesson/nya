@@ -18,6 +18,7 @@ struct SettingsView: View {
     @StateObject private var stravaService = StravaService.shared
     @State private var showStravaDisconnectConfirmation = false
     @State private var showConnectDevices = false
+    @State private var showNutritionOnboarding = false
     
     var body: some View {
         NavigationStack {
@@ -136,6 +137,38 @@ struct SettingsView: View {
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundColor(Color(.systemGray3))
                                     }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
+                        }
+                    }
+                    
+                    // MARK: - NÄRING Section
+                    SettingsSectionView(title: "NÄRING & MÅL") {
+                        VStack(spacing: 0) {
+                            Button(action: { showNutritionOnboarding = true }) {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.orange)
+                                        .frame(width: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Uppdatera näringsinställningar")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("Kalorier, protein, kolhydrater & fett")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(Color(.systemGray3))
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
@@ -287,6 +320,10 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showConnectDevices) {
                 ConnectDeviceView()
+            }
+            .sheet(isPresented: $showNutritionOnboarding) {
+                NutritionSettingsView()
+                    .environmentObject(authViewModel)
             }
             .task {
                 guard !hasLoadedOnce else { return }
@@ -443,9 +480,48 @@ struct SettingsItemDivider: View {
 
 struct PresentPaywallView: View {
     @Environment(\.dismiss) var dismiss
+    @ObservedObject private var revenueCatManager = RevenueCatManager.shared
+    @State private var hasAttemptedLoad = false
     
     var body: some View {
-        PaywallView()
+        Group {
+            if let offerings = revenueCatManager.offerings {
+                // Debug: Print all available offerings
+                let _ = print("📦 Available offerings: \(offerings.all.keys.joined(separator: ", "))")
+                let _ = print("📦 Current offering: \(offerings.current?.identifier ?? "none")")
+                
+                if let chatgptOffering = offerings.offering(identifier: "new") {
+                    let _ = print("✅ Using 'new' offering")
+                    PaywallView(offering: chatgptOffering)
+                } else if let currentOffering = offerings.current {
+                    let _ = print("⚠️ 'new' not found, using current: \(currentOffering.identifier)")
+                    PaywallView(offering: currentOffering)
+                } else {
+                    let _ = print("⚠️ No offerings available, using default PaywallView")
+                    PaywallView()
+                }
+            } else {
+                // Loading state while offerings are being fetched
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Laddar...")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
+                .onAppear {
+                    if !hasAttemptedLoad {
+                        hasAttemptedLoad = true
+                        Task {
+                            print("📦 Offerings not loaded, fetching...")
+                            await revenueCatManager.loadOfferings()
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

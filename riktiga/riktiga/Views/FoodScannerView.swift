@@ -38,6 +38,9 @@ struct FoodScannerView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var flashEnabled = false
     @State private var zoomLevel: CGFloat = 1.0
+    @State private var amountValue: String = "100"
+    @State private var selectedUnit: FoodUnitType = .gram
+    @State private var showUnitPicker = false
     
     init(initialMode: FoodScanMode = .ai) {
         _selectedMode = State(initialValue: initialMode)
@@ -362,83 +365,317 @@ struct FoodScannerView: View {
     
     // MARK: - Result Overlay
     private func resultOverlay(result: FoodScanResult) -> some View {
-        ZStack {
+        // Use user-selected unit
+        let unit = selectedUnit
+        let unitLabel = unit.rawValue
+        let quickValues = unit.quickValues
+        
+        // Calculate adjusted values (base is always per 100g/100ml)
+        let amount = Double(amountValue) ?? 100
+        let multiplier = amount / 100.0
+        
+        let adjustedCalories = Int(Double(result.calories) * multiplier)
+        let adjustedProtein = Int(Double(result.protein) * multiplier)
+        let adjustedCarbs = Int(Double(result.carbs) * multiplier)
+        let adjustedFat = Int(Double(result.fat) * multiplier)
+        
+        return ZStack {
             Color.black.opacity(0.8)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    viewModel.clearResult()
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    showUnitPicker = false
                 }
             
-            VStack(spacing: 20) {
-                // Food image if available
-                if let image = result.image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 200)
-                        .cornerRadius(16)
-                }
-                
-                // Food name
-                Text(result.foodName)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                
-                // Nutrition info
-                HStack(spacing: 30) {
-                    NutritionBadge(value: "\(result.calories)", label: "kcal", color: .orange)
-                    NutritionBadge(value: "\(result.protein)g", label: "Protein", color: .red)
-                    NutritionBadge(value: "\(result.carbs)g", label: "Kolhydrat", color: .yellow)
-                    NutritionBadge(value: "\(result.fat)g", label: "Fett", color: .blue)
-                }
-                
-                // Serving size
-                if let serving = result.servingSize {
-                    Text("Portionsstorlek: \(serving)")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                
-                // Confidence
-                if let confidence = result.confidence {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 12))
-                        Text("AI-konfidens: \(Int(confidence * 100))%")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(.white.opacity(0.5))
-                }
-                
-                // Action buttons
-                HStack(spacing: 16) {
-                    Button {
-                        viewModel.clearResult()
-                    } label: {
-                        Text("Skanna igen")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 140, height: 50)
-                            .background(Color.gray.opacity(0.5))
-                            .cornerRadius(25)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Food image if available
+                    if let image = result.image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 180)
+                            .cornerRadius(16)
                     }
                     
-                    Button {
-                        viewModel.addToLog(result)
-                        dismiss()
-                    } label: {
-                        Text("Lägg till")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(width: 140, height: 50)
-                            .background(Color.white)
-                            .cornerRadius(25)
+                    // Food name
+                    Text(result.foodName)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    // Nutri-Score Badge (if available)
+                    if let nutriScore = result.nutriScore, !nutriScore.isEmpty {
+                        ScannerNutriScoreBadge(grade: nutriScore)
+                            .padding(.vertical, 4)
                     }
+                    
+                    // Amount input section with unit selector
+                    VStack(spacing: 12) {
+                        Text("Hur mycket äter du?")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        // Quick buttons
+                        HStack(spacing: 10) {
+                            ForEach(quickValues, id: \.self) { value in
+                                Button {
+                                    amountValue = value
+                                } label: {
+                                    Text("\(value)\(unitLabel)")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(amountValue == value ? .black : .white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                        .background(amountValue == value ? Color.white : Color.white.opacity(0.2))
+                                        .cornerRadius(20)
+                                }
+                            }
+                        }
+                        
+                        // Custom input with unit dropdown
+                        HStack(spacing: 12) {
+                            // Amount input
+                            TextField(unit.defaultValue, text: $amountValue)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .frame(width: 80)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(12)
+                            
+                            // Unit selector dropdown button
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showUnitPicker.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(unitLabelText(for: unit))
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                    
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .rotationEffect(.degrees(showUnitPicker ? 180 : 0))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(12)
+                            }
+                        }
+                        
+                        // Dropdown menu
+                        if showUnitPicker {
+                            VStack(spacing: 0) {
+                                unitOption(unit: .gram, label: "Gram (g)", isSelected: selectedUnit == .gram)
+                                
+                                Divider()
+                                    .background(Color.white.opacity(0.2))
+                                
+                                unitOption(unit: .milliliter, label: "Milliliter (ml)", isSelected: selectedUnit == .milliliter)
+                            }
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(12)
+                            .padding(.horizontal, 40)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .onAppear {
+                        // Set default unit and value based on detected unit
+                        selectedUnit = result.unit == .piece ? .gram : result.unit
+                        amountValue = selectedUnit.defaultValue
+                    }
+                    
+                    // Nutrition info (adjusted)
+                    VStack(spacing: 8) {
+                        Text("Näringsvärden för \(amountValue)\(unitLabel)")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                        
+                        HStack(spacing: 20) {
+                            NutritionBadge(value: "\(adjustedCalories)", label: "kcal", color: .orange)
+                            NutritionBadge(value: "\(adjustedProtein)g", label: "Protein", color: .red)
+                            NutritionBadge(value: "\(adjustedCarbs)g", label: "Kolhydrat", color: .yellow)
+                            NutritionBadge(value: "\(adjustedFat)g", label: "Fett", color: .blue)
+                        }
+                    }
+                    
+                    // Base info
+                    Text("Värden per 100\(selectedUnit == .milliliter ? "ml" : "g"): \(result.calories) kcal")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                    
+                    // Confidence
+                    if let confidence = result.confidence {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 12))
+                            Text("AI-konfidens: \(Int(confidence * 100))%")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                    }
+                    
+                    // Action buttons
+                    HStack(spacing: 16) {
+                        Button {
+                            viewModel.clearResult()
+                            amountValue = "100"
+                            selectedUnit = .gram
+                            showUnitPicker = false
+                        } label: {
+                            Text("Skanna igen")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 140, height: 50)
+                                .background(Color.gray.opacity(0.5))
+                                .cornerRadius(25)
+                        }
+                        
+                        Button {
+                            // Create adjusted result with user-selected unit
+                            let adjustedResult = FoodScanResult(
+                                foodName: result.foodName,
+                                calories: adjustedCalories,
+                                protein: adjustedProtein,
+                                carbs: adjustedCarbs,
+                                fat: adjustedFat,
+                                servingSize: "\(amountValue)\(selectedUnit.rawValue)",
+                                confidence: result.confidence,
+                                image: result.image,
+                                barcode: result.barcode,
+                                nutriScore: result.nutriScore,
+                                unit: selectedUnit,
+                                servingQuantity: result.servingQuantity
+                            )
+                            viewModel.addToLog(adjustedResult)
+                            amountValue = "100"
+                            selectedUnit = .gram
+                            dismiss()
+                        } label: {
+                            Text("Lägg till")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                                .frame(width: 140, height: 50)
+                                .background(Color.white)
+                                .cornerRadius(25)
+                        }
+                    }
+                    .padding(.top, 10)
+                    .padding(.bottom, 30)
                 }
-                .padding(.top, 10)
+                .padding(.horizontal, 30)
+                .padding(.top, 30)
             }
-            .padding(30)
+        }
+    }
+    
+    // Helper function for unit label text
+    private func unitLabelText(for unit: FoodUnitType) -> String {
+        switch unit {
+        case .gram: return "gram"
+        case .milliliter: return "ml"
+        case .piece: return "styck"
+        }
+    }
+    
+    // Unit dropdown option
+    private func unitOption(unit: FoodUnitType, label: String, isSelected: Bool) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedUnit = unit
+                amountValue = unit.defaultValue
+                showUnitPicker = false
+            }
+        } label: {
+            HStack {
+                Text(label)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(isSelected ? Color.white.opacity(0.1) : Color.clear)
+        }
+    }
+}
+
+// MARK: - Scanner Nutri-Score Badge
+struct ScannerNutriScoreBadge: View {
+    let grade: String
+    
+    private var gradeColor: Color {
+        switch grade.uppercased() {
+        case "A": return Color(red: 0.0, green: 0.5, blue: 0.2)
+        case "B": return Color(red: 0.5, green: 0.7, blue: 0.2)
+        case "C": return Color(red: 0.9, green: 0.7, blue: 0.1)
+        case "D": return Color(red: 0.9, green: 0.5, blue: 0.1)
+        case "E": return Color(red: 0.8, green: 0.2, blue: 0.1)
+        default: return Color.gray
+        }
+    }
+    
+    private var gradeDescription: String {
+        switch grade.uppercased() {
+        case "A": return "Utmärkt näringsprofil"
+        case "B": return "Bra näringsprofil"
+        case "C": return "Medel näringsprofil"
+        case "D": return "Dålig näringsprofil"
+        case "E": return "Ohälsosam näringsprofil"
+        default: return ""
+        }
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(["A", "B", "C", "D", "E"], id: \.self) { letter in
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(letterColor(for: letter))
+                            .frame(width: letter == grade.uppercased() ? 36 : 28, height: letter == grade.uppercased() ? 36 : 28)
+                        
+                        Text(letter)
+                            .font(.system(size: letter == grade.uppercased() ? 18 : 12, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .opacity(letter == grade.uppercased() ? 1.0 : 0.4)
+                }
+            }
+            
+            Text(gradeDescription)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(12)
+    }
+    
+    private func letterColor(for letter: String) -> Color {
+        switch letter {
+        case "A": return Color(red: 0.0, green: 0.5, blue: 0.2)
+        case "B": return Color(red: 0.5, green: 0.7, blue: 0.2)
+        case "C": return Color(red: 0.9, green: 0.7, blue: 0.1)
+        case "D": return Color(red: 0.9, green: 0.5, blue: 0.1)
+        case "E": return Color(red: 0.8, green: 0.2, blue: 0.1)
+        default: return Color.gray
         }
     }
 }
@@ -527,6 +764,32 @@ struct FoodScannerCameraPreview: UIViewRepresentable {
     }
 }
 
+// MARK: - Food Unit Type
+enum FoodUnitType: String {
+    case gram = "g"
+    case milliliter = "ml"
+    case piece = "st"
+    
+    var quickValues: [String] {
+        switch self {
+        case .gram:
+            return ["50", "100", "150", "200"]
+        case .milliliter:
+            return ["100", "250", "330", "500"]
+        case .piece:
+            return ["1", "2", "3", "4"]
+        }
+    }
+    
+    var defaultValue: String {
+        switch self {
+        case .gram: return "100"
+        case .milliliter: return "250"
+        case .piece: return "1"
+        }
+    }
+}
+
 // MARK: - Food Scan Result
 struct FoodScanResult {
     let foodName: String
@@ -538,6 +801,9 @@ struct FoodScanResult {
     let confidence: Double?
     let image: UIImage?
     let barcode: String?
+    let nutriScore: String?
+    let unit: FoodUnitType
+    let servingQuantity: Double? // For piece calculations
 }
 
 // MARK: - Food Scanner ViewModel
@@ -763,7 +1029,10 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                         servingSize: result.servingSize,
                         confidence: result.confidence,
                         image: image,
-                        barcode: nil
+                        barcode: nil,
+                        nutriScore: nil,
+                        unit: .gram,
+                        servingQuantity: nil
                     )
                     isAnalyzing = false
                 }
@@ -805,7 +1074,10 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                         servingSize: result.servingSize,
                         confidence: result.confidence,
                         image: image,
-                        barcode: nil
+                        barcode: nil,
+                        nutriScore: nil,
+                        unit: .gram,
+                        servingQuantity: nil
                     )
                     isAnalyzing = false
                 }
@@ -841,7 +1113,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     }
     
     private func searchOpenFoodFacts(barcode: String) async -> FoodScanResult? {
-        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(barcode)?fields=code,product_name,brands,nutriments,serving_size,image_front_url") else {
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(barcode)?fields=code,product_name,brands,nutriments,serving_size,serving_quantity,image_front_url,nutriscore_grade,quantity") else {
             return nil
         }
         
@@ -861,6 +1133,10 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             let name = product["product_name"] as? String ?? "Okänd produkt"
             let brand = product["brands"] as? String
             let servingSize = product["serving_size"] as? String
+            let servingQuantityRaw = product["serving_quantity"] as? Double
+            let quantity = product["quantity"] as? String // e.g., "330ml", "500g"
+            let nutriScore = product["nutriscore_grade"] as? String
+            let imageUrlString = product["image_front_url"] as? String
             
             var calories = 0
             var protein = 0
@@ -876,6 +1152,24 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             
             let displayName = brand != nil ? "\(name) (\(brand!))" : name
             
+            // Detect unit from serving_size or quantity
+            let detectedUnit = detectFoodUnit(servingSize: servingSize, quantity: quantity)
+            let servingQty = servingQuantityRaw ?? parseServingQuantity(from: servingSize)
+            
+            print("📊 Barcode: servingSize=\(servingSize ?? "nil"), quantity=\(quantity ?? "nil"), detectedUnit=\(detectedUnit.rawValue)")
+            
+            // Download product image from Open Food Facts if available
+            var productImage: UIImage? = nil
+            if let imageUrlString = imageUrlString, let imageUrl = URL(string: imageUrlString) {
+                do {
+                    let (imageData, _) = try await URLSession.shared.data(from: imageUrl)
+                    productImage = UIImage(data: imageData)
+                    print("📷 Downloaded product image from Open Food Facts")
+                } catch {
+                    print("⚠️ Could not download product image: \(error)")
+                }
+            }
+            
             return FoodScanResult(
                 foodName: displayName,
                 calories: calories,
@@ -884,13 +1178,50 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 fat: fat,
                 servingSize: servingSize ?? "100g",
                 confidence: nil,
-                image: nil,
-                barcode: barcode
+                image: productImage,
+                barcode: barcode,
+                nutriScore: nutriScore?.uppercased(),
+                unit: detectedUnit,
+                servingQuantity: servingQty
             )
         } catch {
             print("❌ Barcode lookup error: \(error)")
             return nil
         }
+    }
+    
+    // MARK: - Unit Detection Helpers
+    private func detectFoodUnit(servingSize: String?, quantity: String?) -> FoodUnitType {
+        // Check serving_size first, then quantity
+        let textToCheck = (servingSize ?? "") + " " + (quantity ?? "")
+        let lowercased = textToCheck.lowercased()
+        
+        // Check for milliliters
+        if lowercased.contains("ml") || lowercased.contains("cl") || lowercased.contains("l ") || lowercased.contains("liter") {
+            return .milliliter
+        }
+        
+        // Check for pieces/units
+        if lowercased.contains("st") || lowercased.contains("piece") || lowercased.contains("stück") || 
+           lowercased.contains("portion") || lowercased.contains("unit") || lowercased.contains("capsule") {
+            return .piece
+        }
+        
+        // Default to grams
+        return .gram
+    }
+    
+    private func parseServingQuantity(from servingSize: String?) -> Double? {
+        guard let servingSize = servingSize else { return nil }
+        
+        // Extract number from serving size string (e.g., "250ml" -> 250, "1 piece (30g)" -> 30)
+        let pattern = "([0-9]+\\.?[0-9]*)"
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: servingSize, range: NSRange(servingSize.startIndex..., in: servingSize)),
+           let range = Range(match.range(at: 1), in: servingSize) {
+            return Double(servingSize[range])
+        }
+        return nil
     }
     
     private func detectBarcodeInImage(_ image: UIImage) {
@@ -1061,6 +1392,19 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                     return
                 }
                 
+                print("📷 addToLog - image available: \(result.image != nil)")
+                
+                var imageUrl: String? = nil
+                
+                // Upload image if available
+                if let image = result.image {
+                    print("📷 Attempting to upload image...")
+                    imageUrl = await uploadFoodImage(image: image, userId: userId)
+                    print("📷 Upload result: \(imageUrl ?? "nil")")
+                } else {
+                    print("📷 No image in result")
+                }
+                
                 let entry = FoodLogInsert(
                     id: UUID().uuidString,
                     userId: userId,
@@ -1070,15 +1414,18 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                     carbs: result.carbs,
                     fat: result.fat,
                     mealType: "snack",
-                    loggedAt: ISO8601DateFormatter().string(from: Date())
+                    loggedAt: ISO8601DateFormatter().string(from: Date()),
+                    imageUrl: imageUrl
                 )
+                
+                print("📷 Saving to database with imageUrl: \(imageUrl ?? "nil")")
                 
                 try await SupabaseConfig.supabase
                     .from("food_logs")
                     .insert(entry)
                     .execute()
                 
-                print("✅ Added to log: \(result.foodName) - \(result.calories) kcal")
+                print("✅ Added to log: \(result.foodName) - \(result.calories) kcal (imageUrl: \(imageUrl ?? "none"))")
                 
                 // Notify HomeView to refresh
                 await MainActor.run {
@@ -1087,6 +1434,33 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             } catch {
                 print("❌ Error saving to log: \(error)")
             }
+        }
+    }
+    
+    private func uploadFoodImage(image: UIImage, userId: String) async -> String? {
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            print("❌ Failed to compress image")
+            return nil
+        }
+        
+        let fileName = "food_\(UUID().uuidString).jpg"
+        let filePath = "\(userId)/\(fileName)"
+        
+        do {
+            try await SupabaseConfig.supabase.storage
+                .from("food-images")
+                .upload(path: filePath, file: imageData, options: .init(contentType: "image/jpeg"))
+            
+            // Get public URL
+            let publicUrl = try SupabaseConfig.supabase.storage
+                .from("food-images")
+                .getPublicURL(path: filePath)
+            
+            print("✅ Uploaded food image: \(publicUrl.absoluteString)")
+            return publicUrl.absoluteString
+        } catch {
+            print("❌ Error uploading food image: \(error)")
+            return nil
         }
     }
 }
@@ -1102,12 +1476,14 @@ struct FoodLogInsert: Codable {
     let fat: Int
     let mealType: String
     let loggedAt: String
+    let imageUrl: String?
     
     enum CodingKeys: String, CodingKey {
         case id, name, calories, protein, carbs, fat
         case userId = "user_id"
         case mealType = "meal_type"
         case loggedAt = "logged_at"
+        case imageUrl = "image_url"
     }
 }
 

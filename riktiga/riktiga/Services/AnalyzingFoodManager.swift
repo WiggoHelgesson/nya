@@ -17,10 +17,39 @@ class AnalyzingFoodManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var notificationsEnabled = false
     
+    // Limit reached state - shows lock icon
+    @Published var limitReached = false
+    @Published var showPaywallForLimit = false
+    
+    // Saving state - for "Lägg till" button feedback
+    @Published var isSaving = false
+    @Published var saveSuccess = false
+    
+    // Story posting state
+    @Published var showStoryPopup = false
+    @Published var isPostingStory = false
+    @Published var storyPostedSuccess = false
+    
     private var progressTimer: Timer?
+    private var isPro: Bool = false
     
     private init() {
         checkNotificationPermission()
+        // Observe pro status changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(proStatusChanged),
+            name: NSNotification.Name("ProStatusChanged"),
+            object: nil
+        )
+    }
+    
+    @objc private func proStatusChanged() {
+        isPro = RevenueCatManager.shared.isProMember
+    }
+    
+    func updateProStatus(_ isPro: Bool) {
+        self.isPro = isPro
     }
     
     // MARK: - Notification Handling
@@ -92,6 +121,10 @@ class AnalyzingFoodManager: ObservableObject {
     }
     
     func startAnalyzing(image: UIImage) {
+        // Check if user is pro or has remaining free scans
+        let isProUser = RevenueCatManager.shared.isProMember
+        let scanManager = AIScanLimitManager.shared
+        
         DispatchQueue.main.async {
             self.isAnalyzing = true
             self.progress = 0
@@ -101,6 +134,13 @@ class AnalyzingFoodManager: ObservableObject {
             self.noFoodDetected = false
             self.errorMessage = nil
             self.showNotifyBanner = true
+            self.limitReached = false
+        }
+        
+        // If not pro and at limit, show lock after fake progress
+        if !isProUser && scanManager.isAtLimit() {
+            showLimitReachedAnimation()
+            return
         }
         
         // Start fake progress animation
@@ -108,6 +148,39 @@ class AnalyzingFoodManager: ObservableObject {
         
         // Actually analyze with AI
         analyzeWithAI(image)
+        
+        // Count this scan (only for non-pro users)
+        if !isProUser {
+            scanManager.useScan()
+        }
+    }
+    
+    private func showLimitReachedAnimation() {
+        // Animate progress up to about 60% then show lock
+        var currentProgress: Double = 0
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            currentProgress += 3
+            
+            DispatchQueue.main.async {
+                self.progress = currentProgress
+                
+                if currentProgress >= 60 {
+                    timer.invalidate()
+                    self.progressTimer?.invalidate()
+                    
+                    // Show limit reached lock
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        self.limitReached = true
+                        self.isAnalyzing = false
+                    }
+                }
+            }
+        }
     }
     
     private func startProgressAnimation() {
@@ -298,12 +371,22 @@ class AnalyzingFoodManager: ObservableObject {
         capturedImage = nil
         noFoodDetected = false
         errorMessage = nil
+        limitReached = false
     }
     
     func dismissNoFoodError() {
         noFoodDetected = false
         capturedImage = nil
         errorMessage = nil
+    }
+    
+    func dismissLimitReached() {
+        limitReached = false
+        capturedImage = nil
+    }
+    
+    func openPaywallForLimit() {
+        showPaywallForLimit = true
     }
     
     func retryAnalysis() {
@@ -322,50 +405,153 @@ class AnalyzingFoodManager: ObservableObject {
     }
     
     func addResultToLog() {
-        guard let result = result else { return }
+        print("📝 addResultToLog called")
+        
+        guard let result = result else {
+            print("❌ No result to add")
+            return
+        }
+        
+        print("📝 Adding result: \(result.foodName)")
+        
+        // Show saving state
+        let resultToSave = result
+        DispatchQueue.main.async {
+            self.isSaving = true
+        }
         
         Task {
             do {
                 guard let userId = try? await SupabaseConfig.supabase.auth.session.user.id.uuidString else {
                     print("❌ No user logged in")
+                    await MainActor.run {
+                        self.isSaving = false
+                    }
                     return
                 }
                 
+                print("📝 User ID: \(userId)")
+                
                 // Upload image if available
                 var imageUrl: String? = nil
-                if let image = result.image,
+                if let image = resultToSave.image,
                    let imageData = image.jpegData(compressionQuality: 0.7) {
-                    imageUrl = try await uploadFoodImage(data: imageData, userId: userId)
+                    print("📝 Uploading image...")
+                    do {
+                        imageUrl = try await uploadFoodImage(data: imageData, userId: userId)
+                        print("✅ Image uploaded: \(imageUrl ?? "nil")")
+                    } catch {
+                        print("⚠️ Image upload failed: \(error) - continuing without image")
+                    }
                 }
                 
                 let entry = FoodLogInsertForAnalysis(
                     id: UUID().uuidString,
                     userId: userId,
-                    name: result.foodName,
-                    calories: result.calories,
-                    protein: result.protein,
-                    carbs: result.carbs,
-                    fat: result.fat,
+                    name: resultToSave.foodName,
+                    calories: resultToSave.calories,
+                    protein: resultToSave.protein,
+                    carbs: resultToSave.carbs,
+                    fat: resultToSave.fat,
                     mealType: "snack",
                     loggedAt: ISO8601DateFormatter().string(from: Date()),
                     imageUrl: imageUrl
                 )
                 
+                print("📝 Inserting food log...")
                 try await SupabaseConfig.supabase
                     .from("food_logs")
                     .insert(entry)
                     .execute()
                 
-                print("✅ Added analyzed food: \(result.foodName) with image: \(imageUrl ?? "none")")
+                print("✅ Added analyzed food: \(resultToSave.foodName) with image: \(imageUrl ?? "none")")
+                
+                // Show success animation, then dismiss
+                await MainActor.run {
+                    self.isSaving = false
+                    self.saveSuccess = true
+                    
+                    // Haptic feedback for success
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                }
+                
+                // Wait a moment to show success, then show story popup
+                try? await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
                 
                 await MainActor.run {
+                    self.saveSuccess = false
+                    // Show story popup instead of dismissing immediately
+                    self.showStoryPopup = true
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                }
+            } catch {
+                print("❌ Error saving food log: \(error)")
+                await MainActor.run {
+                    self.isSaving = false
+                    self.errorMessage = "Kunde inte spara: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    // MARK: - Story Posting
+    func postToStory() {
+        guard let image = capturedImage else {
+            print("❌ No image to post to story")
+            dismissStoryPopup()
+            return
+        }
+        
+        isPostingStory = true
+        
+        Task {
+            do {
+                guard let userId = try? await SupabaseConfig.supabase.auth.session.user.id.uuidString else {
+                    print("❌ No user logged in")
+                    await MainActor.run {
+                        self.isPostingStory = false
+                        self.dismissStoryPopup()
+                    }
+                    return
+                }
+                
+                _ = try await StoryService.shared.postStory(userId: userId, image: image)
+                
+                await MainActor.run {
+                    self.isPostingStory = false
+                    self.storyPostedSuccess = true
+                    
+                    // Haptic feedback
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                    
+                    // Notify to refresh stories
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshStories"), object: nil)
+                }
+                
+                // Wait a moment then dismiss
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                
+                await MainActor.run {
+                    self.storyPostedSuccess = false
+                    self.dismissStoryPopup()
                     self.dismissResult()
                 }
             } catch {
-                print("❌ Error saving: \(error)")
+                print("❌ Error posting story: \(error)")
+                await MainActor.run {
+                    self.isPostingStory = false
+                    self.dismissStoryPopup()
+                    self.dismissResult()
+                }
             }
         }
+    }
+    
+    func dismissStoryPopup() {
+        showStoryPopup = false
+        dismissResult()
     }
     
     private func uploadFoodImage(data: Data, userId: String) async throws -> String {

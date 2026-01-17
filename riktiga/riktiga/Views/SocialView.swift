@@ -42,6 +42,18 @@ struct SocialView: View {
     @State private var lastWeekActivities: Int = 0
     @State private var lastWeekTime: TimeInterval = 0
     @State private var lastWeekWeight: Double = 0
+    
+    // Animation states
+    @State private var showHeader = false
+    @State private var showCarousel = false
+    @State private var showPosts = false
+    
+    // Stories state
+    @State private var friendsStories: [UserStories] = []
+    @State private var myStories: [Story] = []
+    @State private var isLoadingStories = false
+    @State private var selectedUserStories: UserStories? = nil
+    
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -86,9 +98,23 @@ struct SocialView: View {
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
             }
-            .sheet(isPresented: $showFindFriends) {
+            .navigationDestination(isPresented: $showFindFriends) {
                 FindFriendsView()
                     .environmentObject(authViewModel)
+            }
+            .fullScreenCover(item: $selectedUserStories) { userStories in
+                StoryViewerOverlay(
+                    userStories: userStories,
+                    currentUserId: authViewModel.currentUser?.id ?? "",
+                    onStoryViewed: { storyId in
+                        markStoryAsViewed(storyId: storyId)
+                    },
+                    onDismiss: {
+                        selectedUserStories = nil
+                    }
+                )
+                .background(Color.black)
+                .ignoresSafeArea()
             }
             .enableSwipeBack()
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToNewsTab"))) { _ in
@@ -121,6 +147,13 @@ struct SocialView: View {
                     await socialViewModel.refreshSocialFeed(userId: authViewModel.currentUser?.id ?? "")
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshStories"))) { _ in
+                Task {
+                    if let userId = authViewModel.currentUser?.id {
+                        await loadStories(userId: userId)
+                    }
+                }
+            }
             .onChange(of: scenePhase) { oldPhase, newPhase in
                 handleScenePhaseChange(newPhase)
             }
@@ -136,6 +169,8 @@ struct SocialView: View {
             CombinedHeaderWithTabs(selectedTab: $selectedTab)
                 .environmentObject(authViewModel)
                 .zIndex(1)
+                .opacity(showHeader ? 1 : 0)
+                .offset(y: showHeader ? 0 : -20)
             
             if socialViewModel.isLoading && socialViewModel.posts.isEmpty && featuredPosts.isEmpty {
                 loadingView
@@ -146,6 +181,33 @@ struct SocialView: View {
                 emptyStateView
             } else {
                 scrollContent
+            }
+        }
+        .onAppear {
+            animateContentIn()
+        }
+    }
+    
+    private func animateContentIn() {
+        // Reset states
+        showHeader = false
+        showCarousel = false
+        showPosts = false
+        
+        // Staggered animations
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            showHeader = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                showCarousel = true
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                showPosts = true
             }
         }
     }
@@ -168,7 +230,24 @@ struct SocialView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
+            // Stories row (Instagram-style)
+            StoriesRowView(
+                userStories: friendsStories,
+                currentUserId: authViewModel.currentUser?.id ?? "",
+                myStories: myStories,
+                onStoryTap: { userStories, index in
+                    selectedUserStories = userStories
+                    // selectedUserStories is already set, fullScreenCover(item:) will present
+                },
+                onAddStoryTap: {
+                    // Could open camera here if needed
+                }
+            )
+            .environmentObject(authViewModel)
+            
+            Divider()
+            
             Spacer()
             
             VStack(spacing: 16) {
@@ -214,13 +293,25 @@ struct SocialView: View {
     private var featuredPostsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Strava-style swipeable cards
-                quickInsightsCarousel
+                // Stories row (Instagram-style)
+                StoriesRowView(
+                    userStories: friendsStories,
+                    currentUserId: authViewModel.currentUser?.id ?? "",
+                    myStories: myStories,
+                    onStoryTap: { userStories, index in
+                        selectedUserStories = userStories
+                        // selectedUserStories is already set, fullScreenCover(item:) will present
+                    },
+                    onAddStoryTap: {
+                        // Could open camera here if needed
+                    }
+                )
+                .environmentObject(authViewModel)
                 
                 Divider()
                 
                 if selectedTab == .feed {
-                    // Featured posts
+                    // Posts from all users
                     LazyVStack(spacing: 0) {
                         ForEach(featuredPosts) { post in
                             SocialPostCard(
@@ -244,21 +335,37 @@ struct SocialView: View {
     private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Strava-style swipeable cards
-                quickInsightsCarousel
+                // Stories row (Instagram-style) - Always show so users can add stories
+                StoriesRowView(
+                    userStories: friendsStories,
+                    currentUserId: authViewModel.currentUser?.id ?? "",
+                    myStories: myStories,
+                    onStoryTap: { userStories, index in
+                        selectedUserStories = userStories
+                        // selectedUserStories is already set, fullScreenCover(item:) will present
+                    },
+                    onAddStoryTap: {
+                        // Could open camera here if needed
+                    }
+                )
+                .environmentObject(authViewModel)
                 
                 Divider()
                 
                 if selectedTab == .feed {
                     feedContent
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 30)
                 } else {
                     newsContent
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 30)
                 }
             }
         }
     }
     
-    // MARK: - Quick Insights Carousel (Strava-style)
+    // MARK: - Quick Insights Carousel (Strava-style) - KEPT FOR REFERENCE
     private var quickInsightsCarousel: some View {
         VStack(spacing: 8) {
             TabView(selection: $carouselIndex.animation(.easeInOut(duration: 0.3))) {
@@ -529,6 +636,9 @@ struct SocialView: View {
             return
         }
         
+        // Load stories from friends
+        await loadStories(userId: userId)
+        
         await socialViewModel.fetchSocialFeedAsync(userId: userId)
         await loadRecommendedUsers(for: userId)
         await newsViewModel.fetchNews()
@@ -549,6 +659,60 @@ struct SocialView: View {
         }
     }
     
+    // MARK: - Load Stories
+    private func loadStories(userId: String) async {
+        isLoadingStories = true
+        
+        // Load my stories (always try this)
+        do {
+            let mine = try await StoryService.shared.fetchMyStories(userId: userId)
+            await MainActor.run {
+                self.myStories = mine
+            }
+        } catch {
+            print("❌ Error loading my stories: \(error)")
+        }
+        
+        // Load friends stories (separate try so my stories still work)
+        do {
+            let friends = try await StoryService.shared.fetchFriendsStories(userId: userId)
+            await MainActor.run {
+                self.friendsStories = friends
+            }
+        } catch {
+            print("❌ Error loading friends stories: \(error)")
+            // This is OK - user might not follow anyone
+        }
+        
+        await MainActor.run {
+            self.isLoadingStories = false
+        }
+    }
+    
+    // MARK: - Mark Story as Viewed
+    private func markStoryAsViewed(storyId: String) {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        Task {
+            do {
+                try await StoryService.shared.markStoryAsViewed(storyId: storyId, viewerId: userId)
+                
+                // Update local state
+                await MainActor.run {
+                    for index in friendsStories.indices {
+                        if let storyIndex = friendsStories[index].stories.firstIndex(where: { $0.id == storyId }) {
+                            friendsStories[index].stories[storyIndex].hasViewed = true
+                        }
+                        // Update hasUnviewedStories
+                        friendsStories[index].hasUnviewedStories = friendsStories[index].stories.contains { !$0.hasViewed }
+                    }
+                }
+            } catch {
+                print("❌ Error marking story as viewed: \(error)")
+            }
+        }
+    }
+    
     private func loadFeaturedPosts() async {
         guard !isLoadingFeatured else { return }
         guard let userId = authViewModel.currentUser?.id else { return }
@@ -556,7 +720,8 @@ struct SocialView: View {
         isLoadingFeatured = true
         
         do {
-            let posts = try await SocialService.shared.getFeaturedPosts(viewerId: userId, limit: 4)
+            // Load 7 most recent posts from all users for users without friends
+            let posts = try await SocialService.shared.getFeaturedPosts(viewerId: userId, limit: 7)
             await MainActor.run {
                 self.featuredPosts = posts
                 self.isLoadingFeatured = false
@@ -607,6 +772,10 @@ struct SocialView: View {
         }
         
         visiblePostCount = 5
+        
+        // Refresh stories first
+        await loadStories(userId: userId)
+        
         await socialViewModel.refreshSocialFeed(userId: userId)
         await loadRecommendedUsers(for: userId)
         await newsViewModel.fetchNews()
@@ -636,62 +805,68 @@ struct SocialView: View {
     // MARK: - Feed Content
     private var feedContent: some View {
         LazyVStack(spacing: 0, pinnedViews: []) {
-                                ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
-                                    VStack(spacing: 0) {
-                                        SocialPostCard(
-                                            post: post,
-                                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                                            onLikeChanged: { postId, isLiked, count in
-                                                socialViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
-                                            },
-                                            onCommentCountChanged: { postId, count in
-                                                socialViewModel.updatePostCommentCount(postId: postId, commentCount: count)
-                                            },
-                                            onPostDeleted: { postId in
-                                                socialViewModel.removePost(postId: postId)
-                                            }
-                                        )
-                                        .id(post.id) // Stable identity for better SwiftUI diffing
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
-                                    .onAppear {
-                                        if let index = socialViewModel.posts.firstIndex(where: { $0.id == post.id }),
-                                           index >= visiblePostCount - 2,
-                                           visiblePostCount < socialViewModel.posts.count {
-                                            loadMorePosts()
-                                        }
-                                    }
-                                    
-                                    if index == 0, shouldShowRecommendedFriendsSection {
-                                        recommendedFriendsInlineSection
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
-                                    
-                                    if index == 4, shouldShowBrandSlider {
-                                        brandSliderInlineSection
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
-                                }
-                                
-                                if isLoadingMore {
-                                    HStack {
-                                        Spacer()
-                                        ProgressView()
-                                            .tint(AppColors.brandBlue)
-                                        Spacer()
-                                    }
-                                    .padding()
-                                }
-                                
-                                if visiblePostCount >= socialViewModel.posts.count {
-                                    Text("Inga fler inlägg")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                        .padding()
-                                }
+            ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
+                VStack(spacing: 0) {
+                    SocialPostCard(
+                        post: post,
+                        onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                        onLikeChanged: { postId, isLiked, count in
+                            socialViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                        },
+                        onCommentCountChanged: { postId, count in
+                            socialViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                        },
+                        onPostDeleted: { postId in
+                            socialViewModel.removePost(postId: postId)
+                        }
+                    )
+                    .id(post.id) // Stable identity for better SwiftUI diffing
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
+                .opacity(showPosts ? 1 : 0)
+                .offset(y: showPosts ? 0 : 20)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.8)
+                    .delay(Double(min(index, 5)) * 0.05),
+                    value: showPosts
+                )
+                .onAppear {
+                    if let index = socialViewModel.posts.firstIndex(where: { $0.id == post.id }),
+                       index >= visiblePostCount - 2,
+                       visiblePostCount < socialViewModel.posts.count {
+                        loadMorePosts()
+                    }
+                }
+                
+                // Removed recommended friends section
+                
+                if index == 4, shouldShowBrandSlider {
+                    brandSliderInlineSection
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 15)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
+            }
+            
+            if isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppColors.brandBlue)
+                    Spacer()
+                }
+                .padding()
+            }
+            
+            if visiblePostCount >= socialViewModel.posts.count {
+                Text("Inga fler inlägg")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .padding()
+            }
         }
     }
     
@@ -1209,7 +1384,11 @@ struct SocialPostCard: View {
     @State private var showEditSheet = false
     @State private var editedTitle: String = ""
     @State private var editedDescription: String = ""
+    @State private var likeAnimationScale: CGFloat = 1.0
+    @State private var showLikeParticles = false
     @EnvironmentObject var authViewModel: AuthViewModel
+    
+    private let likeHaptic = UIImpactFeedbackGenerator(style: .medium)
     
     init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, onLikeChanged: @escaping (String, Bool, Int) -> Void, onCommentCountChanged: @escaping (String, Int) -> Void, onPostDeleted: @escaping (String) -> Void) {
         self.post = post
@@ -1233,10 +1412,28 @@ struct SocialPostCard: View {
             // Like, Comment, Share buttons - large, evenly spaced
             HStack(spacing: 0) {
                 Button(action: toggleLike) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(isLiked ? .red : .gray)
-                        .animation(.none, value: isLiked)
+                    ZStack {
+                        // Particle burst effect when liking
+                        if showLikeParticles {
+                            ForEach(0..<6, id: \.self) { index in
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.red.opacity(0.8))
+                                    .offset(
+                                        x: cos(Double(index) * .pi / 3) * 20,
+                                        y: sin(Double(index) * .pi / 3) * 20
+                                    )
+                                    .opacity(showLikeParticles ? 0 : 1)
+                                    .scaleEffect(showLikeParticles ? 1.5 : 0.5)
+                            }
+                        }
+                        
+                        // Main heart icon
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(isLiked ? .red : .gray)
+                            .scaleEffect(likeAnimationScale)
+                    }
                 }
                 .disabled(likeInProgress)
                 .frame(maxWidth: .infinity)
@@ -1649,11 +1846,34 @@ struct SocialPostCard: View {
         let previousCount = likeCount
         let previousTopLikers = topLikers
         
+        // Haptic feedback
+        likeHaptic.impactOccurred()
+        
         // Update UI immediately (optimistic update)
         likeInProgress = true
         isLiked.toggle()
         likeCount += isLiked ? 1 : -1
+        
+        // Trigger like animation when liking
         if isLiked {
+            // Scale animation
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                likeAnimationScale = 1.3
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                    likeAnimationScale = 1.0
+                }
+            }
+            
+            // Particle burst animation
+            withAnimation(.easeOut(duration: 0.4)) {
+                showLikeParticles = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                showLikeParticles = false
+            }
+            
             if let currentUser = authViewModel.currentUser {
                 let liker = UserSearchResult(id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl)
                 if !topLikers.contains(where: { $0.id == liker.id }) {
@@ -1661,6 +1881,15 @@ struct SocialPostCard: View {
                 }
             }
         } else {
+            // Small bounce animation when unliking
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                likeAnimationScale = 0.8
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                    likeAnimationScale = 1.0
+                }
+            }
             topLikers.removeAll { $0.id == userId }
         }
         topLikers = Array(topLikers.prefix(3))
@@ -2385,6 +2614,9 @@ struct CommentRow: View {
     @GestureState private var dragOffset: CGFloat = 0
     @State private var showDeleteConfirmation = false
     
+    // Like animation state
+    @State private var likeScale: CGFloat = 1.0
+    
     private let actionThreshold: CGFloat = -100
     private let maxSwipe: CGFloat = -150
     
@@ -2536,10 +2768,27 @@ struct CommentRow: View {
                 
                 // Like button with count
                 HStack(spacing: 4) {
-                    Button(action: onLike) {
+                    Button {
+                        // Haptic feedback
+                        let haptic = UIImpactFeedbackGenerator(style: .light)
+                        haptic.impactOccurred()
+                        
+                        // Animation
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                            likeScale = 1.4
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
+                                likeScale = 1.0
+                            }
+                        }
+                        
+                        onLike()
+                    } label: {
                         Image(systemName: comment.isLikedByCurrentUser ? "heart.fill" : "heart")
                             .font(.system(size: 14))
                             .foregroundColor(comment.isLikedByCurrentUser ? .red : .secondary)
+                            .scaleEffect(likeScale)
                     }
                     
                     if comment.likeCount > 0 {

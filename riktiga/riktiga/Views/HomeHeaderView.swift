@@ -127,7 +127,7 @@ struct StravaStyleHeaderView: View {
         .sheet(isPresented: $showPaywall) {
             PresentPaywallView()
         }
-        .sheet(isPresented: $showFindFriends) {
+        .navigationDestination(isPresented: $showFindFriends) {
             FindFriendsView()
                 .environmentObject(authViewModel)
         }

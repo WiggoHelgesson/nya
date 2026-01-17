@@ -209,23 +209,6 @@ struct StatisticsView: View {
                         }
                     }
                 
-                // MARK: - Free Trial Button (for non-Pro users)
-                if !isPremium {
-                    Button {
-                        showPaywall = true
-                    } label: {
-                        Text("Testa 30 dagar gratis")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(Color.black)
-                            .cornerRadius(16)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 32)
-                }
-                
                 Spacer(minLength: 100)
             }
         }

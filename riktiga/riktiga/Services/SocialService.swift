@@ -822,6 +822,50 @@ class SocialService {
         }
     }
     
+    /// Find users that match contact names from the device
+    func findUsersByNames(names: [String]) async throws -> [UserSearchResult] {
+        guard !names.isEmpty else { return [] }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            print("📇 Searching for users matching \(names.count) contact names")
+            
+            // Get current user to exclude from results
+            let currentUser = try await supabase.auth.user()
+            let currentUserId = currentUser.id.uuidString
+            
+            // Search for users whose names match contact names (case insensitive)
+            // We'll fetch all users and filter locally for better matching
+            let allUsers: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .not("username", operator: .is, value: "null")
+                .neq("id", value: currentUserId)
+                .limit(500) // Get a good sample
+                .execute()
+                .value
+            
+            // Create a set of normalized contact names for EXACT matching
+            // Normalize by lowercasing and trimming whitespace
+            let normalizedContactNames = Set(names.map { 
+                $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) 
+            })
+            
+            // Filter users whose names EXACTLY match a contact name (case insensitive)
+            let matchedUsers = allUsers.filter { user in
+                let normalizedUserName = user.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                // Only exact match - the username must be exactly the same as a contact name
+                return normalizedContactNames.contains(normalizedUserName)
+            }
+            
+            print("✅ Found \(matchedUsers.count) users with EXACT contact name match")
+            return matchedUsers
+        } catch {
+            print("❌ Error finding users by names: \(error)")
+            return []
+        }
+    }
+    
     // MARK: - Social Feed Functions
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
@@ -1166,34 +1210,12 @@ class SocialService {
         }
     }
     
-    // MARK: - Featured Posts (for empty feed)
-    func getFeaturedPosts(viewerId: String, limit: Int = 4) async throws -> [SocialWorkoutPost] {
-        let featuredEmails = ["leopold.spel@gmail.com", "info@bylito.se"]
-        
+    // MARK: - Featured Posts (for empty feed - shows recent posts from all users)
+    func getFeaturedPosts(viewerId: String, limit: Int = 7) async throws -> [SocialWorkoutPost] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
             
-            // First, get user IDs for the featured emails
-            struct ProfileRow: Decodable {
-                let id: String
-                let email: String?
-            }
-            
-            let profiles: [ProfileRow] = try await supabase
-                .from("profiles")
-                .select("id, email")
-                .in("email", values: featuredEmails)
-                .execute()
-                .value
-            
-            let featuredUserIds = profiles.map { $0.id }
-            
-            guard !featuredUserIds.isEmpty else {
-                print("⚠️ No featured users found")
-                return []
-            }
-            
-            // Fetch posts from featured users
+            // Fetch the most recent posts from ALL users (excluding the viewer's own posts)
             let posts: [SocialWorkoutPost] = try await supabase
                 .from("workout_posts")
                 .select("""
@@ -1217,15 +1239,16 @@ class SocialService {
                     workout_post_likes(count),
                     workout_post_comments(count)
                 """)
-                .in("user_id", values: featuredUserIds)
+                .neq("user_id", value: viewerId) // Exclude own posts
                 .order("created_at", ascending: false)
                 .limit(limit)
                 .execute()
                 .value
             
+            print("✅ Loaded \(posts.count) recent posts for empty feed")
             return await markLikedPosts(posts, userId: viewerId)
         } catch {
-            print("❌ Error fetching featured posts: \(error)")
+            print("❌ Error fetching recent posts: \(error)")
             throw error
         }
     }

@@ -686,8 +686,10 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Denna app behöver tillgång till kameran för att ta bilder på dina träningspass.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Up&Down kan använda dina kontakter för att hitta vänner som också använder appen.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Up&Down kan använda hälsojournaler för att ge dig mer detaljerad träningsstatistik.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Up&Down använder hälsodata för att spåra dina träningspass, steg och aktiviteter för att ge dig en komplett bild av din träning.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Up&Down kan spara träningsdata till Apple Health för att hålla din hälsodata synkroniserad.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to track your workouts even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to track your workouts even when the app is in the background.";
@@ -763,8 +765,10 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Denna app behöver tillgång till kameran för att ta bilder på dina träningspass.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Denna app kan dela hälsodata för att spåra dina träningspass.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Denna app kan uppdatera hälsodata med information från dina träningspass.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "Up&Down kan använda dina kontakter för att hitta vänner som också använder appen.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Up&Down kan använda hälsojournaler för att ge dig mer detaljerad träningsstatistik.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Up&Down använder hälsodata för att spåra dina träningspass, steg och aktiviteter för att ge dig en komplett bild av din träning.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Up&Down kan spara träningsdata till Apple Health för att hålla din hälsodata synkroniserad.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Denna app behöver tillgång till lokalt nätverk för att synkronisera träningsdata.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need your location to track your workouts even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "We need your location to track your workouts even when the app is in the background.";

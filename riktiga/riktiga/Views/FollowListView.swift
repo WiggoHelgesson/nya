@@ -7,6 +7,13 @@ struct FollowListView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = FollowListViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var selectedTab: FollowListType
+    
+    init(userId: String, listType: FollowListType) {
+        self.userId = userId
+        self.listType = listType
+        self._selectedTab = State(initialValue: listType)
+    }
     
     enum FollowListType {
         case followers
@@ -20,51 +27,107 @@ struct FollowListView: View {
                 return "Följer"
             }
         }
+        
+        var sectionHeader: String {
+            switch self {
+            case .followers:
+                return "PERSONER SOM FÖLJER DIG"
+            case .following:
+                return "PERSONER DU FÖLJER"
+            }
+        }
     }
     
     var body: some View {
-        NavigationStack {
-            VStack {
-                if viewModel.isLoading {
-                    Spacer()
-                    ProgressView("Laddar...")
+        VStack(spacing: 0) {
+            // Tab selector
+            HStack(spacing: 0) {
+                // Following tab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = .following
+                    }
+                    Task {
+                        await viewModel.loadUsers(userId: userId, listType: .following)
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Text("Följer")
+                            .font(.system(size: 16, weight: selectedTab == .following ? .semibold : .regular))
+                            .foregroundColor(selectedTab == .following ? .black : .gray)
+                        
+                        Rectangle()
+                            .fill(selectedTab == .following ? Color.black : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                
+                // Followers tab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = .followers
+                    }
+                    Task {
+                        await viewModel.loadUsers(userId: userId, listType: .followers)
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Text("Följare")
+                            .font(.system(size: 16, weight: selectedTab == .followers ? .semibold : .regular))
+                            .foregroundColor(selectedTab == .followers ? .black : .gray)
+                        
+                        Rectangle()
+                            .fill(selectedTab == .followers ? Color.black : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.top, 8)
+            
+            Divider()
+            
+            // Content
+            if viewModel.isLoading && viewModel.users.isEmpty {
+                Spacer()
+                ProgressView("Laddar...")
+                    .foregroundColor(.gray)
+                Spacer()
+            } else if viewModel.users.isEmpty {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: selectedTab == .followers ? "person.2" : "person.2.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    
+                    Text(selectedTab == .followers ? "Inga följare än" : "Följer ingen än")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.gray)
+                    
+                    Text(selectedTab == .followers ? "När någon följer dig kommer de att visas här" : "När du börjar följa någon kommer de att visas här")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                Spacer()
+            } else {
+                // Section header
+                HStack {
+                    Text(selectedTab.sectionHeader)
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.gray)
                     Spacer()
-                } else if viewModel.users.isEmpty {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: listType == .followers ? "person.2" : "person.2.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray)
-                        
-                        Text(listType == .followers ? "Inga följare än" : "Följer ingen än")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.gray)
-                        
-                        Text(listType == .followers ? "När någon följer dig kommer de att visas här" : "När du börjar följa någon kommer de att visas här")
-                            .font(.body)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    }
-                    Spacer()
-                } else {
-                    // Show cache indicator if using cached data
-                    if viewModel.isUsingCache {
-                        HStack {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .foregroundColor(.blue)
-                            Text("Visar sparad data")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                    }
-                    
-                    List {
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(.systemGray6))
+                
+                // Users list
+                ScrollView {
+                    LazyVStack(spacing: 0) {
                         ForEach(viewModel.users, id: \.id) { user in
                             NavigationLink(destination: UserProfileView(userId: user.id)) {
                                 UserFollowRow(
@@ -78,31 +141,40 @@ struct FollowListView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            
+                            Divider()
+                                .padding(.leading, 78)
                         }
                     }
-                    .listStyle(PlainListStyle())
                 }
             }
-            .navigationTitle(listType.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        dismiss()
-                    }) {
+        }
+        .navigationTitle("Anslutningar")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.primary)
-                            .frame(width: 32, height: 32)
-                            .background(Color(.systemGray5))
-                            .cornerRadius(16)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Tillbaka")
+                            .font(.system(size: 17))
                     }
+                    .foregroundColor(.black)
                 }
             }
-            .onAppear {
-                Task {
-                    await viewModel.loadUsers(userId: userId, listType: listType)
-                }
+        }
+        .onAppear {
+            NavigationDepthTracker.shared.pushView()
+            Task {
+                await viewModel.loadUsers(userId: userId, listType: selectedTab)
             }
+        }
+        .onDisappear {
+            NavigationDepthTracker.shared.popView()
         }
     }
 }
@@ -113,6 +185,7 @@ struct UserFollowRow: View {
     let onFollowToggle: (String, Bool) -> Void
     @State private var isFollowing = false
     @State private var isLoading = false
+    @State private var showUnfollowConfirmation = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -122,46 +195,72 @@ struct UserFollowRow: View {
             // User info
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.name)
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
                 
-                Text("@\(user.name.lowercased())")
-                    .font(.subheadline)
+                Text("@\(user.name.lowercased().replacingOccurrences(of: " ", with: ""))")
+                    .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
             
             Spacer()
             
-            // Follow/Unfollow button
+            // Follow/Following button
             if user.id != currentUserId {
                 Button(action: {
-                    Task {
-                        isLoading = true
-                        onFollowToggle(user.id, isFollowing)
-                        isLoading = false
+                    if isFollowing {
+                        // Show confirmation popup
+                        showUnfollowConfirmation = true
+                    } else {
+                        // Follow directly
+                        performFollowToggle()
                     }
                 }) {
                     if isLoading {
                         ProgressView()
                             .scaleEffect(0.8)
+                            .frame(width: 90, height: 36)
                     } else {
-                        Text(isFollowing ? "Avfölj" : "Följ")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(isFollowing ? .red : .white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(isFollowing ? Color(.systemGray6) : Color.black)
-                            .cornerRadius(20)
+                        Text(isFollowing ? "Följer" : "Följ")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isFollowing ? .black : .white)
+                            .frame(width: 90, height: 36)
+                            .background(isFollowing ? Color.white : Color.black)
+                            .cornerRadius(18)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: isFollowing ? 1 : 0)
+                            )
                     }
                 }
                 .disabled(isLoading)
+                .alert("Är du säker?", isPresented: $showUnfollowConfirmation) {
+                    Button("Avbryt", role: .cancel) { }
+                    Button("Avfölj", role: .destructive) {
+                        performFollowToggle()
+                    }
+                } message: {
+                    Text("Du kommer att sluta följa \(user.name)")
+                }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .onAppear {
             Task {
                 await checkFollowStatus()
+            }
+        }
+    }
+    
+    private func performFollowToggle() {
+        Task {
+            isLoading = true
+            onFollowToggle(user.id, isFollowing)
+            // Toggle state after action
+            await MainActor.run {
+                isFollowing.toggle()
+                isLoading = false
             }
         }
     }
@@ -185,25 +284,22 @@ class FollowListViewModel: ObservableObject {
     
     func loadUsers(userId: String, listType: FollowListView.FollowListType) async {
         isLoading = true
+        users = [] // Clear for new tab
         
         // First, try to load from cache for instant display
         if listType == .followers {
             if let cachedFollowers = cacheManager.getCachedFollowers(userId: userId) {
-                DispatchQueue.main.async {
-                    self.users = cachedFollowers
-                    self.isLoading = false
-                    self.isUsingCache = true
-                    print("✅ Loaded \(cachedFollowers.count) followers from cache")
-                }
+                self.users = cachedFollowers
+                self.isLoading = false
+                self.isUsingCache = true
+                print("✅ Loaded \(cachedFollowers.count) followers from cache")
             }
         } else {
             if let cachedFollowing = cacheManager.getCachedFollowing(userId: userId) {
-                DispatchQueue.main.async {
-                    self.users = cachedFollowing
-                    self.isLoading = false
-                    self.isUsingCache = true
-                    print("✅ Loaded \(cachedFollowing.count) following from cache")
-                }
+                self.users = cachedFollowing
+                self.isLoading = false
+                self.isUsingCache = true
+                print("✅ Loaded \(cachedFollowing.count) following from cache")
             }
         }
         
@@ -211,40 +307,28 @@ class FollowListViewModel: ObservableObject {
         do {
             if listType == .followers {
                 let fetchedUsers = try await SocialService.shared.getFollowerUsers(userId: userId)
-                await MainActor.run {
-                    // Only update if we got new data or cache was empty
-                    if self.users.isEmpty || !self.isUsingCache {
-                        self.users = fetchedUsers
-                    }
-                    self.isLoading = false
-                    self.isUsingCache = false
-                    
-                    // Save to cache for next time
-                    self.cacheManager.saveFollowers(fetchedUsers, userId: userId)
-                }
-                print("✅ Loaded \(fetchedUsers.count) follower users directly with JOIN")
+                self.users = fetchedUsers
+                self.isLoading = false
+                self.isUsingCache = false
+                
+                // Save to cache for next time
+                self.cacheManager.saveFollowers(fetchedUsers, userId: userId)
+                print("✅ Loaded \(fetchedUsers.count) follower users")
             } else {
                 let fetchedUsers = try await SocialService.shared.getFollowingUsers(userId: userId)
-                await MainActor.run {
-                    // Only update if we got new data or cache was empty
-                    if self.users.isEmpty || !self.isUsingCache {
-                        self.users = fetchedUsers
-                    }
-                    self.isLoading = false
-                    self.isUsingCache = false
-                    
-                    // Save to cache for next time
-                    self.cacheManager.saveFollowing(fetchedUsers, userId: userId)
-                }
-                print("✅ Loaded \(fetchedUsers.count) following users directly with JOIN")
+                self.users = fetchedUsers
+                self.isLoading = false
+                self.isUsingCache = false
+                
+                // Save to cache for next time
+                self.cacheManager.saveFollowing(fetchedUsers, userId: userId)
+                print("✅ Loaded \(fetchedUsers.count) following users")
             }
         } catch {
             print("Error loading users: \(error)")
-            await MainActor.run {
-                self.users = []
-                self.isLoading = false
-                self.isUsingCache = false
-            }
+            self.users = []
+            self.isLoading = false
+            self.isUsingCache = false
         }
     }
     

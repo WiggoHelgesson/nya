@@ -24,9 +24,18 @@ struct ProfileActivitiesView: View {
     @State private var showPublicProfile = false
     @State private var navigationPath = NavigationPath()
     @State private var showRoutines = false
+    @State private var myStories: [Story] = []
+    @State private var showStoryViewer = false
+    @State private var selectedUserStories: UserStories? = nil
     
     private let statsLoadThrottle: TimeInterval = 60
     
+    // Computed property to handle empty or nil name
+    private var displayName: String {
+        let name = authViewModel.currentUser?.name ?? ""
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Användare" : trimmed
+    }
     
     var body: some View {
             VStack(spacing: 0) {
@@ -34,24 +43,47 @@ struct ProfileActivitiesView: View {
                     LazyVStack(spacing: 16) {
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
-                            // Profilbild - Tappable
-                            VStack(spacing: 4) {
-                                Button(action: {
+                            // Profilbild - Shows story ring if active, opens story or image picker
+                            Button(action: {
+                                if !myStories.isEmpty {
+                                    // Has active stories - open story viewer
+                                    let myUserStories = UserStories(
+                                        id: authViewModel.currentUser?.id ?? "",
+                                        userId: authViewModel.currentUser?.id ?? "",
+                                        username: displayName,
+                                        avatarUrl: authViewModel.currentUser?.avatarUrl,
+                                        isProMember: authViewModel.currentUser?.isProMember ?? false,
+                                        stories: myStories,
+                                        hasUnviewedStories: false
+                                    )
+                                    selectedUserStories = myUserStories
+                                } else {
+                                    // No stories - open image picker to change profile photo
                                     showImagePicker = true
-                                }) {
+                                }
+                            }) {
+                                ZStack {
+                                    // Story gradient ring if has active stories
+                                    if !myStories.isEmpty {
+                                        Circle()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color.white, Color.black, Color.gray],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 3
+                                            )
+                                            .frame(width: 86, height: 86)
+                                    }
+                                    
                                     ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 80)
                                 }
-                                
-                                Text("Tryck på bilden ovan för att byta profilbild")
-                                    .font(.caption2)
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                                    .frame(width: 80)
                             }
                             
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {
-                                    Text(authViewModel.currentUser?.name ?? "User")
+                                    Text(displayName)
                                         .font(.system(size: 20, weight: .bold))
                                     
                                     Spacer()
@@ -251,23 +283,38 @@ struct ProfileActivitiesView: View {
             .sheet(isPresented: $showImagePicker) {
                 ImagePicker(image: $profileImage, authViewModel: authViewModel)
             }
+            .fullScreenCover(item: $selectedUserStories) { userStories in
+                StoryViewerOverlay(
+                    userStories: userStories,
+                    currentUserId: authViewModel.currentUser?.id ?? "",
+                    onStoryViewed: { _ in },
+                    onDismiss: {
+                        selectedUserStories = nil
+                    }
+                )
+                .background(Color.black)
+                .ignoresSafeArea()
+            }
             .sheet(isPresented: $showPaywall) {
                 PresentPaywallView()
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
             }
-            .sheet(isPresented: $showFindFriends) {
+            .navigationDestination(isPresented: $showFindFriends) {
                 FindFriendsView()
+                    .environmentObject(authViewModel)
             }
-            .sheet(isPresented: $showFollowersList) {
+            .navigationDestination(isPresented: $showFollowersList) {
                 if let userId = authViewModel.currentUser?.id {
                     FollowListView(userId: userId, listType: .followers)
+                        .environmentObject(authViewModel)
                 }
             }
-            .sheet(isPresented: $showFollowingList) {
+            .navigationDestination(isPresented: $showFollowingList) {
                 if let userId = authViewModel.currentUser?.id {
                     FollowListView(userId: userId, listType: .following)
+                        .environmentObject(authViewModel)
                 }
             }
             .sheet(isPresented: $showEditProfile) {
@@ -333,6 +380,15 @@ struct ProfileActivitiesView: View {
                             await self.prefetchPostImages()
                         }
                     }
+                    group.addTask {
+                        // Load user's stories
+                        await self.loadMyStories()
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshStories"))) { _ in
+                Task {
+                    await loadMyStories()
                 }
             }
             .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
@@ -396,6 +452,20 @@ struct ProfileActivitiesView: View {
         }.flatMap { $0 }
         
         ImageCacheManager.shared.prefetch(urls: imagesToPrefetch)
+    }
+    
+    /// Load user's own stories
+    @MainActor
+    private func loadMyStories() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            let stories = try await StoryService.shared.fetchMyStories(userId: userId)
+            self.myStories = stories
+            print("📖 Profile: Loaded \(stories.count) stories")
+        } catch {
+            print("❌ Profile: Error loading stories: \(error)")
+        }
     }
     
 }

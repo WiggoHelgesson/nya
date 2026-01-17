@@ -3,6 +3,7 @@ import Combine
 import UIKit
 import Supabase
 import HealthKit
+import PhotosUI
 
 // MARK: - Food Log Entry Model
 struct FoodLogEntry: Identifiable, Codable {
@@ -16,6 +17,7 @@ struct FoodLogEntry: Identifiable, Codable {
     let mealType: String // "breakfast", "lunch", "dinner", "snack"
     let loggedAt: Date
     let imageUrl: String?
+    let nutriScore: String?
     
     enum CodingKeys: String, CodingKey {
         case id, name, calories, protein, carbs, fat
@@ -23,6 +25,19 @@ struct FoodLogEntry: Identifiable, Codable {
         case mealType = "meal_type"
         case loggedAt = "logged_at"
         case imageUrl = "image_url"
+        case nutriScore = "nutri_score"
+    }
+    
+    // Nutri-Score color helper
+    var nutriScoreColor: Color {
+        switch nutriScore?.uppercased() {
+        case "A": return Color(red: 0.0, green: 0.5, blue: 0.2)
+        case "B": return Color(red: 0.5, green: 0.7, blue: 0.2)
+        case "C": return Color(red: 0.9, green: 0.7, blue: 0.1)
+        case "D": return Color(red: 0.9, green: 0.5, blue: 0.1)
+        case "E": return Color(red: 0.8, green: 0.2, blue: 0.1)
+        default: return Color.gray
+        }
     }
 }
 
@@ -111,61 +126,94 @@ struct HomeView: View {
     @State private var showRecent = false
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
-    @State private var showFoodLogDetail = false
+    
+    // Data transition animation
+    @State private var isTransitioning = false
+    @State private var displayedCaloriesLeft: Int = 0
+    @State private var displayedCaloriesConsumed: Int = 0
+    @State private var displayedCaloriesGoal: Int = 2000
+    @State private var displayedProtein: Int = 0
+    @State private var displayedCarbs: Int = 0
+    @State private var displayedFat: Int = 0
+    
+    // Macro goals (loaded from UserDefaults, set by nutrition onboarding)
+    @State private var proteinGoal: Int = 150
+    @State private var carbsGoal: Int = 250
+    @State private var fatGoal: Int = 70
+    @State private var caloriesGoal: Int = 2000
+    
+    // Toggle between "kvar" (left) and "ätit" (eaten) mode
+    @State private var showEatenMode = false
+    @State private var isModeTransitioning = false
+    
+    // Nutrition onboarding for existing users
+    @State private var showNutritionOnboarding = false
+    
+    // TEST: Story posting test
+    
+    // Check if nutrition onboarding has been completed (user-specific)
+    private var hasCompletedNutritionOnboarding: Bool {
+        guard let userId = authViewModel.currentUser?.id else { return false }
+        return NutritionGoalsManager.shared.hasCompletedOnboarding(userId: userId)
+    }
     
     var body: some View {
-        ZStack {
-            // Background gradient
-            LinearGradient(
-                colors: [
-                    Color(red: 0.92, green: 0.92, blue: 0.93),
-                    Color(red: 0.96, green: 0.96, blue: 0.97),
-                    Color.white
-                ],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .ignoresSafeArea()
+        VStack(spacing: 0) {
+            // MARK: - Standard App Header
+            SimpleAppHeader()
+                .environmentObject(authViewModel)
+                .zIndex(1)
             
-            ScrollView {
-                VStack(spacing: 16) {
-                    // MARK: - Header
-                    headerView
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.92, green: 0.92, blue: 0.93),
+                        Color(red: 0.96, green: 0.96, blue: 0.97),
+                        Color.white
+                    ],
+                    startPoint: .top,
+                    endPoint: .center
+                )
+                .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // MARK: - App Logo
+                        HStack {
+                            Image("23")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 44, height: 44)
+                                .cornerRadius(10)
+                            Spacer()
+                        }
                         .padding(.horizontal, 20)
-                        .padding(.top, 10)
-                    
-                    // MARK: - Week Calendar
-                    weekCalendarView
+                        .padding(.top, 8)
+                        
+                        // MARK: - Week Calendar
+                        weekCalendarView
                         .opacity(showCalendar ? 1 : 0)
                         .offset(y: showCalendar ? 0 : 10)
                     
                     // MARK: - Calorie Card
                     calorieTrackerCard
                         .padding(.horizontal, 16)
-                        .opacity(showCards ? 1 : 0)
+                        .padding(.top, 8)
+                        .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
+                        .scaleEffect(isTransitioning ? 0.98 : 1)
                         .offset(y: showCards ? 0 : 15)
-                        .animation(.easeInOut(duration: 0.3), value: viewModel.selectedDate)
                     
                     // MARK: - Macro Cards
                     macroCardsRow
                         .padding(.horizontal, 16)
-                        .opacity(showCards ? 1 : 0)
+                        .padding(.top, 14)
+                        .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
+                        .scaleEffect(isTransitioning ? 0.98 : 1)
                         .offset(y: showCards ? 0 : 15)
-                        .animation(.easeInOut(duration: 0.3), value: viewModel.selectedDate)
-                    
-                    // MARK: - Page Indicator Dots
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 8, height: 8)
-                        Circle()
-                            .fill(Color.black)
-                            .frame(width: 8, height: 8)
-                    }
-                    .opacity(showWater ? 1 : 0)
                     
                     // MARK: - AI Analyzing Section
-                    if analyzingManager.isAnalyzing || analyzingManager.result != nil || analyzingManager.noFoodDetected {
+                    if analyzingManager.isAnalyzing || analyzingManager.result != nil || analyzingManager.noFoodDetected || analyzingManager.limitReached {
                         aiAnalyzingSection
                             .padding(.horizontal, 16)
                             .transition(.asymmetric(
@@ -177,47 +225,98 @@ struct HomeView: View {
                     // MARK: - Recently Logged Section
                     recentlyLoggedSection
                         .padding(.horizontal, 16)
-                        .opacity(showRecent ? 1 : 0)
-                        .offset(y: showRecent ? 0 : 15)
-                        .animation(.easeInOut(duration: 0.3), value: viewModel.selectedDate)
+                        .opacity(showRecent ? (isTransitioning ? 0.6 : 1) : 0)
+                        .offset(y: showRecent ? (isTransitioning ? 5 : 0) : 15)
                     
                     Spacer(minLength: 120)
                 }
                 .padding(.top, 8)
             }
-        }
+        } // ZStack
+        } // VStack
         .onAppear {
             animateContent()
+            loadNutritionGoals()
             viewModel.setUserId(authViewModel.currentUser?.id)
             viewModel.loadData()
+            updateDisplayedValues(animated: false)
         }
         .onChange(of: authViewModel.currentUser?.id) { _, newId in
             viewModel.setUserId(newId)
             viewModel.loadData()
+            loadNutritionGoals()
+            updateDisplayedValues(animated: false)
+        }
+        .onChange(of: viewModel.currentSummary.caloriesConsumed) { _, _ in
+            updateDisplayedValues(animated: true)
+        }
+        .onChange(of: viewModel.currentSummary.caloriesGoal) { _, _ in
+            updateDisplayedValues(animated: true)
+        }
+        .onChange(of: viewModel.currentSummary.protein) { _, _ in
+            updateDisplayedValues(animated: true)
+        }
+        .onChange(of: viewModel.currentSummary.carbs) { _, _ in
+            updateDisplayedValues(animated: true)
+        }
+        .onChange(of: viewModel.currentSummary.fat) { _, _ in
+            updateDisplayedValues(animated: true)
+        }
+        .onChange(of: viewModel.selectedDate) { _, _ in
+            // Trigger transition animation when date changes
+            withAnimation(.easeOut(duration: 0.15)) {
+                isTransitioning = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    isTransitioning = false
+                }
+            }
+        }
+        .onChange(of: showEatenMode) { _, _ in
+            // Update displayed values when mode changes
+            updateDisplayedValues(animated: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshFoodLogs"))) { _ in
-            viewModel.loadData()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                viewModel.loadData()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NutritionGoalsUpdated"))) { _ in
+            loadNutritionGoals()
+            updateDisplayedValues(animated: true)
         }
         .fullScreenCover(isPresented: $showFoodScanner) {
             FoodScannerView(initialMode: .ai)
         }
-        .fullScreenCover(isPresented: $showFoodLogDetail) {
-            if let foodLog = selectedFoodLog {
-                FoodLogDetailView(entry: foodLog)
+        .fullScreenCover(item: $selectedFoodLog) { foodLog in
+            FoodLogDetailView(entry: foodLog)
+        }
+        .fullScreenCover(isPresented: $showNutritionOnboarding) {
+            ExistingUserNutritionOnboardingView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $analyzingManager.showPaywallForLimit) {
+            PresentPaywallView()
+        }
+        .overlay {
+            // Story posting popup after food is saved
+            if analyzingManager.showStoryPopup, let image = analyzingManager.capturedImage {
+                PostToStoryPopup(
+                    isPresented: $analyzingManager.showStoryPopup,
+                    image: image,
+                    onConfirm: {
+                        analyzingManager.postToStory()
+                    },
+                    onCancel: {
+                        analyzingManager.dismissStoryPopup()
+                    }
+                )
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: analyzingManager.showStoryPopup)
             }
         }
-    }
-    
-    // MARK: - Header
-    private var headerView: some View {
-        HStack {
-            Image("23")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 44, height: 44)
-                .cornerRadius(10)
-            
-            Spacer()
+        .overlay {
         }
     }
     
@@ -243,8 +342,8 @@ struct HomeView: View {
                 } label: {
                     VStack(spacing: 8) {
                         Text(dayInfo.dayLetter)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(dayInfo.isSelected ? .black : Color.gray.opacity(0.6))
+                            .font(.system(size: 13, weight: dayInfo.isSelected || dayInfo.isToday ? .semibold : .medium))
+                            .foregroundColor(dayInfo.isSelected ? .black : (dayInfo.isToday ? Color.black.opacity(0.7) : Color.gray.opacity(0.6)))
                         
                         ZStack {
                             if dayInfo.isSelected {
@@ -253,9 +352,10 @@ struct HomeView: View {
                                     .stroke(Color.black, lineWidth: 2.5)
                                     .frame(width: 40, height: 40)
                             } else if dayInfo.isToday {
-                                // Today but not selected: subtle gray ring
+                                // Today but not selected: dotted border like others but slightly more visible
                                 Circle()
-                                    .stroke(Color.gray.opacity(0.25), lineWidth: 1.5)
+                                    .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 4]))
+                                    .foregroundColor(Color.gray.opacity(0.4))
                                     .frame(width: 40, height: 40)
                             } else {
                                 // Default: dotted border
@@ -266,8 +366,8 @@ struct HomeView: View {
                             }
                             
                             Text("\(dayInfo.dayNumber)")
-                                .font(.system(size: 15, weight: dayInfo.isSelected ? .bold : .medium))
-                                .foregroundColor(dayInfo.isSelected ? .black : Color.black.opacity(0.7))
+                                .font(.system(size: 15, weight: dayInfo.isSelected || dayInfo.isToday ? .bold : .medium))
+                                .foregroundColor(dayInfo.isSelected ? .black : (dayInfo.isToday ? Color.black.opacity(0.85) : Color.black.opacity(0.7)))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -288,76 +388,167 @@ struct HomeView: View {
     
     // MARK: - Calorie Tracker Card
     private var calorieTrackerCard: some View {
-        HStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(max(0, viewModel.currentSummary.caloriesGoal - viewModel.currentSummary.caloriesConsumed))")
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(.black)
+        Button {
+            handleNutritionCardTap()
+        } label: {
+            HStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if hasCompletedNutritionOnboarding {
+                        // Show either calories left or calories consumed
+                        let displayValue = showEatenMode ? displayedCaloriesConsumed : displayedCaloriesLeft
+                        
+                        Text("\(displayValue)")
+                            .font(.system(size: 56, weight: .bold))
+                            .foregroundColor(.black)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .contentTransition(.numericText(value: Double(displayValue)))
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: displayValue)
+                            .opacity(isModeTransitioning ? 0 : 1)
+                            .scaleEffect(isModeTransitioning ? 0.8 : 1)
+                        
+                        Text(showEatenMode ? "Kalorier ätit" : "Kalorier kvar")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.gray)
+                            .contentTransition(.opacity)
+                            .animation(.easeInOut(duration: 0.2), value: showEatenMode)
+                    } else {
+                        // Show "?" for users who haven't completed nutrition onboarding
+                        Text("?")
+                            .font(.system(size: 56, weight: .bold))
+                            .foregroundColor(.black)
+                        
+                        Text("Tryck för att ställa in")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                }
                 
-                Text("Calories left")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.gray)
+                Spacer()
+                
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.12), lineWidth: 12)
+                        .frame(width: 108, height: 108)
+                    
+                    if hasCompletedNutritionOnboarding {
+                        Circle()
+                            .trim(from: 0, to: CGFloat(min(Double(displayedCaloriesConsumed) / Double(max(displayedCaloriesGoal, 1)), 1.0)))
+                            .stroke(Color.black, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                            .frame(width: 108, height: 108)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.spring(response: 0.6, dampingFraction: 0.75), value: displayedCaloriesConsumed)
+                    }
+                    
+                    Image(systemName: hasCompletedNutritionOnboarding ? "flame.fill" : "questionmark")
+                        .font(.system(size: 28))
+                        .foregroundColor(.black)
+                }
             }
-            
-            Spacer()
-            
-            ZStack {
-                Circle()
-                    .stroke(Color.gray.opacity(0.12), lineWidth: 10)
-                    .frame(width: 100, height: 100)
-                
-                Circle()
-                    .trim(from: 0, to: CGFloat(min(Double(viewModel.currentSummary.caloriesConsumed) / Double(viewModel.currentSummary.caloriesGoal), 1.0)))
-                    .stroke(Color.black, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .frame(width: 100, height: 100)
-                    .rotationEffect(.degrees(-90))
-                
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.black)
+            .padding(30)
+            .background(Color.white)
+            .cornerRadius(26)
+            .shadow(color: Color.black.opacity(0.07), radius: 14, x: 0, y: 6)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // Handle tap on nutrition cards
+    private func handleNutritionCardTap() {
+        if hasCompletedNutritionOnboarding {
+            toggleEatenMode()
+        } else {
+            // Open nutrition onboarding for users who haven't set up their goals
+            showNutritionOnboarding = true
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+        }
+    }
+    
+    // Toggle between "kvar" and "ätit" mode with animation
+    private func toggleEatenMode() {
+        // Start transition animation
+        withAnimation(.easeOut(duration: 0.15)) {
+            isModeTransitioning = true
+        }
+        
+        // Toggle mode after brief delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                showEatenMode.toggle()
+                isModeTransitioning = false
             }
         }
-        .padding(24)
-        .background(Color.white)
-        .cornerRadius(24)
-        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
+        
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
     }
     
     // MARK: - Macro Cards Row
     private var macroCardsRow: some View {
-        HStack(spacing: 12) {
-            macroVerticalCard(
-                amount: "\(viewModel.currentSummary.protein)g",
-                label: "Protein over",
-                emoji: "🥩",
-                color: Color(red: 0.95, green: 0.45, blue: 0.45)
-            )
+        Button {
+            handleNutritionCardTap()
+        } label: {
+            let proteinEaten = viewModel.currentSummary.protein
+            let carbsEaten = viewModel.currentSummary.carbs
+            let fatEaten = viewModel.currentSummary.fat
             
-            macroVerticalCard(
-                amount: "\(viewModel.currentSummary.carbs)g",
-                label: "Carbs over",
-                emoji: "🌾",
-                color: Color(red: 0.9, green: 0.65, blue: 0.45)
-            )
-            
-            macroVerticalCard(
-                amount: "\(viewModel.currentSummary.fat)g",
-                label: "Fat over",
-                emoji: "🫒",
-                color: Color(red: 0.45, green: 0.6, blue: 0.85)
-            )
+            HStack(spacing: 10) {
+                animatedMacroCard(
+                    value: hasCompletedNutritionOnboarding ? displayedProtein : nil,
+                    name: "Protein",
+                    icon: "fish.fill",
+                    color: Color(red: 0.85, green: 0.35, blue: 0.35),
+                    progress: Double(proteinEaten) / Double(max(proteinGoal, 1))
+                )
+                
+                animatedMacroCard(
+                    value: hasCompletedNutritionOnboarding ? displayedCarbs : nil,
+                    name: "Kolhydrater",
+                    icon: "leaf.fill",
+                    color: Color(red: 0.80, green: 0.55, blue: 0.18),
+                    progress: Double(carbsEaten) / Double(max(carbsGoal, 1))
+                )
+                
+                animatedMacroCard(
+                    value: hasCompletedNutritionOnboarding ? displayedFat : nil,
+                    name: "Fett",
+                    icon: "drop.fill",
+                    color: Color(red: 0.30, green: 0.55, blue: 0.86),
+                    progress: Double(fatEaten) / Double(max(fatGoal, 1))
+                )
+            }
         }
+        .buttonStyle(.plain)
     }
     
-    private func macroVerticalCard(amount: String, label: String, emoji: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(amount)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.black)
-            
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.gray)
+    private func animatedMacroCard(value: Int?, name: String, icon: String, color: Color, progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let value = value {
+                Text("\(value)g")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.black)
+                    .contentTransition(.numericText(value: Double(value)))
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: value)
+                    .opacity(isModeTransitioning ? 0 : 1)
+                    .scaleEffect(isModeTransitioning ? 0.8 : 1)
+                
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            } else {
+                Text("?")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
             
             Spacer()
             
@@ -365,21 +556,31 @@ struct HomeView: View {
                 Spacer()
                 ZStack {
                     Circle()
-                        .stroke(color.opacity(0.3), lineWidth: 4)
-                        .frame(width: 55, height: 55)
+                        .stroke(Color.gray.opacity(0.12), lineWidth: 6)
+                        .frame(width: 56, height: 56)
                     
-                    Text(emoji)
-                        .font(.system(size: 22))
+                    if hasCompletedNutritionOnboarding {
+                        Circle()
+                            .trim(from: 0, to: CGFloat(min(max(progress, 0), 1)))
+                            .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                            .frame(width: 56, height: 56)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
+                    }
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 18))
+                        .foregroundColor(color)
                 }
                 Spacer()
             }
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity)
-        .frame(height: 160)
+        .frame(height: 130)
         .background(Color.white)
-        .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
     }
     
     // MARK: - Recently Logged Section
@@ -410,21 +611,33 @@ struct HomeView: View {
                 .background(Color.white)
                 .cornerRadius(18)
                 .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
             } else {
-                ForEach(viewModel.recentLogs) { log in
+                ForEach(Array(viewModel.recentLogs.enumerated()), id: \.element.id) { index, log in
                     switch log {
                     case .food(let entry):
                         FoodLogCardView(entry: entry)
                             .onTapGesture {
                                 selectedFoodLog = entry
-                                showFoodLogDetail = true
                             }
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95))
+                            ))
                     case .activity(let entry):
                         ActivityLogCardView(entry: entry)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
+                                removal: .opacity.combined(with: .scale(scale: 0.95))
+                            ))
                     }
                 }
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.recentLogs.map { $0.id })
     }
     
     // MARK: - Animation
@@ -449,6 +662,108 @@ struct HomeView: View {
         }
         withAnimation(.easeOut(duration: duration).delay(delay * 3)) {
             showRecent = true
+        }
+    }
+    
+    // MARK: - Load Nutrition Goals (User-Specific)
+    private func loadNutritionGoals() {
+        guard let userId = authViewModel.currentUser?.id else { 
+            print("⚠️ loadNutritionGoals: No user ID available")
+            return 
+        }
+        
+        print("🔍 Loading nutrition goals for user: \(userId)")
+        
+        // First try to load from UserDefaults (fast)
+        if let goals = NutritionGoalsManager.shared.loadGoals(userId: userId), goals.calories > 0 {
+            print("✅ Loaded goals from UserDefaults: \(goals.calories) kcal")
+            caloriesGoal = goals.calories
+            proteinGoal = goals.protein > 0 ? goals.protein : 150
+            carbsGoal = goals.carbs > 0 ? goals.carbs : 250
+            fatGoal = goals.fat > 0 ? goals.fat : 70
+            viewModel.currentSummary.caloriesGoal = caloriesGoal
+            return
+        }
+        
+        // Fallback: Load from Supabase profile
+        print("📡 UserDefaults empty, fetching from Supabase...")
+        Task {
+            do {
+                let response = try await SupabaseConfig.supabase
+                    .from("profiles")
+                    .select("daily_calories_goal, daily_protein_goal, daily_carbs_goal, daily_fat_goal")
+                    .eq("id", value: userId)
+                    .single()
+                    .execute()
+                
+                if let json = try? JSONSerialization.jsonObject(with: response.data) as? [String: Any] {
+                    let fetchedCalories = json["daily_calories_goal"] as? Int ?? 0
+                    let fetchedProtein = json["daily_protein_goal"] as? Int ?? 0
+                    let fetchedCarbs = json["daily_carbs_goal"] as? Int ?? 0
+                    let fetchedFat = json["daily_fat_goal"] as? Int ?? 0
+                    
+                    if fetchedCalories > 0 {
+                        print("✅ Loaded goals from Supabase: \(fetchedCalories) kcal")
+                        
+                        // Save to UserDefaults for future use
+                        NutritionGoalsManager.shared.saveGoals(
+                            calories: fetchedCalories,
+                            protein: fetchedProtein,
+                            carbs: fetchedCarbs,
+                            fat: fetchedFat,
+                            userId: userId
+                        )
+                        
+                        await MainActor.run {
+                            caloriesGoal = fetchedCalories
+                            proteinGoal = fetchedProtein > 0 ? fetchedProtein : 150
+                            carbsGoal = fetchedCarbs > 0 ? fetchedCarbs : 250
+                            fatGoal = fetchedFat > 0 ? fetchedFat : 70
+                            viewModel.currentSummary.caloriesGoal = caloriesGoal
+                            updateDisplayedValues(animated: true)
+                        }
+                    } else {
+                        print("⚠️ No goals found in Supabase either")
+                    }
+                }
+            } catch {
+                print("❌ Failed to fetch goals from Supabase: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Update Displayed Values with Animation
+    private func updateDisplayedValues(animated: Bool) {
+        let newCaloriesLeft = max(0, caloriesGoal - viewModel.currentSummary.caloriesConsumed)
+        let newCaloriesConsumed = viewModel.currentSummary.caloriesConsumed
+        let newCaloriesGoal = caloriesGoal
+        
+        // Calculate macro values based on mode
+        let proteinEaten = viewModel.currentSummary.protein
+        let carbsEaten = viewModel.currentSummary.carbs
+        let fatEaten = viewModel.currentSummary.fat
+        
+        // If showEatenMode is true, show eaten values; otherwise show "kvar" (left)
+        let newProtein = showEatenMode ? proteinEaten : max(0, proteinGoal - proteinEaten)
+        let newCarbs = showEatenMode ? carbsEaten : max(0, carbsGoal - carbsEaten)
+        let newFat = showEatenMode ? fatEaten : max(0, fatGoal - fatEaten)
+        
+        if animated {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                displayedCaloriesLeft = newCaloriesLeft
+                displayedCaloriesConsumed = newCaloriesConsumed
+                displayedCaloriesGoal = newCaloriesGoal
+                displayedProtein = newProtein
+                displayedCarbs = newCarbs
+                displayedFat = newFat
+            }
+        } else {
+            displayedCaloriesLeft = newCaloriesLeft
+            displayedCaloriesConsumed = newCaloriesConsumed
+            displayedCaloriesGoal = newCaloriesGoal
+            displayedProtein = newProtein
+            displayedCarbs = newCarbs
+            displayedFat = newFat
         }
     }
     
@@ -628,6 +943,10 @@ struct HomeView: View {
                 .cornerRadius(16)
                 .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
                 
+            } else if analyzingManager.limitReached {
+                // Limit reached card - shows lock icon
+                limitReachedCard
+                
             } else if let result = analyzingManager.result {
                 // Result card - shows analyzed food with add/cancel buttons
                 HStack(alignment: .top, spacing: 14) {
@@ -682,7 +1001,7 @@ struct HomeView: View {
                                     .foregroundColor(.black)
                             }
                             HStack(spacing: 3) {
-                                Text("🫒")
+                                Text("🥑")
                                     .font(.system(size: 11))
                                 Text("\(result.fat)g")
                                     .font(.system(size: 12, weight: .medium))
@@ -697,14 +1016,30 @@ struct HomeView: View {
                                     analyzingManager.addResultToLog()
                                 }
                             } label: {
-                                Text("Lägg till")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(Color.black)
-                                    .cornerRadius(10)
+                                HStack(spacing: 6) {
+                                    if analyzingManager.isSaving {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                        Text("Sparar...")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    } else if analyzingManager.saveSuccess {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 16))
+                                        Text("Tillagd!")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    } else {
+                                        Text("Lägg till")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    }
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(analyzingManager.saveSuccess ? Color.green : Color.black)
+                                .cornerRadius(10)
                             }
+                            .disabled(analyzingManager.isSaving || analyzingManager.saveSuccess)
                             
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -719,6 +1054,7 @@ struct HomeView: View {
                                     .background(Color.gray.opacity(0.12))
                                     .cornerRadius(10)
                             }
+                            .disabled(analyzingManager.isSaving || analyzingManager.saveSuccess)
                         }
                         .padding(.top, 2)
                     }
@@ -732,6 +1068,93 @@ struct HomeView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: analyzingManager.isAnalyzing)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: analyzingManager.result != nil)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: analyzingManager.noFoodDetected)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: analyzingManager.limitReached)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: analyzingManager.isSaving)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: analyzingManager.saveSuccess)
+    }
+    
+    // MARK: - Limit Reached Card
+    private var limitReachedCard: some View {
+        HStack(alignment: .center, spacing: 14) {
+            // Image with lock overlay
+            ZStack {
+                if let image = analyzingManager.capturedImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.black.opacity(0.5))
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.gray.opacity(0.15))
+                        .frame(width: 100, height: 100)
+                }
+                
+                // Lock icon
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Veckolimit nådd")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text("Du har använt dina 3 gratis AI-skanningar denna vecka.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                HStack(spacing: 10) {
+                    Button {
+                        analyzingManager.showPaywallForLimit = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 12))
+                            Text("Bli Pro")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.purple, Color.blue],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(10)
+                    }
+                    
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            analyzingManager.dismissLimitReached()
+                        }
+                    } label: {
+                        Text("Stäng")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.gray.opacity(0.12))
+                            .cornerRadius(10)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(14)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
     }
     
     private func progressBarColor(for index: Int) -> Color {
@@ -1088,30 +1511,47 @@ struct FoodLogCardView: View {
         return formatter.string(from: entry.loggedAt)
     }
     
+    private var hasImage: Bool {
+        if let url = entry.imageUrl, !url.isEmpty {
+            return true
+        }
+        return false
+    }
+    
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            // Image if available
-            if let imageUrl = entry.imageUrl, let url = URL(string: imageUrl) {
+        HStack(alignment: .center, spacing: 0) {
+            // Image on left side if available
+            if let imageUrl = entry.imageUrl, !imageUrl.isEmpty, let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 90, height: 90)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .frame(width: 110, height: 110)
+                            .clipped()
                     case .failure(_):
-                        foodPlaceholder
+                        imagePlaceholder
                     case .empty:
                         ProgressView()
-                            .frame(width: 90, height: 90)
+                            .frame(width: 110, height: 110)
+                            .background(Color.gray.opacity(0.1))
                     @unknown default:
-                        foodPlaceholder
+                        imagePlaceholder
                     }
                 }
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 16,
+                        bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    )
+                )
             }
             
-            VStack(alignment: .leading, spacing: 8) {
+            // Content section
+            VStack(alignment: .leading, spacing: 10) {
                 // Header row with name and time
                 HStack(alignment: .top) {
                     Text(entry.name)
@@ -1124,46 +1564,73 @@ struct FoodLogCardView: View {
                     
                     Text(displayTime)
                         .font(.system(size: 13))
-                        .foregroundColor(.gray.opacity(0.8))
+                        .foregroundColor(.gray)
                 }
                 
                 // Calories row
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: "flame.fill")
-                        .font(.system(size: 13))
-                        .foregroundColor(.black)
-                    Text("\(entry.calories) kalorier")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 16))
+                        .foregroundColor(.orange)
+                    Text("\(entry.calories) calories")
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundColor(.black)
                 }
                 
-                // Macros row with colored indicators
-                HStack(spacing: 12) {
-                    macroItem(icon: "🥩", value: "\(entry.protein)g", color: .red)
-                    macroItem(icon: "🌾", value: "\(entry.carbs)g", color: .orange)
-                    macroItem(icon: "🫒", value: "\(entry.fat)g", color: .blue)
+                // Macros row
+                HStack(spacing: 14) {
+                    macroItem(icon: "fish.fill", value: "\(entry.protein)g", color: Color(red: 0.85, green: 0.35, blue: 0.35))
+                    macroItem(icon: "leaf.fill", value: "\(entry.carbs)g", color: Color(red: 0.75, green: 0.55, blue: 0.25))
+                    macroItem(icon: "drop.fill", value: "\(entry.fat)g", color: Color(red: 0.35, green: 0.55, blue: 0.8))
                 }
             }
+            .padding(.horizontal, hasImage ? 14 : 18)
+            .padding(.vertical, 16)
         }
-        .padding(14)
+        .frame(minHeight: hasImage ? 110 : nil)
         .background(
-            LinearGradient(
-                colors: [Color.white, Color(red: 0.98, green: 0.98, blue: 0.99)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            ZStack {
+                // Base color
+                Color.white
+                
+                // Subtle gradient overlay
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.98, green: 0.98, blue: 0.99),
+                        Color(red: 0.96, green: 0.96, blue: 0.97)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+    }
+    
+    private var imagePlaceholder: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.1))
+            .frame(width: 110, height: 110)
+            .overlay(
+                Image(systemName: "photo")
+                    .font(.system(size: 24))
+                    .foregroundColor(.gray.opacity(0.4))
+            )
     }
     
     private func macroItem(icon: String, value: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Text(icon)
-                .font(.system(size: 12))
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(color)
             Text(value)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.black.opacity(0.7))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(color)
         }
     }
     
@@ -1185,6 +1652,29 @@ struct FoodLogDetailView: View {
     let entry: FoodLogEntry
     @State private var quantity: Int = 1
     @State private var isSaved = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var showFixSheet = false
+    @State private var fixDescription = ""
+    @State private var isFixing = false
+    @State private var fixProgress: Double = 0
+    @State private var fixedResult: FixedFoodResult? = nil
+    
+    struct FixedFoodResult {
+        let name: String
+        let calories: Int
+        let protein: Int
+        let carbs: Int
+        let fat: Int
+    }
+    
+    struct FoodLogUpdate: Encodable {
+        let name: String
+        let calories: Int
+        let protein: Int
+        let carbs: Int
+        let fat: Int
+    }
     
     private var displayTime: String {
         let formatter = DateFormatter()
@@ -1239,15 +1729,7 @@ struct FoodLogDetailView: View {
                             .padding(.top, 20)
                     }
                     
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // Ingredients section
-                            ingredientsSection
-                                .padding(.horizontal, 16)
-                        }
-                        .padding(.top, entry.imageUrl != nil ? 16 : 16)
-                        .padding(.bottom, 100)
-                    }
+                    Spacer()
                     
                     // Bottom buttons
                     bottomButtons
@@ -1269,31 +1751,6 @@ struct FoodLogDetailView: View {
                     }
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 8) {
-                        Button {
-                            // Share
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(entry.imageUrl != nil ? .white : .black)
-                                .frame(width: 40, height: 40)
-                                .background(entry.imageUrl != nil ? Color.black.opacity(0.4) : Color.gray.opacity(0.15))
-                                .clipShape(Circle())
-                        }
-                        
-                        Button {
-                            // More options
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(entry.imageUrl != nil ? .white : .black)
-                                .frame(width: 40, height: 40)
-                                .background(entry.imageUrl != nil ? Color.black.opacity(0.4) : Color.gray.opacity(0.15))
-                                .clipShape(Circle())
-                        }
-                    }
-                }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
@@ -1302,6 +1759,11 @@ struct FoodLogDetailView: View {
     // MARK: - Info Card
     private var infoCard: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Nutri-Score Badge - Prominent at top
+            if let nutriScore = entry.nutriScore, !nutriScore.isEmpty {
+                FoodLogNutriScoreBadge(grade: nutriScore)
+            }
+            
             // Header row
             HStack {
                 Button {
@@ -1382,26 +1844,11 @@ struct FoodLogDetailView: View {
                 
                 // Macros row
                 HStack(spacing: 10) {
-                    macroCard(emoji: "🥩", label: "Protein", value: "\(entry.protein * quantity)g")
-                    macroCard(emoji: "🌾", label: "Kolhydrater", value: "\(entry.carbs * quantity)g")
-                    macroCard(emoji: "🫒", label: "Fett", value: "\(entry.fat * quantity)g")
+                    macroCard(icon: "fish.fill", label: "Protein", value: "\(entry.protein * quantity)g", color: Color(red: 0.85, green: 0.35, blue: 0.35))
+                    macroCard(icon: "leaf.fill", label: "Kolhydrater", value: "\(entry.carbs * quantity)g", color: Color(red: 0.75, green: 0.55, blue: 0.25))
+                    macroCard(icon: "drop.fill", label: "Fett", value: "\(entry.fat * quantity)g", color: Color(red: 0.35, green: 0.55, blue: 0.8))
                 }
             }
-            
-            // Page indicator
-            HStack {
-                Spacer()
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.black)
-                        .frame(width: 8, height: 8)
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 8, height: 8)
-                }
-                Spacer()
-            }
-            .padding(.top, 8)
         }
         .padding(20)
         .background(Color.white)
@@ -1410,10 +1857,11 @@ struct FoodLogDetailView: View {
         .padding(.horizontal, 16)
     }
     
-    private func macroCard(emoji: String, label: String, value: String) -> some View {
+    private func macroCard(icon: String, label: String, value: String, color: Color) -> some View {
         VStack(spacing: 6) {
-            Text(emoji)
+            Image(systemName: icon)
                 .font(.system(size: 22))
+                .foregroundColor(color)
             
             Text(label)
                 .font(.system(size: 11))
@@ -1433,91 +1881,401 @@ struct FoodLogDetailView: View {
         )
     }
     
-    // MARK: - Ingredients Section
-    private var ingredientsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Ingredienser")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black)
-                
-                Spacer()
-                
-                Button {
-                    // Add ingredients
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Lägg till")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.gray)
-                }
-            }
-            
-            // Hidden ingredients notice
-            HStack(spacing: 8) {
-                Image(systemName: "eye.slash")
-                    .font(.system(size: 16))
-                    .foregroundColor(.gray)
-                
-                Text("Ingredienser dolda")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                
-                Button {
-                    // Learn why
-                } label: {
-                    Text("Läs mer")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.black)
-                        .underline()
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-        }
-    }
     
-    // MARK: - Bottom Buttons
+    // MARK: - Bottom Button
     private var bottomButtons: some View {
         HStack(spacing: 12) {
+            // Delete button
             Button {
-                // Fix issue / Edit
+                showDeleteConfirmation = true
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14))
-                    Text("Fixa problem")
+                    if isDeleting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .red))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 16))
+                    }
+                    Text("Radera")
                         .font(.system(size: 16, weight: .semibold))
                 }
-                .foregroundColor(.black)
+                .foregroundColor(.red)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.white)
+                .background(Color.red.opacity(0.1))
                 .cornerRadius(30)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 30)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
             }
+            .disabled(isDeleting)
             
+            // Fix result button (AI)
             Button {
-                dismiss()
+                showFixSheet = true
             } label: {
-                Text("Klar")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.black)
-                    .cornerRadius(30)
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Rätta till")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.black)
+                .cornerRadius(30)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.001)) // Transparent background
+        .background(Color.white.opacity(0.001))
+        .sheet(isPresented: $showFixSheet) {
+            FixResultView(
+                entry: entry,
+                fixDescription: $fixDescription,
+                isFixing: $isFixing,
+                fixProgress: $fixProgress,
+                onFix: { performFix() },
+                onDismiss: { showFixSheet = false }
+            )
+        }
+        .alert("Radera måltid?", isPresented: $showDeleteConfirmation) {
+            Button("Avbryt", role: .cancel) { }
+            Button("Radera", role: .destructive) {
+                deleteEntry()
+            }
+        } message: {
+            Text("Är du säker på att du vill radera \"\(entry.name)\"? Detta kan inte ångras.")
+        }
+    }
+    
+    // MARK: - Delete Entry
+    private func deleteEntry() {
+        isDeleting = true
+        
+        Task {
+            do {
+                try await SupabaseConfig.supabase
+                    .from("food_logs")
+                    .delete()
+                    .eq("id", value: entry.id)
+                    .execute()
+                
+                print("✅ Deleted food log: \(entry.name)")
+                
+                await MainActor.run {
+                    // Notify HomeView to refresh
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                    isDeleting = false
+                    dismiss()
+                }
+            } catch {
+                print("❌ Error deleting food log: \(error)")
+                await MainActor.run {
+                    isDeleting = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Fix Result with AI
+    private func performFix() {
+        guard !fixDescription.isEmpty else { return }
+        
+        isFixing = true
+        fixProgress = 0
+        
+        Task {
+            do {
+                // Download the image if available
+                var imageData: Data? = nil
+                if let imageUrl = entry.imageUrl, let url = URL(string: imageUrl) {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    imageData = data
+                }
+                
+                // Animate progress
+                for i in 1...8 {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    await MainActor.run {
+                        withAnimation {
+                            fixProgress = Double(i * 10)
+                        }
+                    }
+                }
+                
+                // Call GPT to re-analyze
+                let result = try await reanalyzeWithGPT(
+                    originalName: entry.name,
+                    originalCalories: entry.calories,
+                    originalProtein: entry.protein,
+                    originalCarbs: entry.carbs,
+                    originalFat: entry.fat,
+                    correction: fixDescription,
+                    imageData: imageData
+                )
+                
+                // Complete progress
+                await MainActor.run {
+                    withAnimation {
+                        fixProgress = 100
+                    }
+                }
+                
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                
+                // Update the database with new values
+                let updateData = FoodLogUpdate(
+                    name: result.name,
+                    calories: result.calories,
+                    protein: result.protein,
+                    carbs: result.carbs,
+                    fat: result.fat
+                )
+                
+                try await SupabaseConfig.supabase
+                    .from("food_logs")
+                    .update(updateData)
+                    .eq("id", value: entry.id)
+                    .execute()
+                
+                print("✅ Updated food log with corrected values")
+                
+                await MainActor.run {
+                    // Haptic feedback
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                    
+                    isFixing = false
+                    showFixSheet = false
+                    fixDescription = ""
+                    
+                    // Refresh and dismiss
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                    dismiss()
+                }
+            } catch {
+                print("❌ Fix error: \(error)")
+                await MainActor.run {
+                    isFixing = false
+                }
+            }
+        }
+    }
+    
+    private func reanalyzeWithGPT(
+        originalName: String,
+        originalCalories: Int,
+        originalProtein: Int,
+        originalCarbs: Int,
+        originalFat: Int,
+        correction: String,
+        imageData: Data?
+    ) async throws -> FixedFoodResult {
+        guard let apiKey = EnvManager.shared.value(for: "OPENAI_API_KEY"), !apiKey.isEmpty else {
+            throw NSError(domain: "APIKeyError", code: -1)
+        }
+        
+        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
+            throw NSError(domain: "URLError", code: -1)
+        }
+        
+        let prompt = """
+        Du har tidigare analyserat en maträtt och fått följande resultat:
+        - Namn: \(originalName)
+        - Kalorier: \(originalCalories) kcal
+        - Protein: \(originalProtein)g
+        - Kolhydrater: \(originalCarbs)g
+        - Fett: \(originalFat)g
+        
+        Användaren har gett följande rättelse/korrigering:
+        "\(correction)"
+        
+        Baserat på denna information, ge nya korrigerade näringsvärden.
+        
+        Svara ENDAST med JSON i detta format:
+        {
+            "name": "Korrigerat namn på svenska",
+            "calories": 0,
+            "protein": 0,
+            "carbs": 0,
+            "fat": 0
+        }
+        
+        Alla värden ska vara heltal.
+        """
+        
+        var messages: [[String: Any]] = []
+        
+        // If we have an image, include it
+        if let imageData = imageData {
+            let base64Image = imageData.base64EncodedString()
+            messages.append([
+                "role": "user",
+                "content": [
+                    ["type": "text", "text": prompt],
+                    ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64Image)"]]
+                ]
+            ])
+        } else {
+            messages.append([
+                "role": "user",
+                "content": prompt
+            ])
+        }
+        
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": messages,
+            "max_tokens": 300
+        ]
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        request.timeoutInterval = 60
+        
+        let (data, _) = try await URLSession.shared.data(for: request)
+        
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw NSError(domain: "ParseError", code: -1)
+        }
+        
+        let cleanContent = content
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard let resultData = cleanContent.data(using: .utf8),
+              let result = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] else {
+            throw NSError(domain: "JSONError", code: -1)
+        }
+        
+        return FixedFoodResult(
+            name: result["name"] as? String ?? originalName,
+            calories: result["calories"] as? Int ?? originalCalories,
+            protein: result["protein"] as? Int ?? originalProtein,
+            carbs: result["carbs"] as? Int ?? originalCarbs,
+            fat: result["fat"] as? Int ?? originalFat
+        )
+    }
+}
+
+// MARK: - Fix Result View (Sheet)
+struct FixResultView: View {
+    let entry: FoodLogEntry
+    @Binding var fixDescription: String
+    @Binding var isFixing: Bool
+    @Binding var fixProgress: Double
+    let onFix: () -> Void
+    let onDismiss: () -> Void
+    
+    @FocusState private var isTextFieldFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(UIColor.systemBackground)
+                    .ignoresSafeArea()
+                
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundColor(.black)
+                        
+                        Text("Rätta till")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.top, 8)
+                    
+                    // Text field
+                    TextField("Beskriv vad som ska rättas", text: $fixDescription, axis: .vertical)
+                        .font(.system(size: 16))
+                        .padding(16)
+                        .background(Color.gray.opacity(0.08))
+                        .cornerRadius(16)
+                        .lineLimit(4...8)
+                        .focused($isTextFieldFocused)
+                    
+                    // Example
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Exempel:")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.black)
+                        
+                        Text("Nötfärsen var 5% fett och du missade att ta med såsen.")
+                            .font(.system(size: 15))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.gray.opacity(0.06))
+                    .cornerRadius(16)
+                    
+                    Spacer()
+                    
+                    // Update button
+                    if isFixing {
+                        VStack(spacing: 12) {
+                            ProgressView(value: fixProgress, total: 100)
+                                .progressViewStyle(LinearProgressViewStyle(tint: .black))
+                                .scaleEffect(y: 2)
+                            
+                            Text("Analyserar...")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.bottom, 20)
+                    } else {
+                        Button {
+                            onFix()
+                        } label: {
+                            Text("Uppdatera")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 18)
+                                .background(fixDescription.isEmpty ? Color.gray : Color.black)
+                                .cornerRadius(30)
+                        }
+                        .disabled(fixDescription.isEmpty)
+                        .padding(.bottom, 20)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "arrow.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .frame(width: 40, height: 40)
+                            .background(Color.gray.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isTextFieldFocused = true
+            }
+        }
     }
 }
 
@@ -1954,8 +2712,100 @@ struct AddOptionSquare: View {
     }
 }
 
+// MARK: - Nutri-Score Badge for Food Log
+struct FoodLogNutriScoreBadge: View {
+    let grade: String
+    
+    private let grades = ["A", "B", "C", "D", "E"]
+    
+    private func colorFor(_ g: String) -> Color {
+        switch g {
+        case "A": return Color(red: 0.0, green: 0.52, blue: 0.26) // Dark green
+        case "B": return Color(red: 0.52, green: 0.73, blue: 0.18) // Light green
+        case "C": return Color(red: 0.96, green: 0.78, blue: 0.15) // Yellow
+        case "D": return Color(red: 0.93, green: 0.55, blue: 0.14) // Orange
+        case "E": return Color(red: 0.88, green: 0.27, blue: 0.14) // Red
+        default: return Color.gray
+        }
+    }
+    
+    private var gradeDescription: String {
+        switch grade.uppercased() {
+        case "A": return "Utmärkt näringsvärde"
+        case "B": return "Bra näringsvärde"
+        case "C": return "Genomsnittligt näringsvärde"
+        case "D": return "Lågt näringsvärde"
+        case "E": return "Dåligt näringsvärde"
+        default: return "Näringsvärde"
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Official Nutri-Score badge design
+            VStack(spacing: 0) {
+                // NUTRI-SCORE header
+                Text("NUTRI-SCORE")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                    .padding(.bottom, 4)
+                
+                // Grade bar
+                HStack(spacing: 0) {
+                    ForEach(grades, id: \.self) { g in
+                        let isSelected = g == grade.uppercased()
+                        
+                        ZStack {
+                            // Background color bar
+                            Rectangle()
+                                .fill(colorFor(g))
+                            
+                            // Letter
+                            Text(g)
+                                .font(.system(size: isSelected ? 24 : 14, weight: .black))
+                                .foregroundColor(isSelected ? colorFor(g) : .white.opacity(0.7))
+                                .background(
+                                    Group {
+                                        if isSelected {
+                                            Circle()
+                                                .fill(Color.white)
+                                                .frame(width: 38, height: 38)
+                                        }
+                                    }
+                                )
+                        }
+                        .frame(width: isSelected ? 48 : 32, height: 48)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+            }
+            
+            // Description
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Nutri-Score")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Text(gradeDescription)
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+    }
+}
 
 #Preview {
     HomeView()
         .environmentObject(AuthViewModel())
 }
+
+

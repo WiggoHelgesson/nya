@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>co.tryterra.data.post.request</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -36,15 +40,5 @@
 		<string>processing</string>
 		<string>fetch</string>
 	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>co.tryterra.data.post.request</string>
-	</array>
-	<key>NSHealthShareUsageDescription</key>
-	<string>Up&amp;Down använder hälsodata för att spåra dina träningspass, steg och aktiviteter för att ge dig en komplett bild av din träning.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Up&amp;Down kan spara träningsdata till Apple Health för att hålla din hälsodata synkroniserad.</string>
-	<key>NSHealthClinicalHealthRecordsShareUsageDescription</key>
-	<string>Up&amp;Down kan använda hälsojournaler för att ge dig mer detaljerad träningsstatistik.</string>
 </dict>
 </plist>
