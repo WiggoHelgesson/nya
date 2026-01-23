@@ -54,6 +54,9 @@ struct SocialView: View {
     @State private var isLoadingStories = false
     @State private var selectedUserStories: UserStories? = nil
     
+    // Notification navigation state - scroll to post instead of opening detail
+    @State private var highlightedPostId: String? = nil
+    
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -92,9 +95,6 @@ struct SocialView: View {
             .refreshable {
                 await refreshData()
             }
-            .sheet(isPresented: $showPaywall) {
-                PresentPaywallView()
-            }
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
             }
@@ -113,6 +113,7 @@ struct SocialView: View {
                         selectedUserStories = nil
                     }
                 )
+                .environmentObject(authViewModel)
                 .background(Color.black)
                 .ignoresSafeArea()
             }
@@ -129,15 +130,14 @@ struct SocialView: View {
                     withAnimation {
                         selectedTab = .feed
                     }
-                    // Try to find the post in existing posts
-                    if let post = socialViewModel.posts.first(where: { $0.id == postId }) {
-                        selectedPost = post
-                    } else {
-                        // Post not in current feed - save it and fetch when data loads
+                    // Set highlighted post to scroll to and highlight it
+                    highlightedPostId = postId
+                    
+                    // If post not in feed, fetch it first
+                    if !socialViewModel.posts.contains(where: { $0.id == postId }) {
                         pendingPostNavigation = postId
-                        // Try to fetch the post directly
                         Task {
-                            await fetchAndNavigateToPost(postId: postId)
+                            await fetchPostForHighlight(postId: postId)
                         }
                     }
                 }
@@ -241,7 +241,8 @@ struct SocialView: View {
                     // selectedUserStories is already set, fullScreenCover(item:) will present
                 },
                 onAddStoryTap: {
-                    // Could open camera here if needed
+                    // Open AI food scanner to add a story
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
                 }
             )
             .environmentObject(authViewModel)
@@ -303,7 +304,8 @@ struct SocialView: View {
                         // selectedUserStories is already set, fullScreenCover(item:) will present
                     },
                     onAddStoryTap: {
-                        // Could open camera here if needed
+                        // Open AI food scanner to add a story
+                        NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
                     }
                 )
                 .environmentObject(authViewModel)
@@ -333,33 +335,50 @@ struct SocialView: View {
     }
     
     private var scrollContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Stories row (Instagram-style) - Always show so users can add stories
-                StoriesRowView(
-                    userStories: friendsStories,
-                    currentUserId: authViewModel.currentUser?.id ?? "",
-                    myStories: myStories,
-                    onStoryTap: { userStories, index in
-                        selectedUserStories = userStories
-                        // selectedUserStories is already set, fullScreenCover(item:) will present
-                    },
-                    onAddStoryTap: {
-                        // Could open camera here if needed
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Stories row (Instagram-style) - Always show so users can add stories
+                    StoriesRowView(
+                        userStories: friendsStories,
+                        currentUserId: authViewModel.currentUser?.id ?? "",
+                        myStories: myStories,
+                        onStoryTap: { userStories, index in
+                            selectedUserStories = userStories
+                            // selectedUserStories is already set, fullScreenCover(item:) will present
+                        },
+                        onAddStoryTap: {
+                            // Open AI food scanner to add a story
+                            NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
+                        }
+                    )
+                    .environmentObject(authViewModel)
+                    
+                    Divider()
+                    
+                    if selectedTab == .feed {
+                        feedContent
+                            .opacity(showPosts ? 1 : 0)
+                            .offset(y: showPosts ? 0 : 30)
+                    } else {
+                        newsContent
+                            .opacity(showPosts ? 1 : 0)
+                            .offset(y: showPosts ? 0 : 30)
                     }
-                )
-                .environmentObject(authViewModel)
-                
-                Divider()
-                
-                if selectedTab == .feed {
-                    feedContent
-                        .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 30)
-                } else {
-                    newsContent
-                        .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 30)
+                }
+            }
+            .onChange(of: highlightedPostId) { _, postId in
+                if let postId = postId {
+                    // Scroll to the highlighted post with animation
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        scrollProxy.scrollTo(postId, anchor: .center)
+                    }
+                    // Remove highlight after 3 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        withAnimation(.easeOut(duration: 0.5)) {
+                            highlightedPostId = nil
+                        }
+                    }
                 }
             }
         }
@@ -761,6 +780,39 @@ struct SocialView: View {
         }
     }
     
+    // Fetch post for highlight (from notification) - doesn't open detail, just scrolls and highlights
+    private func fetchPostForHighlight(postId: String) async {
+        do {
+            // Try to fetch this specific post
+            let post: SocialWorkoutPost = try await SupabaseConfig.supabase
+                .from("workout_posts")
+                .select("""
+                    *,
+                    profiles!inner(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .eq("id", value: postId)
+                .single()
+                .execute()
+                .value
+            
+            await MainActor.run {
+                // Add the post to the feed if it's not already there
+                if !socialViewModel.posts.contains(where: { $0.id == postId }) {
+                    // Insert at the beginning of the posts array
+                    socialViewModel.posts.insert(post, at: 0)
+                }
+                pendingPostNavigation = nil
+                // The highlightedPostId is already set, ScrollViewReader will scroll to it
+            }
+        } catch {
+            print("❌ Failed to fetch post for highlight \(postId): \(error)")
+            pendingPostNavigation = nil
+            highlightedPostId = nil
+        }
+    }
+    
     private func refreshData() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
@@ -806,6 +858,8 @@ struct SocialView: View {
     private var feedContent: some View {
         LazyVStack(spacing: 0, pinnedViews: []) {
             ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
+                let isHighlighted = highlightedPostId == post.id
+                
                 VStack(spacing: 0) {
                     SocialPostCard(
                         post: post,
@@ -821,6 +875,20 @@ struct SocialView: View {
                         }
                     )
                     .id(post.id) // Stable identity for better SwiftUI diffing
+                    .overlay(
+                        // Highlight overlay when navigating from notification
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue.opacity(isHighlighted ? 0.08 : 0))
+                            )
+                            .padding(4)
+                            .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+                    )
+                    .scaleEffect(isHighlighted ? 1.01 : 1.0)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isHighlighted)
+                    
                     Divider()
                         .background(Color(.systemGray5))
                 }
@@ -1647,34 +1715,15 @@ struct SocialPostCard: View {
                     .padding(.horizontal, 16)
             }
             
-            // PB Badge - show if this workout has a personal best
-            if let pbExercise = post.pbExerciseName, let pbVal = post.pbValue,
-               !pbExercise.isEmpty, !pbVal.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.yellow)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Nytt PB!")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.yellow)
-                        Text("\(pbExercise): \(pbVal)")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(12)
-                .background(Color(.systemGray6))
-                .cornerRadius(10)
-                .padding(.horizontal, 16)
+            // Gym Achievement Banner - show motivational message for gym posts
+            if isGymPost {
+                GymAchievementBanner(post: post)
+                    .padding(.horizontal, 16)
             }
             
-            // Only show stats here for gym posts or posts with images
-            // ExternalActivityCard handles stats for clean/external posts
-            if !showsCleanCard {
+            // Always show stats for gym posts, only check showsCleanCard for other posts
+            // ExternalActivityCard handles stats for clean/external posts (non-gym)
+            if isGymPost || !showsCleanCard {
                 HStack(spacing: 0) {
                     if isGymPost {
                         if let duration = post.duration {
@@ -3583,6 +3632,88 @@ class CommentsViewModel: ObservableObject {
     }
 }
 
+// MARK: - Gym Achievement Banner
+struct GymAchievementBanner: View {
+    let post: SocialWorkoutPost
+    
+    // Get the user's first name
+    private var firstName: String {
+        guard let name = post.userName else { return "Användaren" }
+        return name.components(separatedBy: " ").first ?? name
+    }
+    
+    // Determine which achievement to show (if any)
+    private var achievement: GymAchievement? {
+        // 1. If user hit their heaviest lift in any exercise
+        if let pbExercise = post.pbExerciseName, !pbExercise.isEmpty {
+            return .heaviestLift(exercise: pbExercise)
+        }
+        
+        // 2. If user has a streak over 3 days
+        if let streakCount = post.streakCount, streakCount > 3 {
+            return .streak(days: streakCount)
+        }
+        
+        // No achievement to show
+        return nil
+    }
+    
+    // Only show the banner if there's a qualifying achievement
+    var shouldShow: Bool {
+        return achievement != nil
+    }
+    
+    var body: some View {
+        if let achievement = achievement {
+            HStack(spacing: 12) {
+                // Achievement icon - gray/black theme
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: achievement.iconName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(.systemGray))
+                }
+                
+                // Achievement text
+                Text(achievement.message(firstName: firstName))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                
+                Spacer()
+            }
+            .padding(12)
+            .background(Color(.systemGray6).opacity(0.8))
+            .cornerRadius(10)
+        }
+    }
+}
+
+// MARK: - Gym Achievement Types (Simplified)
+enum GymAchievement {
+    case heaviestLift(exercise: String)
+    case streak(days: Int)
+    
+    var iconName: String {
+        switch self {
+        case .heaviestLift: return "trophy.fill"
+        case .streak: return "flame.fill"
+        }
+    }
+    
+    func message(firstName: String) -> String {
+        switch self {
+        case .heaviestLift(let exercise):
+            return "\(firstName) tog sitt tyngsta lyft i \(exercise)"
+        case .streak(let days):
+            return "\(firstName) har en streak på \(days) dagar"
+        }
+    }
+}
+
 // MARK: - Gym Exercises List View
 struct GymExercisesListView: View {
     let exercises: [GymExercisePost]
@@ -3746,12 +3877,29 @@ struct FullFrameAsyncImage: View {
         Group {
             if let image = image {
                 GeometryReader { geometry in
+                    let imageSize = image.size
+                    let frameWidth = geometry.size.width
+                    let frameHeight = height
+                    
+                    // Calculate scale to fill the frame
+                    let widthRatio = frameWidth / imageSize.width
+                    let heightRatio = frameHeight / imageSize.height
+                    let scale = max(widthRatio, heightRatio)
+                    
+                    let scaledWidth = imageSize.width * scale
+                    let scaledHeight = imageSize.height * scale
+                    
+                    // For live photos, ensure left side (with selfie) is fully visible
+                    // Use larger offset to show more of the selfie overlay within the frame
+                    let xOffset: CGFloat = isLivePhoto ? 80 : (frameWidth - scaledWidth) / 2
+                    let yOffset: CGFloat = (frameHeight - scaledHeight) / 2
+                    
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width, height: height)
-                        // For live photos, align to top leading corner so selfie is visible
-                        .frame(width: geometry.size.width, height: height, alignment: isLivePhoto ? .topLeading : .center)
+                        .frame(width: scaledWidth, height: scaledHeight)
+                        .offset(x: xOffset, y: yOffset)
+                        .frame(width: frameWidth, height: frameHeight)
                         .clipped()
                 }
                 .frame(height: height)

@@ -388,22 +388,22 @@ struct FoodScannerView: View {
                 }
             
             ScrollView {
-                VStack(spacing: 20) {
-                    // Food image if available
-                    if let image = result.image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
+            VStack(spacing: 20) {
+                // Food image if available
+                if let image = result.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
                             .frame(height: 180)
-                            .cornerRadius(16)
-                    }
-                    
-                    // Food name
-                    Text(result.foodName)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                    
+                        .cornerRadius(16)
+                }
+                
+                // Food name
+                Text(result.foodName)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                
                     // Nutri-Score Badge (if available)
                     if let nutriScore = result.nutriScore, !nutriScore.isEmpty {
                         ScannerNutriScoreBadge(grade: nutriScore)
@@ -413,8 +413,8 @@ struct FoodScannerView: View {
                     // Amount input section with unit selector
                     VStack(spacing: 12) {
                         Text("Hur mycket äter du?")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.7))
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.7))
                         
                         // Quick buttons
                         HStack(spacing: 10) {
@@ -511,35 +511,35 @@ struct FoodScannerView: View {
                     Text("Värden per 100\(selectedUnit == .milliliter ? "ml" : "g"): \(result.calories) kcal")
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.4))
-                    
-                    // Confidence
-                    if let confidence = result.confidence {
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 12))
-                            Text("AI-konfidens: \(Int(confidence * 100))%")
-                                .font(.system(size: 12))
-                        }
-                        .foregroundColor(.white.opacity(0.5))
+                
+                // Confidence
+                if let confidence = result.confidence {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12))
+                        Text("AI-konfidens: \(Int(confidence * 100))%")
+                            .font(.system(size: 12))
                     }
-                    
-                    // Action buttons
-                    HStack(spacing: 16) {
-                        Button {
-                            viewModel.clearResult()
+                    .foregroundColor(.white.opacity(0.5))
+                }
+                
+                // Action buttons
+                HStack(spacing: 16) {
+                    Button {
+                        viewModel.clearResult()
                             amountValue = "100"
                             selectedUnit = .gram
                             showUnitPicker = false
-                        } label: {
-                            Text("Skanna igen")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 140, height: 50)
-                                .background(Color.gray.opacity(0.5))
-                                .cornerRadius(25)
-                        }
-                        
-                        Button {
+                    } label: {
+                        Text("Skanna igen")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 140, height: 50)
+                            .background(Color.gray.opacity(0.5))
+                            .cornerRadius(25)
+                    }
+                    
+                    Button {
                             // Create adjusted result with user-selected unit
                             let adjustedResult = FoodScanResult(
                                 foodName: result.foodName,
@@ -558,17 +558,17 @@ struct FoodScannerView: View {
                             viewModel.addToLog(adjustedResult)
                             amountValue = "100"
                             selectedUnit = .gram
-                            dismiss()
-                        } label: {
-                            Text("Lägg till")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                                .frame(width: 140, height: 50)
-                                .background(Color.white)
-                                .cornerRadius(25)
-                        }
+                        dismiss()
+                    } label: {
+                        Text("Lägg till")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(width: 140, height: 50)
+                            .background(Color.white)
+                            .cornerRadius(25)
                     }
-                    .padding(.top, 10)
+                }
+                .padding(.top, 10)
                     .padding(.bottom, 30)
                 }
                 .padding(.horizontal, 30)
@@ -1392,17 +1392,23 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                     return
                 }
                 
-                print("📷 addToLog - image available: \(result.image != nil)")
+                print("📷 ============ ADD TO LOG ============")
+                print("📷 Food: \(result.foodName)")
+                print("📷 Image available: \(result.image != nil)")
+                if let img = result.image {
+                    print("📷 Image size: \(img.size)")
+                }
+                print("📷 Barcode: \(result.barcode ?? "none")")
                 
                 var imageUrl: String? = nil
                 
                 // Upload image if available
                 if let image = result.image {
-                    print("📷 Attempting to upload image...")
+                    print("📷 Attempting to upload image to Supabase storage...")
                     imageUrl = await uploadFoodImage(image: image, userId: userId)
-                    print("📷 Upload result: \(imageUrl ?? "nil")")
+                    print("📷 Upload result: \(imageUrl ?? "FAILED - nil")")
                 } else {
-                    print("📷 No image in result")
+                    print("⚠️ No image in result - will save without image")
                 }
                 
                 let entry = FoodLogInsert(
@@ -1439,12 +1445,15 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     
     private func uploadFoodImage(image: UIImage, userId: String) async -> String? {
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("❌ Failed to compress image")
+            print("❌ Failed to compress image to JPEG")
             return nil
         }
         
         let fileName = "food_\(UUID().uuidString).jpg"
         let filePath = "\(userId)/\(fileName)"
+        
+        print("📷 Uploading to bucket 'food-images', path: \(filePath)")
+        print("📷 Image data size: \(imageData.count) bytes")
         
         do {
             try await SupabaseConfig.supabase.storage
@@ -1456,10 +1465,13 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 .from("food-images")
                 .getPublicURL(path: filePath)
             
-            print("✅ Uploaded food image: \(publicUrl.absoluteString)")
+            print("✅ Upload successful!")
+            print("✅ Public URL: \(publicUrl.absoluteString)")
             return publicUrl.absoluteString
         } catch {
-            print("❌ Error uploading food image: \(error)")
+            print("❌ Storage upload FAILED!")
+            print("❌ Error: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
             return nil
         }
     }

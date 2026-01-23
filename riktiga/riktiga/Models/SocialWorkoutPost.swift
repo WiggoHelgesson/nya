@@ -17,6 +17,7 @@ struct SocialWorkoutPostRaw: Codable {
     let exercises: [GymExercisePost]?
     let pbExerciseName: String?
     let pbValue: String?
+    let streakCount: Int?
     let source: String?
     let deviceName: String?
     
@@ -41,6 +42,7 @@ struct SocialWorkoutPostRaw: Codable {
         case exercises = "exercises_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
         case profiles
@@ -98,6 +100,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let pbExerciseName: String?
     let pbValue: String?
     
+    // Streak data for achievement banners
+    let streakCount: Int?
+    
     // External tracking data
     let source: String?
     let deviceName: String?
@@ -141,6 +146,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case exercises = "exercises_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
     }
@@ -181,12 +187,15 @@ struct SocialWorkoutPost: Codable, Identifiable {
         pbExerciseName = raw.pbExerciseName
         pbValue = raw.pbValue
         
+        // Map streak data
+        streakCount = raw.streakCount
+        
         // Map external tracking data
         source = raw.source
         deviceName = raw.deviceName
     }
     
-    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil) {
+    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil, streakCount: Int? = nil) {
         self.id = post.id
         self.userId = post.userId
         self.activityType = post.activityType
@@ -210,6 +219,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.exercises = post.exercises
         self.pbExerciseName = post.pbExerciseName
         self.pbValue = post.pbValue
+        self.streakCount = streakCount ?? post.streakCount
         self.source = source ?? post.source
         self.deviceName = deviceName ?? post.deviceName
     }
@@ -239,6 +249,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         exercises: [GymExercisePost]? = nil,
         pbExerciseName: String? = nil,
         pbValue: String? = nil,
+        streakCount: Int? = nil,
         source: String? = nil,
         deviceName: String? = nil
     ) {
@@ -265,6 +276,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.exercises = exercises
         self.pbExerciseName = pbExerciseName
         self.pbValue = pbValue
+        self.streakCount = streakCount
         self.source = source
         self.deviceName = deviceName
     }

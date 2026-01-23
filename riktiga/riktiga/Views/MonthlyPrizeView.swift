@@ -154,7 +154,7 @@ struct MonthlyPrizeView: View {
                             .padding(.horizontal, 40)
                         
                         Button {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         } label: {
                             Text("Bli Pro medlem")
                                 .font(.system(size: 16, weight: .semibold))
@@ -183,9 +183,6 @@ struct MonthlyPrizeView: View {
                             .foregroundColor(.primary)
                     }
                 }
-            }
-            .sheet(isPresented: $showPaywall) {
-                PresentPaywallView()
             }
             .onAppear {
                 loadMonthlyStats()

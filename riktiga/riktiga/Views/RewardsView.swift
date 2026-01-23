@@ -59,6 +59,15 @@ struct RewardCatalog {
             isBookmarked: false
         ),
         RewardCard(
+            id: 34,
+            brandName: "ALTURA",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "73",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
             id: 8,
             brandName: "RETROGOLF",
             discount: "10% rabatt",
@@ -258,8 +267,11 @@ struct RewardsView: View {
         if category == "Golf" {
             let priority: [String: Int] = [
                 "J.LINDEBERG": 0,
-                "LONEGOLF": 0,
-                "PLIKTGOLF": 1
+                "LONEGOLF": 1,
+                "PLIKTGOLF": 2,
+                "HAPPYALBA": 3,
+                "ALTURA": 4,
+                "PEGMATE": 5
             ]
             
             return rewards.sorted { lhs, rhs in
@@ -1130,6 +1142,8 @@ struct RewardDetailView: View {
             return "Exotic Golf specialiserar sig på unika och exklusiva golfprodukter från världens alla hörn."
         case "HAPPYALBA":
             return "HAPPYALBA fokuserar på golfkläder och accessoarer som kombinerar stil med funktionalitet för den moderna golfaren."
+        case "ALTURA":
+            return "Vår vision är att golf inte ska vara en limiterad sport utan en sport som kan spridas och älskas av vem som helst vare sig bakgrund eller ekonomi. Vi vill förändra den uråldriga golfklädes-marknaden genom vårt koncept där vi blandar stil från utanför golfbanan med den på banan därför levererar vi en golf-hoodie som blandar både stil och prestation. Se ut och spela som proffsen med Altura idag."
         case "RETROGOLF":
             return "RETROGOLF erbjuder klassisk golfutrustning med en modern twist, perfekt för golfare som uppskattar både tradition och innovation."
         case "PUMPLABS":
@@ -1173,6 +1187,8 @@ struct RewardDetailView: View {
             return "19" // Exotic Golf logo
         case "HAPPYALBA":
             return "16" // Alba logo
+        case "ALTURA":
+            return "73" // Altura logo
         case "RETROGOLF":
             return "20" // Retro golf logo
         case "PUMPLABS":
@@ -1208,6 +1224,8 @@ struct RewardDetailView: View {
             urlString = "https://zenenergydrinks.com/?srsltid=AfmBOoo0XewnkvbPLeH1CbuslALX3C-hEOOaf_jJuHh3XMGlHm-rB2Pb"
         case "HAPPYALBA":
             urlString = "https://www.happyalba.com/"
+        case "ALTURA":
+            urlString = "https://alturauf.se/"
         case "LONEGOLF":
             urlString = "https://lonegolf.se"
         case "PEGMATE":
@@ -1595,6 +1613,8 @@ struct ConfirmationView: View {
             return "upanddown15"
         case "HAPPYALBA":
             return "HAPPY2025"
+        case "ALTURA":
+            return "Upanddown15"
         case "RETROGOLF":
             return "Upanddown20"
         case "PUMPLABS":
@@ -1630,6 +1650,8 @@ struct ConfirmationView: View {
             urlString = "https://zenenergydrinks.com/?srsltid=AfmBOoo0XewnkvbPLeH1CbuslALX3C-hEOOaf_jJuHh3XMGlHm-rB2Pb"
         case "HAPPYALBA":
             urlString = "https://www.happyalba.com/"
+        case "ALTURA":
+            urlString = "https://alturauf.se/"
         case "LONEGOLF":
             urlString = "https://lonegolf.se"
         case "PEGMATE":

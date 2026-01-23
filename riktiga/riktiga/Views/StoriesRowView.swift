@@ -47,6 +47,34 @@ struct StoriesRowView: View {
             .padding(.vertical, 14)
         }
         .background(Color.white)
+        .task {
+            // Preload all story images for instant viewing
+            await preloadStoryImages()
+        }
+    }
+    
+    private func preloadStoryImages() async {
+        // Collect all story image URLs
+        var urlsToPreload: [String] = []
+        
+        // My stories
+        for story in myStories {
+            urlsToPreload.append(story.imageUrl)
+        }
+        
+        // Friends' stories
+        for userStory in userStories {
+            for story in userStory.stories {
+                urlsToPreload.append(story.imageUrl)
+            }
+            // Also preload avatar URLs
+            if let avatarUrl = userStory.avatarUrl, !avatarUrl.isEmpty {
+                urlsToPreload.append(avatarUrl)
+            }
+        }
+        
+        // Prefetch with high priority
+        await ImageCacheManager.shared.prefetchHighPriority(urls: urlsToPreload)
     }
 }
 
@@ -87,30 +115,13 @@ struct MyStoryCircle: View {
                                 .frame(width: 80, height: 80)
                         }
                         
-                        // Profile image
-                        if let avatarUrl = authViewModel.currentUser?.avatarUrl,
-                           !avatarUrl.isEmpty,
-                           let url = URL(string: avatarUrl) {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.2))
-                            }
-                            .frame(width: 72, height: 72)
-                            .clipShape(Circle())
-                        } else {
-                            Circle()
-                                .fill(Color.gray.opacity(0.15))
-                                .frame(width: 72, height: 72)
-                                .overlay(
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(.gray)
-                                )
-                        }
+                        // Profile image - cached
+                        OptimizedAsyncImage(
+                            url: authViewModel.currentUser?.avatarUrl,
+                            width: 72,
+                            height: 72,
+                            cornerRadius: 36
+                        )
                     }
                     
                     // Add button (only if no stories)
@@ -173,20 +184,14 @@ struct StoryCircle: View {
                         )
                         .frame(width: 80, height: 80)
                     
-                    // Profile image
-                    if let avatarUrl = userStory.avatarUrl,
-                       !avatarUrl.isEmpty,
-                       let url = URL(string: avatarUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Circle()
-                                .fill(Color.gray.opacity(0.2))
-                        }
-                        .frame(width: 72, height: 72)
-                        .clipShape(Circle())
+                    // Profile image - cached
+                    if let avatarUrl = userStory.avatarUrl, !avatarUrl.isEmpty {
+                        OptimizedAsyncImage(
+                            url: avatarUrl,
+                            width: 72,
+                            height: 72,
+                            cornerRadius: 36
+                        )
                     } else {
                         Circle()
                             .fill(Color.gray.opacity(0.15))
@@ -224,7 +229,9 @@ struct StoryViewerOverlay: View {
     @State private var showViewersList = false
     @State private var showDeleteConfirmation = false
     @State private var isLiked = false
+    @State private var showUserProfile = false
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var authViewModel: AuthViewModel
     
     let currentUserId: String
     let onStoryViewed: (String) -> Void
@@ -293,39 +300,34 @@ struct StoryViewerOverlay: View {
                         
                         // Header
                         HStack(spacing: 12) {
-                            // Avatar
-                            if let avatarUrl = userStories.avatarUrl,
-                               let url = URL(string: avatarUrl) {
-                                AsyncImage(url: url) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                } placeholder: {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.3))
+                            // Tappable avatar and name to open profile
+                            Button {
+                                // Don't open profile for own story
+                                if !isOwnStory {
+                                    pauseTimer()
+                                    showUserProfile = true
                                 }
-                                .frame(width: 40, height: 40)
-                                .clipShape(Circle())
-                            } else {
-                                Circle()
-                                    .fill(Color.white.opacity(0.3))
-                                    .frame(width: 40, height: 40)
-                                    .overlay(
-                                        Text(String(userStories.username.prefix(1)).uppercased())
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    // Avatar - use actual profile image
+                                    StoryHeaderAvatar(
+                                        avatarUrl: userStories.avatarUrl,
+                                        username: userStories.username,
+                                        isOwnStory: isOwnStory
                                     )
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(userStories.username)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        
+                                        Text(story.timeAgo)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                }
                             }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(userStories.username)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.white)
-                                
-                                Text(story.timeAgo)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
+                            .buttonStyle(.plain)
                             
                             Spacer()
                             
@@ -418,29 +420,46 @@ struct StoryViewerOverlay: View {
                         
                         Spacer()
                         
-                        // Bottom navbar
+                        Spacer()
+                    }
+                    
+                    // Tap zones for navigation - positioned to NOT cover bottom navbar
+                    VStack {
+                        // Top spacer for header area
+                        Spacer()
+                            .frame(height: 150)
+                        
+                        HStack(spacing: 0) {
+                            // Left - previous
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    goToPrevious()
+                                }
+                            
+                            // Right - next
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    goToNext()
+                                }
+                        }
+                        
+                        // Bottom spacer for navbar area
+                        Spacer()
+                            .frame(height: 120)
+                    }
+                    
+                    // Bottom navbar - rendered ABOVE tap zones with zIndex
+                    VStack {
+                        Spacer()
+                        
                         storyBottomNavbar
                             .padding(.bottom, 30)
                     }
-                    
-                    // Tap zones for navigation
-                    HStack(spacing: 0) {
-                        // Left - previous
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                goToPrevious()
-                            }
-                        
-                        // Right - next
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                goToNext()
-                            }
-                    }
+                    .zIndex(10) // Ensure navbar is above tap zones
                 }
             }
         }
@@ -460,6 +479,28 @@ struct StoryViewerOverlay: View {
         .sheet(isPresented: $showViewersList) {
             StoryViewersListView(viewers: storyViewers, viewerCount: viewerCount)
                 .presentationDetents([.medium, .large])
+        }
+        .fullScreenCover(isPresented: $showUserProfile) {
+            NavigationStack {
+                UserProfileView(userId: userStories.userId)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                showUserProfile = false
+                                resumeTimer()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text("Tillbaka")
+                                        .font(.system(size: 16))
+                                }
+                                .foregroundColor(.primary)
+                            }
+                        }
+                    }
+            }
         }
         .alert("Radera story?", isPresented: $showDeleteConfirmation) {
             Button("Avbryt", role: .cancel) { }
@@ -654,6 +695,15 @@ struct StoryViewerOverlay: View {
         timer = nil
     }
     
+    private func pauseTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func resumeTimer() {
+        startTimer()
+    }
+    
     /// Preload all story images for instant transitions
     private func preloadAllImages() {
         for (index, story) in userStories.stories.enumerated() {
@@ -821,16 +871,7 @@ struct PostToStoryPopup: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.98, green: 0.35, blue: 0.13),
-                                    Color(red: 0.89, green: 0.22, blue: 0.42)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .background(Color.black)
                         .cornerRadius(25)
                     }
                     .disabled(isPosting)
@@ -967,6 +1008,57 @@ struct StoryViewersListView: View {
                             .foregroundColor(.black)
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Story Header Avatar
+struct StoryHeaderAvatar: View {
+    let avatarUrl: String?
+    let username: String
+    let isOwnStory: Bool
+    
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
+    var body: some View {
+        Group {
+            // For own story, use current user's avatar from auth
+            if isOwnStory, let currentAvatarUrl = authViewModel.currentUser?.avatarUrl,
+               !currentAvatarUrl.isEmpty,
+               let url = URL(string: currentAvatarUrl) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Circle()
+                        .fill(Color.white.opacity(0.3))
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+            } else if let avatarUrl = avatarUrl, !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+                // Use provided avatar URL
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Circle()
+                        .fill(Color.white.opacity(0.3))
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
+            } else {
+                // Fallback to initial
+                Circle()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text(String(username.prefix(1)).uppercased())
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    )
             }
         }
     }

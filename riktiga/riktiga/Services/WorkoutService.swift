@@ -314,7 +314,10 @@ class WorkoutService {
             maxSpeed: post.maxSpeed,
             splits: post.splits,
             exercises: post.exercises,
-            routeData: post.routeData
+            routeData: post.routeData,
+            pbExerciseName: post.pbExerciseName,
+            pbValue: post.pbValue,
+            streakCount: post.streakCount
         )
         
         do {
@@ -368,6 +371,19 @@ class WorkoutService {
             if let routeData = postToSave.routeData, !routeData.isEmpty {
                 minimalPost["route_data"] = DynamicEncodable(routeData)
                 print("✅ Saving post with route_data: \(routeData.count) characters")
+            }
+            
+            // Save PB data for achievement banners
+            if let pbExerciseName = postToSave.pbExerciseName, !pbExerciseName.isEmpty {
+                minimalPost["pb_exercise_name"] = DynamicEncodable(pbExerciseName)
+            }
+            if let pbValue = postToSave.pbValue, !pbValue.isEmpty {
+                minimalPost["pb_value"] = DynamicEncodable(pbValue)
+            }
+            
+            // Save streak count for achievement banners
+            if let streakCount = postToSave.streakCount {
+                minimalPost["streak_count"] = DynamicEncodable(streakCount)
             }
             
             try await supabase

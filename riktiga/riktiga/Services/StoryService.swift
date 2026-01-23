@@ -144,7 +144,7 @@ class StoryService: ObservableObject {
     }
     
     // MARK: - Post Story
-    func postStory(userId: String, image: UIImage) async throws -> Story {
+    func postStory(userId: String, image: UIImage, userName: String? = nil, userAvatar: String? = nil) async throws -> Story {
         print("📸 Posting story for user: \(userId)")
         
         // Upload image to storage
@@ -196,6 +196,28 @@ class StoryService: ObservableObject {
             createdAt: now,
             expiresAt: expiresAt
         )
+    }
+    
+    // MARK: - Fetch User Name
+    private func fetchUserName(userId: String) async -> String? {
+        struct ProfileRecord: Decodable {
+            let username: String?
+        }
+        
+        do {
+            let profile: ProfileRecord = try await supabase
+                .from("profiles")
+                .select("username")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+                .value
+            
+            return profile.username
+        } catch {
+            print("❌ Failed to fetch username for story notification: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Mark Story as Viewed
@@ -250,33 +272,20 @@ class StoryService: ObservableObject {
         struct ViewerRecord: Decodable {
             let viewer_id: String
             let viewed_at: String
-            let profiles: ViewerProfile?
-            
-            struct ViewerProfile: Decodable {
-                let username: String?
-                let avatar_url: String?
-            }
         }
         
+        // First get the viewer IDs
         let records: [ViewerRecord] = try await supabase
             .from("story_views")
-            .select("""
-                viewer_id,
-                viewed_at,
-                profiles!story_views_viewer_id_fkey(username, avatar_url)
-            """)
+            .select("viewer_id, viewed_at")
             .eq("story_id", value: storyId)
             .order("viewed_at", ascending: false)
             .execute()
             .value
         
-        let viewers = records.map { record in
-            StoryViewer(
-                id: record.viewer_id,
-                username: record.profiles?.username ?? "Användare",
-                avatarUrl: record.profiles?.avatar_url
-            )
-        }
+        // Then fetch profile data for each viewer
+        let viewerIds = records.map { $0.viewer_id }
+        let viewers = await fetchProfilesForViewers(viewerIds: viewerIds)
         
         print("👁️ Found \(viewers.count) viewers for story \(storyId)")
         return viewers
@@ -288,42 +297,81 @@ class StoryService: ObservableObject {
         
         struct ViewerRecord: Decodable {
             let viewer_id: String
-            let profiles: ViewerProfile?
-            
-            struct ViewerProfile: Decodable {
-                let username: String?
-                let avatar_url: String?
-            }
         }
         
         let records: [ViewerRecord] = try await supabase
             .from("story_views")
-            .select("""
-                viewer_id,
-                profiles!story_views_viewer_id_fkey(username, avatar_url)
-            """)
+            .select("viewer_id")
             .in("story_id", values: storyIds)
             .order("viewed_at", ascending: false)
             .execute()
             .value
         
-        // Deduplicate viewers (same person might have viewed multiple stories)
+        // Deduplicate viewer IDs
         var seenIds = Set<String>()
-        var uniqueViewers: [StoryViewer] = []
+        var uniqueViewerIds: [String] = []
         
         for record in records {
             if !seenIds.contains(record.viewer_id) {
                 seenIds.insert(record.viewer_id)
-                uniqueViewers.append(StoryViewer(
-                    id: record.viewer_id,
-                    username: record.profiles?.username ?? "Användare",
-                    avatarUrl: record.profiles?.avatar_url
-                ))
+                uniqueViewerIds.append(record.viewer_id)
             }
         }
         
-        print("👁️ Found \(uniqueViewers.count) unique viewers across \(storyIds.count) stories")
-        return uniqueViewers
+        // Fetch profile data for unique viewers
+        let viewers = await fetchProfilesForViewers(viewerIds: uniqueViewerIds)
+        
+        print("👁️ Found \(viewers.count) unique viewers across \(storyIds.count) stories")
+        return viewers
+    }
+    
+    // MARK: - Fetch Profiles for Viewers
+    private func fetchProfilesForViewers(viewerIds: [String]) async -> [StoryViewer] {
+        guard !viewerIds.isEmpty else { return [] }
+        
+        struct ProfileRecord: Decodable {
+            let id: String
+            let username: String?
+            let avatar_url: String?
+        }
+        
+        do {
+            let profiles: [ProfileRecord] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: viewerIds)
+                .execute()
+                .value
+            
+            // Create a map for quick lookup
+            var profileMap: [String: ProfileRecord] = [:]
+            for profile in profiles {
+                profileMap[profile.id.lowercased()] = profile
+            }
+            
+            // Return viewers in original order with profile data
+            return viewerIds.map { viewerId in
+                if let profile = profileMap[viewerId.lowercased()] {
+                    return StoryViewer(
+                        id: viewerId,
+                        username: profile.username ?? "Användare",
+                        avatarUrl: profile.avatar_url
+                    )
+                } else {
+                    return StoryViewer(
+                        id: viewerId,
+                        username: "Användare",
+                        avatarUrl: nil
+                    )
+                }
+            }
+        } catch {
+            print("❌ Error fetching profiles for viewers: \(error)")
+            // Return viewers without profile data
+            return viewerIds.map { viewerId in
+                StoryViewer(id: viewerId, username: "Användare", avatarUrl: nil)
+            }
+        }
     }
     
     // MARK: - Get View Count for Stories

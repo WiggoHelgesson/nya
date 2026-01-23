@@ -18,6 +18,7 @@ struct WorkoutPost: Codable, Identifiable {
     let routeData: String?  // JSON string of route coordinates for Zone War
     let pbExerciseName: String?  // Personal Best exercise name
     let pbValue: String?  // Personal Best value (e.g., "67.0 kg x 6 reps")
+    let streakCount: Int?  // User's streak when post was created
     let source: String?  // "app", "garmin", "fitbit", etc.
     let deviceName: String?  // "Garmin Forerunner 265", etc.
     
@@ -39,6 +40,7 @@ struct WorkoutPost: Codable, Identifiable {
         case routeData = "route_data"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
+        case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
     }
@@ -62,6 +64,7 @@ struct WorkoutPost: Codable, Identifiable {
         routeData = try container.decodeIfPresent(String.self, forKey: .routeData)
         pbExerciseName = try container.decodeIfPresent(String.self, forKey: .pbExerciseName)
         pbValue = try container.decodeIfPresent(String.self, forKey: .pbValue)
+        streakCount = try container.decodeIfPresent(Int.self, forKey: .streakCount)
         source = try container.decodeIfPresent(String.self, forKey: .source)
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
     }
@@ -82,6 +85,7 @@ struct WorkoutPost: Codable, Identifiable {
          routeData: String? = nil,
          pbExerciseName: String? = nil,
          pbValue: String? = nil,
+         streakCount: Int? = nil,
          source: String? = "app",
          deviceName: String? = nil) {
         self.id = id
@@ -101,6 +105,7 @@ struct WorkoutPost: Codable, Identifiable {
         self.routeData = routeData
         self.pbExerciseName = pbExerciseName
         self.pbValue = pbValue
+        self.streakCount = streakCount
         self.source = source
         self.deviceName = deviceName
     }
@@ -124,6 +129,7 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(routeData, forKey: .routeData)
         try container.encodeIfPresent(pbExerciseName, forKey: .pbExerciseName)
         try container.encodeIfPresent(pbValue, forKey: .pbValue)
+        try container.encodeIfPresent(streakCount, forKey: .streakCount)
         try container.encodeIfPresent(source, forKey: .source)
         try container.encodeIfPresent(deviceName, forKey: .deviceName)
     }

@@ -644,8 +644,7 @@ struct NutritionOnboardingView: View {
                     // Macro cards grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                         MacroResultCard(
-                            icon: "flame.fill",
-                            iconColor: .black,
+                            emoji: "🔥",
                             title: "Kalorier",
                             value: $onboardingData.dailyCalories,
                             unit: "",
@@ -653,8 +652,7 @@ struct NutritionOnboardingView: View {
                         )
                         
                         MacroResultCard(
-                            icon: "leaf.fill",
-                            iconColor: .orange,
+                            emoji: "🌾",
                             title: "Kolhydrater",
                             value: $onboardingData.dailyCarbs,
                             unit: "g",
@@ -662,8 +660,7 @@ struct NutritionOnboardingView: View {
                         )
                         
                         MacroResultCard(
-                            icon: "drop.fill",
-                            iconColor: .red,
+                            emoji: "🍗",
                             title: "Protein",
                             value: $onboardingData.dailyProtein,
                             unit: "g",
@@ -671,8 +668,7 @@ struct NutritionOnboardingView: View {
                         )
                         
                         MacroResultCard(
-                            icon: "drop.fill",
-                            iconColor: .blue,
+                            emoji: "🥑",
                             title: "Fett",
                             value: $onboardingData.dailyFat,
                             unit: "g",

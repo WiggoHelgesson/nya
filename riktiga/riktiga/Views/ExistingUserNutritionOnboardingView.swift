@@ -7,6 +7,7 @@ import Supabase
 struct ExistingUserNutritionOnboardingView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     
     // Onboarding data
     @State private var gender: String = ""
@@ -38,9 +39,21 @@ struct ExistingUserNutritionOnboardingView: View {
         Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year ?? 25
     }
     
+    // MARK: - Dark Mode Colors
+    private var isDarkMode: Bool { colorScheme == .dark }
+    private var backgroundColor: Color { isDarkMode ? .black : .white }
+    private var primaryTextColor: Color { isDarkMode ? .white : .black }
+    private var secondaryTextColor: Color { isDarkMode ? .white.opacity(0.7) : .black.opacity(0.6) }
+    private var buttonBackgroundColor: Color { isDarkMode ? .white : .black }
+    private var buttonTextColor: Color { isDarkMode ? .black : .white }
+    private var cardBackgroundColor: Color { isDarkMode ? Color(.systemGray6) : Color(.systemGray6) }
+    private var selectedCardBackgroundColor: Color { isDarkMode ? .white : .black }
+    private var selectedCardTextColor: Color { isDarkMode ? .black : .white }
+    private var unselectedCardTextColor: Color { isDarkMode ? .white : .black }
+    
     var body: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            backgroundColor.ignoresSafeArea()
             
             if showResults {
                 resultsView
@@ -68,7 +81,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 } label: {
                     Image(systemName: currentStep > 0 ? "arrow.left" : "xmark")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                         .frame(width: 40, height: 40)
                         .background(Color(.systemGray6))
                         .clipShape(Circle())
@@ -83,7 +96,7 @@ struct ExistingUserNutritionOnboardingView: View {
                         
                         let progress = CGFloat(currentStep + 1) / CGFloat(totalSteps)
                         Rectangle()
-                            .fill(Color.black)
+                            .fill(buttonBackgroundColor)
                             .frame(width: geometry.size.width * progress, height: 4)
                             .cornerRadius(2)
                             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentStep)
@@ -99,7 +112,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(stepTitle)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                     
                     Text(stepSubtitle)
                         .font(.system(size: 16))
@@ -120,17 +133,17 @@ struct ExistingUserNutritionOnboardingView: View {
                 } label: {
                     Text("Fortsätt")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(canContinue ? .white : .gray)
+                        .foregroundColor(canContinue ? buttonTextColor : .gray)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(canContinue ? Color.black : Color(.systemGray5))
+                        .background(canContinue ? buttonBackgroundColor : Color(.systemGray5))
                         .clipShape(Capsule())
                 }
                 .disabled(!canContinue)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
             }
-            .background(Color.white)
+            .background(backgroundColor)
         }
         .onChange(of: currentStep) { _, _ in
             animateContentIn()
@@ -205,10 +218,10 @@ struct ExistingUserNutritionOnboardingView: View {
         } label: {
             Text(title)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(gender == value ? .white : .black)
+                .foregroundColor(gender == value ? selectedCardTextColor : unselectedCardTextColor)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-                .background(RoundedRectangle(cornerRadius: 16).fill(gender == value ? Color.black : Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(gender == value ? selectedCardBackgroundColor : cardBackgroundColor))
         }
     }
     
@@ -231,11 +244,11 @@ struct ExistingUserNutritionOnboardingView: View {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 20))
-                    .foregroundColor(.black)
+                    .foregroundColor(primaryTextColor)
                     .frame(width: 40)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(range).font(.system(size: 18, weight: .semibold)).foregroundColor(.black)
+                    Text(range).font(.system(size: 18, weight: .semibold)).foregroundColor(primaryTextColor)
                     Text(description).font(.system(size: 14)).foregroundColor(.gray)
                 }
                 Spacer()
@@ -243,8 +256,8 @@ struct ExistingUserNutritionOnboardingView: View {
             .padding(18)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(workoutsPerWeek == value ? Color(.systemGray5) : Color(.systemGray6))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(workoutsPerWeek == value ? Color.black : Color.clear, lineWidth: 2))
+                    .fill(workoutsPerWeek == value ? Color(.systemGray5) : cardBackgroundColor)
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(workoutsPerWeek == value ? buttonBackgroundColor : Color.clear, lineWidth: 2))
             )
         }
     }
@@ -255,7 +268,7 @@ struct ExistingUserNutritionOnboardingView: View {
             
             HStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text("Längd").font(.system(size: 16, weight: .semibold)).foregroundColor(.black)
+                    Text("Längd").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
                     Picker("Längd", selection: $heightCm) {
                         ForEach(140...220, id: \.self) { cm in
                             Text("\(cm) cm").tag(cm)
@@ -267,7 +280,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 .frame(maxWidth: .infinity)
                 
                 VStack(spacing: 8) {
-                    Text("Vikt").font(.system(size: 16, weight: .semibold)).foregroundColor(.black)
+                    Text("Vikt").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
                     Picker("Vikt", selection: Binding(
                         get: { Int(weightKg) },
                         set: { weightKg = Double($0) }
@@ -312,11 +325,11 @@ struct ExistingUserNutritionOnboardingView: View {
         } label: {
             Text(title)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(goal == value ? .white : .black)
+                .foregroundColor(goal == value ? selectedCardTextColor : unselectedCardTextColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 20)
-                .background(RoundedRectangle(cornerRadius: 16).fill(goal == value ? Color.black : Color(.systemGray6)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(goal == value ? selectedCardBackgroundColor : cardBackgroundColor))
         }
     }
     
@@ -330,7 +343,7 @@ struct ExistingUserNutritionOnboardingView: View {
             
             HStack {
                 Text("Nuvarande vikt:").font(.system(size: 14)).foregroundColor(.gray)
-                Text("\(Int(weightKg)) kg").font(.system(size: 14, weight: .semibold)).foregroundColor(.black)
+                Text("\(Int(weightKg)) kg").font(.system(size: 14, weight: .semibold)).foregroundColor(primaryTextColor)
             }
             
             Picker("Målvikt", selection: Binding(
@@ -351,11 +364,11 @@ struct ExistingUserNutritionOnboardingView: View {
                         .foregroundColor(diff < 0 ? .green : .orange)
                     Text("\(abs(diff)) kg \(diff < 0 ? "att gå ner" : "att gå upp")")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
-                .background(Color(.systemGray6))
+                .background(cardBackgroundColor)
                 .cornerRadius(12)
             }
         }
@@ -368,13 +381,13 @@ struct ExistingUserNutritionOnboardingView: View {
             
             Text("\(Int(calculationProgress))%")
                 .font(.system(size: 64, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(primaryTextColor)
                 .contentTransition(.numericText())
                 .animation(.easeOut(duration: 0.1), value: calculationProgress)
             
             Text("Vi skapar allt\nåt dig")
                 .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.black)
+                .foregroundColor(primaryTextColor)
                 .multilineTextAlignment(.center)
             
             GeometryReader { geometry in
@@ -398,7 +411,7 @@ struct ExistingUserNutritionOnboardingView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Daglig rekommendation för")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(primaryTextColor)
                 
                 checklistItem(text: "Kalorier", isChecked: calculationProgress >= 20)
                 checklistItem(text: "Kolhydrater", isChecked: calculationProgress >= 40)
@@ -414,12 +427,12 @@ struct ExistingUserNutritionOnboardingView: View {
     @ViewBuilder
     private func checklistItem(text: String, isChecked: Bool) -> some View {
         HStack(spacing: 12) {
-            Text("•").foregroundColor(.black)
-            Text(text).font(.system(size: 15)).foregroundColor(.black)
+            Text("•").foregroundColor(primaryTextColor)
+            Text(text).font(.system(size: 15)).foregroundColor(primaryTextColor)
             Spacer()
             if isChecked {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.black)
+                    .foregroundColor(primaryTextColor)
                     .transition(.scale.combined(with: .opacity))
             }
         }
@@ -434,7 +447,7 @@ struct ExistingUserNutritionOnboardingView: View {
                     HStack {
                         Spacer()
                         GeometryReader { geometry in
-                            Rectangle().fill(Color.black).frame(height: 4).cornerRadius(2)
+                            Rectangle().fill(buttonBackgroundColor).frame(height: 4).cornerRadius(2)
                         }
                         .frame(height: 4)
                         Spacer()
@@ -444,15 +457,15 @@ struct ExistingUserNutritionOnboardingView: View {
                     
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 50))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                     
                     Text("Grattis")
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                     
                     Text("din personliga plan är klar!")
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                 }
                 
                 VStack(spacing: 12) {
@@ -462,10 +475,10 @@ struct ExistingUserNutritionOnboardingView: View {
                     
                     Text(goalPredictionText)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.black)
+                        .foregroundColor(primaryTextColor)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
-                        .background(Color(.systemGray6))
+                        .background(cardBackgroundColor)
                         .cornerRadius(20)
                 }
                 
@@ -473,7 +486,7 @@ struct ExistingUserNutritionOnboardingView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Daglig rekommendation")
                             .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(primaryTextColor)
                         Text("Du kan ändra detta när som helst")
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
@@ -481,10 +494,10 @@ struct ExistingUserNutritionOnboardingView: View {
                     .padding(.horizontal, 24)
                     
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        MacroResultCard(icon: "flame.fill", iconColor: .black, title: "Kalorier", value: $dailyCalories, unit: "", progress: 0.75)
-                        MacroResultCard(icon: "leaf.fill", iconColor: .orange, title: "Kolhydrater", value: $dailyCarbs, unit: "g", progress: 0.65)
-                        MacroResultCard(icon: "drop.fill", iconColor: .red, title: "Protein", value: $dailyProtein, unit: "g", progress: 0.70)
-                        MacroResultCard(icon: "drop.fill", iconColor: .blue, title: "Fett", value: $dailyFat, unit: "g", progress: 0.55)
+                        MacroResultCard(emoji: "🔥", title: "Kalorier", value: $dailyCalories, unit: "", progress: 0.75)
+                        MacroResultCard(emoji: "🌾", title: "Kolhydrater", value: $dailyCarbs, unit: "g", progress: 0.65)
+                        MacroResultCard(emoji: "🍗", title: "Protein", value: $dailyProtein, unit: "g", progress: 0.70)
+                        MacroResultCard(emoji: "🥑", title: "Fett", value: $dailyFat, unit: "g", progress: 0.55)
                     }
                     .padding(.horizontal, 24)
                 }
@@ -496,10 +509,10 @@ struct ExistingUserNutritionOnboardingView: View {
                 } label: {
                     Text("Kom igång!")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(buttonTextColor)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background(Color.black)
+                        .background(buttonBackgroundColor)
                         .clipShape(Capsule())
                 }
                 .padding(.horizontal, 24)

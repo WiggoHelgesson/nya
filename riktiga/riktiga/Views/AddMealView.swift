@@ -1442,6 +1442,7 @@ struct FoodDetailView: View {
         VStack(spacing: 8) {
             Text(emoji)
                 .font(.system(size: 28))
+                .grayscale(1)
             
             Text(label)
                 .font(.system(size: 13))
@@ -1694,6 +1695,7 @@ struct CreateMealView: View {
         VStack(spacing: 6) {
             Text(emoji)
                 .font(.system(size: 24))
+                .grayscale(1)
             
             Text(label)
                 .font(.system(size: 11))

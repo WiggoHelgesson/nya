@@ -104,7 +104,7 @@ struct WeeklyActivityChart: View {
                 if isPremium {
                     showStatistics = true
                 } else {
-                    showPaywall = true
+                    SuperwallService.shared.showPaywall()
                 }
             }) {
                 HStack {
@@ -125,9 +125,6 @@ struct WeeklyActivityChart: View {
         .cornerRadius(16)
         .sheet(isPresented: $showStatistics) {
             StatisticsView()
-        }
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
         }
         .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue

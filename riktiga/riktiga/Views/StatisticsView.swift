@@ -4,8 +4,6 @@ import SwiftUI
 enum SportType: String, CaseIterable, Identifiable {
     case gym = "Gym"
     case running = "Löpning"
-    case golf = "Golf"
-    case skiing = "Skidor"
     
     var id: String { rawValue }
     
@@ -13,8 +11,6 @@ enum SportType: String, CaseIterable, Identifiable {
         switch self {
         case .gym: return "dumbbell.fill"
         case .running: return "figure.run"
-        case .golf: return "figure.golf"
-        case .skiing: return "figure.skiing.downhill"
         }
     }
     
@@ -22,8 +18,6 @@ enum SportType: String, CaseIterable, Identifiable {
         switch self {
         case .gym: return ["gym", "weight_training", "strength"]
         case .running: return ["run", "running", "trail_run"]
-        case .golf: return ["golf"]
-        case .skiing: return ["skiing", "ski", "alpine_skiing", "cross_country_skiing"]
         }
     }
 }
@@ -59,6 +53,12 @@ struct StatisticsView: View {
     @State private var showMuscleBalance = false
     @State private var showTopExercises = false
     
+    // Chart animation states
+    @State private var chartLineTrim: CGFloat = 0
+    @State private var chartAreaOpacity: Double = 0
+    @State private var chartPointsOpacity: Double = 0
+    @State private var statValuesAnimated: Bool = false
+    
     // Muscle distribution filter
     @State private var muscleTimePeriod: MuscleTimePeriod = .last30Days
     
@@ -74,6 +74,10 @@ struct StatisticsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                // MARK: - Progress Section (Streak & Badges)
+                ProgressSectionView()
+                    .padding(.bottom, 8)
+                
                 // MARK: - Sport Type Filter
                 sportTypeFilter
                     .padding(.top, 16)
@@ -84,13 +88,15 @@ struct StatisticsView: View {
                 thisWeekSection
                     .padding(.top, 24)
                     .opacity(showWeekStats ? 1 : 0)
-                    .offset(y: showWeekStats ? 0 : 15)
+                    .offset(y: showWeekStats ? 0 : 20)
+                    .scaleEffect(showWeekStats ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Past 12 Weeks Chart
                 past12WeeksChart
                     .padding(.top, 8)
                     .opacity(showChart ? 1 : 0)
-                    .offset(y: showChart ? 0 : 15)
+                    .offset(y: showChart ? 0 : 25)
+                    .scaleEffect(showChart ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Calendar Section
                 Divider()
@@ -99,7 +105,8 @@ struct StatisticsView: View {
                 
                 calendarSection
                     .opacity(showCalendar ? 1 : 0)
-                    .offset(y: showCalendar ? 0 : 15)
+                    .offset(y: showCalendar ? 0 : 25)
+                    .scaleEffect(showCalendar ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Premium Features Section
                 if !isPremium {
@@ -119,7 +126,7 @@ struct StatisticsView: View {
                             .multilineTextAlignment(.center)
                         
                         Button {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         } label: {
                             Text("Testa 7 dagar gratis")
                                 .font(.system(size: 16, weight: .semibold))
@@ -146,11 +153,12 @@ struct StatisticsView: View {
                 
                 progressiveOverloadSection
                     .opacity(showProgressive ? 1 : 0)
-                    .offset(y: showProgressive ? 0 : 15)
+                    .offset(y: showProgressive ? 0 : 25)
+                    .scaleEffect(showProgressive ? 1 : 0.95, anchor: .top)
                     .blur(radius: isPremium ? 0 : 6)
                     .onTapGesture {
                         if !isPremium {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         }
                     }
                     .allowsHitTesting(!isPremium ? true : true)
@@ -162,11 +170,12 @@ struct StatisticsView: View {
                 // MARK: - Monthly Recap Preview
                 monthlyRecapSection
                     .opacity(showMonthly ? 1 : 0)
-                    .offset(y: showMonthly ? 0 : 15)
+                    .offset(y: showMonthly ? 0 : 25)
+                    .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
                     .blur(radius: isPremium ? 0 : 6)
                     .onTapGesture {
                         if !isPremium {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         }
                     }
                 
@@ -181,7 +190,7 @@ struct StatisticsView: View {
                     .blur(radius: isPremium ? 0 : 6)
                     .onTapGesture {
                         if !isPremium {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         }
                     }
                 
@@ -193,7 +202,7 @@ struct StatisticsView: View {
                     .blur(radius: isPremium ? 0 : 6)
                     .onTapGesture {
                         if !isPremium {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         }
                     }
                 
@@ -205,7 +214,7 @@ struct StatisticsView: View {
                     .blur(radius: isPremium ? 0 : 6)
                     .onTapGesture {
                         if !isPremium {
-                            showPaywall = true
+                            SuperwallService.shared.showPaywall()
                         }
                     }
                 
@@ -224,9 +233,6 @@ struct StatisticsView: View {
         .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
-        }
         .enableSwipeBack()
     }
     
@@ -241,44 +247,64 @@ struct StatisticsView: View {
         show1RMPredictions = false
         showMuscleBalance = false
         showTopExercises = false
+        chartLineTrim = 0
+        chartAreaOpacity = 0
+        chartPointsOpacity = 0
+        statValuesAnimated = false
         
-        // Staggered animations for smooth appearance
-        let duration = 0.45
-        let delay = 0.08
+        // Staggered animations for smooth appearance with spring
+        let springAnimation = Animation.spring(response: 0.6, dampingFraction: 0.8)
+        let delay = 0.1
         
-        withAnimation(.easeOut(duration: duration)) {
+        withAnimation(springAnimation) {
             showFilter = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 1)) {
+        withAnimation(springAnimation.delay(delay * 1)) {
             showWeekStats = true
+            statValuesAnimated = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 2)) {
+        withAnimation(springAnimation.delay(delay * 2)) {
             showChart = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 3)) {
+        // Chart line animation - draw the line smoothly
+        withAnimation(.easeOut(duration: 1.2).delay(delay * 2.5)) {
+            chartLineTrim = 1.0
+        }
+        
+        // Chart area fade in after line starts
+        withAnimation(.easeIn(duration: 0.5).delay(delay * 3)) {
+            chartAreaOpacity = 1.0
+        }
+        
+        // Chart points appear after line is drawn
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(delay * 3.5)) {
+            chartPointsOpacity = 1.0
+        }
+        
+        withAnimation(springAnimation.delay(delay * 4)) {
             showCalendar = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 4)) {
+        withAnimation(springAnimation.delay(delay * 5)) {
             showProgressive = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 5)) {
+        withAnimation(springAnimation.delay(delay * 6)) {
             showMonthly = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 6)) {
+        withAnimation(springAnimation.delay(delay * 7)) {
             show1RMPredictions = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 7)) {
+        withAnimation(springAnimation.delay(delay * 8)) {
             showMuscleBalance = true
         }
         
-        withAnimation(.easeOut(duration: duration).delay(delay * 8)) {
+        withAnimation(springAnimation.delay(delay * 9)) {
             showTopExercises = true
         }
     }
@@ -323,13 +349,13 @@ struct StatisticsView: View {
             
             HStack(spacing: 0) {
                 if selectedSport == .gym {
-                    StatColumn(label: "Volym", value: "\(Int(progressStats.distance)) kg")
-                    StatColumn(label: "Set", value: "\(Int(progressStats.elevation))")
-                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration))
+                    StatColumn(label: "Volym", value: "\(Int(progressStats.distance)) kg", isAnimated: true, delay: 0.1)
+                    StatColumn(label: "Set", value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.2)
+                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
                 } else {
-                    StatColumn(label: "Distans", value: String(format: "%.2f km", progressStats.distance))
-                    StatColumn(label: "Höjdmeter", value: "\(Int(progressStats.elevation)) m")
-                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration))
+                    StatColumn(label: "Distans", value: String(format: "%.2f km", progressStats.distance), isAnimated: true, delay: 0.1)
+                    StatColumn(label: "Höjdmeter", value: "\(Int(progressStats.elevation)) m", isAnimated: true, delay: 0.2)
+                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
                 }
             }
         }
@@ -382,7 +408,7 @@ struct StatisticsView: View {
                     
                     // Line chart with area fill
                     if weeklyData.count > 1 {
-                        // Area fill
+                        // Area fill - animated opacity
                         Path { path in
                             path.move(to: CGPoint(x: 0, y: chartHeight))
                             for (index, data) in weeklyData.enumerated() {
@@ -393,9 +419,9 @@ struct StatisticsView: View {
                             path.addLine(to: CGPoint(x: CGFloat(weeklyData.count - 1) * pointSpacing, y: chartHeight))
                             path.closeSubpath()
                         }
-                        .fill(Color.primary.opacity(0.1))
+                        .fill(Color.primary.opacity(0.1 * chartAreaOpacity))
                         
-                        // Line
+                        // Line - animated with trim
                         Path { path in
                             for (index, data) in weeklyData.enumerated() {
                                 let x = CGFloat(index) * pointSpacing
@@ -407,9 +433,10 @@ struct StatisticsView: View {
                                 }
                             }
                         }
-                        .stroke(Color.primary, lineWidth: 2)
+                        .trim(from: 0, to: chartLineTrim)
+                        .stroke(Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                         
-                        // Data points
+                        // Data points - animated with scale and opacity
                         ForEach(weeklyData.indices, id: \.self) { index in
                             let x = CGFloat(index) * pointSpacing
                             let y = chartHeight - (weeklyData[index].value / maxValue) * chartHeight
@@ -421,6 +448,8 @@ struct StatisticsView: View {
                                     Circle()
                                         .stroke(Color.primary, lineWidth: 2)
                                 )
+                                .scaleEffect(chartPointsOpacity)
+                                .opacity(chartPointsOpacity)
                                 .position(x: x, y: y)
                         }
                     }
@@ -1472,17 +1501,36 @@ private struct WeekData: Identifiable {
 private struct StatColumn: View {
     let label: String
     let value: String
+    var isAnimated: Bool = false
+    var delay: Double = 0
+    
+    @State private var showValue = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
+                .opacity(showValue ? 1 : 0)
+                .offset(y: showValue ? 0 : 10)
+            
             Text(value)
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
+                .opacity(showValue ? 1 : 0)
+                .scaleEffect(showValue ? 1 : 0.5, anchor: .leading)
+                .offset(y: showValue ? 0 : 15)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            if isAnimated {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
+                    showValue = true
+                }
+            } else {
+                showValue = true
+            }
+        }
     }
 }
 

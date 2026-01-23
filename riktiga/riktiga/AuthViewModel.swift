@@ -121,6 +121,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         // Set current user for AI scan limit manager
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         
+                        // Set current user for streak manager (per-user streaks)
+                        StreakManager.shared.setUser(userId: profile.id)
+                        
                         // Update database Pro status in RevenueCatManager FIRST
                         RevenueCatManager.shared.updateDatabaseProStatus(profile.isProMember)
                         
@@ -196,6 +199,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         
                         // Set current user for AI scan limit manager
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
+                        
+                        // Set current user for streak manager (per-user streaks)
+                        StreakManager.shared.setUser(userId: profile.id)
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
@@ -285,6 +291,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     
                     // Set current user for AI scan limit manager
                     AIScanLimitManager.shared.setCurrentUser(userId: newUser.id)
+                    
+                    // Set current user for streak manager (per-user streaks)
+                    StreakManager.shared.setUser(userId: newUser.id)
                 }
             } catch {
                 await MainActor.run {
@@ -316,6 +325,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     // Clear AI scan limit manager user
                     AIScanLimitManager.shared.setCurrentUser(userId: nil)
                     
+                    // Clear streak manager user
+                    StreakManager.shared.clearUser()
+                    
                     self.isLoggedIn = false
                     self.currentUser = nil
                     print("✅ User logged out successfully (graceful)")
@@ -327,6 +339,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     
                     // Clear AI scan limit manager user
                     AIScanLimitManager.shared.setCurrentUser(userId: nil)
+                    
+                    // Clear streak manager user
+                    StreakManager.shared.clearUser()
                     
                     self.isLoggedIn = false
                     self.currentUser = nil
@@ -500,6 +515,9 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         
                         // Set current user for AI scan limit manager
                         AIScanLimitManager.shared.setCurrentUser(userId: existingProfile.id)
+                        
+                        // Set current user for streak manager (per-user streaks)
+                        StreakManager.shared.setUser(userId: existingProfile.id)
                         
                         RevenueCatManager.shared.updateDatabaseProStatus(existingProfile.isProMember)
                         

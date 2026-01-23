@@ -124,9 +124,6 @@ struct StravaStyleHeaderView: View {
             MonthlyPrizeView()
                 .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
-        }
         .navigationDestination(isPresented: $showFindFriends) {
             FindFriendsView()
                 .environmentObject(authViewModel)
@@ -151,7 +148,7 @@ struct StravaStyleHeaderView: View {
             Button("Bli Pro") {
                 showNonProAlert = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showPaywall = true
+                    SuperwallService.shared.showPaywall()
                 }
             }
         } message: {

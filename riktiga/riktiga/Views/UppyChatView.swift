@@ -106,7 +106,7 @@ struct UppyChatView: View {
             
             if shouldGateChat {
                 Button {
-                    showPaywall = true
+                    SuperwallService.shared.showPaywall()
                 } label: {
                     Text("Uppgradera till PRO")
                         .font(.system(size: 15, weight: .semibold))
@@ -140,9 +140,6 @@ struct UppyChatView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showPaywall) {
-            PaywallAfterSignupView()
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -298,7 +295,7 @@ struct UppyChatView: View {
     
     private func send(text: String, clearInput: Bool) {
         if shouldGateChat {
-            showPaywall = true
+            SuperwallService.shared.showPaywall()
             return
         }
         

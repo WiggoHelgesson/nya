@@ -37,6 +37,77 @@ final class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-10k-steps"]) 
     }
     
+    // MARK: - Daily Meal Reminders
+    
+    /// Schedule daily lunch reminder at 12:00
+    func scheduleLunchReminder() {
+        // Remove existing to avoid duplicates
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-lunch-reminder"])
+        
+        let content = UNMutableNotificationContent()
+        content.title = "🍽️ Lunch dags!"
+        content.body = "Glöm inte registrera din måltid"
+        content.sound = .default
+        content.userInfo = ["type": "meal_reminder", "meal": "lunch"]
+        
+        var dateComponents = DateComponents()
+        dateComponents.hour = 12
+        dateComponents.minute = 0
+        
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: "daily-lunch-reminder", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to schedule lunch reminder: \(error)")
+            } else {
+                print("✅ Lunch reminder scheduled for 12:00 daily")
+            }
+        }
+    }
+    
+    /// Schedule daily dinner reminder at 17:30
+    func scheduleDinnerReminder() {
+        // Remove existing to avoid duplicates
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-dinner-reminder"])
+        
+        let content = UNMutableNotificationContent()
+        content.title = "🍝 Dags för middag?"
+        content.body = "Regga på några sekunder med AI"
+        content.sound = .default
+        content.userInfo = ["type": "meal_reminder", "meal": "dinner"]
+        
+        var dateComponents = DateComponents()
+        dateComponents.hour = 17
+        dateComponents.minute = 30
+        
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: "daily-dinner-reminder", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to schedule dinner reminder: \(error)")
+            } else {
+                print("✅ Dinner reminder scheduled for 17:30 daily")
+            }
+        }
+    }
+    
+    /// Schedule all meal reminders
+    func scheduleMealReminders() {
+        scheduleLunchReminder()
+        scheduleDinnerReminder()
+    }
+    
+    /// Cancel all meal reminders
+    func cancelMealReminders() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
+            "daily-lunch-reminder",
+            "daily-dinner-reminder"
+        ])
+        print("🔕 Meal reminders cancelled")
+    }
+    
     // MARK: - Social Activity Notifications
     
     /// Send a push notification when someone likes a post
@@ -88,6 +159,58 @@ final class NotificationManager {
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+    
+    // MARK: - Workout Complete Notification
+    
+    /// Schedule a motivational notification 15 seconds after completing a workout
+    func scheduleWorkoutCompleteNotification(userName: String?) {
+        // Remove any existing workout complete notification to avoid duplicates
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workout-complete-motivation"])
+        
+        let content = UNMutableNotificationContent()
+        
+        // Use first name if available, otherwise use a generic message
+        let firstName = userName?.components(separatedBy: " ").first ?? "du"
+        content.title = "Grymt jobbat \(firstName)! 💪"
+        content.body = "Håll din streak uppe och fortsätt slakta det!"
+        content.sound = .default
+        content.userInfo = ["type": "workout_complete"]
+        
+        // Trigger after 15 seconds
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 15, repeats: false)
+        let request = UNNotificationRequest(identifier: "workout-complete-motivation", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to schedule workout complete notification: \(error)")
+            } else {
+                print("✅ Workout complete notification scheduled for 15 seconds from now")
+            }
+        }
+    }
+    
+    // MARK: - Streak Broken Notification
+    
+    /// Send an immediate notification when the user's streak is broken
+    func sendStreakBrokenNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Alla missar en dag ibland 💪"
+        content.body = "Starta en ny streak och nå dina mål, vi tror på dig!"
+        content.sound = .default
+        content.userInfo = ["type": "streak_broken"]
+        
+        // Trigger immediately (1 second delay for system)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(identifier: "streak-broken", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to send streak broken notification: \(error)")
+            } else {
+                print("✅ Streak broken notification sent")
+            }
+        }
     }
 }
 

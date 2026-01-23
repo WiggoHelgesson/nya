@@ -2028,9 +2028,6 @@ struct ZoneWarMenuView: View {
                     UserProfileView(userId: userId)
                 }
             }
-            .sheet(isPresented: $showPaywall) {
-                PresentPaywallView()
-            }
             .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue
             }

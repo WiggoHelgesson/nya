@@ -83,7 +83,7 @@ struct ShareActivityView: View {
         var list: [ShareCardTemplate] = [.stats]
         
         // Only show streak card if user has an actual streak (2+ consecutive days)
-        let streakDays = insightsLoader.insights.streakInfo.consecutiveDays
+        let streakDays = insightsLoader.insights.streakInfo.currentStreak
         if streakDays >= 2 {
             list.append(.streak)
         }
@@ -630,7 +630,7 @@ struct ShareCardView: View {
                 .font(.system(size: 20 * scale, weight: .semibold))
                 .foregroundColor(textColor)
             
-            Text("Du har tränat \(insights.streakInfo.consecutiveDays) dagar i rad!")
+            Text("Du har tränat \(insights.streakInfo.currentStreak) dagar i rad!")
                 .font(.system(size: 16 * scale))
                 .foregroundColor(textColor.opacity(0.7))
                 .multilineTextAlignment(.center)

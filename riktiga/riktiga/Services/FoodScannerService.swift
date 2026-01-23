@@ -56,6 +56,86 @@ final class FoodScannerService {
         return try await performVisionRequest(base64Image: base64Image, systemPrompt: systemPrompt, userPrompt: userPrompt)
     }
     
+    // MARK: - AI Text-Based Food Analysis (Describe Food Mode)
+    
+    func analyzeFoodFromDescription(_ description: String) async throws -> AIFoodAnalysis {
+        guard let apiKey = EnvManager.shared.value(for: "OPENAI_API_KEY"), !apiKey.isEmpty else {
+            throw FoodScannerError.missingAPIKey
+        }
+        
+        let systemPrompt = """
+        Du är en expert på nutrition och matanalys. Din uppgift är att uppskatta näringsvärden baserat på användarens beskrivning av sin måltid.
+        
+        Var realistisk med portionsstorlekar. Om användaren inte anger storlek, anta en normal portion.
+        
+        Svara ENDAST med giltig JSON:
+        {
+          "name": "Maträttens namn på svenska",
+          "calories": 450,
+          "protein": 25,
+          "carbs": 40,
+          "fat": 15,
+          "confidence": "high|medium|low",
+          "description": "Kort sammanfattning av uppskattningen"
+        }
+        
+        Confidence-nivåer:
+        - "high": Vanlig maträtt med tydlig beskrivning
+        - "medium": Ungefärlig uppskattning baserat på typiska värden
+        - "low": Osäker uppskattning, saknar detaljer
+        """
+        
+        let userPrompt = "Uppskatta näringsvärden för denna måltid: \(description)"
+        
+        return try await performTextRequest(systemPrompt: systemPrompt, userPrompt: userPrompt)
+    }
+    
+    private func performTextRequest<T: Codable>(systemPrompt: String, userPrompt: String) async throws -> T {
+        guard let apiKey = EnvManager.shared.value(for: "OPENAI_API_KEY"), !apiKey.isEmpty else {
+            throw FoodScannerError.missingAPIKey
+        }
+        
+        let payload: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": [
+                [
+                    "role": "system",
+                    "content": systemPrompt
+                ],
+                [
+                    "role": "user",
+                    "content": userPrompt
+                ]
+            ],
+            "max_tokens": 1000,
+            "response_format": ["type": "json_object"]
+        ]
+        
+        var request = URLRequest(url: baseURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        request.timeoutInterval = 30
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw FoodScannerError.apiError
+        }
+        
+        let decodedResponse = try jsonDecoder.decode(ChatResponsePayload.self, from: data)
+        guard let content = decodedResponse.choices.first?.message.content else {
+            throw FoodScannerError.emptyResponse
+        }
+        
+        guard let jsonData = content.data(using: .utf8) else {
+            throw FoodScannerError.parsingFailed
+        }
+        
+        return try jsonDecoder.decode(T.self, from: jsonData)
+    }
+    
     // MARK: - Food Label Analysis (Food Label Mode)
     
     struct FoodLabelAnalysis: Codable {

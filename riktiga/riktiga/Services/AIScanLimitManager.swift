@@ -2,14 +2,14 @@ import Foundation
 import Combine
 
 // MARK: - AI Scan Limit Manager (User-Specific)
+// Non-Pro users get 3 FREE AI scans TOTAL (not per week)
 class AIScanLimitManager: ObservableObject {
     static let shared = AIScanLimitManager()
     
-    private let freeScansPerWeek = 3
-    private let baseKey = "ai_scan_usage"
+    private let freeScansTotal = 3
+    private let baseKey = "ai_scan_usage_total"
     
-    @Published var scansUsedThisWeek: Int = 0
-    @Published var weekStartDate: Date = Date()
+    @Published var scansUsedTotal: Int = 0
     
     private var currentUserId: String?
     
@@ -38,97 +38,77 @@ class AIScanLimitManager: ObservableObject {
     
     // MARK: - Check if user can scan for free
     var canScanForFree: Bool {
-        return scansUsedThisWeek < freeScansPerWeek
+        return scansUsedTotal < freeScansTotal
     }
     
     var remainingFreeScans: Int {
-        return max(0, freeScansPerWeek - scansUsedThisWeek)
+        return max(0, freeScansTotal - scansUsedTotal)
+    }
+    
+    // For backwards compatibility with existing code
+    var scansUsedThisWeek: Int {
+        return scansUsedTotal
     }
     
     // MARK: - Use a scan
     func useScan() {
-        checkAndResetWeekIfNeeded()
-        scansUsedThisWeek += 1
+        scansUsedTotal += 1
         saveUsage()
-        print("📸 AI Scan used: \(scansUsedThisWeek)/\(freeScansPerWeek) for user: \(currentUserId ?? "unknown")")
+        print("📸 AI Scan used: \(scansUsedTotal)/\(freeScansTotal) TOTAL for user: \(currentUserId ?? "unknown")")
     }
     
     // MARK: - Check if should show limit (4th scan)
     func shouldShowLimitOnNextScan() -> Bool {
-        checkAndResetWeekIfNeeded()
-        return scansUsedThisWeek >= freeScansPerWeek
+        return scansUsedTotal >= freeScansTotal
     }
     
     // MARK: - Check if at the limit (for graying out button)
     func isAtLimit() -> Bool {
-        checkAndResetWeekIfNeeded()
-        return scansUsedThisWeek >= freeScansPerWeek
+        return scansUsedTotal >= freeScansTotal
     }
     
     // MARK: - Private methods
     private func loadUsage() {
         guard currentUserId != nil else {
             // No user logged in, start fresh
-            scansUsedThisWeek = 0
-            weekStartDate = Date()
+            scansUsedTotal = 0
             print("📸 AIScanLimit: No user, starting with 0 scans used")
             return
         }
         
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let usage = try? JSONDecoder().decode(ScanUsage.self, from: data) else {
-            // No saved data for this user, start fresh with 0 scans used
-            print("📸 AIScanLimit: New user, starting with 0 scans used (3 free)")
-            resetWeek()
+        // Try to load total usage (new format)
+        if let totalScans = UserDefaults.standard.object(forKey: userDefaultsKey) as? Int {
+            scansUsedTotal = totalScans
+            print("📸 AIScanLimit: Loaded \(scansUsedTotal)/\(freeScansTotal) TOTAL scans for user")
             return
         }
         
-        self.weekStartDate = usage.weekStartDate
-        self.scansUsedThisWeek = usage.scansUsed
+        // Try to migrate from old weekly format
+        let oldKey = "ai_scan_usage_\(currentUserId ?? "")"
+        if let data = UserDefaults.standard.data(forKey: oldKey),
+           let oldUsage = try? JSONDecoder().decode(OldScanUsage.self, from: data) {
+            // Migrate: keep the scans they've already used
+            scansUsedTotal = oldUsage.scansUsed
+            saveUsage()
+            // Remove old key
+            UserDefaults.standard.removeObject(forKey: oldKey)
+            print("📸 AIScanLimit: Migrated from weekly to total. Used: \(scansUsedTotal)/\(freeScansTotal)")
+            return
+        }
         
-        print("📸 AIScanLimit: Loaded \(scansUsedThisWeek)/\(freeScansPerWeek) scans for user")
-        
-        // Check if we need to reset for a new week
-        checkAndResetWeekIfNeeded()
+        // New user, start with 0 scans used (3 free)
+        scansUsedTotal = 0
+        print("📸 AIScanLimit: New user, starting with 0 scans used (\(freeScansTotal) free TOTAL)")
     }
     
     private func saveUsage() {
         guard currentUserId != nil else { return }
-        
-        let usage = ScanUsage(weekStartDate: weekStartDate, scansUsed: scansUsedThisWeek)
-        if let data = try? JSONEncoder().encode(usage) {
-            UserDefaults.standard.set(data, forKey: userDefaultsKey)
-        }
-    }
-    
-    private func checkAndResetWeekIfNeeded() {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        // Check if current week start is different from saved week start
-        guard let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start,
-              let savedWeekStart = calendar.dateInterval(of: .weekOfYear, for: weekStartDate)?.start else {
-            return
-        }
-        
-        // If we're in a new week, reset the counter
-        if currentWeekStart > savedWeekStart {
-            print("📅 New week detected - resetting AI scan count for user: \(currentUserId ?? "unknown")")
-            resetWeek()
-        }
-    }
-    
-    private func resetWeek() {
-        let calendar = Calendar.current
-        weekStartDate = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
-        scansUsedThisWeek = 0
-        saveUsage()
+        UserDefaults.standard.set(scansUsedTotal, forKey: userDefaultsKey)
     }
 }
 
-// MARK: - Scan Usage Model
-private struct ScanUsage: Codable {
+// MARK: - Old Scan Usage Model (for migration)
+private struct OldScanUsage: Codable {
     let weekStartDate: Date
     let scansUsed: Int
 }
-

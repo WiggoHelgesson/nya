@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 enum GymSessionInputField: Hashable {
     case kg(exerciseId: String, setIndex: Int)
@@ -24,6 +25,7 @@ struct GymSessionView: View {
     @State private var isResumingSession = false
     @State private var showNoExercisesAlert = false
     @State private var showMissingInfoAlert = false
+    @State private var showFinishConfirmation = false
     
     @ViewBuilder
     private var savedWorkoutsSection: some View {
@@ -107,20 +109,50 @@ struct GymSessionView: View {
                 .font(.headline)
                 .foregroundColor(.secondary)
             
-            Button(action: {
-                showExercisePicker = true
-            }) {
-                HStack {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Lägg till övning")
-                        .font(.system(size: 16, weight: .semibold))
+            VStack(spacing: 12) {
+                // Start running session button - only shown when no exercises
+                Button(action: {
+                    // Switch to running session
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("SwitchActivity"),
+                        object: nil,
+                        userInfo: ["activity": ActivityType.running.rawValue]
+                    )
+                }) {
+                    HStack {
+                        Image(systemName: "figure.run")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Starta löppass")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                    )
                 }
-                .foregroundColor(Color(.systemBackground))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.primary)
-                .cornerRadius(12)
+                
+                Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    showExercisePicker = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Lägg till övning")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(Color(.systemBackground))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.primary)
+                    .cornerRadius(12)
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -202,6 +234,8 @@ struct GymSessionView: View {
                     
                     // Add Exercise Button
                     Button(action: {
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
                         showExercisePicker = true
                     }) {
                         HStack {
@@ -334,7 +368,21 @@ struct GymSessionView: View {
                             }
                         } else {
                             Button {
-                                saveWorkoutTapped()
+                                // Check if there are exercises with valid sets before showing confirmation
+                                if viewModel.exercises.isEmpty {
+                                    showNoExercisesAlert = true
+                                } else {
+                                    let hasValidData = viewModel.exercises.allSatisfy { exercise in
+                                        exercise.sets.contains { set in
+                                            set.kg > 0 && set.reps > 0
+                                        }
+                                    }
+                                    if hasValidData {
+                                        showFinishConfirmation = true
+                                    } else {
+                                        showMissingInfoAlert = true
+                                    }
+                                }
                             } label: {
                                 Text("Avsluta")
                                     .font(.system(size: 16, weight: .semibold))
@@ -373,6 +421,12 @@ struct GymSessionView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text("Alla övningar behöver ha minst ett set med kg och reps ifyllt.")
+            }
+            .alert("Är du klar?", isPresented: $showFinishConfirmation) {
+                Button("Nej", role: .cancel) { }
+                Button("Jag är klar") {
+                    saveWorkoutTapped()
+                }
             }
             .sheet(isPresented: $showExercisePicker) {
                 ExercisePickerView { exercise in
@@ -479,7 +533,7 @@ struct GymSessionView: View {
         viewModel.completeSession(duration: duration, isPro: isPro)
         
         // Update streak
-        StreakManager.shared.registerWorkoutCompletion()
+        StreakManager.shared.registerActivityCompletion()
         
         // Go directly to session complete
         showCompleteSession = true
@@ -493,7 +547,7 @@ struct GymSessionView: View {
         viewModel.completeSession(duration: duration, isPro: isPro)
         
         // Update streak
-        StreakManager.shared.registerWorkoutCompletion()
+        StreakManager.shared.registerActivityCompletion()
         
         // Go directly to session complete
         showCompleteSession = true
@@ -1032,12 +1086,23 @@ struct ExercisePickerView: View {
     @State private var targetList: [String] = []
     @State private var hasLoadedExercises = false
     @State private var recentlyUsedExercises: [ExerciseDBExercise] = []
+    @State private var showOnlyFavorites = false
+    @ObservedObject private var favoriteStore = FavoriteExerciseStore.shared
     
     var filteredExercises: [ExerciseDBExercise] {
-        if searchText.isEmpty {
-            return exercises
+        var result = exercises
+        
+        // Filter by favorites if enabled
+        if showOnlyFavorites {
+            result = result.filter { favoriteStore.isFavorite($0.id) }
         }
-        return exercises.filter { $0.displayName.localizedCaseInsensitiveContains(searchText) }
+        
+        // Filter by search text
+        if !searchText.isEmpty {
+            result = result.filter { $0.displayName.localizedCaseInsensitiveContains(searchText) }
+        }
+        
+        return result
     }
     
     var equipmentButtonText: String {
@@ -1071,39 +1136,66 @@ struct ExercisePickerView: View {
                 .background(Color(.systemBackground))
                 
                 // Filter buttons
-                HStack(spacing: 12) {
-                    Button(action: {
-                        showEquipmentSheet = true
-                    }) {
-                        HStack {
-                            Text(equipmentButtonText)
-                                .font(.system(size: 14, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12))
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            showEquipmentSheet = true
+                        }) {
+                            HStack {
+                                Text(equipmentButtonText)
+                                    .font(.system(size: 14, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 8)
+                            .background(selectedEquipment != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
+                            .cornerRadius(10)
                         }
-                        .foregroundColor(.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 8)
-                        .background(selectedEquipment != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
-                        .cornerRadius(10)
+                        
+                        Button(action: {
+                            showMuscleSheet = true
+                        }) {
+                            HStack {
+                                Text(muscleButtonText)
+                                    .font(.system(size: 14, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 8)
+                            .background(selectedTarget != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
+                            .cornerRadius(10)
+                        }
                     }
                     
+                    // Favorites filter button
                     Button(action: {
-                        showMuscleSheet = true
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showOnlyFavorites.toggle()
+                        }
                     }) {
                         HStack {
-                            Text(muscleButtonText)
+                            Image(systemName: showOnlyFavorites ? "star.fill" : "star")
+                                .font(.system(size: 14))
+                                .foregroundColor(showOnlyFavorites ? .yellow : .primary)
+                            Text("Favoritmarkerade övningar")
                                 .font(.system(size: 14, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12))
                         }
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 8)
-                        .background(selectedTarget != nil ? Color.primary.opacity(0.1) : Color(.systemGray6))
+                        .background(showOnlyFavorites ? Color.yellow.opacity(0.15) : Color(.systemGray6))
                         .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(showOnlyFavorites ? Color.yellow : Color.clear, lineWidth: 1)
+                        )
                     }
                 }
                 .padding(.horizontal, 16)
@@ -1161,36 +1253,54 @@ struct ExercisePickerView: View {
                                         .padding(.top, 16)
                                     
                                     ForEach(recentlyUsedExercises) { exercise in
-                                        Button(action: {
-                                            let template = ExerciseTemplate(
-                                                id: exercise.id,
-                                                name: exercise.displayName,
-                                                category: exercise.swedishBodyPart
-                                            )
-                                            RecentExerciseStore.shared.record(exerciseId: exercise.id)
-                                            onSelect(template)
-                                            dismiss()
-                                        }) {
-                                            HStack(spacing: 12) {
-                                                ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
-                                                
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    Text(exercise.displayName)
-                                                        .font(.system(size: 16, weight: .medium))
-                                                        .foregroundColor(.primary)
-                                                    Text(exercise.swedishBodyPart)
-                                                        .font(.system(size: 13))
-                                                        .foregroundColor(.secondary)
+                                        HStack(spacing: 0) {
+                                            Button(action: {
+                                                let template = ExerciseTemplate(
+                                                    id: exercise.id,
+                                                    name: exercise.displayName,
+                                                    category: exercise.swedishBodyPart
+                                                )
+                                                RecentExerciseStore.shared.record(exerciseId: exercise.id)
+                                                onSelect(template)
+                                                dismiss()
+                                            }) {
+                                                HStack(spacing: 12) {
+                                                    ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
+                                                    
+                                                    VStack(alignment: .leading, spacing: 4) {
+                                                        Text(exercise.displayName)
+                                                            .font(.system(size: 16, weight: .medium))
+                                                            .foregroundColor(.primary)
+                                                        Text(exercise.swedishBodyPart)
+                                                            .font(.system(size: 13))
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                    Spacer()
+                                                    Image(systemName: "clock.arrow.circlepath")
+                                                        .foregroundColor(.orange)
+                                                        .font(.system(size: 18))
                                                 }
-                                                Spacer()
-                                                Image(systemName: "clock.arrow.circlepath")
-                                                    .foregroundColor(.orange)
-                                                    .font(.system(size: 18))
+                                                .padding(.vertical, 12)
+                                                .padding(.leading, 16)
                                             }
-                                            .padding(.vertical, 12)
-                                            .padding(.horizontal, 16)
-                                            .background(Color(.systemGray6).opacity(0.5))
+                                            
+                                            // Favorite button
+                                            Button(action: {
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                                    favoriteStore.toggle(exercise.id)
+                                                }
+                                                let haptic = UIImpactFeedbackGenerator(style: .light)
+                                                haptic.impactOccurred()
+                                            }) {
+                                                Image(systemName: favoriteStore.isFavorite(exercise.id) ? "star.fill" : "star")
+                                                    .font(.system(size: 20))
+                                                    .foregroundColor(favoriteStore.isFavorite(exercise.id) ? .yellow : .gray.opacity(0.5))
+                                                    .frame(width: 44, height: 44)
+                                                    .scaleEffect(favoriteStore.isFavorite(exercise.id) ? 1.1 : 1.0)
+                                            }
+                                            .padding(.trailing, 8)
                                         }
+                                        .background(Color(.systemGray6).opacity(0.5))
                                     }
                                     
                                     Divider()
@@ -1204,41 +1314,56 @@ struct ExercisePickerView: View {
                             }
                             
                             ForEach(filteredExercises) { exercise in
-                                Button(action: {
-                                    let template = ExerciseTemplate(
-                                        id: exercise.id,
-                                        name: exercise.displayName,
-                                        category: exercise.swedishBodyPart
-                                    )
-                                    RecentExerciseStore.shared.record(exerciseId: exercise.id)
-                                    onSelect(template)
-                                    dismiss()
-                                }) {
-                                    HStack(spacing: 12) {
-                                        // Exercise GIF from RapidAPI
-                                        ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(exercise.displayName)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.primary)
-                                                .multilineTextAlignment(.leading)
+                                HStack(spacing: 0) {
+                                    Button(action: {
+                                        let template = ExerciseTemplate(
+                                            id: exercise.id,
+                                            name: exercise.displayName,
+                                            category: exercise.swedishBodyPart
+                                        )
+                                        RecentExerciseStore.shared.record(exerciseId: exercise.id)
+                                        onSelect(template)
+                                        dismiss()
+                                    }) {
+                                        HStack(spacing: 12) {
+                                            // Exercise GIF from RapidAPI
+                                            ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
                                             
-                                            Text(exercise.swedishBodyPart)
-                                                .font(.system(size: 14))
-                                                .foregroundColor(.secondary)
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(exercise.displayName)
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundColor(.primary)
+                                                    .multilineTextAlignment(.leading)
+                                                
+                                                Text(exercise.swedishBodyPart)
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
                                         }
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "arrow.up.right")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(.primary)
+                                        .padding(.leading, 16)
+                                        .padding(.vertical, 12)
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .background(Color(.systemBackground))
+                                    
+                                    // Favorite button
+                                    Button(action: {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                            favoriteStore.toggle(exercise.id)
+                                        }
+                                        // Haptic feedback
+                                        let haptic = UIImpactFeedbackGenerator(style: .light)
+                                        haptic.impactOccurred()
+                                    }) {
+                                        Image(systemName: favoriteStore.isFavorite(exercise.id) ? "star.fill" : "star")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(favoriteStore.isFavorite(exercise.id) ? .yellow : .gray.opacity(0.5))
+                                            .frame(width: 44, height: 44)
+                                            .scaleEffect(favoriteStore.isFavorite(exercise.id) ? 1.1 : 1.0)
+                                    }
+                                    .padding(.trailing, 8)
                                 }
+                                .background(Color(.systemBackground))
                                 
                                 Divider()
                                     .padding(.leading, 88)
@@ -1679,6 +1804,52 @@ final class RecentExerciseStore {
     
     private func save(_ ids: [String]) {
         defaults.set(ids, forKey: storageKey)
+    }
+}
+
+// MARK: - Favorite Exercise Store
+final class FavoriteExerciseStore: ObservableObject {
+    static let shared = FavoriteExerciseStore()
+    private let defaults = UserDefaults.standard
+    private let storageKey = "favorite_exercises"
+    
+    @Published var favoriteIds: Set<String> = []
+    
+    init() {
+        loadFavorites()
+    }
+    
+    func isFavorite(_ exerciseId: String) -> Bool {
+        favoriteIds.contains(exerciseId)
+    }
+    
+    func toggle(_ exerciseId: String) {
+        if favoriteIds.contains(exerciseId) {
+            favoriteIds.remove(exerciseId)
+        } else {
+            favoriteIds.insert(exerciseId)
+        }
+        saveFavorites()
+    }
+    
+    func add(_ exerciseId: String) {
+        favoriteIds.insert(exerciseId)
+        saveFavorites()
+    }
+    
+    func remove(_ exerciseId: String) {
+        favoriteIds.remove(exerciseId)
+        saveFavorites()
+    }
+    
+    private func loadFavorites() {
+        if let ids = defaults.stringArray(forKey: storageKey) {
+            favoriteIds = Set(ids)
+        }
+    }
+    
+    private func saveFavorites() {
+        defaults.set(Array(favoriteIds), forKey: storageKey)
     }
 }
 

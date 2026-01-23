@@ -55,7 +55,7 @@ struct StartSessionView: View {
                 if activity == .walking {
                     GymSessionView()
                 } else {
-                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession)
+                    SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession, autoStart: forceNewSession)
                 }
             } else {
                 // Empty view as fallback
@@ -166,7 +166,7 @@ struct ActivityCarouselSelectionView: View {
     @Binding var currentSelection: ActivityType
     let onStart: () -> Void
     
-    private let activities: [ActivityType] = [.walking, .running, .golf, .skiing]
+    private let activities: [ActivityType] = [.walking, .running, .hiking]
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
     private let maxHeight = UIScreen.main.bounds.height * 0.55
     
@@ -500,7 +500,8 @@ struct StreakCelebrationView: View {
     private func weekdayCircle(index: Int) -> some View {
         let symbols = Calendar.current.shortWeekdaySymbols
         let symbol = symbols[index]
-        let isCompleted = streakInfo.completedDaysThisWeek > index
+        // Check if this weekday index is in the completed days array (index+1 because Calendar weekdays are 1-based)
+        let isCompleted = streakInfo.completedDaysThisWeek.contains(index + 1)
         
         return VStack(spacing: 8) {
             ZStack {
@@ -634,6 +635,7 @@ struct SessionMapView: View {
     @Binding var isPresented: Bool
     let resumeSession: Bool
     @Binding var forceNewSession: Bool
+    var autoStart: Bool = false
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var isPremium = RevenueCatManager.shared.isProMember
     @ObservedObject private var sessionManager = SessionManager.shared
@@ -737,6 +739,20 @@ struct SessionMapView: View {
                     if !resumeSession {
                         territoryStore.resetSession()
                     }
+                    
+                    // Auto-start if coming from activity switch (e.g., from gym session)
+                    if autoStart && !resumeSession && !isRunning {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            Task { @MainActor in
+                                sessionManager.beginSession()
+                                locationManager.startNewTracking(activityType: activity.rawValue)
+                                startTimer()
+                                isRunning = true
+                                print("🏃 Auto-started \(activity.rawValue) session")
+                            }
+                        }
+                    }
+                    
                     if resumeSession, let session = sessionManager.activeSession {
                         Task { @MainActor in
                             print("🔄 [RESUME] Starting session restoration...")
@@ -1720,7 +1736,7 @@ struct SessionMapView: View {
         }
         
         // Update streak
-        StreakManager.shared.registerWorkoutCompletion()
+        StreakManager.shared.registerActivityCompletion()
         
         // Capture territory - only if not skipped
         if !skipTerritoryCapture {

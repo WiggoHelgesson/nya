@@ -798,6 +798,42 @@ class SocialService {
         }
     }
     
+    /// Get mutual friends count between the current user and a list of other users
+    /// Returns a dictionary mapping user IDs to their mutual friend count
+    func getMutualFriendsCount(currentUserId: String, otherUserIds: [String]) async throws -> [String: Int] {
+        guard !otherUserIds.isEmpty else { return [:] }
+        
+        do {
+            // Get who the current user follows
+            let myFollowing = try await getFollowing(userId: currentUserId)
+            let myFollowingSet = Set(myFollowing)
+            
+            if myFollowingSet.isEmpty {
+                // If current user doesn't follow anyone, no mutual friends possible
+                return [:]
+            }
+            
+            var mutualCounts: [String: Int] = [:]
+            
+            // For each other user, get who they follow and count overlap
+            for otherUserId in otherUserIds {
+                let theirFollowing = try await getFollowing(userId: otherUserId)
+                let theirFollowingSet = Set(theirFollowing)
+                
+                // Mutual friends = intersection of who we both follow
+                let mutualCount = myFollowingSet.intersection(theirFollowingSet).count
+                if mutualCount > 0 {
+                    mutualCounts[otherUserId] = mutualCount
+                }
+            }
+            
+            return mutualCounts
+        } catch {
+            print("❌ Error getting mutual friends count: \(error)")
+            return [:]
+        }
+    }
+    
     func searchUsers(query: String, currentUserId: String) async throws -> [UserSearchResult] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
@@ -866,17 +902,45 @@ class SocialService {
         }
     }
     
+    // MARK: - Featured Users Helper
+    
+    /// Get user IDs for featured usernames (shown when user doesn't follow anyone)
+    private func getFeaturedUserIds() async throws -> [String] {
+        struct ProfileUsername: Decodable {
+            let id: String
+        }
+        
+        do {
+            let profiles: [ProfileUsername] = try await supabase
+                .from("profiles")
+                .select("id")
+                .in("username", values: Self.featuredUsernames)
+                .execute()
+                .value
+            
+            return profiles.map { $0.id }
+        } catch {
+            print("⚠️ Could not fetch featured user IDs: \(error)")
+            return []
+        }
+    }
+    
     // MARK: - Social Feed Functions
+    
+    // Featured usernames to show when user doesn't follow anyone
+    private static let featuredUsernames = ["Wiggolito", "Linus.Lanneborn", "Podden"]
     
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
             // Always include the provided userId (avoid auth.user() cancellation problems)
             var userIdsToFetch: [String] = [userId]
+            var followingCount = 0
             
             // Try to add following users; if request is cancelled, just continue with current user
             do {
                 let following = try await getFollowing(userId: userId)
+                followingCount = following.count
                 userIdsToFetch.append(contentsOf: following)
             } catch let urlError as URLError where urlError.code == .cancelled {
                 if !hasLoggedFollowingCancelled {
@@ -885,6 +949,13 @@ class SocialService {
                 }
             } catch {
                 print("⚠️ Could not fetch following list: \(error) - proceeding with current user's posts only")
+            }
+            
+            // If user doesn't follow anyone, show posts from featured users instead
+            if followingCount == 0 {
+                let featuredUserIds = try await getFeaturedUserIds()
+                userIdsToFetch.append(contentsOf: featuredUserIds)
+                print("📱 User follows no one - showing featured users: \(Self.featuredUsernames)")
             }
             
             // Get posts from followed users AND current user with social data
@@ -905,6 +976,9 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    pb_exercise_name,
+                    pb_value,
+                    streak_count,
                     source,
                     device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url),
@@ -980,6 +1054,9 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    pb_exercise_name,
+                    pb_value,
+                    streak_count,
                     source,
                     device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
@@ -1025,6 +1102,9 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    pb_exercise_name,
+                    pb_value,
+                    streak_count,
                     source,
                     device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
@@ -1233,6 +1313,9 @@ class SocialService {
                     created_at,
                     split_data,
                     exercises_data,
+                    pb_exercise_name,
+                    pb_value,
+                    streak_count,
                     source,
                     device_name,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),

@@ -74,6 +74,7 @@ struct WaterLogEntry: Identifiable, Codable {
     }
 }
 
+// MARK: - Test Food Log Insert (for debugging)
 // MARK: - Daily Summary Model
 struct DailySummary {
     var date: Date
@@ -127,6 +128,9 @@ struct HomeView: View {
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
     
+    // Cached image for story popup (prevents crash when image is cleared during animation)
+    @State private var cachedStoryImage: UIImage?
+    
     // Data transition animation
     @State private var isTransitioning = false
     @State private var displayedCaloriesLeft: Int = 0
@@ -149,7 +153,11 @@ struct HomeView: View {
     // Nutrition onboarding for existing users
     @State private var showNutritionOnboarding = false
     
-    // TEST: Story posting test
+    // Achievement manager
+    @ObservedObject private var achievementManager = AchievementManager.shared
+    
+    // Streak count
+    @State private var streakCount: Int = 0
     
     // Check if nutrition onboarding has been completed (user-specific)
     private var hasCompletedNutritionOnboarding: Bool {
@@ -165,28 +173,46 @@ struct HomeView: View {
                 .zIndex(1)
             
             ZStack {
-                // Background gradient
+                // Background gradient - light blue
                 LinearGradient(
                     colors: [
-                        Color(red: 0.92, green: 0.92, blue: 0.93),
-                        Color(red: 0.96, green: 0.96, blue: 0.97),
-                        Color.white
+                        Color(red: 0.95, green: 0.97, blue: 1.0),
+                        Color(red: 0.98, green: 0.95, blue: 0.97),
+                        Color(.systemGroupedBackground)
                     ],
                     startPoint: .top,
-                    endPoint: .center
+                    endPoint: .bottom
                 )
                 .ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // MARK: - App Logo
+                        // MARK: - App Logo & Streak
                         HStack {
                             Image("23")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 44, height: 44)
                                 .cornerRadius(10)
+                            
                             Spacer()
+                            
+                            // Streak badge
+                            HStack(spacing: 4) {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.orange)
+                                Text("\(streakCount)")
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                            )
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -237,6 +263,7 @@ struct HomeView: View {
         .onAppear {
             animateContent()
             loadNutritionGoals()
+            loadStreakCount()
             viewModel.setUserId(authViewModel.currentUser?.id)
             viewModel.loadData()
             updateDisplayedValues(animated: false)
@@ -286,6 +313,9 @@ struct HomeView: View {
             loadNutritionGoals()
             updateDisplayedValues(animated: true)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .streakUpdated)) { _ in
+            loadStreakCount()
+        }
         .fullScreenCover(isPresented: $showFoodScanner) {
             FoodScannerView(initialMode: .ai)
         }
@@ -296,12 +326,16 @@ struct HomeView: View {
             ExistingUserNutritionOnboardingView()
                 .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $analyzingManager.showPaywallForLimit) {
-            PresentPaywallView()
+        .onChange(of: analyzingManager.showPaywallForLimit) { _, newValue in
+            if newValue {
+                SuperwallService.shared.showPaywall()
+                analyzingManager.showPaywallForLimit = false
+            }
         }
         .overlay {
             // Story posting popup after food is saved
-            if analyzingManager.showStoryPopup, let image = analyzingManager.capturedImage {
+            // Use cachedStoryImage to prevent crash when analyzingManager.capturedImage is cleared
+            if analyzingManager.showStoryPopup, let image = cachedStoryImage {
                 PostToStoryPopup(
                     isPresented: $analyzingManager.showStoryPopup,
                     image: image,
@@ -310,13 +344,43 @@ struct HomeView: View {
                     },
                     onCancel: {
                         analyzingManager.dismissStoryPopup()
+                        // Clear cached image after dismissal
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            cachedStoryImage = nil
+                        }
                     }
                 )
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.2), value: analyzingManager.showStoryPopup)
             }
         }
-        .overlay {
+        .onChange(of: analyzingManager.showStoryPopup) { _, newValue in
+            // Cache the image when popup is about to show
+            if newValue, let image = analyzingManager.capturedImage {
+                cachedStoryImage = image
+            } else if !newValue {
+                // Clear cached image after a delay when popup is dismissed
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    cachedStoryImage = nil
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $achievementManager.showAchievementPopup) {
+            if let achievement = achievementManager.currentlyShowingAchievement {
+                AchievementPopupView(
+                    achievement: achievement,
+                    onDismiss: {
+                        achievementManager.dismissAchievement()
+                    }
+                )
+                .background(Color.clear)
+            }
+        }
+        .onAppear {
+            // Set user for achievement manager
+            if let userId = authViewModel.currentUser?.id {
+                achievementManager.setUser(userId)
+            }
         }
     }
     
@@ -346,24 +410,8 @@ struct HomeView: View {
                             .foregroundColor(dayInfo.isSelected ? .black : (dayInfo.isToday ? Color.black.opacity(0.7) : Color.gray.opacity(0.6)))
                         
                         ZStack {
-                            if dayInfo.isSelected {
-                                // Selected state: solid circle with number
-                                Circle()
-                                    .stroke(Color.black, lineWidth: 2.5)
-                                    .frame(width: 40, height: 40)
-                            } else if dayInfo.isToday {
-                                // Today but not selected: dotted border like others but slightly more visible
-                                Circle()
-                                    .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 4]))
-                                    .foregroundColor(Color.gray.opacity(0.4))
-                                    .frame(width: 40, height: 40)
-                            } else {
-                                // Default: dotted border
-                                Circle()
-                                    .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 4]))
-                                    .foregroundColor(Color.gray.opacity(0.25))
-                                    .frame(width: 40, height: 40)
-                            }
+                            // Ring based on calorie status
+                            dayRing(for: dayInfo)
                             
                             Text("\(dayInfo.dayNumber)")
                                 .font(.system(size: 15, weight: dayInfo.isSelected || dayInfo.isToday ? .bold : .medium))
@@ -384,6 +432,53 @@ struct HomeView: View {
             }
         }
         .padding(.horizontal, 8)
+    }
+    
+    /// Returns the appropriate ring view based on calorie status
+    @ViewBuilder
+    private func dayRing(for dayInfo: CalorieTrackerViewModel.DayInfo) -> some View {
+        let ringColor = ringColor(for: dayInfo.calorieStatus)
+        
+        if dayInfo.isSelected {
+            // Selected state: solid ring (color based on status, or black if no meals)
+            Circle()
+                .stroke(ringColor, lineWidth: 2.5)
+                .frame(width: 40, height: 40)
+        } else {
+            switch dayInfo.calorieStatus {
+            case .onTarget:
+                // Green solid ring
+                Circle()
+                    .stroke(Color.green, lineWidth: 2)
+                    .frame(width: 40, height: 40)
+            case .slightlyOver:
+                // Yellow solid ring
+                Circle()
+                    .stroke(Color.yellow, lineWidth: 2)
+                    .frame(width: 40, height: 40)
+            case .overTarget:
+                // Red solid ring
+                Circle()
+                    .stroke(Color.red, lineWidth: 2)
+                    .frame(width: 40, height: 40)
+            case .noMeals, .future:
+                // Dotted gray ring
+                Circle()
+                    .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 4]))
+                    .foregroundColor(dayInfo.isToday ? Color.gray.opacity(0.4) : Color.gray.opacity(0.25))
+                    .frame(width: 40, height: 40)
+            }
+        }
+    }
+    
+    /// Returns the color for the ring based on calorie status
+    private func ringColor(for status: CalorieTrackerViewModel.CalorieStatus) -> Color {
+        switch status {
+        case .onTarget: return .green
+        case .slightlyOver: return .yellow
+        case .overTarget: return .red
+        case .noMeals, .future: return .black
+        }
     }
     
     // MARK: - Calorie Tracker Card
@@ -499,24 +594,24 @@ struct HomeView: View {
                 animatedMacroCard(
                     value: hasCompletedNutritionOnboarding ? displayedProtein : nil,
                     name: "Protein",
-                    icon: "fish.fill",
-                    color: Color(red: 0.85, green: 0.35, blue: 0.35),
+                    emoji: "🍗",
+                    color: .black,
                     progress: Double(proteinEaten) / Double(max(proteinGoal, 1))
                 )
                 
                 animatedMacroCard(
                     value: hasCompletedNutritionOnboarding ? displayedCarbs : nil,
                     name: "Kolhydrater",
-                    icon: "leaf.fill",
-                    color: Color(red: 0.80, green: 0.55, blue: 0.18),
+                    emoji: "🌾",
+                    color: .black,
                     progress: Double(carbsEaten) / Double(max(carbsGoal, 1))
                 )
                 
                 animatedMacroCard(
                     value: hasCompletedNutritionOnboarding ? displayedFat : nil,
                     name: "Fett",
-                    icon: "drop.fill",
-                    color: Color(red: 0.30, green: 0.55, blue: 0.86),
+                    emoji: "🥑",
+                    color: .black,
                     progress: Double(fatEaten) / Double(max(fatGoal, 1))
                 )
             }
@@ -524,7 +619,7 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
     
-    private func animatedMacroCard(value: Int?, name: String, icon: String, color: Color, progress: Double) -> some View {
+    private func animatedMacroCard(value: Int?, name: String, emoji: String, color: Color, progress: Double) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             if let value = value {
                 Text("\(value)g")
@@ -568,9 +663,9 @@ struct HomeView: View {
                             .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
                     }
                     
-                    Image(systemName: icon)
-                        .font(.system(size: 18))
-                        .foregroundColor(color)
+                    Text(emoji)
+                        .font(.system(size: 22))
+                        .grayscale(1)
                 }
                 Spacer()
             }
@@ -665,6 +760,11 @@ struct HomeView: View {
         }
     }
     
+    // MARK: - Load Streak Count
+    private func loadStreakCount() {
+        streakCount = StreakManager.shared.getCurrentStreak().currentStreak
+    }
+    
     // MARK: - Load Nutrition Goals (User-Specific)
     private func loadNutritionGoals() {
         guard let userId = authViewModel.currentUser?.id else { 
@@ -682,6 +782,14 @@ struct HomeView: View {
             carbsGoal = goals.carbs > 0 ? goals.carbs : 250
             fatGoal = goals.fat > 0 ? goals.fat : 70
             viewModel.currentSummary.caloriesGoal = caloriesGoal
+            
+            // Sync goals to widgets
+            WidgetSyncService.shared.syncNutritionGoals(
+                caloriesGoal: caloriesGoal,
+                proteinGoal: proteinGoal,
+                carbsGoal: carbsGoal,
+                fatGoal: fatGoal
+            )
             return
         }
         
@@ -721,6 +829,14 @@ struct HomeView: View {
                             fatGoal = fetchedFat > 0 ? fetchedFat : 70
                             viewModel.currentSummary.caloriesGoal = caloriesGoal
                             updateDisplayedValues(animated: true)
+                            
+                            // Sync goals to widgets
+                            WidgetSyncService.shared.syncNutritionGoals(
+                                caloriesGoal: caloriesGoal,
+                                proteinGoal: proteinGoal,
+                                carbsGoal: carbsGoal,
+                                fatGoal: fatGoal
+                            )
                         }
                     } else {
                         print("⚠️ No goals found in Supabase either")
@@ -996,6 +1112,7 @@ struct HomeView: View {
                             HStack(spacing: 3) {
                                 Text("🌾")
                                     .font(.system(size: 11))
+                                    .grayscale(1)
                                 Text("\(result.carbs)g")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.black)
@@ -1003,6 +1120,7 @@ struct HomeView: View {
                             HStack(spacing: 3) {
                                 Text("🥑")
                                     .font(.system(size: 11))
+                                    .grayscale(1)
                                 Text("\(result.fat)g")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.black)
@@ -1190,6 +1308,15 @@ class CalorieTrackerViewModel: ObservableObject {
     private let healthStore = HKHealthStore()
     private var cancellables = Set<AnyCancellable>()
     
+    // Calorie status for ring color
+    enum CalorieStatus {
+        case noMeals       // Dotted gray ring - no meals logged
+        case onTarget      // Green ring - at or below target, or up to 100 over
+        case slightlyOver  // Yellow ring - 100-200 calories over target
+        case overTarget    // Red ring - more than 200 calories over target
+        case future        // Gray dotted - future date, no data yet
+    }
+    
     struct DayInfo: Identifiable {
         let id = UUID()
         let date: Date
@@ -1198,6 +1325,7 @@ class CalorieTrackerViewModel: ObservableObject {
         var isSelected: Bool
         var isToday: Bool
         var hasActivity: Bool
+        var calorieStatus: CalorieStatus = .noMeals
     }
     
     struct WeekInfo: Identifiable {
@@ -1307,13 +1435,18 @@ class CalorieTrackerViewModel: ObservableObject {
                 if isSelected { containsSelected = true }
                 if isToday { containsToday = true }
                 
+                // Determine initial calorie status
+                let isFutureDate = date > today
+                let initialStatus: CalorieStatus = isFutureDate ? .future : .noMeals
+                
                 days.append(DayInfo(
                     date: date,
                     dayLetter: dayLetters[dayOffset],
                     dayNumber: dayNumber,
                     isSelected: isSelected,
                     isToday: isToday,
-                    hasActivity: false
+                    hasActivity: false,
+                    calorieStatus: initialStatus
                 ))
             }
             
@@ -1331,6 +1464,112 @@ class CalorieTrackerViewModel: ObservableObject {
         // Set current week index to the week containing selected date
         if let index = allWeeks.firstIndex(where: { $0.containsSelectedDate }) {
             self.currentWeekIndex = index
+        }
+        
+        // Load calorie data for all visible days
+        Task {
+            await loadCalorieStatusForWeeks()
+        }
+    }
+    
+    /// Fetch calorie data for all days in the weeks and update their status
+    private func loadCalorieStatusForWeeks() async {
+        guard let userId = userId else { return }
+        
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Get all dates from all weeks
+        var allDates: [Date] = []
+        for week in weeks {
+            for day in week.days {
+                // Only load past and today dates
+                if day.date <= today {
+                    allDates.append(day.date)
+                }
+            }
+        }
+        
+        guard !allDates.isEmpty else { return }
+        
+        // Get date range
+        guard let minDate = allDates.min(),
+              let maxDate = allDates.max() else { return }
+        
+        let startOfMinDate = calendar.startOfDay(for: minDate)
+        let endOfMaxDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: maxDate))!
+        
+        do {
+            // Fetch all food logs for the date range
+            let foodLogs: [FoodLogEntry] = try await SupabaseConfig.supabase
+                .from("food_logs")
+                .select()
+                .eq("user_id", value: userId)
+                .gte("logged_at", value: ISO8601DateFormatter().string(from: startOfMinDate))
+                .lt("logged_at", value: ISO8601DateFormatter().string(from: endOfMaxDate))
+                .execute()
+                .value
+            
+            // Group food logs by date
+            var caloriesByDate: [Date: Int] = [:]
+            var hasMealsByDate: [Date: Bool] = [:]
+            
+            for log in foodLogs {
+                let dayStart = calendar.startOfDay(for: log.loggedAt)
+                caloriesByDate[dayStart, default: 0] += log.calories
+                hasMealsByDate[dayStart] = true
+            }
+            
+            // Get the user's calorie goal
+            let calorieGoal = NutritionGoalsManager.shared.getCaloriesGoal(userId: userId)
+            
+            // Update weeks with calorie status
+            await MainActor.run {
+                var updatedWeeks = self.weeks
+                
+                for weekIndex in 0..<updatedWeeks.count {
+                    var updatedDays = updatedWeeks[weekIndex].days
+                    
+                    for dayIndex in 0..<updatedDays.count {
+                        let dayStart = calendar.startOfDay(for: updatedDays[dayIndex].date)
+                        
+                        // Skip future dates
+                        if updatedDays[dayIndex].date > today {
+                            updatedDays[dayIndex].calorieStatus = .future
+                            continue
+                        }
+                        
+                        // Check if any meals were logged
+                        guard hasMealsByDate[dayStart] == true else {
+                            updatedDays[dayIndex].calorieStatus = .noMeals
+                            continue
+                        }
+                        
+                        let totalCalories = caloriesByDate[dayStart] ?? 0
+                        let caloriesOver = totalCalories - calorieGoal
+                        
+                        // Determine status based on how much over goal
+                        if caloriesOver <= 100 {
+                            updatedDays[dayIndex].calorieStatus = .onTarget  // Green
+                        } else if caloriesOver <= 200 {
+                            updatedDays[dayIndex].calorieStatus = .slightlyOver  // Yellow
+                        } else {
+                            updatedDays[dayIndex].calorieStatus = .overTarget  // Red
+                        }
+                    }
+                    
+                    updatedWeeks[weekIndex] = WeekInfo(
+                        days: updatedDays,
+                        weekNumber: updatedWeeks[weekIndex].weekNumber,
+                        containsSelectedDate: updatedWeeks[weekIndex].containsSelectedDate,
+                        containsToday: updatedWeeks[weekIndex].containsToday
+                    )
+                }
+                
+                self.weeks = updatedWeeks
+            }
+        } catch {
+            print("❌ Error loading calorie status: \(error)")
         }
     }
     
@@ -1380,6 +1619,17 @@ class CalorieTrackerViewModel: ObservableObject {
                 let totalFat = foodLogs.reduce(0) { $0 + $1.fat }
                 let totalCaloriesBurnedFromActivities = activityLogs.reduce(0) { $0 + $1.caloriesBurned }
                 
+                // Debug: Log food logs and their images
+                print("📷 Daily summary - Food logs loaded: \(foodLogs.count)")
+                for log in foodLogs {
+                    print("   - \(log.name): imageUrl = \(log.imageUrl ?? "nil")")
+                }
+                
+                // Preload food images for faster display
+                let imageUrls = foodLogs.compactMap { $0.imageUrl }.filter { !$0.isEmpty }
+                print("📷 Found \(imageUrls.count) images to preload")
+                ImageCacheManager.shared.prefetch(urls: imageUrls)
+                
                 await MainActor.run {
                     self.currentSummary = DailySummary(
                         date: date,
@@ -1396,6 +1646,16 @@ class CalorieTrackerViewModel: ObservableObject {
                         foodLogs: foodLogs,
                         activityLogs: activityLogs
                     )
+                    
+                    // Sync nutrition data to widgets (only for today)
+                    if Calendar.current.isDateInToday(date) {
+                        WidgetSyncService.shared.syncNutritionConsumed(
+                            caloriesConsumed: totalCaloriesConsumed,
+                            proteinConsumed: totalProtein,
+                            carbsConsumed: totalCarbs,
+                            fatConsumed: totalFat
+                        )
+                    }
                 }
             } catch {
                 print("❌ Error loading daily summary: \(error)")
@@ -1438,6 +1698,10 @@ class CalorieTrackerViewModel: ObservableObject {
                 allLogs.append(contentsOf: foodLogs.map { .food($0) })
                 allLogs.append(contentsOf: activityLogs.map { .activity($0) })
                 allLogs.sort { $0.loggedAt > $1.loggedAt }
+                
+                // Preload food images for faster display
+                let imageUrls = foodLogs.compactMap { $0.imageUrl }.filter { !$0.isEmpty }
+                ImageCacheManager.shared.prefetch(urls: imageUrls)
                 
                 await MainActor.run {
                     self.recentLogs = Array(allLogs.prefix(5))
@@ -1520,34 +1784,17 @@ struct FoodLogCardView: View {
     
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Image on left side if available
-            if let imageUrl = entry.imageUrl, !imageUrl.isEmpty, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 110, height: 110)
-                            .clipped()
-                    case .failure(_):
-                        imagePlaceholder
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 110, height: 110)
-                            .background(Color.gray.opacity(0.1))
-                    @unknown default:
-                        imagePlaceholder
-                    }
-                }
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 16,
-                        bottomLeadingRadius: 16,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 0
+            // Image on left side if available - using optimized cached image
+            if let imageUrl = entry.imageUrl, !imageUrl.isEmpty {
+                OptimizedAsyncImage(url: imageUrl, width: 110, height: 110, cornerRadius: 0)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 16,
+                            bottomLeadingRadius: 16,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
                     )
-                )
             }
             
             // Content section
@@ -1572,16 +1819,16 @@ struct FoodLogCardView: View {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 16))
                         .foregroundColor(.orange)
-                    Text("\(entry.calories) calories")
+                    Text("\(entry.calories) Kalorier")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundColor(.black)
                 }
                 
                 // Macros row
                 HStack(spacing: 14) {
-                    macroItem(icon: "fish.fill", value: "\(entry.protein)g", color: Color(red: 0.85, green: 0.35, blue: 0.35))
-                    macroItem(icon: "leaf.fill", value: "\(entry.carbs)g", color: Color(red: 0.75, green: 0.55, blue: 0.25))
-                    macroItem(icon: "drop.fill", value: "\(entry.fat)g", color: Color(red: 0.35, green: 0.55, blue: 0.8))
+                    macroItem(emoji: "🍗", value: "\(entry.protein)g")
+                    macroItem(emoji: "🌾", value: "\(entry.carbs)g")
+                    macroItem(emoji: "🥑", value: "\(entry.fat)g")
                 }
             }
             .padding(.horizontal, hasImage ? 14 : 18)
@@ -1623,14 +1870,14 @@ struct FoodLogCardView: View {
             )
     }
     
-    private func macroItem(icon: String, value: String, color: Color) -> some View {
+    private func macroItem(emoji: String, value: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: icon)
+            Text(emoji)
                 .font(.system(size: 14))
-                .foregroundColor(color)
+                .grayscale(1)
             Text(value)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(color)
+                .foregroundColor(.black)
         }
     }
     
@@ -1650,7 +1897,6 @@ struct FoodLogCardView: View {
 struct FoodLogDetailView: View {
     @Environment(\.dismiss) var dismiss
     let entry: FoodLogEntry
-    @State private var quantity: Int = 1
     @State private var isSaved = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -1659,6 +1905,20 @@ struct FoodLogDetailView: View {
     @State private var isFixing = false
     @State private var fixProgress: Double = 0
     @State private var fixedResult: FixedFoodResult? = nil
+    
+    // Editable values
+    @State private var editedName: String = ""
+    @State private var editedCalories: String = ""
+    @State private var editedProtein: String = ""
+    @State private var editedCarbs: String = ""
+    @State private var editedFat: String = ""
+    @State private var isEditingName = false
+    @State private var isEditingCalories = false
+    @State private var isEditingProtein = false
+    @State private var isEditingCarbs = false
+    @State private var isEditingFat = false
+    @State private var isSaving = false
+    @State private var hasChanges = false
     
     struct FixedFoodResult {
         let name: String
@@ -1698,36 +1958,9 @@ struct FoodLogDetailView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Image section (if available)
-                    if let imageUrl = entry.imageUrl, let url = URL(string: imageUrl) {
-                        ZStack(alignment: .bottom) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(height: 320)
-                                        .clipped()
-                                case .failure(_), .empty:
-                                    Color.gray.opacity(0.1)
-                                        .frame(height: 120)
-                                @unknown default:
-                                    Color.gray.opacity(0.1)
-                                        .frame(height: 120)
-                                }
-                            }
-                            
-                            // Info card overlay
-                            infoCard
-                                .offset(y: 80)
-                        }
-                        .padding(.bottom, 80)
-                    } else {
-                        // No image - just show info card
-                        infoCard
-                            .padding(.top, 20)
-                    }
+                    // Info card (no background image)
+                    infoCard
+                        .padding(.top, 20)
                     
                     Spacer()
                     
@@ -1744,15 +1977,23 @@ struct FoodLogDetailView: View {
                     } label: {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(entry.imageUrl != nil ? .white : .black)
+                            .foregroundColor(.black)
                             .frame(width: 40, height: 40)
-                            .background(entry.imageUrl != nil ? Color.black.opacity(0.4) : Color.gray.opacity(0.15))
+                            .background(Color.gray.opacity(0.15))
                             .clipShape(Circle())
                     }
                 }
                 
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .onAppear {
+                // Initialize editable values from entry
+                editedName = entry.name
+                editedCalories = "\(entry.calories)"
+                editedProtein = "\(entry.protein)"
+                editedCarbs = "\(entry.carbs)"
+                editedFat = "\(entry.fat)"
+            }
         }
     }
     
@@ -1785,69 +2026,105 @@ struct FoodLogDetailView: View {
                 Spacer()
             }
             
-            // Title and quantity
-            HStack(alignment: .top) {
-                Text(entry.name)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.black)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                
-                Spacer()
-                
-                // Quantity selector
-                HStack(spacing: 8) {
-                    Text("\(quantity)")
-                        .font(.system(size: 16, weight: .medium))
+            // Editable Title
+            if isEditingName {
+                HStack {
+                    TextField("Namn", text: $editedName)
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.black)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .padding(12)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
                     
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
+                    Button {
+                        isEditingName = false
+                        checkForChanges()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.green)
+                    }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.white)
-                .cornerRadius(25)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 25)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
+            } else {
+                Button {
+                    isEditingName = true
+                } label: {
+                    HStack {
+                        Text(editedName)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.black)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                        
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                    }
+                }
             }
             
             // Nutrition info
             VStack(spacing: 12) {
-                // Calories card
-                HStack(spacing: 12) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.black)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Kalorier")
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                        Text("\(entry.calories * quantity)")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.black)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(14)
-                .background(Color.white)
-                .cornerRadius(14)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-                )
+                // Editable Calories card
+                editableCaloriesCard
                 
-                // Macros row
+                // Editable Macros row
                 HStack(spacing: 10) {
-                    macroCard(icon: "fish.fill", label: "Protein", value: "\(entry.protein * quantity)g", color: Color(red: 0.85, green: 0.35, blue: 0.35))
-                    macroCard(icon: "leaf.fill", label: "Kolhydrater", value: "\(entry.carbs * quantity)g", color: Color(red: 0.75, green: 0.55, blue: 0.25))
-                    macroCard(icon: "drop.fill", label: "Fett", value: "\(entry.fat * quantity)g", color: Color(red: 0.35, green: 0.55, blue: 0.8))
+                    editableMacroCard(
+                        emoji: "🍗",
+                        label: "Protein",
+                        value: $editedProtein,
+                        isEditing: $isEditingProtein,
+                        color: .black,
+                        suffix: "g"
+                    )
+                    editableMacroCard(
+                        emoji: "🌾",
+                        label: "Kolhydrater",
+                        value: $editedCarbs,
+                        isEditing: $isEditingCarbs,
+                        color: .black,
+                        suffix: "g"
+                    )
+                    editableMacroCard(
+                        emoji: "🥑",
+                        label: "Fett",
+                        value: $editedFat,
+                        isEditing: $isEditingFat,
+                        color: .black,
+                        suffix: "g"
+                    )
                 }
+            }
+            
+            // Save button if changes detected
+            if hasChanges {
+                Button {
+                    saveChanges()
+                } label: {
+                    HStack {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        Text("Spara ändringar")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.green)
+                    .cornerRadius(12)
+                }
+                .disabled(isSaving)
             }
         }
         .padding(20)
@@ -1857,29 +2134,209 @@ struct FoodLogDetailView: View {
         .padding(.horizontal, 16)
     }
     
-    private func macroCard(icon: String, label: String, value: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 22))
-                .foregroundColor(color)
-            
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
-            
-            Text(value)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
+    // MARK: - Editable Calories Card
+    private var editableCaloriesCard: some View {
+        Group {
+            if isEditingCalories {
+                HStack(spacing: 12) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.black)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Kalorier")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                        TextField("0", text: $editedCalories)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.black)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(PlainTextFieldStyle())
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        isEditingCalories = false
+                        checkForChanges()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.green)
+                    }
+                }
+                .padding(14)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(14)
+            } else {
+                Button {
+                    isEditingCalories = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.black)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Kalorier")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                            HStack(spacing: 4) {
+                                Text(editedCalories)
+                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundColor(.black)
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(Color.white)
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+                    )
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(Color.white)
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-        )
     }
+    
+    // MARK: - Editable Macro Card
+    private func editableMacroCard(emoji: String, label: String, value: Binding<String>, isEditing: Binding<Bool>, color: Color, suffix: String) -> some View {
+        Group {
+            if isEditing.wrappedValue {
+                VStack(spacing: 6) {
+                    Text(emoji)
+                        .font(.system(size: 22))
+                        .grayscale(1)
+                    
+                    Text(label)
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                    
+                    HStack(spacing: 2) {
+                        TextField("0", text: value)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.black)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(PlainTextFieldStyle())
+                            .multilineTextAlignment(.center)
+                            .frame(width: 40)
+                        Text(suffix)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Button {
+                        isEditing.wrappedValue = false
+                        checkForChanges()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(14)
+            } else {
+                Button {
+                    isEditing.wrappedValue = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Text(emoji)
+                            .font(.system(size: 22))
+                            .grayscale(1)
+                        
+                        Text(label)
+                            .font(.system(size: 11))
+                            .foregroundColor(.gray)
+                        
+                        HStack(spacing: 2) {
+                            Text(value.wrappedValue)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                            Text(suffix)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.white)
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.gray.opacity(0.12), lineWidth: 1)
+                    )
+                }
+            }
+        }
+    }
+    
+    // MARK: - Check for Changes
+    private func checkForChanges() {
+        let nameChanged = editedName != entry.name
+        let caloriesChanged = Int(editedCalories) != entry.calories
+        let proteinChanged = Int(editedProtein) != entry.protein
+        let carbsChanged = Int(editedCarbs) != entry.carbs
+        let fatChanged = Int(editedFat) != entry.fat
+        
+        withAnimation {
+            hasChanges = nameChanged || caloriesChanged || proteinChanged || carbsChanged || fatChanged
+        }
+    }
+    
+    // MARK: - Save Changes
+    private func saveChanges() {
+        isSaving = true
+        
+        Task {
+            do {
+                let updateData = FoodLogUpdate(
+                    name: editedName,
+                    calories: Int(editedCalories) ?? entry.calories,
+                    protein: Int(editedProtein) ?? entry.protein,
+                    carbs: Int(editedCarbs) ?? entry.carbs,
+                    fat: Int(editedFat) ?? entry.fat
+                )
+                
+                try await SupabaseConfig.supabase
+                    .from("food_logs")
+                    .update(updateData)
+                    .eq("id", value: entry.id)
+                    .execute()
+                
+                print("✅ Saved manual edits to food log")
+                
+                await MainActor.run {
+                    // Haptic feedback
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                    
+                    isSaving = false
+                    hasChanges = false
+                    
+                    // Notify HomeView to refresh
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                }
+            } catch {
+                print("❌ Error saving edits: \(error)")
+                await MainActor.run {
+                    isSaving = false
+                }
+            }
+        }
+    }
+    
     
     
     // MARK: - Bottom Button
@@ -2692,7 +3149,11 @@ struct AddOptionSquare: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            action()
+        }) {
             VStack(spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 26, weight: .medium))

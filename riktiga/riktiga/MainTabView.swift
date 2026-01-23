@@ -74,6 +74,7 @@ struct MainTabView: View {
     @State private var initialScannerMode: FoodScanMode = .ai
     @State private var showAIScanPaywall = false
     @State private var showManualEntry = false
+    @State private var showProWelcome = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -115,12 +116,20 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $showFoodScanner) {
             FoodScannerView(initialMode: initialScannerMode)
         }
-        .sheet(isPresented: $showAIScanPaywall) {
-            PresentPaywallView()
-        }
         .fullScreenCover(isPresented: $showManualEntry) {
             ManualFoodEntryView()
                 .environmentObject(authViewModel)
+        }
+        .fullScreenCover(isPresented: $showProWelcome) {
+            ProWelcomeView(onDismiss: {
+                showProWelcome = false
+            })
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .userBecamePro)) { _ in
+            // Small delay to let the paywall dismiss first
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                showProWelcome = true
+            }
         }
         .onAppear {
             if hasActiveSession && !showStartSession && !showResumeSession {
@@ -196,6 +205,11 @@ struct MainTabView: View {
             showStartSession = false
             showResumeSession = false
             autoPresentedActiveSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAIFoodScanner"))) { _ in
+            // Open the AI food scanner (for adding story from story circle)
+            initialScannerMode = .ai
+            showFoodScanner = true
         }
         .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
             UsernameRequiredView().environmentObject(authViewModel)
@@ -319,14 +333,12 @@ struct MainTabView: View {
                 }
             }
             .tint(.primary)
-            .opacity(showAddMealSheet ? 0.3 : 1.0)
-            .blur(radius: showAddMealSheet ? 10 : 0)
+            .allowsHitTesting(!showAddMealSheet)
             
-            // Add Meal Overlay
-            if showAddMealSheet {
-                addMealOverlay
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
+            // Add Meal Overlay - always rendered but hidden for smooth transitions
+            addMealOverlay
+                .opacity(showAddMealSheet ? 1 : 0)
+                .allowsHitTesting(showAddMealSheet)
             
             // Floating + button container - hide when navigating to sub-pages
             VStack {
@@ -352,17 +364,17 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
-        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showAddMealSheet)
+        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
     }
     
     // MARK: - Add Meal Overlay
     private var addMealOverlay: some View {
         ZStack {
             // Semi-transparent background that closes the menu when tapped
-            Color.black.opacity(0.15) // Slightly darker for better contrast
+            Color.black.opacity(showAddMealSheet ? 0.3 : 0)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.easeOut(duration: 0.15)) {
                         showAddMealSheet = false
                     }
                 }
@@ -373,50 +385,53 @@ struct MainTabView: View {
                 VStack(spacing: 12) {
                     HStack(spacing: 12) {
                         addMealOption(icon: "dumbbell.fill", title: "Starta pass") {
-                            withAnimation { showAddMealSheet = false }
+                            showAddMealSheet = false
+                            startActivityType = .walking
                             showStartSession = true
                         }
+                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
+                        
                         addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
-                            withAnimation { showAddMealSheet = false }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                initialScannerMode = .barcode
-                                showFoodScanner = true
-                            }
+                            showAddMealSheet = false
+                            initialScannerMode = .barcode
+                            showFoodScanner = true
                         }
+                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
                     }
                     
                     HStack(spacing: 12) {
-                        // Regga manuellt
                         addMealOption(icon: "pencil.line", title: "Regga manuellt") {
-                            withAnimation { showAddMealSheet = false }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                showManualEntry = true
-                            }
+                            showAddMealSheet = false
+                            showManualEntry = true
                         }
+                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         
                         // AI Scan - check if limit reached for non-pro users
                         if !revenueCatManager.isProMember && scanLimitManager.isAtLimit() {
-                            // Grayed out AI scan button
                             aiScanLimitedOption()
+                                .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         } else {
                             aiScanOption {
-                                withAnimation { showAddMealSheet = false }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    initialScannerMode = .ai
-                                    showFoodScanner = true
-                                }
+                                showAddMealSheet = false
+                                initialScannerMode = .ai
+                                showFoodScanner = true
                             }
+                            .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         }
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 40) // Bottom part of the screen
+                .padding(.bottom, 40)
             }
         }
     }
     
     private func addMealOption(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button(action: {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            action()
+        }) {
             VStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
@@ -495,7 +510,7 @@ struct MainTabView: View {
         Button {
             withAnimation { showAddMealSheet = false }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                showAIScanPaywall = true
+                SuperwallService.shared.showPaywall()
             }
         } label: {
             VStack(spacing: 8) {
@@ -564,14 +579,12 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(showAddMealSheet ? 0.3 : 1.0)
-            .blur(radius: showAddMealSheet ? 10 : 0)
+            .allowsHitTesting(!showAddMealSheet)
             
-            // Add Meal Overlay
-            if showAddMealSheet {
-                addMealOverlay
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
+            // Add Meal Overlay - always rendered but hidden for smooth transitions
+            addMealOverlay
+                .opacity(showAddMealSheet ? 1 : 0)
+                .allowsHitTesting(showAddMealSheet)
             
             // Floating active session banner
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
@@ -588,7 +601,7 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
-        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: showAddMealSheet)
+        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
     }
     
     // MARK: - Floating Add Button

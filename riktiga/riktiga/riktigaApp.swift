@@ -144,6 +144,12 @@ struct UpAndDownApp: App {
                 .onAppear {
                     // Request push notification permission when logged in
                     PushNotificationService.shared.requestPermissionAndRegister()
+                    
+                    // Schedule daily meal reminders (12:00 lunch, 17:30 dinner)
+                    NotificationManager.shared.scheduleMealReminders()
+                    
+                    // Sync streak to widgets on app launch
+                    WidgetSyncService.shared.syncStreakData()
                 }
         } else {
             AuthenticationView()

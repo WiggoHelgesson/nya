@@ -22,6 +22,12 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authViewModel: AuthViewModel
     
+    // Animation states
+    @State private var showHeader: Bool = false
+    @State private var showStats: Bool = false
+    @State private var showChart: Bool = false
+    @State private var showPosts: Bool = false
+    
     // Filter posts with Up&Down Live photos
     private var livePhotoPosts: [SocialWorkoutPost] {
         profilePostsViewModel.posts.filter { post in
@@ -43,6 +49,8 @@ struct UserProfileView: View {
                             posts: livePhotoPosts,
                             selectedPost: $selectedLivePhotoPost
                         )
+                        .opacity(showHeader ? 1 : 0)
+                        .offset(y: showHeader ? 0 : 10)
                     }
                     
                     // Header
@@ -50,6 +58,8 @@ struct UserProfileView: View {
                         HStack(spacing: 12) {
                             ProfileAvatarView(path: avatarUrl ?? "", size: 72)
                                 .overlay(Circle().stroke(Color(.systemGray5), lineWidth: 1))
+                                .scaleEffect(showHeader ? 1 : 0.8)
+                                .opacity(showHeader ? 1 : 0)
                             
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 6) {
@@ -65,11 +75,14 @@ struct UserProfileView: View {
                                     
                                     Spacer()
                                 }
+                                .opacity(showHeader ? 1 : 0)
+                                .offset(x: showHeader ? 0 : 20)
                                 
                                 HStack(spacing: 0) {
                                     VStack(spacing: 2) {
                                         Text("\(workoutsCount)")
                                             .font(.system(size: 16, weight: .bold))
+                                            .contentTransition(.numericText())
                                         Text("Pass")
                                             .font(.system(size: 11))
                                             .foregroundColor(.gray)
@@ -79,6 +92,7 @@ struct UserProfileView: View {
                                     VStack(spacing: 2) {
                                         Text("\(followersCount)")
                                             .font(.system(size: 16, weight: .bold))
+                                            .contentTransition(.numericText())
                                         Text("Följare")
                                             .font(.system(size: 11))
                                             .foregroundColor(.gray)
@@ -88,6 +102,7 @@ struct UserProfileView: View {
                                     VStack(spacing: 2) {
                                         Text("\(followingCount)")
                                             .font(.system(size: 16, weight: .bold))
+                                            .contentTransition(.numericText())
                                         Text("Följer")
                                             .font(.system(size: 11))
                                             .foregroundColor(.gray)
@@ -95,6 +110,8 @@ struct UserProfileView: View {
                                     .frame(maxWidth: .infinity)
                                 }
                                 .frame(maxWidth: .infinity)
+                                .opacity(showStats ? 1 : 0)
+                                .offset(y: showStats ? 0 : 10)
                                 
                                 // Personal Records button
                                 HStack {
@@ -117,6 +134,8 @@ struct UserProfileView: View {
                                     Spacer()
                                 }
                                 .padding(.top, 4)
+                                .opacity(showStats ? 1 : 0)
+                                .scaleEffect(showStats ? 1 : 0.95)
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -143,6 +162,8 @@ struct UserProfileView: View {
                             }
                             .disabled(followToggleInProgress)
                             .padding(.horizontal, 16)
+                            .opacity(showStats ? 1 : 0)
+                            .offset(y: showStats ? 0 : 10)
                         }
                     }
                     .padding(.bottom, 12)
@@ -155,6 +176,8 @@ struct UserProfileView: View {
                     )
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .opacity(showChart ? 1 : 0)
+                    .offset(y: showChart ? 0 : 15)
                     
                     // MARK: - Compare Button
                     if let currentUser = authViewModel.currentUser, currentUser.id != userId {
@@ -167,9 +190,12 @@ struct UserProfileView: View {
                         )
                         .padding(.horizontal, 16)
                         .padding(.bottom, 12)
+                        .opacity(showChart ? 1 : 0)
+                        .offset(y: showChart ? 0 : 10)
                     }
                     
                     Divider()
+                        .opacity(showPosts ? 1 : 0)
                 
                     // Posts list
                     if isLoading {
@@ -191,6 +217,7 @@ struct UserProfileView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
+                            .opacity(showPosts ? 1 : 0)
                         } else if profilePostsViewModel.posts.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "figure.run")
@@ -203,9 +230,11 @@ struct UserProfileView: View {
                                     .foregroundColor(.gray)
                             }
                             .padding(.top, 40)
+                            .opacity(showPosts ? 1 : 0)
+                            .offset(y: showPosts ? 0 : 20)
                         } else {
                             LazyVStack(spacing: 0) {
-                                ForEach(profilePostsViewModel.posts) { post in
+                                ForEach(Array(profilePostsViewModel.posts.enumerated()), id: \.element.id) { index, post in
                                     SocialPostCard(
                                         post: post,
                                         onOpenDetail: { tappedPost in selectedPost = tappedPost },
@@ -219,6 +248,10 @@ struct UserProfileView: View {
                                             profilePostsViewModel.removePost(postId: postId)
                                         }
                                     )
+                                    .opacity(showPosts ? 1 : 0)
+                                    .offset(y: showPosts ? 0 : 20)
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05), value: showPosts)
+                                    
                                     Divider()
                                         .background(Color(.systemGray5))
                                 }
@@ -230,7 +263,11 @@ struct UserProfileView: View {
         }
         .navigationTitle("Profil")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadData() }
+        .task {
+            await loadData()
+            // Trigger staggered animations
+            triggerAnimations()
+        }
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
         }
@@ -382,6 +419,31 @@ struct UserProfileView: View {
             }
             await MainActor.run {
                 self.followToggleInProgress = false
+            }
+        }
+    }
+    
+    private func triggerAnimations() {
+        // Staggered animations for smooth loading appearance
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            showHeader = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                showStats = true
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                showChart = true
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                showPosts = true
             }
         }
     }
@@ -1619,4 +1681,3 @@ struct ExerciseStatCompareRow: View {
         }
     }
 }
-

@@ -120,6 +120,21 @@ class AnalyzingFoodManager: ObservableObject {
         let image: UIImage?
     }
     
+    // MARK: - Test Helper (for debugging story posting)
+    func setTestResult(foodName: String, calories: Int, protein: Int, carbs: Int, fat: Int, image: UIImage?) {
+        self.result = AnalyzedFoodResult(
+            foodName: foodName,
+            calories: calories,
+            protein: protein,
+            carbs: carbs,
+            fat: fat,
+            servingSize: nil,
+            image: image
+        )
+        self.capturedImage = image
+        print("📷 TEST: Set test result - \(foodName)")
+    }
+    
     func startAnalyzing(image: UIImage) {
         // Check if user is pro or has remaining free scans
         let isProUser = RevenueCatManager.shared.isProMember
@@ -412,7 +427,12 @@ class AnalyzingFoodManager: ObservableObject {
             return
         }
         
+        // IMPORTANT: Also capture the original captured image as backup
+        let capturedImageBackup = capturedImage
+        
         print("📝 Adding result: \(result.foodName)")
+        print("📷 DEBUG: result.image = \(result.image != nil ? "present (\(result.image!.size))" : "NIL")")
+        print("📷 DEBUG: capturedImage backup = \(capturedImageBackup != nil ? "present (\(capturedImageBackup!.size))" : "NIL")")
         
         // Show saving state
         let resultToSave = result
@@ -432,17 +452,25 @@ class AnalyzingFoodManager: ObservableObject {
                 
                 print("📝 User ID: \(userId)")
                 
-                // Upload image if available
+                // Upload image if available - try result.image first, then capturedImage as backup
                 var imageUrl: String? = nil
-                if let image = resultToSave.image,
+                let imageToUpload = resultToSave.image ?? capturedImageBackup
+                
+                if let image = imageToUpload,
                    let imageData = image.jpegData(compressionQuality: 0.7) {
-                    print("📝 Uploading image...")
+                    print("📷 Image found - size: \(image.size), data size: \(imageData.count) bytes")
+                    print("📷 Attempting to upload to food-images bucket...")
                     do {
                         imageUrl = try await uploadFoodImage(data: imageData, userId: userId)
-                        print("✅ Image uploaded: \(imageUrl ?? "nil")")
+                        print("✅ Image uploaded successfully: \(imageUrl ?? "nil")")
                     } catch {
-                        print("⚠️ Image upload failed: \(error) - continuing without image")
+                        print("❌ Image upload FAILED: \(error)")
+                        print("❌ Error details: \(error.localizedDescription)")
                     }
+                } else {
+                    print("⚠️ No image available to upload")
+                    print("   - resultToSave.image: \(resultToSave.image != nil)")
+                    print("   - capturedImageBackup: \(capturedImageBackup != nil)")
                 }
                 
                 let entry = FoodLogInsertForAnalysis(
@@ -479,11 +507,31 @@ class AnalyzingFoodManager: ObservableObject {
                 // Wait a moment to show success, then show story popup
                 try? await Task.sleep(nanoseconds: 800_000_000) // 0.8 seconds
                 
+                // Capture the image BEFORE clearing state
+                let imageForStory = self.capturedImage
+                
                 await MainActor.run {
                     self.saveSuccess = false
-                    // Show story popup instead of dismissing immediately
-                    self.showStoryPopup = true
+                    
+                    // Only show story popup if we have a valid image
+                    if imageForStory != nil {
+                        self.showStoryPopup = true
+                    }
+                    
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                }
+                
+                // Register activity for streak
+                StreakManager.shared.registerActivityCompletion()
+                
+                // Check for AI scan achievement AFTER story popup is shown (delayed)
+                // This prevents race conditions with multiple fullScreenCovers
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds delay
+                await MainActor.run {
+                    // Only show achievement if story popup is NOT showing
+                    if !self.showStoryPopup {
+                        AchievementManager.shared.unlock("first_scan")
+                    }
                 }
             } catch {
                 print("❌ Error saving food log: \(error)")
@@ -497,79 +545,350 @@ class AnalyzingFoodManager: ObservableObject {
     
     // MARK: - Story Posting
     func postToStory() {
+        print("📸 postToStory() called")
+        
+        // Capture values at the start to prevent race conditions
         guard let image = capturedImage else {
             print("❌ No image to post to story")
-            dismissStoryPopup()
+            safelyDismissStoryPopup()
             return
         }
         
+        guard let foodResult = result else {
+            print("❌ No food result to post to story")
+            safelyDismissStoryPopup()
+            return
+        }
+        
+        // Prevent double-posting
+        guard !isPostingStory else {
+            print("⚠️ Already posting story, ignoring duplicate call")
+            return
+        }
+        
+        print("📸 Starting story post...")
         isPostingStory = true
         
-        Task {
+        // Capture ALL values locally to avoid any reference to self during async
+        let imageToPost = image
+        let foodName = foodResult.foodName
+        let calories = foodResult.calories
+        let protein = foodResult.protein
+        let carbs = foodResult.carbs
+        let fat = foodResult.fat
+        
+        Task { @MainActor in
             do {
                 guard let userId = try? await SupabaseConfig.supabase.auth.session.user.id.uuidString else {
                     print("❌ No user logged in")
-                    await MainActor.run {
-                        self.isPostingStory = false
-                        self.dismissStoryPopup()
-                    }
+                    self.isPostingStory = false
+                    self.safelyDismissStoryPopup()
                     return
                 }
                 
-                _ = try await StoryService.shared.postStory(userId: userId, image: image)
+                print("📸 Creating composite image...")
+                print("📸 Original image size: \(imageToPost.size)")
                 
-                await MainActor.run {
-                    self.isPostingStory = false
-                    self.storyPostedSuccess = true
-                    
-                    // Haptic feedback
-                    let haptic = UINotificationFeedbackGenerator()
-                    haptic.notificationOccurred(.success)
-                    
-                    // Notify to refresh stories
-                    NotificationCenter.default.post(name: NSNotification.Name("RefreshStories"), object: nil)
+                // Create composite image with error handling
+                var compositeImage: UIImage
+                do {
+                    compositeImage = self.createStoryImageSimple(
+                        original: imageToPost,
+                        foodName: foodName,
+                        calories: calories,
+                        protein: protein,
+                        carbs: carbs,
+                        fat: fat
+                    )
+                    print("📸 Composite image created successfully: \(compositeImage.size)")
+                } catch {
+                    print("❌ Failed to create composite image: \(error)")
+                    // Fallback: just use the original image
+                    compositeImage = imageToPost
                 }
                 
-                // Wait a moment then dismiss
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                print("📸 Posting to StoryService...")
+                _ = try await StoryService.shared.postStory(userId: userId, image: compositeImage)
                 
-                await MainActor.run {
-                    self.storyPostedSuccess = false
-                    self.dismissStoryPopup()
-                    self.dismissResult()
+                print("✅ Story posted successfully!")
+                self.isPostingStory = false
+                self.storyPostedSuccess = true
+                
+                // Haptic feedback
+                let haptic = UINotificationFeedbackGenerator()
+                haptic.notificationOccurred(.success)
+                
+                // Notify to refresh stories
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshStories"), object: nil)
+                
+                // Wait a moment then dismiss
+                try? await Task.sleep(nanoseconds: 600_000_000) // 0.6 seconds
+                
+                self.storyPostedSuccess = false
+                self.safelyDismissStoryPopup()
+                
+                // Register activity for streak
+                StreakManager.shared.registerActivityCompletion()
+                
+                // Check achievement after story is posted
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    AchievementManager.shared.unlock("first_scan")
                 }
             } catch {
                 print("❌ Error posting story: \(error)")
-                await MainActor.run {
-                    self.isPostingStory = false
-                    self.dismissStoryPopup()
-                    self.dismissResult()
-                }
+                self.isPostingStory = false
+                self.safelyDismissStoryPopup()
             }
         }
     }
     
-    func dismissStoryPopup() {
+    /// Simplified story image creation that takes primitive values instead of struct
+    private func createStoryImageSimple(original: UIImage, foodName: String, calories: Int, protein: Int, carbs: Int, fat: Int) -> UIImage {
+        // Resize image if too large to prevent memory issues
+        let maxDimension: CGFloat = 1500
+        let resizedImage: UIImage
+        if original.size.width > maxDimension || original.size.height > maxDimension {
+            let scale = min(maxDimension / original.size.width, maxDimension / original.size.height)
+            let newSize = CGSize(width: original.size.width * scale, height: original.size.height * scale)
+            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+            original.draw(in: CGRect(origin: .zero, size: newSize))
+            resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? original
+            UIGraphicsEndImageContext()
+            print("📸 Resized image from \(original.size) to \(newSize)")
+        } else {
+            resizedImage = original
+        }
+        
+        let size = resizedImage.size
+        // Made card much larger - more than double the previous size
+        let cardWidth: CGFloat = min(size.width * 0.92, 1200)
+        let cardHeight: CGFloat = cardWidth * 0.55 // Taller card
+        let cardX: CGFloat = (size.width - cardWidth) / 2
+        let cardY: CGFloat = size.height * 0.55 // Position higher to fit larger card
+        let cornerRadius: CGFloat = cardWidth * 0.06
+        
+        let renderer = UIGraphicsImageRenderer(size: size)
+        
+        return renderer.image { context in
+            // Draw original image
+            resizedImage.draw(at: .zero)
+            
+            let cardRect = CGRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
+            let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: cornerRadius)
+            
+            // White background with slight transparency
+            UIColor.white.withAlphaComponent(0.97).setFill()
+            cardPath.fill()
+            
+            // Subtle shadow effect (draw a darker rect behind)
+            context.cgContext.saveGState()
+            context.cgContext.setShadow(offset: CGSize(width: 0, height: 8), blur: 20, color: UIColor.black.withAlphaComponent(0.15).cgColor)
+            UIColor.white.setFill()
+            cardPath.fill()
+            context.cgContext.restoreGState()
+            
+            // Border
+            UIColor.gray.withAlphaComponent(0.15).setStroke()
+            cardPath.lineWidth = 3
+            cardPath.stroke()
+            
+            // Text sizes - significantly larger
+            let titleFontSize: CGFloat = cardWidth * 0.08
+            let caloriesFontSize: CGFloat = cardWidth * 0.09
+            let macroFontSize: CGFloat = cardWidth * 0.065
+            let padding: CGFloat = cardWidth * 0.06
+            
+            // Draw food name
+            let titleFont = UIFont.systemFont(ofSize: titleFontSize, weight: .bold)
+            let titleAttributes: [NSAttributedString.Key: Any] = [
+                .font: titleFont,
+                .foregroundColor: UIColor.black
+            ]
+            let titleRect = CGRect(x: cardRect.minX + padding, y: cardRect.minY + padding * 1.2, width: cardRect.width - padding * 2, height: titleFontSize * 1.4)
+            let truncatedName = foodName.count > 30 ? String(foodName.prefix(27)) + "..." : foodName
+            truncatedName.draw(in: titleRect, withAttributes: titleAttributes)
+            
+            // Draw calories - prominent
+            let caloriesY = titleRect.maxY + padding * 0.8
+            let caloriesFont = UIFont.systemFont(ofSize: caloriesFontSize, weight: .heavy)
+            let caloriesText = "🔥 \(calories) Kalorier"
+            let caloriesAttributes: [NSAttributedString.Key: Any] = [.font: caloriesFont, .foregroundColor: UIColor.black]
+            let caloriesRect = CGRect(x: cardRect.minX + padding, y: caloriesY, width: cardRect.width - padding * 2, height: caloriesFontSize * 1.4)
+            caloriesText.draw(in: caloriesRect, withAttributes: caloriesAttributes)
+            
+            // Draw macros - larger and more spaced
+            let macrosY = caloriesRect.maxY + padding * 0.8
+            let macroFont = UIFont.systemFont(ofSize: macroFontSize, weight: .semibold)
+            let macrosText = "🐟 \(protein)g    🌿 \(carbs)g    💧 \(fat)g"
+            let macroAttributes: [NSAttributedString.Key: Any] = [.font: macroFont, .foregroundColor: UIColor.darkGray]
+            let macrosRect = CGRect(x: cardRect.minX + padding, y: macrosY, width: cardRect.width - padding * 2, height: macroFontSize * 1.4)
+            macrosText.draw(in: macrosRect, withAttributes: macroAttributes)
+        }
+    }
+    
+    /// Safe method to dismiss story popup - handles the sequence properly to avoid crashes
+    private func safelyDismissStoryPopup() {
+        print("📸 Dismissing story popup safely...")
+        
+        // First hide the popup WITHOUT animation to avoid SwiftUI issues
         showStoryPopup = false
-        dismissResult()
+        
+        // Then clear the data after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.result = nil
+            self?.capturedImage = nil
+            self?.noFoodDetected = false
+            self?.errorMessage = nil
+            self?.limitReached = false
+            self?.isPostingStory = false
+            print("📸 Story popup state cleared")
+        }
+    }
+    
+    // MARK: - Create Story Image with Food Overlay
+    private func createStoryImage(original: UIImage, foodResult: AnalyzedFoodResult) -> UIImage {
+        // Resize image if too large to prevent memory issues
+        let maxDimension: CGFloat = 1500
+        let resizedImage: UIImage
+        if original.size.width > maxDimension || original.size.height > maxDimension {
+            let scale = min(maxDimension / original.size.width, maxDimension / original.size.height)
+            let newSize = CGSize(width: original.size.width * scale, height: original.size.height * scale)
+            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+            original.draw(in: CGRect(origin: .zero, size: newSize))
+            resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? original
+            UIGraphicsEndImageContext()
+        } else {
+            resizedImage = original
+        }
+        
+        let size = resizedImage.size
+        // Made card much larger - more than double the previous size
+        let cardWidth: CGFloat = min(size.width * 0.92, 1200)
+        let cardHeight: CGFloat = cardWidth * 0.55 // Taller card
+        let cardX: CGFloat = (size.width - cardWidth) / 2
+        let cardY: CGFloat = size.height * 0.55 // Position higher to fit larger card
+        let cornerRadius: CGFloat = cardWidth * 0.06
+        
+        let renderer = UIGraphicsImageRenderer(size: size)
+        
+        return renderer.image { context in
+            // Draw original image
+            resizedImage.draw(at: .zero)
+            
+            let cardRect = CGRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
+            
+            // Draw card background with rounded corners
+            let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: cornerRadius)
+            
+            // White background with slight transparency
+            UIColor.white.withAlphaComponent(0.97).setFill()
+            cardPath.fill()
+            
+            // Add shadow effect
+            context.cgContext.saveGState()
+            context.cgContext.setShadow(offset: CGSize(width: 0, height: 8), blur: 20, color: UIColor.black.withAlphaComponent(0.15).cgColor)
+            UIColor.white.setFill()
+            cardPath.fill()
+            context.cgContext.restoreGState()
+            
+            // Draw border
+            UIColor.gray.withAlphaComponent(0.15).setStroke()
+            cardPath.lineWidth = 3
+            cardPath.stroke()
+            
+            // Text sizes - significantly larger
+            let titleFontSize: CGFloat = cardWidth * 0.08
+            let caloriesFontSize: CGFloat = cardWidth * 0.09
+            let macroFontSize: CGFloat = cardWidth * 0.065
+            let padding: CGFloat = cardWidth * 0.06
+            
+            // Draw food name
+            let titleFont = UIFont.systemFont(ofSize: titleFontSize, weight: .bold)
+            let titleAttributes: [NSAttributedString.Key: Any] = [
+                .font: titleFont,
+                .foregroundColor: UIColor.black
+            ]
+            
+            let titleRect = CGRect(
+                x: cardRect.minX + padding,
+                y: cardRect.minY + padding * 1.2,
+                width: cardRect.width - padding * 2,
+                height: titleFontSize * 1.4
+            )
+            
+            let truncatedName = foodResult.foodName.count > 30 ? String(foodResult.foodName.prefix(27)) + "..." : foodResult.foodName
+            truncatedName.draw(in: titleRect, withAttributes: titleAttributes)
+            
+            // Draw calories with flame emoji - prominent
+            let caloriesY = titleRect.maxY + padding * 0.8
+            let caloriesFont = UIFont.systemFont(ofSize: caloriesFontSize, weight: .heavy)
+            let caloriesText = "🔥 \(foodResult.calories) Kalorier"
+            let caloriesAttributes: [NSAttributedString.Key: Any] = [
+                .font: caloriesFont,
+                .foregroundColor: UIColor.black
+            ]
+            
+            let caloriesRect = CGRect(
+                x: cardRect.minX + padding,
+                y: caloriesY,
+                width: cardRect.width - padding * 2,
+                height: caloriesFontSize * 1.4
+            )
+            caloriesText.draw(in: caloriesRect, withAttributes: caloriesAttributes)
+            
+            // Draw macros row - larger and more spaced
+            let macrosY = caloriesRect.maxY + padding * 0.8
+            let macroFont = UIFont.systemFont(ofSize: macroFontSize, weight: .semibold)
+            let macrosText = "🐟 \(foodResult.protein)g    🌿 \(foodResult.carbs)g    💧 \(foodResult.fat)g"
+            let macrosAttributes: [NSAttributedString.Key: Any] = [
+                .font: macroFont,
+                .foregroundColor: UIColor.darkGray
+            ]
+            
+            let macrosRect = CGRect(
+                x: cardRect.minX + padding,
+                y: macrosY,
+                width: cardRect.width - padding * 2,
+                height: macroFontSize * 1.4
+            )
+            macrosText.draw(in: macrosRect, withAttributes: macrosAttributes)
+        }
+    }
+    
+    func dismissStoryPopup() {
+        // Only dismiss if actually showing
+        guard showStoryPopup else { return }
+        
+        // Use the safe dismissal method
+        safelyDismissStoryPopup()
     }
     
     private func uploadFoodImage(data: Data, userId: String) async throws -> String {
         let fileName = "\(userId)/food_\(UUID().uuidString).jpg"
         
-        try await SupabaseConfig.supabase.storage
-            .from("food-images")
-            .upload(
-                path: fileName,
-                file: data,
-                options: FileOptions(contentType: "image/jpeg")
-            )
+        print("📷 Uploading to path: \(fileName)")
+        print("📷 Data size: \(data.count) bytes")
+        
+        do {
+            try await SupabaseConfig.supabase.storage
+                .from("food-images")
+                .upload(
+                    path: fileName,
+                    file: data,
+                    options: FileOptions(contentType: "image/jpeg")
+                )
+            print("📷 Upload completed")
+        } catch {
+            print("❌ Storage upload error: \(error)")
+            throw error
+        }
         
         // Get public URL
         let publicURL = try SupabaseConfig.supabase.storage
             .from("food-images")
             .getPublicURL(path: fileName)
         
+        print("📷 Public URL: \(publicURL.absoluteString)")
         return publicURL.absoluteString
     }
 }

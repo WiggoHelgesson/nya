@@ -34,8 +34,7 @@ struct NutritionSettingsView: View {
                     // Goal Cards
                     VStack(spacing: 16) {
                         NutritionGoalCard(
-                            icon: "flame.fill",
-                            iconColor: .black,
+                            emoji: "🔥",
                             title: "Kalorier",
                             value: $caloriesGoal,
                             unit: "kcal",
@@ -44,8 +43,7 @@ struct NutritionSettingsView: View {
                         )
                         
                         NutritionGoalCard(
-                            icon: "drop.fill",
-                            iconColor: .red,
+                            emoji: "🍗",
                             title: "Protein",
                             value: $proteinGoal,
                             unit: "g",
@@ -54,8 +52,7 @@ struct NutritionSettingsView: View {
                         )
                         
                         NutritionGoalCard(
-                            icon: "leaf.fill",
-                            iconColor: .orange,
+                            emoji: "🌾",
                             title: "Kolhydrater",
                             value: $carbsGoal,
                             unit: "g",
@@ -64,8 +61,7 @@ struct NutritionSettingsView: View {
                         )
                         
                         NutritionGoalCard(
-                            icon: "drop.fill",
-                            iconColor: .blue,
+                            emoji: "🥑",
                             title: "Fett",
                             value: $fatGoal,
                             unit: "g",
@@ -183,8 +179,7 @@ struct NutritionSettingsView: View {
 }
 
 struct NutritionGoalCard: View {
-    let icon: String
-    let iconColor: Color
+    let emoji: String
     let title: String
     @Binding var value: Int
     let unit: String
@@ -194,9 +189,9 @@ struct NutritionGoalCard: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Image(systemName: icon)
+                Text(emoji)
                     .font(.system(size: 18))
-                    .foregroundColor(iconColor)
+                    .grayscale(1)
                 
                 Text(title)
                     .font(.system(size: 18, weight: .semibold))
@@ -230,7 +225,7 @@ struct NutritionGoalCard: View {
                     in: Double(range.lowerBound)...Double(range.upperBound),
                     step: Double(step)
                 )
-                .tint(iconColor)
+                .tint(.black)
                 
                 Button {
                     if value + step <= range.upperBound {

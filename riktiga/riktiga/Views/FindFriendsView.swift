@@ -19,6 +19,10 @@ struct FindFriendsView: View {
     @State private var isLoadingContacts = false
     @State private var contactsFollowingStatus: [String: Bool] = [:]
     
+    // Mutual friends counts
+    @State private var searchMutualCounts: [String: Int] = [:]
+    @State private var recommendedMutualCounts: [String: Int] = [:]
+    
     enum FindFriendsTab {
         case suggested
         case contacts
@@ -31,7 +35,7 @@ struct FindFriendsView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
+            VStack(spacing: 0) {
             // Main tab - Vänner (always selected, single tab)
             HStack {
                 Text("Vänner")
@@ -53,46 +57,46 @@ struct FindFriendsView: View {
             }
             .padding(.horizontal, 16)
             
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                
+                // Search Bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    
                 TextField("Sök efter personer...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onChange(of: searchText) { _, newValue in
-                        searchDebounceTask?.cancel()
-                        
-                        if newValue.count >= 2 {
-                            searchDebounceTask = Task {
-                                try? await Task.sleep(nanoseconds: 300_000_000)
-                                if !Task.isCancelled {
-                                    await MainActor.run {
-                                        performSearch()
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onChange(of: searchText) { _, newValue in
+                            searchDebounceTask?.cancel()
+                            
+                            if newValue.count >= 2 {
+                                searchDebounceTask = Task {
+                                    try? await Task.sleep(nanoseconds: 300_000_000)
+                                    if !Task.isCancelled {
+                                        await MainActor.run {
+                                            performSearch()
+                                        }
                                     }
                                 }
+                            } else {
+                                findFriendsViewModel.searchResults = []
                             }
-                        } else {
+                        }
+                    
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
                             findFriendsViewModel.searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
                         }
                     }
-                
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        findFriendsViewModel.searchResults = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                    }
                 }
-            }
-            .padding(12)
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
-            .padding(.horizontal, 16)
+                .padding(12)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal, 16)
             .padding(.top, 12)
             
             // Sub-tabs: Gemensamma & Kontakter
@@ -156,7 +160,7 @@ struct FindFriendsView: View {
             Divider()
             
             // Content based on search or selected tab
-            if !searchText.isEmpty {
+                if !searchText.isEmpty {
                 searchResultsView
             } else {
                 switch selectedTab {
@@ -229,43 +233,43 @@ struct FindFriendsView: View {
     // MARK: - Search Results View
     private var searchResultsView: some View {
         Group {
-            if findFriendsViewModel.isLoading && findFriendsViewModel.searchResults.isEmpty {
+                    if findFriendsViewModel.isLoading && findFriendsViewModel.searchResults.isEmpty {
                 VStack {
-                    Spacer()
-                    ProgressView("Söker...")
-                        .foregroundColor(.gray)
-                    Spacer()
+                        Spacer()
+                        ProgressView("Söker...")
+                            .foregroundColor(.gray)
+                        Spacer()
                 }
-            } else if findFriendsViewModel.searchResults.isEmpty && !findFriendsViewModel.isLoading {
+                    } else if findFriendsViewModel.searchResults.isEmpty && !findFriendsViewModel.isLoading {
                 VStack {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.crop.circle.badge.questionmark")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-                        Text("Inga användare hittades")
-                            .font(.headline)
-                        Text("Prova att söka efter ett annat namn")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    Spacer()
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.badge.questionmark")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
+                            Text("Inga användare hittades")
+                                .font(.headline)
+                            Text("Prova att söka efter ett annat namn")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
                 }
-            } else {
-                ScrollView {
+                    } else {
+                        ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(findFriendsViewModel.searchResults) { user in
-                            NavigationLink(destination: UserProfileView(userId: user.id)) {
+                                ForEach(findFriendsViewModel.searchResults) { user in
+                                    NavigationLink(destination: UserProfileView(userId: user.id)) {
                                 FriendSearchRow(
-                                    user: user,
-                                    isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
-                                    mutualInfo: "Du har gemensamma vänner",
-                                    onFollowToggle: {
-                                        toggleFollow(userId: user.id)
+                                            user: user,
+                                            isFollowing: findFriendsViewModel.followingStatus[user.id] ?? false,
+                                    mutualInfo: getMutualInfoText(for: user.id, from: searchMutualCounts),
+                                            onFollowToggle: {
+                                                toggleFollow(userId: user.id)
+                                            }
+                                        )
                                     }
-                                )
-                            }
-                            .buttonStyle(.plain)
+                                    .buttonStyle(.plain)
                             
                             Divider()
                                 .padding(.leading, 78)
@@ -279,24 +283,24 @@ struct FindFriendsView: View {
     // MARK: - Suggested Friends View
     private var suggestedFriendsView: some View {
         Group {
-            if isLoadingRecommended && recommendedUsers.isEmpty {
+                    if isLoadingRecommended && recommendedUsers.isEmpty {
                 VStack {
-                    Spacer()
+                        Spacer()
                     ProgressView("Laddar förslag...")
-                        .foregroundColor(.gray)
-                    Spacer()
-                }
-            } else if recommendedUsers.isEmpty {
-                VStack {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.2")
-                            .font(.system(size: 48))
                             .foregroundColor(.gray)
+                        Spacer()
+                }
+                    } else if recommendedUsers.isEmpty {
+                VStack {
+                        Spacer()
+                        VStack(spacing: 16) {
+                        Image(systemName: "person.2")
+                                .font(.system(size: 48))
+                                .foregroundColor(.gray)
                         Text("Inga förslag just nu")
-                            .font(.headline)
+                                .font(.headline)
                         Text("Följ fler personer för att få förslag")
-                            .font(.caption)
+                                .font(.caption)
                             .foregroundColor(.gray)
                     }
                     Spacer()
@@ -326,16 +330,16 @@ struct FindFriendsView: View {
                                     )
                             }
                         }
-                        .padding(.horizontal, 16)
+                                .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .background(Color(.systemGray6))
-                        
+                                
                         ForEach(recommendedUsers) { user in
                             NavigationLink(destination: UserProfileView(userId: user.id)) {
                                 FriendSearchRow(
                                     user: user,
                                     isFollowing: recommendedFollowingStatus[user.id] ?? false,
-                                    mutualInfo: "Du har gemensamma vänner",
+                                    mutualInfo: getMutualInfoText(for: user.id, from: recommendedMutualCounts),
                                     onFollowToggle: {
                                         toggleRecommendedFollow(userId: user.id)
                                     }
@@ -721,9 +725,17 @@ struct FindFriendsView: View {
                     followStatus[user.id] = findFriendsViewModel.followingIds.contains(user.id)
                 }
                 
+                // Get mutual friends counts
+                let userIds = recommended.map { $0.id }
+                let mutualCounts = try await SocialService.shared.getMutualFriendsCount(
+                    currentUserId: userId,
+                    otherUserIds: userIds
+                )
+                
                 await MainActor.run {
                     self.recommendedUsers = recommended
                     self.recommendedFollowingStatus = followStatus
+                    self.recommendedMutualCounts = mutualCounts
                     self.isLoadingRecommended = false
                 }
                 AppCacheManager.shared.saveRecommendedUsers(recommended, userId: userId)
@@ -741,6 +753,40 @@ struct FindFriendsView: View {
               let currentUserId = authViewModel.currentUser?.id else { return }
         
         findFriendsViewModel.searchUsers(query: searchText, currentUserId: currentUserId)
+        
+        // Fetch mutual friends counts for search results
+        Task {
+            // Wait a bit for search results to load
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            
+            let userIds = findFriendsViewModel.searchResults.map { $0.id }
+            if !userIds.isEmpty {
+                do {
+                    let mutualCounts = try await SocialService.shared.getMutualFriendsCount(
+                        currentUserId: currentUserId,
+                        otherUserIds: userIds
+                    )
+                    await MainActor.run {
+                        self.searchMutualCounts = mutualCounts
+                    }
+                } catch {
+                    print("❌ Error fetching mutual friends: \(error)")
+                }
+            }
+        }
+    }
+    
+    /// Helper to generate mutual friends info text
+    private func getMutualInfoText(for userId: String, from counts: [String: Int]) -> String? {
+        guard let count = counts[userId], count > 0 else {
+            return nil
+        }
+        
+        if count == 1 {
+            return "1 gemensam vän"
+        } else {
+            return "\(count) gemensamma vänner"
+        }
     }
     
     private func toggleFollow(userId: String) {
@@ -800,7 +846,7 @@ struct FriendSearchRow: View {
             
             // User info
             VStack(alignment: .leading, spacing: 4) {
-                Text(user.name)
+                    Text(user.name)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.black)
                 
@@ -822,8 +868,8 @@ struct FriendSearchRow: View {
                     isProcessing = false
                 }
             } label: {
-                if isProcessing {
-                    ProgressView()
+                    if isProcessing {
+                        ProgressView()
                         .scaleEffect(0.8)
                         .frame(width: 70, height: 32)
                 } else {

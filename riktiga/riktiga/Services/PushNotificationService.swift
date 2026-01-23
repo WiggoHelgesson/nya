@@ -4,6 +4,7 @@ import UserNotifications
 import Supabase
 import Functions
 import Combine
+import SuperwallKit
 
 final class PushNotificationService: NSObject {
     static let shared = PushNotificationService()
@@ -164,6 +165,90 @@ final class PushNotificationService: NSObject {
         } catch {
             print("❌ [PUSH] Failed to get followers for notification: \(error)")
         }
+    }
+    
+    // MARK: - Notify Followers About New Story
+    
+    func notifyFollowersAboutStory(
+        userId: String,
+        userName: String,
+        userAvatar: String?
+    ) async {
+        print("📖 [PUSH] Starting story notification flow for \(userName)")
+        
+        do {
+            // Get all followers
+            let followers = try await SocialService.shared.getFollowers(userId: userId)
+            
+            guard !followers.isEmpty else {
+                print("📭 [PUSH] No followers to notify about story")
+                return
+            }
+            
+            print("📖 [PUSH] Found \(followers.count) followers to notify about new story")
+            
+            for followerId in followers {
+                guard followerId != userId else { continue }
+                
+                do {
+                    // Create in-app notification
+                    try await createStoryNotification(
+                        forUserId: followerId,
+                        fromUserId: userId,
+                        fromUserName: userName,
+                        fromUserAvatar: userAvatar
+                    )
+                    
+                    // Send real iOS push notification
+                    await sendRealPushNotification(
+                        toUserId: followerId,
+                        title: "📸 Ny händelse",
+                        body: "\(userName) laddade upp en ny story!",
+                        data: ["type": "new_story", "actor_id": userId]
+                    )
+                } catch {
+                    print("⚠️ [PUSH] Failed to notify follower \(followerId) about story: \(error)")
+                }
+            }
+            
+            print("✅ [PUSH] All followers notified about new story")
+        } catch {
+            print("❌ [PUSH] Failed to get followers for story notification: \(error)")
+        }
+    }
+    
+    // MARK: - Create Story Notification in Database
+    
+    private func createStoryNotification(
+        forUserId: String,
+        fromUserId: String,
+        fromUserName: String,
+        fromUserAvatar: String?
+    ) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        struct NotificationPayload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
+        }
+        
+        let payload = NotificationPayload(
+            user_id: forUserId,
+            actor_id: fromUserId,
+            actor_username: fromUserName,
+            actor_avatar_url: fromUserAvatar,
+            type: "new_story"
+        )
+        
+        try await SupabaseConfig.supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+        
+        print("✅ [PUSH] Created story notification for user \(forUserId)")
     }
     
     // MARK: - Notify Followers About New PB
@@ -443,8 +528,27 @@ import TerraiOS
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     
+    // Keep reference to purchase controller
+    private let purchaseController = RCPurchaseController()
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        
+        // IMPORTANT: Initialize RevenueCat FIRST (before Superwall)
+        // This triggers RevenueCatManager.shared initialization
+        _ = RevenueCatManager.shared
+        print("✅ RevenueCat initialized")
+        
+        // Initialize Superwall SDK with RevenueCat purchase controller
+        Superwall.configure(
+            apiKey: "pk_V87Rb4tJLmrkuA7OTpCsV",
+            purchaseController: purchaseController
+        )
+        print("✅ Superwall configured with RevenueCat integration")
+        
+        // Start syncing subscription status between RevenueCat and Superwall
+        purchaseController.syncSubscriptionStatus()
+        print("✅ Subscription status sync started")
         
         // Initialize Insert Affiliate SDK
         InsertAffiliateSwift.initialize(

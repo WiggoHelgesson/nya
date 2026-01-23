@@ -148,9 +148,6 @@ struct ProfileHeaderWithTabs: View {
             MonthlyPrizeView()
                 .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $showPaywall) {
-            PresentPaywallView()
-        }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
                 NavigationStack {
@@ -171,7 +168,7 @@ struct ProfileHeaderWithTabs: View {
             Button("Bli Pro") {
                 showNonProAlert = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showPaywall = true
+                    SuperwallService.shared.showPaywall()
                 }
             }
         } message: {

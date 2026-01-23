@@ -191,3 +191,5 @@ GRANT EXECUTE ON FUNCTION public.get_lottery_stats(uuid) TO anon;
 
 
 
+
+

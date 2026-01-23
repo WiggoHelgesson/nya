@@ -237,11 +237,11 @@ struct OptimizedAsyncImage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: width, height: height)
-                    .clipShape(cornerRadius > 0 ? AnyShape(RoundedRectangle(cornerRadius: cornerRadius)) : AnyShape(Circle()))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else if isLoading {
                 // Loading placeholder with shimmer effect
-                RoundedRectangle(cornerRadius: cornerRadius > 0 ? cornerRadius : width/2)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color(.systemGray5))
                     .frame(width: width, height: height)
                     .overlay(
@@ -252,13 +252,13 @@ struct OptimizedAsyncImage: View {
                     .shimmer()
             } else {
                 // Error placeholder
-                RoundedRectangle(cornerRadius: cornerRadius > 0 ? cornerRadius : width/2)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color(.systemGray5))
                     .frame(width: width, height: height)
                     .overlay(
-                        Image(systemName: "person.fill")
+                        Image(systemName: "photo")
                             .foregroundColor(.gray)
-                            .font(.system(size: min(width, height) * 0.4))
+                            .font(.system(size: min(width, height) * 0.3))
                     )
             }
         }

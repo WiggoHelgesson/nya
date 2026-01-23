@@ -708,6 +708,8 @@ struct SessionCompleteView: View {
         Button(action: {
             // Immediately block further taps
             guard !saveButtonTapped else { return }
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
             saveButtonTapped = true
             saveWorkout()
         }) {
@@ -899,17 +901,13 @@ struct SessionCompleteView: View {
             .padding(.horizontal, 16)
             .padding(.top, 60)
             
-            // Gym icon and XP earned
+            // App logo and XP earned
             VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(Color.black)
-                        .frame(width: 80, height: 80)
-                    
-                    Image(systemName: "dumbbell.fill")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(.white)
-                }
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .cornerRadius(18)
                 
                 // XP earned
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -974,6 +972,9 @@ struct SessionCompleteView: View {
                 }
             }
             
+            // Get current streak for achievement banner
+            let currentStreak = StreakManager.shared.currentStreak
+            
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
                 activityType: activity.rawValue,
@@ -989,7 +990,8 @@ struct SessionCompleteView: View {
                 exercises: exercisesData,
                 routeData: routeDataJson,
                 pbExerciseName: hasPB ? pbExerciseName : nil,
-                pbValue: hasPB ? pbValue : nil
+                pbValue: hasPB ? pbValue : nil,
+                streakCount: currentStreak > 0 ? currentStreak : nil
             )
             
             do {
@@ -1093,9 +1095,18 @@ struct SessionCompleteView: View {
                     pendingSharePost = sharePost
                     triggerSaveSuccessAnimation()
                     
+                    // Register activity for streak
+                    StreakManager.shared.registerActivityCompletion()
+                    
+                    // Check workout achievements
+                    AchievementManager.shared.unlock("first_workout")
+                    
                     // Registrera avslutat pass och visa review-popup om villkoren är uppfyllda
                     ReviewManager.shared.recordWorkoutCompleted()
                     ReviewManager.shared.requestReviewAfterWorkoutIfEligible()
+                    
+                    // Schedule motivational notification 1 minute after workout
+                    NotificationManager.shared.scheduleWorkoutCompleteNotification(userName: authViewModel.currentUser?.name)
                 }
             } catch {
                 print("❌ Error saving workout: \(error)")

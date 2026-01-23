@@ -1,247 +1,814 @@
 import SwiftUI
-import InsertAffiliateSwift
 
 struct ReferralView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var affiliateIdentifier: String? = nil
-    @State private var isLoading = true
-    @State private var copySuccess = false
     
-    // Insert Affiliate signup URL - users sign up here to become affiliates
-    private let affiliateSignupURL = "https://app.insertaffiliate.com/signup"
-    private let affiliateDashboardURL = "https://app.insertaffiliate.com"
+    @State private var referralCode: String = ""
+    @State private var stats: ReferralStats?
+    @State private var isLoading = true
+    @State private var showCopiedToast = false
+    
+    // Code editing states
+    @State private var showEditCodeSheet = false
+    @State private var editedCode: String = ""
+    @State private var canEditCode = false
+    @State private var daysUntilEdit = 0
+    @State private var isUpdatingCode = false
+    @State private var codeUpdateError: String?
+    @State private var showCodeUpdateSuccess = false
+    @State private var showPayoutAlert = false
+    @State private var showPayoutSuccess = false
+    @State private var isRequestingPayout = false
+    @State private var stripeAccountStatus: StripeAccountStatus?
+    @State private var showStripeOnboarding = false
+    @State private var stripeOnboardingUrl: String?
+    @State private var isSettingUpStripe = false
+    @State private var estimatedUsers: Double = 10
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // MARK: - Hero Section
-                    VStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.black, Color.black.opacity(0.8)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 100, height: 100)
-                            
-                            Image(systemName: "gift.fill")
-                                .font(.system(size: 44))
-                                .foregroundColor(.white)
-                        }
-                        
-                        Text("Referera och tjäna")
-                            .font(.system(size: 28, weight: .bold))
-                        
-                        Text("Bli affiliate och tjäna pengar genom att rekommendera Up&Down till andra!")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                    }
-                    .padding(.top, 20)
-                    
-                    // MARK: - How it works
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Så fungerar det")
-                            .font(.system(size: 20, weight: .bold))
-                            .padding(.horizontal, 20)
-                        
-                        VStack(spacing: 12) {
-                            howItWorksStep(
-                                number: "1",
-                                title: "Bli affiliate",
-                                description: "Registrera dig som affiliate via länken nedan"
-                            )
-                            
-                            howItWorksStep(
-                                number: "2",
-                                title: "Få din unika länk",
-                                description: "Du får en personlig länk att dela med andra"
-                            )
-                            
-                            howItWorksStep(
-                                number: "3",
-                                title: "Dela och tjäna",
-                                description: "När någon prenumererar via din länk får du provision"
-                            )
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    
-                    // MARK: - Become Affiliate Button
-                    VStack(spacing: 16) {
-                        Text("Kom igång")
-                            .font(.system(size: 18, weight: .bold))
-                        
-                        // Sign up as affiliate button
-                        Button(action: openAffiliateSignup) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Bli affiliate")
-                                    .font(.system(size: 17, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .background(Color.black)
-                            .cornerRadius(27)
-                        }
-                        
-                        // Already an affiliate? Open dashboard
-                        Button(action: openAffiliateDashboard) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "chart.bar.fill")
-                                    .font(.system(size: 16))
-                                Text("Öppna affiliate-dashboard")
-                                    .font(.system(size: 15, weight: .medium))
-                            }
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(24)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    
-                    // MARK: - Current Affiliate Status
-                    if let identifier = affiliateIdentifier {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("Affiliate-koppling aktiv")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.green)
-                            }
-                            
-                            Text("ID: \(identifier)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.gray)
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(12)
-                        .padding(.horizontal, 20)
-                    }
-                    
-                    // MARK: - Info Section
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Vanliga frågor")
-                            .font(.system(size: 18, weight: .bold))
-                        
-                        faqItem(
-                            question: "Hur mycket kan jag tjäna?",
-                            answer: "Du får provision på varje prenumeration som görs via din länk. Exakt belopp beror på prenumerationstyp."
-                        )
-                        
-                        faqItem(
-                            question: "När får jag betalt?",
-                            answer: "Utbetalningar sker månadsvis via Insert Affiliate-plattformen."
-                        )
-                        
-                        faqItem(
-                            question: "Hur spåras mina referrals?",
-                            answer: "När någon klickar på din länk och laddar ner appen kopplas de automatiskt till ditt affiliate-konto."
-                        )
-                    }
-                    .padding(.horizontal, 20)
-                    
-                    Spacer(minLength: 40)
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header section with avatars
+                headerSection
+                
+                // Promo code section
+                promoCodeSection
+                
+                // Share button
+                shareButton
+                
+                // How to earn section
+                howToEarnSection
+                
+                // Earnings calculator section
+                earningsCalculatorSection
+                
+                // Stats section (if has referrals)
+                if let stats = stats, stats.totalReferrals > 0 {
+                    statsSection(stats: stats)
+                }
+                
+                // Payout section (if can withdraw)
+                if let stats = stats, stats.canWithdraw {
+                    payoutSection(stats: stats)
+                }
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+        }
+        .background(Color(.systemGray6).opacity(0.5))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Referera och tjäna")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.black)
+                        .frame(width: 40, height: 40)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
                 }
             }
-            .background(Color(.systemBackground))
-            .navigationTitle("Referera")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
-                        dismiss()
-                    }
-                    .foregroundColor(.primary)
+        }
+        .navigationBarBackButtonHidden(true)
+        .task {
+            await loadData()
+        }
+        .overlay {
+            if showCopiedToast {
+                VStack {
+                    Spacer()
+                    Text("Kopierad!")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color.black)
+                        .cornerRadius(25)
+                        .padding(.bottom, 100)
                 }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .task {
-                loadAffiliateStatus()
+        }
+        .alert("Begär utbetalning", isPresented: $showPayoutAlert) {
+            Button("Avbryt", role: .cancel) { }
+            Button("Bekräfta") {
+                requestPayout()
             }
+        } message: {
+            if let stats = stats {
+                Text("Du kommer att få \(Int(stats.pendingEarnings)) kr utbetalt till ditt kopplade Stripe-konto.")
+            }
+        }
+        .alert("Utbetalning begärd!", isPresented: $showPayoutSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Din utbetalning behandlas. Pengarna kommer att överföras inom 3-5 arbetsdagar.")
+        }
+        .alert("Kod uppdaterad!", isPresented: $showCodeUpdateSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Din referenskod har ändrats till \(referralCode)")
+        }
+        .sheet(isPresented: $showEditCodeSheet) {
+            editCodeSheet
         }
     }
     
-    // MARK: - Helper Views
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(spacing: 16) {
+            // Title
+            Text("Referera en vän")
+                .font(.system(size: 32, weight: .bold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // Avatar grid - decorative
+            HStack(spacing: -10) {
+                ForEach(0..<6, id: \.self) { index in
+                    Circle()
+                        .fill(avatarColors[index % avatarColors.count])
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white.opacity(0.8))
+                        )
+                        .offset(y: index % 2 == 0 ? -10 : 10)
+                }
+            }
+            .padding(.vertical, 20)
+            
+            // Center logo
+            Circle()
+                .fill(Color(.systemGray5))
+                .frame(width: 70, height: 70)
+                .overlay(
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .cornerRadius(8)
+                )
+                .offset(y: -30)
+            
+            // Subtitle
+            VStack(spacing: 4) {
+                Text("Hjälp dina vänner")
+                    .font(.system(size: 22, weight: .semibold))
+                Text("& tjäna pengar tillsammans")
+                    .font(.system(size: 16))
+                    .foregroundColor(.gray)
+            }
+            .offset(y: -20)
+        }
+    }
     
-    private func howItWorksStep(number: String, title: String, description: String) -> some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 36, height: 36)
+    private let avatarColors: [Color] = [
+        Color(red: 0.3, green: 0.5, blue: 0.3),
+        Color(red: 0.5, green: 0.7, blue: 0.5),
+        Color(red: 0.4, green: 0.6, blue: 0.8),
+        Color(red: 0.9, green: 0.7, blue: 0.5),
+        Color(red: 0.8, green: 0.5, blue: 0.5),
+        Color(red: 0.6, green: 0.5, blue: 0.8)
+    ]
+    
+    // MARK: - Promo Code Section
+    private var promoCodeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Din personliga kod")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
                 
-                Text(number)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
+                Spacer()
+                
+                // Edit button
+                Button {
+                    editedCode = referralCode
+                    showEditCodeSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12))
+                        Text(canEditCode ? "Redigera" : "Redigera om \(daysUntilEdit) dagar")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(canEditCode ? .black : .gray)
+                }
+                .disabled(!canEditCode)
             }
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
+            HStack {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(referralCode)
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(2)
+                }
                 
-                Text(description)
+                Spacer()
+                
+                Button {
+                    copyCode()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 20))
+                        .foregroundColor(.black)
+                }
+            }
+            .padding(20)
+            .background(Color.white)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+    }
+    
+    // MARK: - Share Button
+    private var shareButton: some View {
+        Button {
+            shareCode()
+        } label: {
+            Text("Dela")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(Color.black)
+                .cornerRadius(30)
+        }
+    }
+    
+    // MARK: - How to Earn Section
+    private var howToEarnSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Text("Så tjänar du")
+                    .font(.system(size: 18, weight: .semibold))
+                
+                Circle()
+                    .fill(Color.orange.opacity(0.2))
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Text("💰")
+                            .font(.system(size: 14))
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                bulletPoint("Dela din kod med dina vänner")
+                bulletPoint("Tjäna 40% på alla köp de gör")
+                bulletPoint("Ta ut pengarna när du nått 300 kr")
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
+    }
+    
+    private func bulletPoint(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("✱")
+                .font(.system(size: 14, weight: .bold))
+            Text(text)
+                .font(.system(size: 15))
+        }
+    }
+    
+    // MARK: - Earnings Calculator Section
+    private var earningsCalculatorSection: some View {
+        VStack(spacing: 0) {
+            // Top section - User slider
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Betalande användare du kan värva")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.primary.opacity(0.8))
+                
+                Text("\(Int(estimatedUsers))")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundColor(.black)
+                
+                // Custom slider
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // Background track
+                        Capsule()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 8)
+                        
+                        // Filled track
+                        Capsule()
+                            .fill(Color.black)
+                            .frame(width: max(0, min(geometry.size.width, geometry.size.width * (estimatedUsers / 500))), height: 8)
+                        
+                        // Thumb
+                        Circle()
+                            .fill(Color.black)
+                            .frame(width: 28, height: 28)
+                            .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            .offset(x: max(0, min(geometry.size.width - 28, (geometry.size.width - 28) * (estimatedUsers / 500))))
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let newValue = min(max(0, value.location.x / geometry.size.width * 500), 500)
+                                        estimatedUsers = max(1, newValue)
+                                        
+                                        // Light haptic
+                                        let generator = UIImpactFeedbackGenerator(style: .light)
+                                        generator.impactOccurred()
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 28)
+                .padding(.top, 8)
+            }
+            .padding(28)
+            
+            // Divider
+            Divider()
+                .padding(.horizontal, 20)
+            
+            // Bottom section - Estimated earnings
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Beräknad intjäning")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.primary.opacity(0.8))
+                
+                Text("\(Int(estimatedUsers * 160)) kr")
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text("baserat på årsabonnemang (160 kr/person med 40%)")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
-            
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(28)
         }
-        .padding(16)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .background(Color(.systemGray6).opacity(0.8))
+        .cornerRadius(24)
     }
     
-    private func faqItem(question: String, answer: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(question)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary)
+    // MARK: - Stats Section
+    private func statsSection(stats: ReferralStats) -> some View {
+        VStack(spacing: 16) {
+            Text("Din statistik")
+                .font(.system(size: 18, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
             
-            Text(answer)
-                .font(.system(size: 14))
+            HStack(spacing: 16) {
+                statCard(
+                    title: "Refererade",
+                    value: "\(stats.totalReferrals)",
+                    icon: "person.2.fill",
+                    color: .blue
+                )
+                
+                statCard(
+                    title: "Intjänat",
+                    value: "\(Int(stats.totalEarnings)) kr",
+                    icon: "banknote.fill",
+                    color: .green
+                )
+            }
+            
+            HStack(spacing: 16) {
+                statCard(
+                    title: "Tillgängligt",
+                    value: "\(Int(stats.pendingEarnings)) kr",
+                    icon: "wallet.pass.fill",
+                    color: .orange
+                )
+                
+                statCard(
+                    title: "Utbetalt",
+                    value: "\(Int(stats.paidOutEarnings)) kr",
+                    icon: "checkmark.circle.fill",
+                    color: .purple
+                )
+            }
+        }
+    }
+    
+    private func statCard(title: String, value: String, icon: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(color)
+                Spacer()
+            }
+            
+            Text(value)
+                .font(.system(size: 24, weight: .bold))
+            
+            Text(title)
+                .font(.system(size: 13))
                 .foregroundColor(.gray)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .background(Color.white)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.15), lineWidth: 1)
+        )
     }
     
-    // MARK: - Actions
-    
-    private func loadAffiliateStatus() {
-        // Check if user has an affiliate identifier stored (they came from an affiliate link)
-        affiliateIdentifier = InsertAffiliateSwift.returnInsertAffiliateIdentifier()
-        isLoading = false
+    // MARK: - Payout Section
+    private func payoutSection(stats: ReferralStats) -> some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Redo för utbetalning!")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Du har \(Int(stats.pendingEarnings)) kr tillgängligt")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "party.popper.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(.orange)
+            }
+            
+            // Check if Stripe account needs setup
+            if stripeAccountStatus?.needsOnboarding == true || stripeAccountStatus == nil {
+                // Setup Stripe Connect button
+                Button {
+                    setupStripeConnect()
+                } label: {
+                    HStack {
+                        if isSettingUpStripe {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "link.badge.plus")
+                            Text("Koppla bankkonto")
+                        }
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.blue)
+                    .cornerRadius(14)
+                }
+                .disabled(isSettingUpStripe)
+                
+                Text("Du behöver koppla ett bankkonto för att ta emot utbetalningar.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            } else {
+                // Request payout button
+                Button {
+                    showPayoutAlert = true
+                } label: {
+                    HStack {
+                        if isRequestingPayout {
+                            ProgressView()
+                                .tint(.black)
+                        } else {
+                            Image(systemName: "arrow.down.to.line")
+                            Text("Begär utbetalning")
+                        }
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(14)
+                }
+                .disabled(isRequestingPayout)
+            }
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [Color.orange.opacity(0.1), Color.yellow.opacity(0.05)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
     }
     
-    private func openAffiliateSignup() {
-        if let url = URL(string: affiliateSignupURL) {
-            UIApplication.shared.open(url)
+    // MARK: - Setup Stripe Connect
+    private func setupStripeConnect() {
+        isSettingUpStripe = true
+        
+        Task {
+            do {
+                // Try to create a new Connect account or get onboarding link
+                if let onboardingUrl = try await ReferralService.shared.createStripeConnectAccount() {
+                    await MainActor.run {
+                        self.stripeOnboardingUrl = onboardingUrl
+                        self.isSettingUpStripe = false
+                        
+                        // Open the URL in Safari
+                        if let url = URL(string: onboardingUrl) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                } else {
+                    await MainActor.run {
+                        self.isSettingUpStripe = false
+                    }
+                }
+            } catch {
+                print("❌ Stripe setup error: \(error)")
+                await MainActor.run {
+                    self.isSettingUpStripe = false
+                }
+            }
         }
     }
     
-    private func openAffiliateDashboard() {
-        if let url = URL(string: affiliateDashboardURL) {
-            UIApplication.shared.open(url)
+    // MARK: - Edit Code Sheet
+    private var editCodeSheet: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.black)
+                    
+                    Text("Ändra din kod")
+                        .font(.system(size: 24, weight: .bold))
+                    
+                    Text("Skriv in din nya personliga kod")
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 20)
+                
+                // Input field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Ny kod (3-12 tecken)")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    
+                    TextField("T.ex. MITTNAMN", text: $editedCode)
+                        .font(.system(size: 20, weight: .semibold))
+                        .textCase(.uppercase)
+                        .autocorrectionDisabled()
+                        .padding(16)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .onChange(of: editedCode) { _, newValue in
+                            // Filter to only alphanumeric and limit to 12 chars
+                            let filtered = newValue.uppercased().filter { $0.isLetter || $0.isNumber }
+                            if filtered.count <= 12 {
+                                editedCode = filtered
+                            } else {
+                                editedCode = String(filtered.prefix(12))
+                            }
+                        }
+                }
+                .padding(.horizontal, 20)
+                
+                // Error message
+                if let error = codeUpdateError {
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 20)
+                }
+                
+                // Info text
+                Text("Du kan ändra din kod var 6:e dag. Koden måste vara unik.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Save button
+                Button {
+                    updateCode()
+                } label: {
+                    HStack {
+                        if isUpdatingCode {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Spara")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(editedCode.count >= 3 ? Color.black : Color.gray)
+                    .cornerRadius(14)
+                }
+                .disabled(editedCode.count < 3 || isUpdatingCode)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 30)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showEditCodeSheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .frame(width: 36, height: 36)
+                            .background(Color(.systemGray5))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+    
+    private func updateCode() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isUpdatingCode = true
+        codeUpdateError = nil
+        
+        Task {
+            do {
+                let success = try await ReferralService.shared.updateReferralCode(userId: userId, newCode: editedCode)
+                
+                await MainActor.run {
+                    isUpdatingCode = false
+                    
+                    if success {
+                        referralCode = editedCode.uppercased()
+                        showEditCodeSheet = false
+                        showCodeUpdateSuccess = true
+                        
+                        // Refresh edit status
+                        Task {
+                            await checkEditStatus()
+                        }
+                    } else {
+                        codeUpdateError = "Koden är redan tagen eller ogiltig"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isUpdatingCode = false
+                    codeUpdateError = "Kunde inte uppdatera koden"
+                }
+            }
+        }
+    }
+    
+    private func checkEditStatus() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            let (canEdit, daysLeft) = try await ReferralService.shared.canEditCode(userId: userId)
+            await MainActor.run {
+                self.canEditCode = canEdit
+                self.daysUntilEdit = daysLeft
+            }
+        } catch {
+            print("❌ Error checking edit status: \(error)")
+        }
+    }
+    
+    // MARK: - Actions
+    private func loadData() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            // Get or create referral code
+            let code = try await ReferralService.shared.getOrCreateReferralCode(userId: userId)
+            
+            // Check if user can edit code
+            let (canEdit, daysLeft) = try await ReferralService.shared.canEditCode(userId: userId)
+            
+            // Get stats
+            let fetchedStats = try await ReferralService.shared.getReferralStats(userId: userId)
+            
+            // Check Stripe account status (only if can withdraw)
+            var accountStatus: StripeAccountStatus? = nil
+            if fetchedStats.canWithdraw {
+                accountStatus = try? await ReferralService.shared.checkStripeAccountStatus()
+            }
+            
+            await MainActor.run {
+                self.referralCode = code
+                self.canEditCode = canEdit
+                self.daysUntilEdit = daysLeft
+                self.stats = fetchedStats
+                self.stripeAccountStatus = accountStatus
+                self.isLoading = false
+            }
+        } catch {
+            print("❌ Error loading referral data: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func copyCode() {
+        UIPasteboard.general.string = referralCode
+        
+        // Haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        // Show toast
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showCopiedToast = true
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopiedToast = false
+            }
+        }
+    }
+    
+    private func shareCode() {
+        let message = """
+        Gå med mig på Up&Down! 💪
+        
+        Använd min kod: \(referralCode)
+        
+        Ladda ner appen här: https://apps.apple.com/app/upanddown/id123456789
+        """
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [message],
+            applicationActivities: nil
+        )
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+    }
+    
+    private func requestPayout() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isRequestingPayout = true
+        
+        Task {
+            do {
+                let success = try await ReferralService.shared.requestPayout(userId: userId)
+                
+                await MainActor.run {
+                    isRequestingPayout = false
+                    if success {
+                        showPayoutSuccess = true
+                        // Refresh stats
+                        Task {
+                            await loadData()
+                        }
+                    }
+                }
+            } catch {
+                print("❌ Payout error: \(error)")
+                await MainActor.run {
+                    isRequestingPayout = false
+                }
+            }
         }
     }
 }
 
 #Preview {
-    ReferralView()
+    NavigationStack {
+        ReferralView()
+            .environmentObject(AuthViewModel())
+    }
 }
-

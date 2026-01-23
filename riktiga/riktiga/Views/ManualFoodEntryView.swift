@@ -15,6 +15,12 @@ struct ManualFoodEntryView: View {
     @State private var isSaving = false
     @State private var showSuccess = false
     
+    // AI Description states
+    @State private var showAISheet = false
+    @State private var aiDescription: String = ""
+    @State private var isAnalyzing = false
+    @State private var aiError: String?
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -69,8 +75,7 @@ struct ManualFoodEntryView: View {
                                 text: $calories,
                                 keyboardType: .numberPad,
                                 unit: "kcal",
-                                icon: "flame.fill",
-                                iconColor: .orange
+                                emoji: "🔥"
                             )
                             
                             // Protein
@@ -80,8 +85,7 @@ struct ManualFoodEntryView: View {
                                 text: $protein,
                                 keyboardType: .numberPad,
                                 unit: "g",
-                                icon: "fish.fill",
-                                iconColor: Color(red: 0.85, green: 0.35, blue: 0.35)
+                                emoji: "🍗"
                             )
                             
                             // Carbs
@@ -91,8 +95,7 @@ struct ManualFoodEntryView: View {
                                 text: $carbs,
                                 keyboardType: .numberPad,
                                 unit: "g",
-                                icon: "leaf.fill",
-                                iconColor: Color(red: 0.75, green: 0.55, blue: 0.25)
+                                emoji: "🌾"
                             )
                             
                             // Fat
@@ -102,41 +105,64 @@ struct ManualFoodEntryView: View {
                                 text: $fat,
                                 keyboardType: .numberPad,
                                 unit: "g",
-                                icon: "drop.fill",
-                                iconColor: Color(red: 0.35, green: 0.55, blue: 0.8)
+                                emoji: "🥑"
                             )
                         }
                         .padding(.horizontal, 20)
                         
-                        Spacer(minLength: 100)
+                        Spacer(minLength: 120)
                     }
                 }
                 
-                // Bottom button
+                // Bottom buttons
                 VStack {
                     Spacer()
                     
-                    Button {
-                        saveFood()
-                    } label: {
-                        HStack {
-                            if isSaving {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 18))
-                                Text("Lägg till")
-                                    .font(.system(size: 17, weight: .semibold))
+                    HStack(spacing: 12) {
+                        // AI Button
+                        Button {
+                            showAISheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 16))
+                                Text("Regga med AI")
+                                    .font(.system(size: 15, weight: .semibold))
                             }
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.white)
+                            .cornerRadius(14)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.black, lineWidth: 1.5)
+                            )
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(isFormValid ? Color.black : Color.gray)
-                        .cornerRadius(14)
+                        
+                        // Add Button
+                        Button {
+                            saveFood()
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 16))
+                                    Text("Lägg till")
+                                        .font(.system(size: 15, weight: .semibold))
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(isFormValid ? Color.black : Color.gray)
+                            .cornerRadius(14)
+                        }
+                        .disabled(!isFormValid || isSaving)
                     }
-                    .disabled(!isFormValid || isSaving)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 30)
                 }
@@ -163,6 +189,195 @@ struct ManualFoodEntryView: View {
             } message: {
                 Text("\(foodName) har lagts till i din dagbok.")
             }
+            .sheet(isPresented: $showAISheet) {
+                aiDescriptionSheet
+            }
+        }
+    }
+    
+    // MARK: - AI Description Sheet
+    private var aiDescriptionSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.black.opacity(0.05))
+                                .frame(width: 80, height: 80)
+                            
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 36))
+                                .foregroundColor(.black)
+                        }
+                        
+                        Text("Beskriv din måltid")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.black)
+                        
+                        Text("AI analyserar och uppskattar näringsvärden")
+                            .font(.system(size: 15))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 20)
+                    
+                    // Text input
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Beskriv vad du åt")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        TextEditor(text: $aiDescription)
+                            .font(.system(size: 16))
+                            .frame(minHeight: 120)
+                            .padding(12)
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                            .overlay(
+                                Group {
+                                    if aiDescription.isEmpty {
+                                        Text("T.ex. En stor portion kyckling med ris och grönsaker, lite sås på...")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.gray.opacity(0.5))
+                                            .padding(16)
+                                            .allowsHitTesting(false)
+                                    }
+                                },
+                                alignment: .topLeading
+                            )
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Error message
+                    if let error = aiError {
+                        Text(error)
+                            .font(.system(size: 14))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 20)
+                    }
+                    
+                    // Examples
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Exempel:")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        VStack(spacing: 8) {
+                            exampleChip("🍝 Pasta carbonara med bacon")
+                            exampleChip("🥗 Stor salladsskål med kyckling")
+                            exampleChip("🍔 Hamburgare med pommes")
+                            exampleChip("🥣 Overnight oats med bär")
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                    
+                    // Analyze button
+                    Button {
+                        analyzeWithAI()
+                    } label: {
+                        HStack {
+                            if isAnalyzing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                Text("Analyserar...")
+                                    .font(.system(size: 17, weight: .semibold))
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 18))
+                                Text("Analysera med AI")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(!aiDescription.trimmingCharacters(in: .whitespaces).isEmpty ? Color.black : Color.gray)
+                        .cornerRadius(14)
+                    }
+                    .disabled(aiDescription.trimmingCharacters(in: .whitespaces).isEmpty || isAnalyzing)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showAISheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .frame(width: 36, height: 36)
+                            .background(Color.gray.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+    
+    private func exampleChip(_ text: String) -> some View {
+        Button {
+            aiDescription = String(text.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        } label: {
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.white)
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+        }
+    }
+    
+    private func analyzeWithAI() {
+        guard !aiDescription.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        
+        isAnalyzing = true
+        aiError = nil
+        
+        Task {
+            do {
+                let result = try await FoodScannerService.shared.analyzeFoodFromDescription(aiDescription)
+                
+                await MainActor.run {
+                    // Fill in the form with AI results
+                    foodName = result.name
+                    calories = "\(result.calories)"
+                    protein = "\(result.protein)"
+                    carbs = "\(result.carbs)"
+                    fat = "\(result.fat)"
+                    
+                    isAnalyzing = false
+                    showAISheet = false
+                    
+                    // Haptic feedback
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                }
+            } catch {
+                await MainActor.run {
+                    aiError = "Kunde inte analysera: \(error.localizedDescription)"
+                    isAnalyzing = false
+                }
+            }
         }
     }
     
@@ -177,15 +392,14 @@ struct ManualFoodEntryView: View {
         text: Binding<String>,
         keyboardType: UIKeyboardType,
         unit: String? = nil,
-        icon: String? = nil,
-        iconColor: Color = .black
+        emoji: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                if let icon = icon {
-                    Image(systemName: icon)
+                if let emoji = emoji {
+                    Text(emoji)
                         .font(.system(size: 14))
-                        .foregroundColor(iconColor)
+                        .grayscale(1)
                 }
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
@@ -284,4 +498,3 @@ struct ManualFoodLogInsert: Codable {
     ManualFoodEntryView()
         .environmentObject(AuthViewModel())
 }
-

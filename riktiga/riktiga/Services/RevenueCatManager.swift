@@ -6,7 +6,7 @@ import Supabase
 class RevenueCatManager: NSObject, ObservableObject {
     static let shared = RevenueCatManager()
     
-    @Published var customerInfo: CustomerInfo?
+    @Published var customerInfo: RevenueCat.CustomerInfo?
     @Published var offerings: Offerings?
     @Published var isPremium: Bool = false {
         didSet { updateCombinedProStatus() }
@@ -117,6 +117,12 @@ class RevenueCatManager: NSObject, ObservableObject {
                     await updateProStatusInDatabase(isPro: true)
                 }
                 
+                // 🎁 Track referral earning if user was referred
+                await trackReferralEarning(
+                    productId: package.storeProduct.productIdentifier,
+                    priceInSEK: getPriceInSEK(package: package)
+                )
+                
                 print("✅ Purchase successful: \(package.storeProduct.productIdentifier)")
                 
                 await MainActor.run {
@@ -138,6 +144,53 @@ class RevenueCatManager: NSObject, ObservableObject {
             print("❌ Purchase error: \(error)")
             return false
         }
+    }
+    
+    // MARK: - Referral Tracking
+    /// Track earnings for the referrer when a purchase is made
+    private func trackReferralEarning(productId: String, priceInSEK: Double) async {
+        do {
+            let session = try await SupabaseConfig.supabase.auth.session
+            let userId = session.user.id.uuidString
+            
+            // Record the earning - ReferralService will check if user was referred
+            try await ReferralService.shared.recordEarning(
+                referredUserId: userId,
+                purchaseAmountSek: priceInSEK,
+                purchaseType: productId
+            )
+            
+            print("🎁 Referral earning tracked for purchase: \(productId), amount: \(priceInSEK) SEK")
+        } catch {
+            print("⚠️ Could not track referral earning: \(error)")
+            // Don't fail the purchase if referral tracking fails
+        }
+    }
+    
+    /// Convert package price to SEK (approximate)
+    private func getPriceInSEK(package: Package) -> Double {
+        let price = package.storeProduct.price as Decimal
+        let priceDouble = NSDecimalNumber(decimal: price).doubleValue
+        
+        // Get currency code from the localized price string
+        let currencyCode = package.storeProduct.currencyCode ?? "SEK"
+        
+        // If already in SEK, return as is
+        if currencyCode == "SEK" {
+            return priceDouble
+        }
+        
+        // Approximate conversion rates (update these or use live rates)
+        let conversionToSEK: [String: Double] = [
+            "USD": 10.5,
+            "EUR": 11.5,
+            "GBP": 13.5,
+            "NOK": 1.0,
+            "DKK": 1.55
+        ]
+        
+        let rate = conversionToSEK[currencyCode] ?? 10.0 // Default fallback
+        return priceDouble * rate
     }
     
     func purchaseProduct(_ productId: String) async -> Bool {
@@ -283,7 +336,7 @@ class RevenueCatManager: NSObject, ObservableObject {
 
     // MARK: - Helpers
     @MainActor
-    private func applyCustomerInfo(_ info: CustomerInfo) async {
+    private func applyCustomerInfo(_ info: RevenueCat.CustomerInfo) async {
         self.customerInfo = info
         if let firstActive = info.entitlements.active.values.first {
             self.isPremium = true
@@ -333,13 +386,25 @@ class RevenueCatManager: NSObject, ObservableObject {
 
 // MARK: - PurchasesDelegate
 extension RevenueCatManager: PurchasesDelegate {
-    func purchases(_ purchases: Purchases, receivedUpdated customerInfo: CustomerInfo) {
+    func purchases(_ purchases: Purchases, receivedUpdated customerInfo: RevenueCat.CustomerInfo) {
+        let wasNotPremium = !self.isPremium
+        
         DispatchQueue.main.async {
             self.customerInfo = customerInfo
             if let firstActive = customerInfo.entitlements.active.values.first {
                 self.isPremium = true
                 self.activeEntitlementId = firstActive.identifier
                 self.activeExpirationDate = firstActive.expirationDate
+                
+                // 🎁 Track renewal for referral (only if transitioning to premium)
+                if wasNotPremium {
+                    Task {
+                        await self.trackRenewalForReferral(entitlementId: firstActive.identifier)
+                    }
+                    // 🎉 Post notification to show Pro welcome screen
+                    NotificationCenter.default.post(name: .userBecamePro, object: nil)
+                    print("🎉 User just became Pro! Posted notification.")
+                }
             } else {
                 self.isPremium = false
                 self.activeEntitlementId = nil
@@ -354,5 +419,20 @@ extension RevenueCatManager: PurchasesDelegate {
                 }
             }
         }
+    }
+    
+    /// Track subscription renewal for referral earnings
+    private func trackRenewalForReferral(entitlementId: String) async {
+        // Estimate price based on entitlement (these should match your actual prices)
+        let renewalPrices: [String: Double] = [
+            "premium": 99.0,      // Monthly price in SEK
+            "monthly": 99.0,
+            "yearly": 499.0,     // Yearly price in SEK
+            "annual": 499.0
+        ]
+        
+        let price = renewalPrices[entitlementId.lowercased()] ?? 99.0
+        
+        await trackReferralEarning(productId: "renewal_\(entitlementId)", priceInSEK: price)
     }
 }

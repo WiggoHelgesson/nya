@@ -11,8 +11,15 @@ import SwiftUI
 @main
 struct UpDownLiveActivityBundle: WidgetBundle {
     var body: some Widget {
-        UpDownLiveActivity()
-        UpDownLiveActivityControl()
+        // Home Screen Widgets
+        StreakWidget()
+        CaloriesWidget()
+        DetailedNutritionWidget()
+        
+        // Live Activity
         UpDownLiveActivityLiveActivity()
+        
+        // Control Center Widget
+        UpDownLiveActivityControl()
     }
 }

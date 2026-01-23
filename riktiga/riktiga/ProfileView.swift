@@ -38,6 +38,19 @@ struct ProfileActivitiesView: View {
     }
     
     var body: some View {
+        ZStack {
+            // Light blue gradient background
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                    Color(red: 0.98, green: 0.95, blue: 0.97),
+                    Color(.systemGroupedBackground)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
             VStack(spacing: 0) {
                 ScrollView {
                     LazyVStack(spacing: 16) {
@@ -139,7 +152,7 @@ struct ProfileActivitiesView: View {
                         }
                     }
                     .padding(20)
-                    .background(Color(.systemGray6))
+                    .background(Color.white)
                     .cornerRadius(16)
                     
                     // MARK: - Public Profile Button
@@ -155,7 +168,7 @@ struct ProfileActivitiesView: View {
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color(.systemGray6))
+                        .background(Color.white)
                         .cornerRadius(12)
                     }
 
@@ -177,7 +190,7 @@ struct ProfileActivitiesView: View {
                         Spacer()
                     }
                     .padding(16)
-                    .background(Color(.secondarySystemBackground))
+                    .background(Color.white)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -204,7 +217,6 @@ struct ProfileActivitiesView: View {
                             action: { showRoutines = true }
                         )
                     }
-                    
                     
                     // MARK: - Up&Down Live Gallery
                     UpAndDownLiveGallery(posts: myPostsViewModel.posts)
@@ -277,6 +289,7 @@ struct ProfileActivitiesView: View {
                 .padding(16)
                 }
             }
+        } // ZStack
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
             }
@@ -292,11 +305,9 @@ struct ProfileActivitiesView: View {
                         selectedUserStories = nil
                     }
                 )
+                .environmentObject(authViewModel)
                 .background(Color.black)
                 .ignoresSafeArea()
-            }
-            .sheet(isPresented: $showPaywall) {
-                PresentPaywallView()
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
@@ -516,9 +527,9 @@ struct ProfileCardButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 90)
-            .background(Color(.secondarySystemBackground))
+            .background(Color.white)
             .cornerRadius(16)
-            .shadow(color: colorScheme == .dark ? .clear : .black.opacity(0.08), radius: 12, x: 0, y: 4)
+            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)

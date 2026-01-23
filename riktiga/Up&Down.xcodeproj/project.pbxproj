@@ -16,6 +16,7 @@
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
 		8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8631B5092ECA305300EBACD6 /* OpenAISwift */; };
 		868BB4432F0C6AE7005227A3 /* UpDownLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8699E37D2F1D91B700AC7ADF /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8699E37C2F1D91B700AC7ADF /* SuperwallKit */; };
 		86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269AE2EAA5E2D00A4EC93 /* Auth */; };
 		86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B02EAA5E2D00A4EC93 /* Functions */; };
 		86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269B22EAA5E2D00A4EC93 /* PostgREST */; };
@@ -68,6 +69,7 @@
 		86030F362EB75F430023EA7B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8631B4FA2EBDEDEE00EBACD6 /* AppTrackingTransparency.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppTrackingTransparency.framework; path = System/Library/Frameworks/AppTrackingTransparency.framework; sourceTree = SDKROOT; };
+		8643149C2F22BE3A000D39F1 /* UpDownLiveActivityExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UpDownLiveActivityExtension.entitlements; sourceTree = "<group>"; };
 		868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UpDownLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		86B269892EAA2EBB00A4EC93 /* Up&Down.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Up&Down.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -163,6 +165,7 @@
 				86D759BF2EDC536B00CE3755 /* StripeCardScan in Frameworks */,
 				8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */,
 				86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */,
+				8699E37D2F1D91B700AC7ADF /* SuperwallKit in Frameworks */,
 				86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */,
 				86D759C12EDC536B00CE3755 /* StripeConnect in Frameworks */,
 				86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */,
@@ -188,6 +191,7 @@
 		86B269802EAA2EBB00A4EC93 = {
 			isa = PBXGroup;
 			children = (
+				8643149C2F22BE3A000D39F1 /* UpDownLiveActivityExtension.entitlements */,
 				86B2698B2EAA2EBB00A4EC93 /* riktiga */,
 				868BB4262F0C66A6005227A3 /* UpDownLiveActivity */,
 				8614115F2F158FE9005BF8CF /* NotificationServiceExtension */,
@@ -302,6 +306,7 @@
 				86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */,
 				860C82202EF8A5F900A317BD /* InsertAffiliateSwift */,
 				861411582F152368005BF8CF /* TerraiOS */,
+				8699E37C2F1D91B700AC7ADF /* SuperwallKit */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -344,6 +349,7 @@
 				86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 				860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */,
 				861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */,
+				8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -424,7 +430,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
@@ -436,7 +442,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 113;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -454,7 +460,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
@@ -466,7 +472,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 113;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -484,9 +490,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
@@ -498,7 +505,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 113;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -516,9 +523,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
@@ -530,7 +538,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 113;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -676,7 +684,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -709,7 +717,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 110;
+				MARKETING_VERSION = 113;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -755,7 +763,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -788,7 +796,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 110;
+				MARKETING_VERSION = 113;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -896,6 +904,14 @@
 				minimumVersion = 1.4.1;
 			};
 		};
+		8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/superwall/Superwall-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.12.5;
+			};
+		};
 		86B269AD2EAA5E2D00A4EC93 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -944,6 +960,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */;
 			productName = OpenAISwift;
+		};
+		8699E37C2F1D91B700AC7ADF /* SuperwallKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
+			productName = SuperwallKit;
 		};
 		86B269AE2EAA5E2D00A4EC93 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
