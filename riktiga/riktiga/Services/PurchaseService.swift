@@ -133,6 +133,7 @@ class PurchaseService: ObservableObject {
     
     private func getDiscountCode(for brandName: String) -> String {
         switch brandName {
+        // Golf
         case "PLIKTGOLF":
             return "T59W1DH7B81J"
         case "PEGMATE":
@@ -149,18 +150,33 @@ class PurchaseService: ObservableObject {
             return "HAPPY2025"
         case "RETROGOLF":
             return "Upanddown20"
+        case "ALTURA":
+            return "UPDOWN15"
+        case "J.LINDEBERG":
+            return "UPANDDOWN15"
+            
+        // Energidryck / Gym / Löpning
         case "PUMPLABS":
             return "UPNDOWN15"
         case "ZEN ENERGY":
             return "UPDOWN15"
         case "CLYRO":
             return "Up&Down20"
-        case "Fjällsyn UF":
-            return "FJÄLLSYN15PÅALLT"
         case "Powerwell":
             return "1EFN34345G1J"
+        case "FUSE ENERGY":
+            return "UPDOWN10"
+        case "XEEIL":
+            return "UPDOWN15"
+            
+        // Skidåkning
+        case "CAPSTONE":
+            return "UPDOWN10"
+        case "Fjällsyn UF":
+            return "FJÄLLSYN15PÅALLT"
+            
         default:
-            return "CODE2025"
+            return "UPDOWN2025"
         }
     }
 }

@@ -128,9 +128,6 @@ struct HomeView: View {
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
     
-    // Cached image for story popup (prevents crash when image is cleared during animation)
-    @State private var cachedStoryImage: UIImage?
-    
     // Data transition animation
     @State private var isTransitioning = false
     @State private var displayedCaloriesLeft: Int = 0
@@ -332,39 +329,6 @@ struct HomeView: View {
                 analyzingManager.showPaywallForLimit = false
             }
         }
-        .overlay {
-            // Story posting popup after food is saved
-            // Use cachedStoryImage to prevent crash when analyzingManager.capturedImage is cleared
-            if analyzingManager.showStoryPopup, let image = cachedStoryImage {
-                PostToStoryPopup(
-                    isPresented: $analyzingManager.showStoryPopup,
-                    image: image,
-                    onConfirm: {
-                        analyzingManager.postToStory()
-                    },
-                    onCancel: {
-                        analyzingManager.dismissStoryPopup()
-                        // Clear cached image after dismissal
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            cachedStoryImage = nil
-                        }
-                    }
-                )
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: analyzingManager.showStoryPopup)
-            }
-        }
-        .onChange(of: analyzingManager.showStoryPopup) { _, newValue in
-            // Cache the image when popup is about to show
-            if newValue, let image = analyzingManager.capturedImage {
-                cachedStoryImage = image
-            } else if !newValue {
-                // Clear cached image after a delay when popup is dismissed
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    cachedStoryImage = nil
-                }
-            }
-        }
         .fullScreenCover(isPresented: $achievementManager.showAchievementPopup) {
             if let achievement = achievementManager.currentlyShowingAchievement {
                 AchievementPopupView(
@@ -386,9 +350,10 @@ struct HomeView: View {
     
     // MARK: - Week Calendar View
     private var weekCalendarView: some View {
-        TabView(selection: $viewModel.currentWeekIndex) {
-            ForEach(Array(viewModel.weeks.enumerated()), id: \.element.id) { index, week in
-                weekView(week: week)
+        let weeksCount = viewModel.weeks.count
+        return TabView(selection: $viewModel.currentWeekIndex) {
+            ForEach(0..<weeksCount, id: \.self) { index in
+                weekView(week: viewModel.weeks[index])
                     .tag(index)
             }
         }

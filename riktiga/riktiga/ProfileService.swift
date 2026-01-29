@@ -43,7 +43,7 @@ class ProfileService {
             
             // Försök att dekoda - Email finns INTE i profiles tabellen
             do {
-                let baseColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, climbed_mountains, completed_races"
+                let baseColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races"
                 let personalBestColumns = ", pb_5km_minutes, pb_10km_hours, pb_10km_minutes, pb_marathon_hours, pb_marathon_minutes"
                 var profiles: [User]
                 let shouldAttemptPBColumns = personalBestColumnsAvailable ?? true

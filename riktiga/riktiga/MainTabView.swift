@@ -65,7 +65,7 @@ struct MainTabView: View {
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem, 1=Socialt, 2=Belöningar, 3=Profil
+    @State private var selectedTab = 0  // 0=Hem (Social), 1=Kalorier (Home), 2=Belöningar, 3=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     @State private var showDiscardConfirmation = false
@@ -89,20 +89,15 @@ struct MainTabView: View {
     // Tab items data - 4 tabs now (removed Starta pass)
     private let tabItems: [(icon: String, title: String)] = [
         ("house.fill", "Hem"),
-        ("person.2.fill", "Socialt"),
+        ("fork.knife", "Kalorier"),
         ("gift.fill", "Belöningar"),
         ("person.fill", "Profil")
     ]
     
     var body: some View {
         Group {
-            if #available(iOS 26.0, *) {
-                // iOS 26+ : Native Liquid Glass TabView
-                liquidGlassTabView
-            } else {
-                // iOS 25 and earlier: Custom Tab Bar
-                legacyTabView
-            }
+            // Use the same custom tab bar with Tracka button for all iOS versions
+            legacyTabView
         }
         .fullScreenCover(isPresented: $showStartSession) {
             StartSessionView(initialActivity: startActivityType ?? .running)
@@ -317,11 +312,11 @@ struct MainTabView: View {
             // Native TabView with built-in Liquid Glass effect
             TabView(selection: $selectedTab) {
                 Tab("Hem", systemImage: "house.fill", value: 0) {
-                    HomeContainerView()
+                    SocialView()
                 }
                 
-                Tab("Socialt", systemImage: "person.2.fill", value: 1) {
-                    SocialView()
+                Tab("Kalorier", systemImage: "fork.knife", value: 1) {
+                    HomeContainerView()
                 }
                 
                 Tab("Belöningar", systemImage: "gift.fill", value: 2) {
@@ -332,28 +327,12 @@ struct MainTabView: View {
                     ProfileContainerView()
                 }
             }
-            .tint(.primary)
             .allowsHitTesting(!showAddMealSheet)
             
             // Add Meal Overlay - always rendered but hidden for smooth transitions
             addMealOverlay
                 .opacity(showAddMealSheet ? 1 : 0)
                 .allowsHitTesting(showAddMealSheet)
-            
-            // Floating + button container - hide when navigating to sub-pages
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView {
-                        floatingAddButton
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 90) // Above the tab bar
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             
             // Floating active session banner
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
@@ -435,17 +414,22 @@ struct MainTabView: View {
             VStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             .frame(width: 150, height: 120)
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 10)
+            .background(mealOptionBackground)
         }
+    }
+    
+    @ViewBuilder
+    private var mealOptionBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
     
     // AI Scan option with logo and stars
@@ -456,17 +440,17 @@ struct MainTabView: View {
                     // Stars around the logo
                     Image(systemName: "sparkles")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .offset(x: -20, y: -12)
                     
                     Image(systemName: "sparkle")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .offset(x: 18, y: -14)
                     
                     Image(systemName: "sparkle")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(.primary.opacity(0.6))
                         .offset(x: 22, y: 2)
                     
                     // App logo with rounded corners
@@ -480,12 +464,10 @@ struct MainTabView: View {
                 
                 Text("Ta bild med AI")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             .frame(width: 150, height: 120)
-            .background(Color.white)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 10)
+            .background(mealOptionBackground)
         }
     }
     
@@ -500,9 +482,15 @@ struct MainTabView: View {
                 .foregroundColor(.gray.opacity(0.5))
         }
         .frame(width: 150, height: 120)
-        .background(Color.white.opacity(0.7))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 5)
+        .background(disabledMealOptionBackground)
+    }
+    
+    @ViewBuilder
+    private var disabledMealOptionBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.regularMaterial)
+            .opacity(0.7)
+            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
     
     // AI Scan limited option (shows paywall when tapped)
@@ -554,22 +542,20 @@ struct MainTabView: View {
                     .foregroundColor(.orange)
             }
             .frame(width: 150, height: 120)
-            .background(Color.white.opacity(0.7))
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 5)
+            .background(disabledMealOptionBackground)
         }
     }
     
     // MARK: - Legacy Tab View (iOS 25 and earlier)
     private var legacyTabView: some View {
         ZStack(alignment: .bottom) {
-            // Content views based on selected tab
+            // Content views based on selected tab - instant switch
             Group {
                 switch selectedTab {
                 case 0:
-                    HomeContainerView()
-                case 1:
                     SocialView()
+                case 1:
+                    HomeContainerView()
                 case 2:
                     RewardsView()
                 case 3:
@@ -593,97 +579,187 @@ struct MainTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Custom Tab Bar with + button - hide + when navigating
-            if !showAddMealSheet {
+            // Custom Tab Bar with + button - hide when navigating to subpages
+            if !showAddMealSheet && navigationTracker.isAtRootView {
                 legacyCustomTabBar
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
+        .animation(.easeOut(duration: 0.25), value: navigationTracker.isAtRootView)
     }
     
-    // MARK: - Floating Add Button
-    private var floatingAddButton: some View {
+    // MARK: - Legacy Custom Tab Bar (Golf GameBook style)
+    private var legacyCustomTabBar: some View {
+        VStack(spacing: 0) {
+            // Top border line
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 0.5)
+            
+            // Tab bar content - all 5 items in one row
+            HStack(spacing: 0) {
+                // Tab 0: Hem
+                FixedTabBarItem(
+                    icon: tabItems[0].icon,
+                    title: tabItems[0].title,
+                    isSelected: selectedTab == 0,
+                    action: {
+                        // Always pop to root and reset navigation tracker
+                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootHem"), object: nil)
+                        NavigationDepthTracker.shared.resetToRoot()
+                        if selectedTab != 0 {
+                            switchToTab(0)
+                        }
+                    }
+                )
+                
+                // Tab 1: Kalorier
+                FixedTabBarItem(
+                    icon: tabItems[1].icon,
+                    title: tabItems[1].title,
+                    isSelected: selectedTab == 1,
+                    action: {
+                        // Always pop to root and reset navigation tracker
+                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootKalorier"), object: nil)
+                        NavigationDepthTracker.shared.resetToRoot()
+                        if selectedTab != 1 {
+                            switchToTab(1)
+                        }
+                    }
+                )
+                
+                // Center: Tracka button (sticks up)
+                centerTrackaButton
+                
+                // Tab 2: Belöningar
+                FixedTabBarItem(
+                    icon: tabItems[2].icon,
+                    title: tabItems[2].title,
+                    isSelected: selectedTab == 2,
+                    action: {
+                        // Always pop to root and reset navigation tracker
+                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootBeloningar"), object: nil)
+                        NavigationDepthTracker.shared.resetToRoot()
+                        if selectedTab != 2 {
+                            switchToTab(2)
+                        }
+                    }
+                )
+                
+                // Tab 3: Profil
+                FixedTabBarItem(
+                    icon: tabItems[3].icon,
+                    title: tabItems[3].title,
+                    isSelected: selectedTab == 3,
+                    action: {
+                        // Always pop to root and reset navigation tracker
+                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
+                        NavigationDepthTracker.shared.resetToRoot()
+                        if selectedTab != 3 {
+                            switchToTab(3)
+                        }
+                    }
+                )
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 28)
+            .padding(.horizontal, 4)
+        }
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Center Tracka Button (circular, sticks up above tab bar)
+    private var centerTrackaButton: some View {
         Button {
             triggerHeavyHaptic()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showAddMealSheet.toggle()
             }
         } label: {
-            ZStack {
-                Circle()
-                    .fill(Color(red: 0.15, green: 0.15, blue: 0.17))
-                    .frame(width: 56, height: 56)
-                    .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
-                
-                Image(systemName: showAddMealSheet ? "xmark" : "plus")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(.white)
-                    .rotationEffect(.degrees(showAddMealSheet ? 0 : 0))
-            }
-        }
-    }
-    
-    // MARK: - Legacy Custom Tab Bar
-    private var legacyCustomTabBar: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // Tab items container with glass style background
-            HStack(spacing: 0) {
-                ForEach(0..<tabItems.count, id: \.self) { index in
-                    LegacyTabBarItem(
-                        icon: tabItems[index].icon,
-                        title: tabItems[index].title,
-                        isSelected: selectedTab == index,
-                        action: {
-                            if selectedTab == index {
-                                // Same tab tapped - pop to root
-                                let notificationName: String
-                                switch index {
-                                case 0: notificationName = "PopToRootHem"
-                                case 1: notificationName = "PopToRootSocialt"
-                                case 2: notificationName = "PopToRootBeloningar"
-                                case 3: notificationName = "PopToRootProfil"
-                                default: notificationName = ""
-                                }
-                                if !notificationName.isEmpty {
-                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
-                                }
-                            } else {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedTab = index
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .background(
+            VStack(spacing: 4) {
                 ZStack {
-                    // Glass effect layers
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                    // Outer dark rim for 3D depth effect
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.25),
+                                    Color.black,
+                                    Color(white: 0.15),
+                                    Color.black
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 72, height: 72)
+                        .shadow(color: Color.black.opacity(0.5), radius: 12, x: 0, y: 6)
                     
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(Color.white.opacity(0.7))
+                    // Main button body with gradient
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(white: 0.45),      // Silver highlight at top
+                                    Color(white: 0.3),       // Silver mid
+                                    Color(white: 0.15),      // Dark mid
+                                    Color.black,             // Black bottom
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 64, height: 64)
                     
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                    // Inner highlight ring at top for 3D pop
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.4),
+                                    Color.white.opacity(0.2),
+                                    Color.clear,
+                                    Color.clear,
+                                    Color.black.opacity(0.3)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 2
+                        )
+                        .frame(width: 62, height: 62)
+                    
+                    // Subtle inner shadow/bevel
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.4),
+                                    Color.clear,
+                                    Color.clear,
+                                    Color(white: 0.4).opacity(0.3)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                        .frame(width: 58, height: 58)
+                    
+                    // Text inside button - bolder and larger
+                    Text("Tracka")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 1)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 8)
-            )
-            
-            // + button on the right - hide when navigating to sub-pages
-            if navigationTracker.isAtRootView {
-                floatingAddButton
-                    .transition(.scale.combined(with: .opacity))
+                .offset(y: -16) // Stick up more above other tabs
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 28)
+        .buttonStyle(.plain)
     }
     
     private func triggerHeavyHaptic() {
@@ -703,6 +779,22 @@ struct MainTabView: View {
         let tabHaptic = UIImpactFeedbackGenerator(style: .medium)
         tabHaptic.prepare()
         tabHaptic.impactOccurred(intensity: 0.7)
+    }
+    
+    private func switchToTab(_ index: Int) {
+        // Instant tab switch - each view handles its own loading state
+        selectedTab = index
+    }
+    
+    @ViewBuilder
+    private var activeSessionBannerBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+            )
     }
     
     // MARK: - Active Session Banner
@@ -750,15 +842,7 @@ struct MainTabView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(.systemBackground))
-                    .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
+            .background(activeSessionBannerBackground)
         }
         .padding(.horizontal, 16)
         .alert("Avsluta pass?", isPresented: $showDiscardConfirmation) {
@@ -774,41 +858,34 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Legacy Tab Bar Item Component
-private struct LegacyTabBarItem: View {
+// MARK: - Fixed Tab Bar Item Component (Golf GameBook style)
+private struct FixedTabBarItem: View {
     let icon: String
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
     
     private let selectionHaptic = UIImpactFeedbackGenerator(style: .medium)
     
+    // Selected color (black)
+    private var selectedColor: Color {
+        Color.black
+    }
+    
     var body: some View {
         Button {
-            // Strong haptic feedback on tab selection
             selectionHaptic.prepare()
             selectionHaptic.impactOccurred(intensity: 0.8)
             action()
         } label: {
             VStack(spacing: 4) {
-                ZStack {
-                    if isSelected {
-                        // Selected background pill
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.gray.opacity(0.15))
-                            .frame(width: 56, height: 32)
-                    }
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: isSelected ? 20 : 18, weight: isSelected ? .bold : .regular))
-                        .foregroundColor(isSelected ? .primary : .gray)
-                }
-                .frame(height: 32)
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(isSelected ? selectedColor : .gray)
                 
                 Text(title)
-                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? .primary : .gray)
+                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? selectedColor : .gray)
             }
             .frame(maxWidth: .infinity)
         }
@@ -816,3 +893,83 @@ private struct LegacyTabBarItem: View {
     }
 }
 
+// MARK: - Tab Skeleton View
+private struct TabSkeletonView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header skeleton
+            VStack(spacing: 12) {
+                // Title bar skeleton
+                HStack {
+                    SkeletonBox(width: 120, height: 28)
+                    Spacer()
+                    SkeletonBox(width: 40, height: 40, cornerRadius: 20)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 60)
+                
+                // Banner/hero skeleton
+                SkeletonBox(width: UIScreen.main.bounds.width - 32, height: 180, cornerRadius: 16)
+                    .padding(.horizontal, 16)
+            }
+            
+            // Content cards skeleton
+            VStack(spacing: 16) {
+                ForEach(0..<3, id: \.self) { index in
+                    HStack(spacing: 12) {
+                        SkeletonBox(width: 50, height: 50, cornerRadius: 25)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            SkeletonBox(width: 140, height: 16)
+                            SkeletonBox(width: 200, height: 12)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            .padding(.top, 24)
+            
+            Spacer()
+        }
+        .background(Color(.systemBackground))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                isAnimating = true
+            }
+        }
+    }
+}
+
+// MARK: - Skeleton Box Component
+private struct SkeletonBox: View {
+    let width: CGFloat
+    let height: CGFloat
+    var cornerRadius: CGFloat = 8
+    
+    @State private var isAnimating = false
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(.systemGray5),
+                        Color(.systemGray4),
+                        Color(.systemGray5)
+                    ],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: width, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}

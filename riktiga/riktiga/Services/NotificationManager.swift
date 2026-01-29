@@ -212,6 +212,48 @@ final class NotificationManager {
             }
         }
     }
+    
+    // MARK: - Friend Started Workout Notification
+    
+    /// Send a notification when a friend starts a workout (for local testing)
+    func sendFriendStartedWorkoutNotification(friendName: String, activityType: String) {
+        let content = UNMutableNotificationContent()
+        let firstName = friendName.components(separatedBy: " ").first ?? friendName
+        
+        let activityText: String
+        switch activityType.lowercased() {
+        case "gym", "walking":
+            activityText = "gympass"
+        case "running":
+            activityText = "löppass"
+        default:
+            activityText = "träningspass"
+        }
+        
+        content.title = "\(firstName) startade ett \(activityText)! 💪"
+        content.body = "Ge lite motivation!"
+        content.sound = .default
+        content.userInfo = [
+            "type": "active_session",
+            "deepLink": "upanddown://active-friends"
+        ]
+        
+        // Trigger immediately
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "friend-workout-\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to send friend workout notification: \(error)")
+            } else {
+                print("✅ Friend workout notification sent for \(firstName)")
+            }
+        }
+    }
 }
 
 

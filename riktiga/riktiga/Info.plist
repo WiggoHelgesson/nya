@@ -25,6 +25,14 @@
 				<string>ia-ooc4erygmyaztjecbnr7tjzb1bl2</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Google Sign-In</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.748390418907-05k79f4af3tcdftfeasfds1rq0behvoi</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
@@ -40,6 +48,10 @@
 		<string>processing</string>
 		<string>fetch</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Up&amp;Down använder din plats för att spåra dina löprutter och påminna dig när du är på gymmet.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Up&amp;Down behöver alltid tillgång till din plats för att kunna påminna dig när du kommer till gymmet.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 </dict>

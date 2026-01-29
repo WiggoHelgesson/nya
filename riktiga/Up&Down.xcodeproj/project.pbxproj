@@ -15,6 +15,8 @@
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
 		8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8631B5092ECA305300EBACD6 /* OpenAISwift */; };
+		86672E182F2C0573001DA9A3 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 86672E172F2C0573001DA9A3 /* GoogleSignIn */; };
+		86672E1A2F2C0573001DA9A3 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 86672E192F2C0573001DA9A3 /* GoogleSignInSwift */; };
 		868BB4432F0C6AE7005227A3 /* UpDownLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 868BB4232F0C66A6005227A3 /* UpDownLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		8699E37D2F1D91B700AC7ADF /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8699E37C2F1D91B700AC7ADF /* SuperwallKit */; };
 		86B269AF2EAA5E2D00A4EC93 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 86B269AE2EAA5E2D00A4EC93 /* Auth */; };
@@ -182,6 +184,8 @@
 				860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */,
 				86B269B72EAA5E2D00A4EC93 /* Storage in Frameworks */,
 				86B269B52EAA5E2D00A4EC93 /* Realtime in Frameworks */,
+				86672E182F2C0573001DA9A3 /* GoogleSignIn in Frameworks */,
+				86672E1A2F2C0573001DA9A3 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -307,6 +311,8 @@
 				860C82202EF8A5F900A317BD /* InsertAffiliateSwift */,
 				861411582F152368005BF8CF /* TerraiOS */,
 				8699E37C2F1D91B700AC7ADF /* SuperwallKit */,
+				86672E172F2C0573001DA9A3 /* GoogleSignIn */,
+				86672E192F2C0573001DA9A3 /* GoogleSignInSwift */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -350,6 +356,7 @@
 				860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */,
 				861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */,
 				8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
+				86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -430,19 +437,19 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -460,19 +467,19 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NotificationServiceExtension;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -493,19 +500,19 @@
 				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UpDownLiveActivity;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -526,19 +533,19 @@
 				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = UpDownLiveActivity;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -684,7 +691,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -717,7 +724,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -763,7 +770,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 112;
+				CURRENT_PROJECT_VERSION = 117;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -796,7 +803,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 113;
+				MARKETING_VERSION = 117;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -904,6 +911,14 @@
 				minimumVersion = 1.4.1;
 			};
 		};
+		86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 		8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/superwall/Superwall-iOS";
@@ -960,6 +975,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */;
 			productName = OpenAISwift;
+		};
+		86672E172F2C0573001DA9A3 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		86672E192F2C0573001DA9A3 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 		8699E37C2F1D91B700AC7ADF /* SuperwallKit */ = {
 			isa = XCSwiftPackageProductDependency;

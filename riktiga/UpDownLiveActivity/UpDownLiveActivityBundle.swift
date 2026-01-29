@@ -19,7 +19,9 @@ struct UpDownLiveActivityBundle: WidgetBundle {
         // Live Activity
         UpDownLiveActivityLiveActivity()
         
-        // Control Center Widget
-        UpDownLiveActivityControl()
+        // Control Center Widget (iOS 18+ only)
+        if #available(iOS 18.0, *) {
+            UpDownLiveActivityControl()
+        }
     }
 }

@@ -16,6 +16,7 @@ struct ShareActivityView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var coverImage: UIImage?
+    @State private var showConfetti = false
     
     init(post: SocialWorkoutPost, onFinish: (() -> Void)? = nil) {
         self.post = post
@@ -25,27 +26,47 @@ struct ShareActivityView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                header
+            ZStack {
+                // Background
+                Color(.systemBackground)
+                    .ignoresSafeArea()
                 
-                if insightsLoader.isLoading {
-                    Spacer()
-                    ProgressView("Skapar dina delningskort...")
-                        .progressViewStyle(.circular)
-                        .padding(.top, 32)
-                    Spacer()
-                } else {
-                    cardCarousel
-                    actionRow
-                    doneButton
+                // Confetti overlay
+                if showConfetti {
+                    ConfettiView()
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+                
+                VStack(spacing: 0) {
+                    header
+                    
+                    if insightsLoader.isLoading {
+                        Spacer()
+                        ProgressView("Skapar dina delningskort...")
+                            .progressViewStyle(.circular)
+                            .padding(.top, 32)
+                        Spacer()
+                    } else {
+                        cardCarousel
+                        actionRow
+                        doneButton
+                    }
                 }
             }
-            .background(Color(.systemBackground))
             .navigationBarHidden(true)
         }
         .interactiveDismissDisabled(onFinish != nil)
         .task {
             await loadCoverImageIfNeeded()
+        }
+        .onAppear {
+            // Trigger confetti animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation {
+                    showConfetti = true
+                }
+            }
         }
         .confirmationDialog("Välj bakgrund", isPresented: $showBackgroundDialog, titleVisibility: .visible) {
             ForEach(ShareBackgroundOption.allCases) { option in
@@ -63,15 +84,28 @@ struct ShareActivityView: View {
     }
     
     private var header: some View {
-        VStack(spacing: 6) {
-            Text("Up&Down")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.primary)
-            Text(headerSubtitle)
-                .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.gray)
-                            }
-        .padding(.top, 32)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Bra jobbat!")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+                
+                Text(headerSubtitle)
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Celebration emoji in circle
+            Text("🎉")
+                .font(.system(size: 32))
+                .frame(width: 60, height: 60)
+                .background(Color(.systemGray6))
+                .clipShape(Circle())
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 50)
     }
     
     private var headerSubtitle: String {
@@ -80,7 +114,7 @@ struct ShareActivityView: View {
     }
     
     private var templates: [ShareCardTemplate] {
-        var list: [ShareCardTemplate] = [.stats]
+        var list: [ShareCardTemplate] = [.stats, .compact]
         
         // Only show streak card if user has an actual streak (2+ consecutive days)
         let streakDays = insightsLoader.insights.streakInfo.currentStreak
@@ -97,11 +131,12 @@ struct ShareActivityView: View {
     }
     
     private var cardCarousel: some View {
-        VStack(spacing: 24) {
+        let count = templates.count
+        return VStack(spacing: 24) {
             TabView(selection: $selectedTemplateIndex) {
-                ForEach(Array(templates.enumerated()), id: \.offset) { index, template in
+                ForEach(0..<count, id: \.self) { index in
                     ShareCardView(
-                        template: template,
+                        template: templates[index],
                         post: post,
                         insights: insightsLoader.insights,
                         background: selectedBackground,
@@ -504,7 +539,7 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
 
 // MARK: - ShareCardTemplate
 enum ShareCardTemplate: String, CaseIterable, Identifiable {
-    case stats, streak, calendar, muscles
+    case stats, compact, streak, calendar, muscles
     var id: String { rawValue }
 }
 
@@ -523,8 +558,8 @@ struct ShareCardView: View {
     }
     
     private var shouldShowCoverImage: Bool {
-        // Only show cover image when background is not transparent
-        background != .transparent && coverImage != nil && template == .stats
+        // Only show cover image when background is not transparent and for stats/compact templates
+        background != .transparent && coverImage != nil && (template == .stats || template == .compact)
     }
     
     var body: some View {
@@ -576,19 +611,27 @@ struct ShareCardView: View {
     
     @ViewBuilder
     private var content: some View {
-        VStack(spacing: 32 * scale) {
-            Spacer()
-            
-            switch template {
-            case .stats: statsCard
-            case .streak: streakCard
-            case .calendar: calendarCard
-            case .muscles: muscleCard
+        VStack(spacing: 0) {
+            // Top section with centered content
+            VStack {
+                Spacer()
+                
+                switch template {
+                case .stats: statsCard
+                case .compact: compactCard
+                case .streak: streakCard
+                case .calendar: calendarCard
+                case .muscles: muscleCard
+                }
+                
+                Spacer()
             }
-
-            Spacer()
+            .frame(maxHeight: .infinity)
             
-            brandSignature
+            // Don't show brand signature for compact card since it has branding at top
+            if template != .compact {
+                brandSignature
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundColor(textColor)
@@ -612,6 +655,71 @@ struct ShareCardView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+    
+    // MARK: - Compact Card (Strava-style)
+    private var compactCard: some View {
+        VStack(spacing: 20 * scale) {
+            // Logo and brand name
+            HStack(spacing: 12 * scale) {
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36 * scale, height: 36 * scale)
+                    .clipShape(RoundedRectangle(cornerRadius: 8 * scale))
+                
+                Text("UP&DOWN")
+                    .font(.system(size: 22 * scale, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(textColor)
+            }
+            
+            // Stats in a row
+            HStack(spacing: 24 * scale) {
+                // Tid (Time)
+                VStack(alignment: .leading, spacing: 2 * scale) {
+                    Text("Tid")
+                        .font(.system(size: 12 * scale, weight: .semibold))
+                        .foregroundColor(textColor.opacity(0.7))
+                    Text(overlayDurationString(post.duration))
+                        .font(.system(size: 20 * scale, weight: .bold))
+                        .foregroundColor(textColor)
+                }
+                
+                // Volym (for gym) or Distans (for running)
+                if post.activityType == "Gympass" {
+                    VStack(alignment: .leading, spacing: 2 * scale) {
+                        Text("Volym")
+                            .font(.system(size: 12 * scale, weight: .semibold))
+                            .foregroundColor(textColor.opacity(0.7))
+                        Text(formatGymVolume(from: post.exercises))
+                            .font(.system(size: 20 * scale, weight: .bold))
+                            .foregroundColor(textColor)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 2 * scale) {
+                        Text("Distans")
+                            .font(.system(size: 12 * scale, weight: .semibold))
+                            .foregroundColor(textColor.opacity(0.7))
+                        Text(formatDistance(post.distance))
+                            .font(.system(size: 20 * scale, weight: .bold))
+                            .foregroundColor(textColor)
+                    }
+                    
+                    if let pace = formattedPace(distance: post.distance, duration: post.duration) {
+                        VStack(alignment: .leading, spacing: 2 * scale) {
+                            Text("Tempo")
+                                .font(.system(size: 12 * scale, weight: .semibold))
+                                .foregroundColor(textColor.opacity(0.7))
+                            Text(pace)
+                                .font(.system(size: 20 * scale, weight: .bold))
+                                .foregroundColor(textColor)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16 * scale)
     }
     
     private var streakCard: some View {

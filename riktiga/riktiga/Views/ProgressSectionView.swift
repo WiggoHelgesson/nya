@@ -8,44 +8,24 @@ struct ProgressSectionView: View {
     
     // Animation states
     @State private var showStreakCard = false
-    @State private var showBadgesCard = false
-    
-    private var badgeCount: Int {
-        achievementManager.unlockedAchievements.count
-    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                // Day Streak Card
-                Button {
-                    showMilestones = true
-                } label: {
-                    StreakCardView(
-                        streak: streakInfo.currentStreak,
-                        completedToday: streakInfo.completedToday,
-                        completedDaysThisWeek: streakInfo.completedDaysThisWeek
-                    )
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .opacity(showStreakCard ? 1 : 0)
-                .offset(y: showStreakCard ? 0 : 20)
-                .scaleEffect(showStreakCard ? 1 : 0.9)
-                
-                // Badges Earned Card
-                Button {
-                    showMilestones = true
-                } label: {
-                    BadgesCardView(
-                        badgeCount: badgeCount,
-                        recentBadges: Array(achievementManager.unlockedAchievements.suffix(4))
-                    )
-                }
-                .buttonStyle(ScaleButtonStyle())
-                .opacity(showBadgesCard ? 1 : 0)
-                .offset(y: showBadgesCard ? 0 : 20)
-                .scaleEffect(showBadgesCard ? 1 : 0.9)
+            // Streak Card - centered and full width
+            Button {
+                showMilestones = true
+            } label: {
+                StreakCardView(
+                    streak: streakInfo.currentStreak,
+                    completedToday: streakInfo.completedToday,
+                    completedDaysThisWeek: streakInfo.completedDaysThisWeek
+                )
+                .frame(maxWidth: .infinity)
             }
+            .buttonStyle(ScaleButtonStyle())
+            .opacity(showStreakCard ? 1 : 0)
+            .offset(y: showStreakCard ? 0 : 20)
+            .scaleEffect(showStreakCard ? 1 : 0.9)
             .padding(.horizontal, 20)
         }
         .padding(.vertical, 16)
@@ -67,14 +47,9 @@ struct ProgressSectionView: View {
     
     private func animateCards() {
         showStreakCard = false
-        showBadgesCard = false
         
         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
             showStreakCard = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-            showBadgesCard = true
         }
     }
 }

@@ -82,7 +82,11 @@ struct NotificationsView: View {
             // Mark all as read when entering the page
             await markAllAsReadOnEntry()
         }
+        .onAppear {
+            NavigationDepthTracker.shared.setAtRoot(false)
+        }
         .onDisappear {
+            NavigationDepthTracker.shared.setAtRoot(true)
             onDismiss?()
         }
         .navigationDestination(isPresented: Binding(

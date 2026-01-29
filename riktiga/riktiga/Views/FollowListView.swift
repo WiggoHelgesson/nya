@@ -151,20 +151,12 @@ struct FollowListView: View {
         }
         .navigationTitle("Anslutningar")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
+                Button("Stäng") {
                     dismiss()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("Tillbaka")
-                            .font(.system(size: 17))
-                    }
-                    .foregroundColor(.black)
                 }
+                .foregroundColor(.black)
             }
         }
         .onAppear {

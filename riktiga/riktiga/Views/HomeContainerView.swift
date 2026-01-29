@@ -3,9 +3,10 @@ import SwiftUI
 struct HomeContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showAddMealView = false
+    @State private var navigationPath = NavigationPath()
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             HomeView()
                 .environmentObject(authViewModel)
                 .navigationBarTitleDisplayMode(.inline)
@@ -15,6 +16,10 @@ struct HomeContainerView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAddMealView"))) { _ in
                     showAddMealView = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootKalorier"))) { _ in
+                    navigationPath = NavigationPath()
+                    showAddMealView = false
                 }
         }
     }
@@ -308,31 +313,33 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
             .padding(.top, 12)
             .padding(.bottom, 16)
             
-            // MARK: - Tab Selector (Strava-style)
-            HStack(spacing: 0) {
-                ForEach(Array(Tab.allCases), id: \.self) { tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTab = tab
+            // MARK: - Tab Selector (Strava-style) - Only show if more than 1 tab
+            if Array(Tab.allCases).count > 1 {
+                HStack(spacing: 0) {
+                    ForEach(Array(Tab.allCases), id: \.self) { tab in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = tab
+                            }
+                        } label: {
+                            VStack(spacing: 10) {
+                                Text(tab.rawValue)
+                                    .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
+                                    .foregroundColor(selectedTab == tab ? .primary : .gray)
+                                
+                                // Black underline indicator (50% width)
+                                Rectangle()
+                                    .fill(selectedTab == tab ? Color.primary : Color.clear)
+                                    .frame(height: 3)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                         }
-                    } label: {
-                        VStack(spacing: 10) {
-                            Text(tab.rawValue)
-                                .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
-                                .foregroundColor(selectedTab == tab ? .primary : .gray)
-                            
-                            // Black underline indicator (50% width)
-                            Rectangle()
-                                .fill(selectedTab == tab ? Color.primary : Color.clear)
-                                .frame(height: 3)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.bottom, 0)
             }
-            .padding(.bottom, 0)
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)

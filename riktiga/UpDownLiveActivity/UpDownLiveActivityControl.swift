@@ -9,6 +9,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
+@available(iOS 18.0, *)
 struct UpDownLiveActivityControl: ControlWidget {
     static let kind: String = "roboreabapp.productions.UpDownLiveActivity"
 
@@ -30,6 +31,7 @@ struct UpDownLiveActivityControl: ControlWidget {
     }
 }
 
+@available(iOS 18.0, *)
 extension UpDownLiveActivityControl {
     struct Value {
         var isRunning: Bool
@@ -48,6 +50,7 @@ extension UpDownLiveActivityControl {
     }
 }
 
+@available(iOS 18.0, *)
 struct TimerConfiguration: ControlConfigurationIntent {
     static let title: LocalizedStringResource = "Timer Name Configuration"
 
@@ -55,6 +58,7 @@ struct TimerConfiguration: ControlConfigurationIntent {
     var timerName: String
 }
 
+@available(iOS 18.0, *)
 struct StartTimerIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Start a timer"
 

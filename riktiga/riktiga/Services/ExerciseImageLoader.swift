@@ -130,26 +130,28 @@ class ExerciseImageLoader: ObservableObject {
 struct ExerciseGIFView: View {
     let exerciseId: String
     let gifUrl: String?
+    var width: CGFloat? = 60
+    var height: CGFloat? = 60
     @StateObject private var loader = ExerciseImageLoader()
     
     var body: some View {
         Group {
             if loader.isLoading {
                 ProgressView()
-                    .frame(width: 60, height: 60)
+                    .frame(width: width, height: height)
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if let image = loader.image {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 60)
+                    .frame(width: width, height: height)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 28))
+                    .font(.system(size: (width ?? 60) * 0.4))
                     .foregroundColor(.gray)
-                    .frame(width: 60, height: 60)
+                    .frame(width: width, height: height)
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }

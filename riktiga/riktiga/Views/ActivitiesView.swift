@@ -291,7 +291,12 @@ struct WorkoutPostCard: View {
             
             // Show exercises list for Gympass, otherwise show swipeable images
             if post.activityType == "Gympass", let exercises = post.exercises, !exercises.isEmpty {
-                GymExercisesListView(exercises: exercises, userImage: post.userImageUrl)
+                GymExercisesListView(
+                    exercises: exercises,
+                    userImage: post.userImageUrl,
+                    userId: post.userId,
+                    postDate: ISO8601DateFormatter().date(from: post.createdAt)
+                )
             } else {
                 // Swipeable images (route and user image)
                 SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)

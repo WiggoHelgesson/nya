@@ -5,6 +5,15 @@ struct RewardCatalog {
     static let all: [RewardCard] = [
         // MARK: - Golf
         RewardCard(
+            id: 35,
+            brandName: "J.LINDEBERG",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "75",
+            category: "Golf",
+            isBookmarked: false
+        ),
+        RewardCard(
             id: 1,
             brandName: "PLIKTGOLF",
             discount: "10% rabatt",
@@ -175,6 +184,15 @@ struct RewardCatalog {
         
         // MARK: - Skidåkning (utan FUSE ENERGY)
         RewardCard(
+            id: 36,
+            brandName: "J.LINDEBERG",
+            discount: "15% rabatt",
+            points: "200 poäng",
+            imageName: "75",
+            category: "Skidåkning",
+            isBookmarked: false
+        ),
+        RewardCard(
             id: 19,
             brandName: "CAPSTONE",
             discount: "10% rabatt",
@@ -211,7 +229,7 @@ struct HeroBannerAsset: Identifiable {
 }
 
 struct RewardsView: View {
-    @State private var selectedCategory = "Energidryck"
+    @State private var selectedCategory = "Golf"
     @State private var currentHeroIndex = 0
     @State private var searchText = ""
     @State private var showSearchView = false
@@ -226,7 +244,12 @@ struct RewardsView: View {
     @State private var showHeader = false
     @State private var showHeroBanner = false
     @State private var showCategories = false
-    @State private var showRewardSections = false
+    @State private var showGolfSection = false
+    @State private var showGymSection = false
+    @State private var showEnergySection = false
+    @State private var showRunningSection = false
+    @State private var showSkiSection = false
+    @State private var showSkeleton = true
     
     // Adaptive colors
     private var pageBackgroundColor: Color {
@@ -250,7 +273,7 @@ struct RewardsView: View {
         HeroBannerAsset(imageName: "3", url: "https://lonegolf.se")
     ]
     
-    let categories = ["Energidryck", "Gym", "Löpning", "Golf", "Skidåkning"]
+    let categories = ["Golf", "Gym", "Energidryck", "Löpning", "Skidåkning"]
     
     let allRewards = RewardCatalog.all
     
@@ -342,14 +365,14 @@ struct RewardsView: View {
     }
     
     private var heroBannerSection: some View {
-        TabView(selection: $currentHeroIndex) {
-            ForEach(heroBanners.indices, id: \.self) { index in
-                let banner = heroBanners[index]
-                HeroBannerCard(imageName: banner.imageName)
+        let count = heroBanners.count
+        return TabView(selection: $currentHeroIndex) {
+            ForEach(0..<count, id: \.self) { index in
+                HeroBannerCard(imageName: heroBanners[index].imageName)
                     .contentShape(Rectangle())
                     .tag(index)
                     .onTapGesture {
-                        if let url = URL(string: banner.url) {
+                        if let url = URL(string: heroBanners[index].url) {
                             UIApplication.shared.open(url)
                         }
                     }
@@ -452,6 +475,12 @@ struct RewardsView: View {
                 pageBackgroundColor
                     .ignoresSafeArea()
                 
+                // Skeleton loading view - shows immediately
+                if showSkeleton {
+                    RewardsSkeletonView()
+                        .transition(.opacity)
+                }
+                
                 VStack(spacing: 0) {
                     // MARK: - Fixed Strava-Style Navigation Header
                     StravaStyleHeaderView()
@@ -535,30 +564,43 @@ struct RewardsView: View {
                         .offset(y: showHeader ? 0 : 10)
                         
                         LazyVStack(spacing: 12) {
-                            heroBannerSection
-                                .background(sectionBackgroundColor)
-                                .opacity(showHeroBanner ? 1 : 0)
-                                .offset(y: showHeroBanner ? 0 : 15)
+                            // Hero banner ads hidden
+                            // heroBannerSection
+                            //     .background(sectionBackgroundColor)
+                            //     .opacity(showHeroBanner ? 1 : 0)
+                            //     .offset(y: showHeroBanner ? 0 : 20)
+                            //     .scaleEffect(showHeroBanner ? 1 : 0.95)
                             
                             categoriesSection
                                 .padding(.vertical, 16)
                                 .background(sectionBackgroundColor)
                                 .opacity(showCategories ? 1 : 0)
-                                .offset(y: showCategories ? 0 : 15)
+                                .offset(y: showCategories ? 0 : 20)
                             
-                            Group {
-                                sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
-                                
-                                sliderSectionOptimized(title: "Gym", rewards: gymRewards)
-                                
-                                sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
-                                
-                                sliderSectionOptimized(title: "Golf", rewards: golfRewards)
-                                
-                                sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
-                            }
-                            .opacity(showRewardSections ? 1 : 0)
-                            .offset(y: showRewardSections ? 0 : 15)
+                            // Golf section
+                            sliderSectionOptimized(title: "Golf", rewards: golfRewards)
+                                .opacity(showGolfSection ? 1 : 0)
+                                .offset(y: showGolfSection ? 0 : 25)
+                            
+                            // Gym section
+                            sliderSectionOptimized(title: "Gym", rewards: gymRewards)
+                                .opacity(showGymSection ? 1 : 0)
+                                .offset(y: showGymSection ? 0 : 25)
+                            
+                            // Energy drinks section
+                            sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
+                                .opacity(showEnergySection ? 1 : 0)
+                                .offset(y: showEnergySection ? 0 : 25)
+                            
+                            // Running section
+                            sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
+                                .opacity(showRunningSection ? 1 : 0)
+                                .offset(y: showRunningSection ? 0 : 25)
+                            
+                            // Skiing section
+                            sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
+                                .opacity(showSkiSection ? 1 : 0)
+                                .offset(y: showSkiSection ? 0 : 25)
                             
                             Spacer(minLength: 100)
                         }
@@ -581,26 +623,201 @@ struct RewardsView: View {
             .onAppear {
                 animateRewardsContent()
             }
+            .onDisappear {
+                resetAnimationStates()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootBeloningar"))) { _ in
                 navigationPath = NavigationPath()
+                showSearchView = false
+                showFavorites = false
+                showMyPurchases = false
             }
         }
         .tint(primaryTextColor) // Adaptive back buttons for all navigation
     }
     
     private func animateRewardsContent() {
-        withAnimation(.easeOut(duration: 0.4)) {
+        // Hide skeleton immediately
+        withAnimation(.easeOut(duration: 0.15)) {
+            showSkeleton = false
+        }
+        
+        // Header animation
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             showHeader = true
         }
-        withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+        
+        // Hero banner with slight delay
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
             showHeroBanner = true
         }
-        withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+        
+        // Categories
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
             showCategories = true
         }
-        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
-            showRewardSections = true
+        
+        // Staggered section animations
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
+            showGolfSection = true
         }
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.28)) {
+            showGymSection = true
+        }
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.36)) {
+            showEnergySection = true
+        }
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.44)) {
+            showRunningSection = true
+        }
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.52)) {
+            showSkiSection = true
+        }
+    }
+    
+    private func resetAnimationStates() {
+        showHeader = false
+        showHeroBanner = false
+        showCategories = false
+        showGolfSection = false
+        showGymSection = false
+        showEnergySection = false
+        showRunningSection = false
+        showSkiSection = false
+        showSkeleton = true
+    }
+}
+
+// MARK: - Rewards Skeleton View
+private struct RewardsSkeletonView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header skeleton
+            HStack {
+                SkeletonPill(width: 100, height: 36)
+                Spacer()
+                HStack(spacing: 16) {
+                    RewardsSkeletonCircle(size: 24)
+                    RewardsSkeletonCircle(size: 24)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 80)
+            
+            // Search bar skeleton
+            SkeletonPill(width: UIScreen.main.bounds.width - 32, height: 44)
+                .padding(.top, 16)
+            
+            // Hero banner skeleton
+            SkeletonBox(width: UIScreen.main.bounds.width - 32, height: 200, cornerRadius: 12)
+                .padding(.top, 16)
+            
+            // Categories skeleton
+            HStack(spacing: 12) {
+                ForEach(0..<4, id: \.self) { _ in
+                    SkeletonPill(width: 80, height: 36)
+                }
+            }
+            .padding(.top, 24)
+            
+            // Section skeleton
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    SkeletonBox(width: 80, height: 24, cornerRadius: 4)
+                    Spacer()
+                    SkeletonBox(width: 60, height: 16, cornerRadius: 4)
+                }
+                .padding(.horizontal, 16)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            SkeletonBox(width: 160, height: 200, cornerRadius: 12)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .padding(.top, 24)
+            
+            Spacer()
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
+private struct SkeletonPill: View {
+    let width: CGFloat
+    let height: CGFloat
+    @State private var isAnimating = false
+    
+    var body: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray5), Color(.systemGray4), Color(.systemGray5)],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: width, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
+private struct RewardsSkeletonCircle: View {
+    let size: CGFloat
+    @State private var isAnimating = false
+    
+    var body: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray5), Color(.systemGray4), Color(.systemGray5)],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: size, height: size)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
+private struct SkeletonBox: View {
+    let width: CGFloat
+    let height: CGFloat
+    var cornerRadius: CGFloat = 8
+    @State private var isAnimating = false
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray5), Color(.systemGray4), Color(.systemGray5)],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: width, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
     }
 }
 
@@ -834,6 +1051,8 @@ struct ModernRewardCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
+        case "73": return "73" // ALTURA
+        case "75": return "76" // J.LINDEBERG
         default: return imageName // Use the image itself as logo if no mapping
         }
     }
@@ -954,6 +1173,8 @@ struct FullScreenRewardCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
+        case "73": return "73" // ALTURA
+        case "75": return "76" // J.LINDEBERG
         default: return imageName // Use the image itself as logo if no mapping
         }
     }
@@ -1155,7 +1376,7 @@ struct RewardDetailView: View {
         case "FUSE ENERGY":
             return "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft."
         case "J.LINDEBERG":
-            return "J.Lindeberg kombinerar skandinaviskt mode med högpresterande sportplagg. Kollektionerna är designade för golfbanan och backen med tekniska material, skarpa snitt och premiumdetaljer – så att du kan prestera på topp och samtidigt se ut som ett proffs."
+            return "J.Lindeberg är ett svenskt modevarumärke som grundades 1996 av Johan Lindeberg i Stockholm. Varumärket kombinerar mode, sport och livsstil och är särskilt känt för att blanda skräddat herrmode med influenser från golf, skidåkning och streetwear.\n\nJ.Lindeberg har ett modernt och internationellt uttryck där designen ofta präglas av rena linjer, hög kvalitet och en sportig elegans. Märket riktar sig till personer som vill ha stilrena plagg som fungerar både i vardagen och i mer aktiva sammanhang. I dag säljs J.Lindeberg globalt och är ett välkänt namn inom både mode- och sportsegmentet."
         case "CLYRO":
             return "Clyro tillverkar energidrycker med 20 gram protein och hög kvalitet så att du kan kombinera boost och återhämtning i samma burk. Perfekt före eller efter gymmet – utan att kompromissa på smak eller innehåll."
         case "Fjällsyn UF":
@@ -1172,7 +1393,7 @@ struct RewardDetailView: View {
     private func getCompanyLogo(for brandName: String) -> String {
         switch brandName {
         case "J.LINDEBERG":
-            return "37"
+            return "76"
         case "PLIKTGOLF":
             return "15" // Pliktgolf logo
         case "PEGMATE":
@@ -1243,7 +1464,7 @@ struct RewardDetailView: View {
         case "WINWIZE":
             urlString = "https://winwize.com/?srsltid=AfmBOootwFRqBXLHIeZW7SD8Em9h3_XydIfKOpTSt_uB01nndveoqM0J"
         case "J.LINDEBERG":
-            urlString = "https://jlindeberg.com/"
+            urlString = "https://www.jlindeberg.com"
         case "CLYRO":
             urlString = "https://clyro.se/"
         case "Fjällsyn UF":
@@ -1633,6 +1854,8 @@ struct ConfirmationView: View {
             return "1EFN34345G1J"
         case "XEEIL":
             return "SNOWSTORM15"
+        case "J.LINDEBERG":
+            return "Up&Down15"
         default:
             return "CODE2025"
         }
@@ -1747,6 +1970,8 @@ struct AllRewardsCard: View {
         case "40": return "40" // Powerwell (old)
         case "55": return "40" // Powerwell (new cover)
         case "44": return "45" // XEEIL
+        case "73": return "73" // ALTURA
+        case "75": return "76" // J.LINDEBERG
         default: return imageName // Use the image itself as logo if no mapping
         }
     }

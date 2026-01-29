@@ -58,39 +58,18 @@ struct LocalAsyncImage: View {
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(minWidth: 0, maxWidth: .infinity)
-                    .frame(height: 300)
-                    .clipped()
             } else if isLoading {
                 Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 300)
+                    .fill(Color(.systemGray4))
                     .overlay(ProgressView().scaleEffect(0.8))
             } else if loadFailed {
+                // Plain gray background when image fails to load
                 Rectangle()
-                    .fill(Color(.systemGray6))
-                    .frame(height: 300)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                                .font(.system(size: 28))
-                            Text("Kunde inte ladda bild")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    )
+                    .fill(Color(.systemGray4))
             } else {
-                // Fallback - treat as failed
+                // Fallback - treat as failed, plain gray background
                 Rectangle()
-                    .fill(Color(.systemGray6))
-                    .frame(height: 300)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray.opacity(0.5))
-                            .font(.system(size: 28))
-                    )
+                    .fill(Color(.systemGray4))
             }
         }
         .task {
@@ -130,14 +109,37 @@ struct LocalAsyncImage: View {
             return
         }
         
+        // Check if this is a Supabase Storage relative path (e.g., "banners/..." or "avatars/...")
+        let supabaseStorageBuckets = ["banners/", "avatars/", "workout-images/"]
+        let isSupabaseRelativePath = supabaseStorageBuckets.contains { path.hasPrefix($0) }
+        
+        // Convert to full URL if it's a Supabase relative path
+        let effectivePath: String
+        if isSupabaseRelativePath {
+            // Determine the bucket name from the path
+            // Note: Banners are stored in the "avatars" bucket under banners/ folder
+            let bucket: String
+            if path.hasPrefix("banners/") {
+                bucket = "avatars"  // Banners are uploaded to avatars bucket
+            } else if path.hasPrefix("avatars/") {
+                bucket = "avatars"
+            } else {
+                bucket = "workout-images"
+            }
+            effectivePath = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/\(bucket)/\(path)"
+            print("🔗 Converted relative path to Supabase URL: \(effectivePath)")
+        } else {
+            effectivePath = path
+        }
+        
         // Create cache key by normalizing the URL
         let cacheKey: String = {
-            if path.hasPrefix("http") {
+            if effectivePath.hasPrefix("http") {
                 // For URLs, remove query parameters to use consistent cache key
-                return path.components(separatedBy: "?")[0]
+                return effectivePath.components(separatedBy: "?")[0]
             } else {
                 // For local paths, use the full path
-                return path
+                return effectivePath
             }
         }()
         
@@ -152,13 +154,13 @@ struct LocalAsyncImage: View {
         }
         
         // Load from URL or file
-        if path.hasPrefix("http") {
+        if effectivePath.hasPrefix("http") {
             // Remote URL - download and cache
-            guard let url = URL(string: path) else {
+            guard let url = URL(string: effectivePath) else {
                 await MainActor.run {
                     self.isLoading = false
                     self.loadFailed = true
-                    print("❌ Invalid URL: \(path)")
+                    print("❌ Invalid URL: \(effectivePath)")
                 }
                 return
             }
@@ -178,7 +180,7 @@ struct LocalAsyncImage: View {
                 
                 // Check if request was successful
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("📡 HTTP Status: \(httpResponse.statusCode) for \(path)")
+                    print("📡 HTTP Status: \(httpResponse.statusCode) for \(effectivePath)")
                     
                     if httpResponse.statusCode != 200 {
                         await MainActor.run {
@@ -203,7 +205,7 @@ struct LocalAsyncImage: View {
                     await MainActor.run {
                         self.isLoading = false
                         self.loadFailed = true
-                        print("❌ Could not decode image from URL: \(path)")
+                        print("❌ Could not decode image from URL: \(effectivePath)")
                     }
                 }
             } catch {

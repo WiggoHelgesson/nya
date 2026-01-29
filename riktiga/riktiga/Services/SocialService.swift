@@ -1212,6 +1212,7 @@ class SocialService {
                             description: post.description,
                             distance: post.distance,
                             duration: post.duration,
+                            elevationGain: post.elevationGain,
                             imageUrl: post.imageUrl,
                             userImageUrl: post.userImageUrl,
                             createdAt: post.createdAt,
@@ -1224,7 +1225,12 @@ class SocialService {
                             commentCount: counts.commentCount,
                             isLikedByCurrentUser: false,
                             splits: post.splits,
-                            exercises: post.exercises
+                            exercises: post.exercises,
+                            pbExerciseName: post.pbExerciseName,
+                            pbValue: post.pbValue,
+                            streakCount: post.streakCount,
+                            source: post.source,
+                            deviceName: post.deviceName
                         )
                     }
                     return mapped
@@ -1260,6 +1266,7 @@ class SocialService {
                 .execute()
                 .value
             let likedSet = Set(likes.map { $0.postId })
+            print("✅ Marked \(likedSet.count) posts as liked out of \(posts.count) posts")
             return posts.map { post in
                 SocialWorkoutPost(
                     id: post.id,
@@ -1269,6 +1276,7 @@ class SocialService {
                     description: post.description,
                     distance: post.distance,
                     duration: post.duration,
+                    elevationGain: post.elevationGain,
                     imageUrl: post.imageUrl,
                     userImageUrl: post.userImageUrl,
                     createdAt: post.createdAt,
@@ -1281,12 +1289,47 @@ class SocialService {
                     commentCount: post.commentCount,
                     isLikedByCurrentUser: likedSet.contains(post.id),
                     splits: post.splits,
-                    exercises: post.exercises
+                    exercises: post.exercises,
+                    pbExerciseName: post.pbExerciseName,
+                    pbValue: post.pbValue,
+                    streakCount: post.streakCount,
+                    source: post.source,
+                    deviceName: post.deviceName
                 )
             }
         } catch {
-            print("⚠️ Could not mark liked posts: \(error)")
-            return posts
+            print("❌ Could not mark liked posts: \(error) - returning posts with isLikedByCurrentUser as false")
+            // Return posts with isLikedByCurrentUser explicitly set to false so UI is consistent
+            return posts.map { post in
+                SocialWorkoutPost(
+                    id: post.id,
+                    userId: post.userId,
+                    activityType: post.activityType,
+                    title: post.title,
+                    description: post.description,
+                    distance: post.distance,
+                    duration: post.duration,
+                    elevationGain: post.elevationGain,
+                    imageUrl: post.imageUrl,
+                    userImageUrl: post.userImageUrl,
+                    createdAt: post.createdAt,
+                    userName: post.userName,
+                    userAvatarUrl: post.userAvatarUrl,
+                    userIsPro: post.userIsPro,
+                    location: post.location,
+                    strokes: post.strokes,
+                    likeCount: post.likeCount,
+                    commentCount: post.commentCount,
+                    isLikedByCurrentUser: false,
+                    splits: post.splits,
+                    exercises: post.exercises,
+                    pbExerciseName: post.pbExerciseName,
+                    pbValue: post.pbValue,
+                    streakCount: post.streakCount,
+                    source: post.source,
+                    deviceName: post.deviceName
+                )
+            }
         }
     }
     

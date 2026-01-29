@@ -74,6 +74,12 @@ class GymSessionViewModel: ObservableObject {
     @Published var isLoadingSavedWorkouts = false
     @Published private(set) var exerciseHistory: [String: ExerciseHistorySnapshot] = [:]
     
+    // Real-time spectate support
+    @Published var spectatorCount: Int = 0
+    private var currentSessionId: String?
+    private var currentUserId: String?
+    private var realtimeService = RealtimeWorkoutService.shared
+    
     var totalVolume: Double {
         exercises.reduce(0) { result, exercise in
             result + exerciseVolume(exercise)
@@ -108,6 +114,46 @@ class GymSessionViewModel: ObservableObject {
                 self?.completeNextSetViaLiveActivity()
             }
             .store(in: &cancellables)
+        
+        // Listen for spectator count updates
+        realtimeService.$spectatorCount
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] count in
+                self?.spectatorCount = count
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Start real-time syncing for spectators
+    func startRealtimeSync(sessionId: String, userId: String) {
+        currentSessionId = sessionId
+        currentUserId = userId
+        realtimeService.startSyncingExercises(sessionId: sessionId, userId: userId)
+        
+        // Sync current exercises immediately
+        Task {
+            await realtimeService.syncAllExercises(exercises, sessionId: sessionId, userId: userId)
+        }
+    }
+    
+    /// Stop real-time syncing
+    func stopRealtimeSync() {
+        if let sessionId = currentSessionId {
+            Task {
+                await realtimeService.clearSessionExercises(sessionId: sessionId)
+            }
+        }
+        realtimeService.stopSyncing()
+        currentSessionId = nil
+        currentUserId = nil
+    }
+    
+    /// Sync exercise changes to database
+    private func syncExerciseIfNeeded(_ exercise: GymExercise, at index: Int) {
+        guard let sessionId = currentSessionId, let userId = currentUserId else { return }
+        Task {
+            await realtimeService.syncExercise(exercise, sessionId: sessionId, userId: userId, orderIndex: index)
+        }
     }
     
     private func completeNextSetViaLiveActivity() {
@@ -203,6 +249,7 @@ class GymSessionViewModel: ObservableObject {
     func resetSession() {
         stopTimer()
         endLiveActivity()
+        stopRealtimeSync()
         exercises = []
         startTime = nil
         elapsedSeconds = 0
@@ -280,6 +327,9 @@ class GymSessionViewModel: ObservableObject {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             exercises.append(newExercise)
         }
+        
+        // Sync to real-time database
+        syncExerciseIfNeeded(newExercise, at: exercises.count - 1)
     }
     
     func loadWorkout(_ workout: SavedGymWorkout) {
@@ -321,6 +371,13 @@ class GymSessionViewModel: ObservableObject {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             exercises.removeAll { $0.id == id }
         }
+        
+        // Remove from real-time database
+        if let sessionId = currentSessionId {
+            Task {
+                await realtimeService.removeExercise(exerciseId: id, sessionId: sessionId)
+            }
+        }
     }
     
     func moveExercise(from source: IndexSet, to destination: Int) {
@@ -341,6 +398,9 @@ class GymSessionViewModel: ObservableObject {
         )
         
         exercises[index].sets.append(newSet)
+        
+        // Sync to real-time database
+        syncExerciseIfNeeded(exercises[index], at: index)
     }
     
     func updateSet(exerciseId: String, setIndex: Int, kg: Double, reps: Int) {
@@ -351,6 +411,9 @@ class GymSessionViewModel: ObservableObject {
         exercises[exerciseIndex].sets[setIndex].reps = reps
         exercises[exerciseIndex].sets[setIndex].isCompleted = kg > 0 && reps > 0
         updateLiveActivity()
+        
+        // Sync to real-time database
+        syncExerciseIfNeeded(exercises[exerciseIndex], at: exerciseIndex)
     }
     
     func deleteSet(exerciseId: String, setIndex: Int) {
@@ -361,6 +424,9 @@ class GymSessionViewModel: ObservableObject {
             exercises[exerciseIndex].sets.remove(at: setIndex)
         }
         updateLiveActivity()
+        
+        // Sync to real-time database
+        syncExerciseIfNeeded(exercises[exerciseIndex], at: exerciseIndex)
     }
     
     func toggleSetCompletion(exerciseId: String, setIndex: Int) {
@@ -369,6 +435,9 @@ class GymSessionViewModel: ObservableObject {
         
         exercises[exerciseIndex].sets[setIndex].isCompleted.toggle()
         updateLiveActivity()
+        
+        // Sync to real-time database
+        syncExerciseIfNeeded(exercises[exerciseIndex], at: exerciseIndex)
     }
     
     func appendGeneratedExercises(_ generated: [GeneratedWorkoutEntry]) {

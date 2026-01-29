@@ -198,26 +198,7 @@ class WorkoutService {
         return total
     }
     
-    func deleteWorkoutPost(postId: String, userId: String? = nil) async throws {
-        do {
-            try await supabase
-                .from("workout_posts")
-                .delete()
-                .eq("id", value: postId)
-                .execute()
-            
-            print("✅ Successfully deleted workout post: \(postId)")
-            if let userId {
-                cache.clearCacheForUser(userId: userId)
-                // Also clear AppCacheManager to ensure social feed is refreshed
-                AppCacheManager.shared.clearCacheForUser(userId: userId)
-            }
-            
-        } catch {
-            print("❌ Error deleting workout post: \(error)")
-            throw error
-        }
-    }
+    // Note: Use the full deleteWorkoutPost(postId:userId:) function below that properly cleans up likes, comments and images
     
     func updateWorkoutPost(postId: String, title: String, description: String, userImageUrl: String? = nil) async throws {
         try await AuthSessionManager.shared.ensureValidSession()
@@ -454,18 +435,21 @@ class WorkoutService {
         }
     }
     
-    func deleteWorkoutPost(postId: String, userId: String) async throws {
+    func deleteWorkoutPost(postId: String, userId: String?) async throws {
         try await AuthSessionManager.shared.ensureValidSession()
         print("🗑️ Deleting workout post: \(postId)")
         
         // First, get the post to find image URLs
-        let response: [WorkoutPost] = try await supabase
+        var query = supabase
             .from("workout_posts")
             .select()
             .eq("id", value: postId)
-            .eq("user_id", value: userId)
-            .execute()
-            .value
+        
+        if let userId = userId {
+            query = query.eq("user_id", value: userId)
+        }
+        
+        let response: [WorkoutPost] = try await query.execute().value
         
         guard let post = response.first else {
             print("⚠️ Post not found or user doesn't own it")
@@ -522,11 +506,14 @@ class WorkoutService {
             .from("workout_posts")
             .delete()
             .eq("id", value: postId)
-            .eq("user_id", value: userId)
             .execute()
         print("✅ Deleted workout post from database")
         
-        // TODO: Should also subtract points from user's XP
+        // Clear caches
+        if let userId = userId {
+            cache.clearCacheForUser(userId: userId)
+            AppCacheManager.shared.clearCacheForUser(userId: userId)
+        }
     }
 }
 

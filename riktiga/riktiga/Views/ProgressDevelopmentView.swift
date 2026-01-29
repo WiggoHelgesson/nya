@@ -463,10 +463,11 @@ private struct ProgressSlideshowView: View {
                     .font(.callout)
                     .foregroundColor(.secondary)
             } else {
+                let photosCount = store.photos.count
                 TabView(selection: $currentIndex) {
-                    ForEach(Array(store.photos.enumerated()), id: \.element.id) { index, photo in
+                    ForEach(0..<photosCount, id: \.self) { index in
                         VStack {
-                            if let image = store.image(for: photo) {
+                            if let image = store.image(for: store.photos[index]) {
                                 Image(uiImage: image)
                                     .resizable()
                                     .scaledToFit()
@@ -477,7 +478,7 @@ private struct ProgressSlideshowView: View {
                                     .fill(Color.gray.opacity(0.2))
                             }
                             
-                            Text(formatter.string(from: photo.date))
+                            Text(formatter.string(from: store.photos[index].date))
                                 .font(.headline)
                                 .padding(.top, 8)
                         }

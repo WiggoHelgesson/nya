@@ -10,6 +10,7 @@ final class DeepLinkHandler: ObservableObject {
     @Published var showResetPassword = false
     @Published var pendingAccessToken: String?
     @Published var pendingRefreshToken: String?
+    @Published var shouldNavigateToActiveFriends = false
     
     private init() {}
     
@@ -63,6 +64,17 @@ final class DeepLinkHandler: ObservableObject {
         if host == "stripe-return" || path.contains("stripe") {
             print("✅ Stripe return deep link detected")
             // Just return true, the app will handle refreshing the status
+            return true
+        }
+        
+        // Handle active-friends deep link (from notification when friend starts workout)
+        if host == "active-friends" {
+            print("✅ Active friends deep link detected")
+            // Navigate to social tab and then to active friends
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToActiveFriendsTab"), object: nil)
+            }
             return true
         }
         

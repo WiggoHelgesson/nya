@@ -3,6 +3,7 @@ import SwiftUI
 struct SwipeableImageView: View {
     let routeImage: String?
     let userImage: String?
+    var onTapImage: (() -> Void)? = nil
     
     @State private var currentIndex = 0
     @State private var currentId: Int? = 0
@@ -50,6 +51,16 @@ struct SwipeableImageView: View {
             LocalAsyncImage(path: images[0])
                 .frame(height: imageHeight)
                 .clipped()
+                .overlay(
+                    // Tap only center area
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onTapImage?()
+                        }
+                        .padding(.horizontal, 50)
+                        .padding(.vertical, 50)
+                )
         } else {
             // Multiple images - smooth paging ScrollView with right peek + dots
             GeometryReader { geo in
@@ -61,6 +72,16 @@ struct SwipeableImageView: View {
                                 LocalAsyncImage(path: imagePath)
                                     .frame(width: pageWidth, height: imageHeight)
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay(
+                                        // Tap only center area
+                                        Color.clear
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                onTapImage?()
+                                            }
+                                            .padding(.horizontal, 50)
+                                            .padding(.vertical, 50)
+                                    )
                                     .id(index)
                             }
                         }

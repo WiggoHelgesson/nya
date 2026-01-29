@@ -2,11 +2,13 @@ import SwiftUI
 import Combine
 import PhotosUI
 import Supabase
+import MapKit
 
 // MARK: - Social Tab Selection
 enum SocialTab: String, CaseIterable {
     case feed = "Flödet"
-    case news = "Nyheter"
+    // Active Friends tab temporarily hidden
+    // case activeFriends = "Aktiva vänner"
 }
 
 struct SocialView: View {
@@ -16,6 +18,7 @@ struct SocialView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
     @State private var isLoadingMore = false
+    @State private var hasInitiallyLoaded = false // Track if first load is complete
     @State private var selectedPost: SocialWorkoutPost?
     @State private var recommendedUsers: [UserSearchResult] = []
     @State private var recommendedFollowingStatus: [String: Bool] = [:]
@@ -57,6 +60,28 @@ struct SocialView: View {
     // Notification navigation state - scroll to post instead of opening detail
     @State private var highlightedPostId: String? = nil
     
+    // Friends at gym state
+    @State private var activeFriends: [ActiveFriendSession] = []
+    @State private var isLoadingActiveFriends = false
+    
+    // Banner image picker
+    @State private var showBannerPicker = false
+    @State private var bannerPickerItem: PhotosPickerItem? = nil
+    @State private var isUploadingBanner = false
+    
+    @State private var streakCount: Int = 0
+    @State private var friendCount: Int = 0
+    @State private var friendAvatars: [String?] = []
+    @State private var showNotifications = false
+    @State private var showQRCodeSheet = false
+    
+    // Navigation states
+    @State private var showFollowersList = false
+    @State private var showOwnProfile = false
+    
+    // Timer for active friends refresh
+    @State private var activeFriendsRefreshTimer: Timer?
+    
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -78,9 +103,13 @@ struct SocialView: View {
                 mainContent
             }
             .navigationTitle("")
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootSocialt"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootHem"))) { _ in
                 navigationPath = NavigationPath()
                 selectedPost = nil
+                showFindFriends = false
+                showFollowersList = false
+                showOwnProfile = false
+                showNotifications = false
             }
             .navigationBarHidden(true)
             .navigationBarTitleDisplayMode(.inline)
@@ -98,9 +127,27 @@ struct SocialView: View {
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
             }
+            .sheet(isPresented: $showQRCodeSheet) {
+                MyQRCodeView(
+                    userId: authViewModel.currentUser?.id ?? "",
+                    userName: authViewModel.currentUser?.name ?? "Användare"
+                )
+            }
             .navigationDestination(isPresented: $showFindFriends) {
                 FindFriendsView()
                     .environmentObject(authViewModel)
+            }
+            .navigationDestination(isPresented: $showFollowersList) {
+                if let userId = authViewModel.currentUser?.id {
+                    FollowListView(userId: userId, listType: .followers)
+                        .environmentObject(authViewModel)
+                }
+            }
+            .navigationDestination(isPresented: $showOwnProfile) {
+                if let userId = authViewModel.currentUser?.id {
+                    UserProfileView(userId: userId)
+                        .environmentObject(authViewModel)
+                }
             }
             .fullScreenCover(item: $selectedUserStories) { userStories in
                 StoryViewerOverlay(
@@ -118,11 +165,12 @@ struct SocialView: View {
                 .ignoresSafeArea()
             }
             .enableSwipeBack()
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToNewsTab"))) { _ in
-                withAnimation {
-                    selectedTab = .news
-                }
-            }
+            // Active Friends navigation temporarily disabled
+            // .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToActiveFriendsTab"))) { _ in
+            //     withAnimation {
+            //         selectedTab = .activeFriends
+            //     }
+            // }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPost"))) { notification in
                 if let userInfo = notification.userInfo,
                    let postId = userInfo["postId"] as? String {
@@ -164,28 +212,387 @@ struct SocialView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            // Combined header with tabs (Strava-style)
-            CombinedHeaderWithTabs(selectedTab: $selectedTab)
-                .environmentObject(authViewModel)
-                .zIndex(1)
-                .opacity(showHeader ? 1 : 0)
-                .offset(y: showHeader ? 0 : -20)
-            
-            if socialViewModel.isLoading && socialViewModel.posts.isEmpty && featuredPosts.isEmpty {
-                loadingView
-            } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
-                // Show featured posts when user has no following
-                featuredPostsContent
-            } else if socialViewModel.posts.isEmpty {
-                emptyStateView
-            } else {
-                scrollContent
+        ScrollView {
+            VStack(spacing: 0) {
+                // Hero Banner Section (Now inside ScrollView and goes up to top)
+                heroBannerSection
+                    .zIndex(2)
+                
+                // Overlapping Friends & Stats section
+                friendsAndStatsSection
+                    .offset(y: -40)
+                    .zIndex(3)
+                
+                VStack(spacing: 0) {
+                    // Show skeleton while initially loading (before first successful load)
+                    if !hasInitiallyLoaded || (socialViewModel.isLoading && socialViewModel.posts.isEmpty) {
+                        loadingView
+                    } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
+                        // Show featured posts when user has no following
+                        featuredPostsContent
+                    } else if socialViewModel.posts.isEmpty && hasInitiallyLoaded {
+                        emptyStateView
+                    } else {
+                        // Feed content directly here instead of scrollContent to avoid nested scrolls
+                        VStack(alignment: .leading, spacing: 0) {
+                            // MARK: - Friends at gym section
+                            friendsAtGymSection
+                            
+                            // Separator line between friends section and posts
+                            Divider()
+                                .background(Color(.systemGray5))
+                            
+                            // Always show feed content
+                            feedContent
+                                .opacity(showPosts ? 1 : 0)
+                                .offset(y: showPosts ? 0 : 30)
+                        }
+                        .transition(.opacity.combined(with: .offset(y: 20)))
+                    }
+                }
+                .padding(.top, -30) // Adjust for the overlapping section
+                .animation(.easeOut(duration: 0.35), value: hasInitiallyLoaded)
+                .animation(.easeOut(duration: 0.35), value: socialViewModel.posts.isEmpty)
             }
+        }
+        .ignoresSafeArea(edges: .top)
+        .navigationDestination(isPresented: $showNotifications) {
+            NotificationsView(onDismiss: {
+                showNotifications = false
+            })
+            .environmentObject(authViewModel)
         }
         .onAppear {
             animateContentIn()
+            loadStats()
         }
+    }
+
+    // MARK: - Load Stats
+    private func loadStats() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        // Load streak
+        streakCount = StreakManager.shared.getCurrentStreak().currentStreak
+        
+        // Load friend count and avatars
+        Task {
+            do {
+                // Fetch follower users directly to get their avatars
+                let followerUsers = try await SocialService.shared.getFollowerUsers(userId: userId)
+                
+                await MainActor.run {
+                    self.friendCount = followerUsers.count
+                    // Take up to 3 avatars from actual followers
+                    self.friendAvatars = followerUsers.prefix(3).map { $0.avatarUrl }
+                }
+            } catch {
+                print("⚠️ Error loading friend stats: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Friends & Stats Section (Overlapping)
+    private var friendsAndStatsSection: some View {
+        HStack(spacing: 10) {
+            // Friends Card - tappable to show followers list
+            Button {
+                showFollowersList = true
+            } label: {
+                HStack(spacing: 0) {
+                    // Three profile pictures (Actual Friends)
+                    HStack(spacing: -14) {
+                        ForEach(0..<friendAvatars.count, id: \.self) { index in
+                            ProfileImage(url: friendAvatars[index], size: 36)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
+                        }
+                        
+                        if friendAvatars.isEmpty {
+                            Circle()
+                                .fill(Color.gray.opacity(0.1))
+                                .frame(width: 36, height: 36)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.gray)
+                                )
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 6) {
+                        Text("\(friendCount)")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.black)
+                        
+                        Text("Vänner")
+                            .font(.system(size: 17, weight: .medium, design: .rounded))
+                            .foregroundColor(.black)
+                    }
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+                .background(Color(.systemBackground))
+                .cornerRadius(28)
+                .shadow(color: Color.black.opacity(0.1), radius: 15, x: 0, y: 8)
+            }
+            .buttonStyle(.plain)
+            
+            // Streak Card
+            HStack(spacing: 6) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.orange)
+                
+                Text("\(streakCount)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(.black)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(Color(.systemBackground))
+            .cornerRadius(28)
+            .shadow(color: Color.black.opacity(0.1), radius: 15, x: 0, y: 8)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    // MARK: - Hero Banner Section
+    private var heroBannerSection: some View {
+        ZStack(alignment: .top) {
+            // Background banner image or gray placeholder
+            ZStack(alignment: .bottom) {
+                if let bannerUrl = authViewModel.currentUser?.bannerUrl, !bannerUrl.isEmpty {
+                    LocalAsyncImage(path: bannerUrl)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: UIScreen.main.bounds.width, height: 420)
+                        .clipped()
+                } else {
+                    // Default banner image (77) for users without custom banner
+                    Image("77")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: UIScreen.main.bounds.width, height: 420)
+                        .clipped()
+                }
+                
+                // Bottom shadow gradient
+                LinearGradient(
+                    colors: [Color.clear, Color.black.opacity(0.5)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 150)
+            }
+            
+            // Top Navigation Overlay
+            HStack {
+                Spacer()
+                HStack(spacing: 24) {
+                    Button {
+                        showFindFriends = true
+                    } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                    
+                    Button {
+                        showNotifications = true
+                    } label: {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                }
+                .padding(.trailing, 24)
+            }
+            .padding(.top, 60)
+            
+            // Profile and Name Overlay - Tappable to show own profile
+            Button {
+                showOwnProfile = true
+            } label: {
+                VStack(alignment: .leading, spacing: 20) {
+                    Spacer()
+                    
+                    // Profile picture with black/silver gradient ring
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black,
+                                        Color(white: 0.7),
+                                        Color.white.opacity(0.8),
+                                        Color(white: 0.7),
+                                        Color.black
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 115, height: 115)
+                            .shadow(color: .black.opacity(0.3), radius: 12)
+                        
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 105)
+                            .clipShape(Circle())
+                    }
+                    .padding(.leading, 24)
+                    
+                    // Greeting text
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Kör hårt,")
+                            .font(.system(size: 32, weight: .medium, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.4), radius: 5)
+                        
+                        Text(authViewModel.currentUser?.name ?? "")
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.4), radius: 5)
+                    }
+                    .padding(.leading, 24)
+                    .padding(.bottom, 90) // Moved down by increasing banner height
+                }
+                .frame(width: UIScreen.main.bounds.width, height: 420, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            
+            // QR Code & Edit Banner Buttons
+            VStack {
+                Spacer()
+                HStack(spacing: 12) {
+                    Spacer()
+                    Button {
+                        showQRCodeSheet = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 28))
+                            .foregroundColor(.black)
+                            .frame(width: 60, height: 60)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
+                    }
+                    
+                    Button {
+                        showBannerPicker = true
+                    } label: {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 24))
+                            .foregroundColor(.black)
+                            .frame(width: 60, height: 60)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
+                    }
+                }
+                .padding(.trailing, 28)
+                .padding(.bottom, 110)
+            }
+        }
+        .frame(width: UIScreen.main.bounds.width, height: 420)
+        .overlay(
+            // Edit banner button (hidden but accessible)
+            Button {
+                showBannerPicker = true
+            } label: {
+                Color.clear
+                    .frame(width: 80, height: 80)
+            },
+            alignment: .topLeading
+        )
+        .photosPicker(isPresented: $showBannerPicker, selection: $bannerPickerItem, matching: .images)
+        .onChange(of: bannerPickerItem) { _, newItem in
+            Task {
+                await uploadBannerImage(item: newItem)
+            }
+        }
+    }
+    
+    // MARK: - Upload Banner Image
+    private func uploadBannerImage(item: PhotosPickerItem?) async {
+        guard let item = item else { return }
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        await MainActor.run {
+            isUploadingBanner = true
+        }
+        
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data) else {
+                await MainActor.run { isUploadingBanner = false }
+                return
+            }
+            
+            // Resize image for banner (max 1200px width)
+            let resizedImage = resizeBannerImage(image, targetWidth: 1200)
+            guard let jpegData = resizedImage.jpegData(compressionQuality: 0.8) else {
+                await MainActor.run { isUploadingBanner = false }
+                return
+            }
+            
+            let filename = "banner_\(userId)_\(Int(Date().timeIntervalSince1970)).jpg"
+            let path = "banners/\(filename)"
+            
+            // Upload to Supabase Storage
+            try await SupabaseConfig.supabase.storage
+                .from("avatars")
+                .upload(path: path, file: jpegData, options: .init(contentType: "image/jpeg", upsert: true))
+            
+            // Update profile with new banner URL
+            let updateResponse = try await SupabaseConfig.supabase
+                .from("profiles")
+                .update(["banner_url": path])
+                .eq("id", value: userId)
+                .execute()
+            
+            print("📡 Supabase update response: \(updateResponse.status)")
+            
+            // Force refresh user data in AuthViewModel
+            await authViewModel.loadUserProfile()
+            
+            await MainActor.run {
+                isUploadingBanner = false
+                bannerPickerItem = nil
+            }
+            
+            print("✅ Banner uploaded successfully: \(path)")
+            
+        } catch {
+            print("❌ Failed to upload banner: \(error)")
+            await MainActor.run {
+                isUploadingBanner = false
+                bannerPickerItem = nil
+            }
+        }
+    }
+    
+    // Helper function to resize image for banner
+    private func resizeBannerImage(_ image: UIImage, targetWidth: CGFloat) -> UIImage {
+        let size = image.size
+        let widthRatio = targetWidth / size.width
+        
+        if widthRatio >= 1.0 {
+            return image // Don't upscale
+        }
+        
+        let newSize = CGSize(width: targetWidth, height: size.height * widthRatio)
+        
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        
+        return resizedImage ?? image
     }
     
     private func animateContentIn() {
@@ -213,42 +620,32 @@ struct SocialView: View {
     }
     
     private var loadingView: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Skeleton for carousel/header area
-                HStack(spacing: 16) {
-                    SkeletonRectangle(height: 120, cornerRadius: 16)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+        VStack(alignment: .leading, spacing: 0) {
+            // Skeleton for "Vänner på gymmet" section
+            VStack(alignment: .leading, spacing: 12) {
+                SkeletonLine(width: 160, height: 20)
                 
-                // Skeleton posts
-                SkeletonFeedView(postCount: 3)
+                HStack(spacing: 12) {
+                    SkeletonCircle(size: 48)
+                    VStack(alignment: .leading, spacing: 6) {
+                        SkeletonLine(width: 200, height: 14)
+                        SkeletonLine(width: 140, height: 12)
+                    }
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            Divider()
+                .background(Color(.systemGray5))
+            
+            // Skeleton posts
+            SkeletonFeedView(postCount: 4)
         }
-        .scrollDisabled(true)
     }
     
     private var emptyStateView: some View {
         VStack(spacing: 0) {
-            // Stories row (Instagram-style)
-            StoriesRowView(
-                userStories: friendsStories,
-                currentUserId: authViewModel.currentUser?.id ?? "",
-                myStories: myStories,
-                onStoryTap: { userStories, index in
-                    selectedUserStories = userStories
-                    // selectedUserStories is already set, fullScreenCover(item:) will present
-                },
-                onAddStoryTap: {
-                    // Open AI food scanner to add a story
-                    NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
-                }
-            )
-            .environmentObject(authViewModel)
-            
-            Divider()
-            
             Spacer()
             
             VStack(spacing: 16) {
@@ -294,41 +691,19 @@ struct SocialView: View {
     private var featuredPostsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Stories row (Instagram-style)
-                StoriesRowView(
-                    userStories: friendsStories,
-                    currentUserId: authViewModel.currentUser?.id ?? "",
-                    myStories: myStories,
-                    onStoryTap: { userStories, index in
-                        selectedUserStories = userStories
-                        // selectedUserStories is already set, fullScreenCover(item:) will present
-                    },
-                    onAddStoryTap: {
-                        // Open AI food scanner to add a story
-                        NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
+                // Posts from all users (always show feed)
+                LazyVStack(spacing: 0) {
+                    ForEach(featuredPosts) { post in
+                        SocialPostCard(
+                            post: post,
+                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                            onLikeChanged: { _, _, _ in },
+                            onCommentCountChanged: { _, _ in },
+                            onPostDeleted: { _ in }
+                        )
+                        Divider()
+                            .background(Color(.systemGray5))
                     }
-                )
-                .environmentObject(authViewModel)
-                
-                Divider()
-                
-                if selectedTab == .feed {
-                    // Posts from all users
-                    LazyVStack(spacing: 0) {
-                        ForEach(featuredPosts) { post in
-                            SocialPostCard(
-                                post: post,
-                                onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                                onLikeChanged: { _, _, _ in },
-                                onCommentCountChanged: { _, _ in },
-                                onPostDeleted: { _ in }
-                            )
-                            Divider()
-                                .background(Color(.systemGray5))
-                        }
-                    }
-                } else {
-                    newsContent
                 }
             }
         }
@@ -338,33 +713,13 @@ struct SocialView: View {
         ScrollViewReader { scrollProxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Stories row (Instagram-style) - Always show so users can add stories
-                    StoriesRowView(
-                        userStories: friendsStories,
-                        currentUserId: authViewModel.currentUser?.id ?? "",
-                        myStories: myStories,
-                        onStoryTap: { userStories, index in
-                            selectedUserStories = userStories
-                            // selectedUserStories is already set, fullScreenCover(item:) will present
-                        },
-                        onAddStoryTap: {
-                            // Open AI food scanner to add a story
-                            NotificationCenter.default.post(name: NSNotification.Name("OpenAIFoodScanner"), object: nil)
-                        }
-                    )
-                    .environmentObject(authViewModel)
+                    // MARK: - Friends at gym section
+                    friendsAtGymSection
                     
-                    Divider()
-                    
-                    if selectedTab == .feed {
-                        feedContent
-                            .opacity(showPosts ? 1 : 0)
-                            .offset(y: showPosts ? 0 : 30)
-                    } else {
-                        newsContent
-                            .opacity(showPosts ? 1 : 0)
-                            .offset(y: showPosts ? 0 : 30)
-                    }
+                    // Always show feed content
+                    feedContent
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 30)
                 }
             }
             .onChange(of: highlightedPostId) { _, postId in
@@ -380,6 +735,178 @@ struct SocialView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    // MARK: - Friends at Gym Section
+    private var friendsAtGymSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Vänner på gymmet")
+                .font(.system(size: 20, weight: .bold))
+            
+            if isLoadingActiveFriends {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Laddar...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else if activeFriends.isEmpty {
+                HStack(spacing: 12) {
+                    // App logo with black/silver gradient ring
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.black, Color(white: 0.7), .black],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 3
+                            )
+                            .frame(width: 60, height: 60)
+                        
+                        Image("23") // App logo
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 52, height: 52)
+                            .clipShape(Circle())
+                    }
+                    
+                    Text("Dina vänner tränar inte för närvarande")
+                        .font(.system(size: 16))
+                        .foregroundColor(.gray)
+                }
+                .padding(.vertical, 8)
+            } else {
+                // Show active friends with spectate option
+                ForEach(activeFriends) { friend in
+                    NavigationLink(destination: SpectateWorkoutView(session: friend).environmentObject(authViewModel)) {
+                        HStack(spacing: 12) {
+                            // Profile picture with green activity ring
+                            ZStack {
+                                Circle()
+                                    .stroke(Color.green, lineWidth: 3)
+                                    .frame(width: 52, height: 52)
+                                
+                                AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                        .overlay(
+                                            Image(systemName: "person.fill")
+                                                .foregroundColor(.gray)
+                                        )
+                                }
+                                .frame(width: 44, height: 44)
+                                .clipShape(Circle())
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(friend.userName)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                HStack(spacing: 4) {
+                                    Image(systemName: activityIconForFriend(friend.activityType))
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.green)
+                                    Text(friend.formattedDuration)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            // "Watch" button
+                            HStack(spacing: 6) {
+                                Image(systemName: "eye.fill")
+                                    .font(.system(size: 12))
+                                Text("Titta")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .cornerRadius(16)
+                        }
+                        .padding(12)
+                        .background(Color(.tertiarySystemBackground))
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .task {
+            await loadActiveFriendsData()
+        }
+        .onAppear {
+            startActiveFriendsTimer()
+        }
+        .onDisappear {
+            stopActiveFriendsTimer()
+        }
+    }
+    
+    // MARK: - Active Friends Timer
+    private func startActiveFriendsTimer() {
+        // Invalidate existing timer if any
+        activeFriendsRefreshTimer?.invalidate()
+        
+        // Create new timer that fires every 30 seconds
+        activeFriendsRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            Task {
+                await loadActiveFriendsData()
+            }
+        }
+    }
+    
+    private func stopActiveFriendsTimer() {
+        activeFriendsRefreshTimer?.invalidate()
+        activeFriendsRefreshTimer = nil
+    }
+    
+    private func activityIconForFriend(_ activityType: String) -> String {
+        switch activityType.lowercased() {
+        case "running", "löpning": return "figure.run"
+        case "gym", "strength": return "dumbbell.fill"
+        case "cycling", "cykling": return "bicycle"
+        case "walking", "promenad": return "figure.walk"
+        case "swimming", "simning": return "figure.pool.swim"
+        case "yoga": return "figure.yoga"
+        case "golf": return "figure.golf"
+        default: return "flame.fill"
+        }
+    }
+    
+    private func loadActiveFriendsData() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        isLoadingActiveFriends = true
+        
+        do {
+            // Fetch active friends
+            let active = try await ActiveSessionService.shared.fetchActiveFriends(userId: userId)
+            await MainActor.run {
+                activeFriends = active
+                isLoadingActiveFriends = false
+            }
+        } catch {
+            print("⚠️ Failed to load friends data: \(error)")
+            await MainActor.run {
+                isLoadingActiveFriends = false
             }
         }
     }
@@ -658,7 +1185,18 @@ struct SocialView: View {
         // Load stories from friends
         await loadStories(userId: userId)
         
+        // Load active friends at gym
+        await loadActiveFriendsData()
+        
         await socialViewModel.fetchSocialFeedAsync(userId: userId)
+        
+        // Mark initial load as complete with smooth animation
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.3)) {
+                hasInitiallyLoaded = true
+            }
+        }
+        
         await loadRecommendedUsers(for: userId)
         await newsViewModel.fetchNews()
         
@@ -828,6 +1366,9 @@ struct SocialView: View {
         // Refresh stories first
         await loadStories(userId: userId)
         
+        // Refresh active friends
+        await loadActiveFriendsData()
+        
         await socialViewModel.refreshSocialFeed(userId: userId)
         await loadRecommendedUsers(for: userId)
         await newsViewModel.fetchNews()
@@ -836,6 +1377,15 @@ struct SocialView: View {
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         if newPhase == .active {
             let inactiveTime = Date().timeIntervalSince(lastActiveTime)
+            
+            // Restart the active friends timer when app becomes active
+            startActiveFriendsTimer()
+            
+            // Always refresh active friends when app becomes active (they change frequently)
+            Task {
+                await loadActiveFriendsData()
+            }
+            
             if inactiveTime > sessionRefreshThreshold && !socialViewModel.posts.isEmpty {
                 print("🔄 App became active after \(Int(inactiveTime))s - refreshing social feed")
                 Task {
@@ -850,6 +1400,8 @@ struct SocialView: View {
             }
             lastActiveTime = Date()
         } else if newPhase == .background || newPhase == .inactive {
+            // Stop the timer when app goes to background to save battery
+            stopActiveFriendsTimer()
             lastActiveTime = Date()
         }
     }
@@ -938,7 +1490,13 @@ struct SocialView: View {
         }
     }
     
-    // MARK: - News Content
+    // MARK: - Active Friends Content
+    private var activeFriendsContent: some View {
+        ActiveFriendsMapView()
+            .environmentObject(authViewModel)
+    }
+    
+    // MARK: - News Content (Deprecated)
     private var newsContent: some View {
         VStack(spacing: 0) {
             // Admin controls
@@ -1454,9 +2012,22 @@ struct SocialPostCard: View {
     @State private var editedDescription: String = ""
     @State private var likeAnimationScale: CGFloat = 1.0
     @State private var showLikeParticles = false
+    @State private var showSaveRoutineAlert = false
+    @State private var isSavingRoutine = false
+    @State private var routineSavedSuccess = false
     @EnvironmentObject var authViewModel: AuthViewModel
     
     private let likeHaptic = UIImpactFeedbackGenerator(style: .medium)
+    
+    // Check if this is the current user's post
+    private var isOwnPost: Bool {
+        post.userId == authViewModel.currentUser?.id
+    }
+    
+    // Check if this is a gym post with exercises that can be saved as routine
+    private var canSaveAsRoutine: Bool {
+        post.activityType == "Gympass" && (post.exercises?.isEmpty == false)
+    }
     
     init(post: SocialWorkoutPost, onOpenDetail: @escaping (SocialWorkoutPost) -> Void, onLikeChanged: @escaping (String, Bool, Int) -> Void, onCommentCountChanged: @escaping (String, Int) -> Void, onPostDeleted: @escaping (String) -> Void) {
         self.post = post
@@ -1478,6 +2049,7 @@ struct SocialPostCard: View {
             likesPreview
             
             // Like, Comment, Share buttons - large, evenly spaced
+            // Share only shown for own posts, otherwise 50/50 for like/comment
             HStack(spacing: 0) {
                 Button(action: toggleLike) {
                     ZStack {
@@ -1502,29 +2074,38 @@ struct SocialPostCard: View {
                             .foregroundColor(isLiked ? .red : .gray)
                             .scaleEffect(likeAnimationScale)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .disabled(likeInProgress)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
 
                 NavigationLink(destination: CommentsView(post: post) {
                     commentCount += 1
                     onCommentCountChanged(post.id, commentCount)
-                }) {
+                }
+                .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+                ) {
                     Image(systemName: "bubble.right")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
 
-                Button(action: { showShareSheet = true }) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.gray)
+                // Only show share button for own posts
+                if isOwnPost {
+                    Button(action: { showShareSheet = true }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
@@ -1550,10 +2131,22 @@ struct SocialPostCard: View {
             Button("Redigera") {
                 showEditSheet = true
             }
+            if canSaveAsRoutine {
+                Button("Gör till en rutin") {
+                    Task {
+                        await saveAsRoutine()
+                    }
+                }
+            }
             Button("Ta bort inlägg", role: .destructive) {
                 showDeleteAlert = true
             }
             Button("Avbryt", role: .cancel) {}
+        }
+        .alert("Rutin sparad!", isPresented: $routineSavedSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Gympasset har sparats som en rutin. Du hittar den under \"Sparade pass\" när du startar ett nytt gympass.")
         }
         .alert("Ta bort inlägg", isPresented: $showDeleteAlert) {
             Button("Avbryt", role: .cancel) {}
@@ -1657,11 +2250,18 @@ struct SocialPostCard: View {
     @ViewBuilder
     private var contentSection: some View {
         // Show exercises list for Gympass, otherwise show swipeable images
+        // Note: Tap gesture is handled inside GymExercisesListView/SwipeableImageView
+        // to only trigger on the center image area, not on buttons
         if post.activityType == "Gympass", let exercises = post.exercises, !exercises.isEmpty {
-            GymExercisesListView(exercises: exercises, userImage: post.userImageUrl)
-                .onTapGesture {
+            GymExercisesListView(
+                exercises: exercises,
+                userImage: post.userImageUrl,
+                userId: post.userId,
+                postDate: ISO8601DateFormatter().date(from: post.createdAt),
+                onTapImage: {
                     onOpenDetail(post)
                 }
+            )
         } else if post.isExternalPost || shouldShowCleanCard {
             // External posts or posts without images - show clean Strava-style card
             ExternalActivityCard(post: post)
@@ -1670,10 +2270,9 @@ struct SocialPostCard: View {
                 }
         } else {
             // Swipeable images (route and user image)
-            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
-                .onTapGesture {
-                    onOpenDetail(post)
-                }
+            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl, onTapImage: {
+                onOpenDetail(post)
+            })
         }
     }
     
@@ -1886,6 +2485,46 @@ struct SocialPostCard: View {
         }
     }
     
+    private func saveAsRoutine() async {
+        guard let userId = authViewModel.currentUser?.id,
+              let exercises = post.exercises,
+              !exercises.isEmpty else {
+            return
+        }
+        
+        await MainActor.run {
+            isSavingRoutine = true
+        }
+        
+        do {
+            // Use the post title as the routine name
+            let routineName = post.title.isEmpty ? "Mitt gympass" : post.title
+            
+            // Save as a workout template
+            _ = try await SavedWorkoutService.shared.saveWorkoutTemplate(
+                userId: userId,
+                name: routineName,
+                exercises: exercises
+            )
+            
+            await MainActor.run {
+                isSavingRoutine = false
+                routineSavedSuccess = true
+                
+                // Haptic feedback for success
+                let successHaptic = UINotificationFeedbackGenerator()
+                successHaptic.notificationOccurred(.success)
+            }
+            
+            print("✅ Workout saved as routine: \(routineName)")
+        } catch {
+            print("❌ Error saving workout as routine: \(error)")
+            await MainActor.run {
+                isSavingRoutine = false
+            }
+        }
+    }
+    
     private func toggleLike() {
         guard let userId = authViewModel.currentUser?.id else { return }
         guard !likeInProgress else { return }
@@ -1945,11 +2584,13 @@ struct SocialPostCard: View {
         
         Task {
             do {
+                // Fetch actual like count and check current like status from server
+                let existingLikes = try await SocialService.shared.getPostLikes(postId: post.id)
+                let alreadyLiked = existingLikes.contains { $0.userId == userId }
+                let actualLikeCount = existingLikes.count
+                
                 if isLiked {
-                    // When liking, check if already liked first
-                    let existingLikes = try await SocialService.shared.getPostLikes(postId: post.id)
-                    let alreadyLiked = existingLikes.contains { $0.userId == userId }
-                    
+                    // User wants to like
                     if !alreadyLiked {
                         // Pass post owner ID to trigger notification
                         try await SocialService.shared.likePost(
@@ -1959,17 +2600,45 @@ struct SocialPostCard: View {
                             postTitle: post.title
                         )
                         print("✅ Post liked successfully")
+                        
+                        // Update with correct count from server + 1
+                        await MainActor.run {
+                            likeCount = actualLikeCount + 1
+                            likeInProgress = false
+                            onLikeChanged(post.id, true, likeCount)
+                        }
                     } else {
-                        print("⚠️ Already liked this post")
+                        // Was already liked - sync state correctly
+                        print("⚠️ Already liked this post - syncing state")
+                        await MainActor.run {
+                            isLiked = true // Make sure it shows as liked
+                            likeCount = actualLikeCount // Correct the count
+                            likeInProgress = false
+                            onLikeChanged(post.id, true, likeCount)
+                        }
                     }
                 } else {
-                    try await SocialService.shared.unlikePost(postId: post.id, userId: userId)
-                    print("✅ Post unliked successfully")
-                }
-                
-                await MainActor.run {
-                    likeInProgress = false
-                    onLikeChanged(post.id, isLiked, likeCount)
+                    // User wants to unlike
+                    if alreadyLiked {
+                        try await SocialService.shared.unlikePost(postId: post.id, userId: userId)
+                        print("✅ Post unliked successfully")
+                        
+                        // Update with correct count from server - 1
+                        await MainActor.run {
+                            likeCount = max(0, actualLikeCount - 1)
+                            likeInProgress = false
+                            onLikeChanged(post.id, false, likeCount)
+                        }
+                    } else {
+                        // Wasn't liked - sync state correctly
+                        print("⚠️ Post wasn't liked - syncing state")
+                        await MainActor.run {
+                            isLiked = false // Make sure it shows as not liked
+                            likeCount = actualLikeCount // Correct the count
+                            likeInProgress = false
+                            onLikeChanged(post.id, false, likeCount)
+                        }
+                    }
                 }
             } catch {
                 print("❌ Error toggling like: \(error)")
@@ -2117,7 +2786,10 @@ private extension SocialPostCard {
             NavigationLink(destination: CommentsView(post: post) {
                 commentCount += 1
                 onCommentCountChanged(post.id, commentCount)
-            }) {
+            }
+            .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+            .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+            ) {
                 Text("\(commentCount) kommentarer")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
@@ -2232,6 +2904,7 @@ struct CommentsView: View {
                                     CommentRow(
                                         comment: thread.comment,
                                         isReply: false,
+                                        canSwipeToReply: true, // Main comments can always be replied to
                                         onLike: { commentsViewModel.toggleLike(for: thread.comment.id, currentUserId: authViewModel.currentUser?.id) },
                                         onReply: { startReplyTo(thread.comment) },
                                         onDelete: { deleteComment(thread.comment) }
@@ -2246,9 +2919,14 @@ struct CommentsView: View {
                                     )
                                     
                                     ForEach(thread.replies) { reply in
+                                        // Level 2 replies (direct replies to main comment) can be replied to
+                                        // Level 3 replies (replies to replies) cannot be replied to
+                                        let isLevel2Reply = reply.parentCommentId == thread.id
+                                        
                                         CommentRow(
                                             comment: reply,
                                             isReply: true,
+                                            canSwipeToReply: isLevel2Reply, // Only level 2 replies can be replied to
                                             onLike: { commentsViewModel.toggleLike(for: reply.id, currentUserId: authViewModel.currentUser?.id) },
                                             onReply: { startReplyTo(reply) },
                                             onDelete: { deleteComment(reply) }
@@ -2294,6 +2972,9 @@ struct CommentsView: View {
             await loadTopLikers()
         }
         .onAppear {
+            // Track navigation depth to hide tab bar
+            NavigationDepthTracker.shared.setAtRoot(false)
+            
             // Elegant staggered entrance animation
             withAnimation(.easeOut(duration: 0.4)) {
                 headerAppeared = true
@@ -2310,6 +2991,9 @@ struct CommentsView: View {
                     inputAppeared = true
                 }
             }
+        }
+        .onDisappear {
+            NavigationDepthTracker.shared.setAtRoot(true)
         }
     }
     
@@ -2652,6 +3336,7 @@ struct CommentsView: View {
 struct CommentRow: View {
     let comment: PostComment
     let isReply: Bool
+    let canSwipeToReply: Bool // Whether this comment can be swiped to reply (false for 3rd level comments)
     let onLike: () -> Void
     let onReply: () -> Void
     let onDelete: () -> Void
@@ -2673,6 +3358,11 @@ struct CommentRow: View {
     private var isOwnComment: Bool {
         guard let currentUserId = authViewModel.currentUser?.id else { return false }
         return comment.userId == currentUserId
+    }
+    
+    // Can swipe if: own comment (delete) OR can reply to this comment
+    private var canSwipe: Bool {
+        isOwnComment || canSwipeToReply
     }
     
     private var currentOffset: CGFloat {
@@ -2718,11 +3408,14 @@ struct CommentRow: View {
             
             // Main comment content
             commentContent
-                .offset(x: currentOffset)
+                .offset(x: canSwipe ? currentOffset : 0)
                 .contentShape(Rectangle()) // Ensure the entire area is tappable/draggable
                 .highPriorityGesture(
                     DragGesture(minimumDistance: 8, coordinateSpace: .local)
                         .updating($dragOffset) { value, state, _ in
+                            // Only allow swipe if canSwipe is true
+                            guard canSwipe else { return }
+                            
                             // Only capture horizontal swipes (left swipe primarily)
                             let horizontalAmount = abs(value.translation.width)
                             let verticalAmount = abs(value.translation.height)
@@ -2733,6 +3426,7 @@ struct CommentRow: View {
                             }
                         }
                         .onChanged { value in
+                            guard canSwipe else { return }
                             let horizontalAmount = abs(value.translation.width)
                             let verticalAmount = abs(value.translation.height)
                             if horizontalAmount > verticalAmount * 1.5 && value.translation.width < 0 {
@@ -2740,6 +3434,7 @@ struct CommentRow: View {
                             }
                         }
                         .onEnded { value in
+                            guard canSwipe else { return }
                             isDragging = false
                             
                             // Only process if it was a horizontal swipe
@@ -3172,6 +3867,7 @@ class SocialViewModel: ObservableObject {
                     description: post.description,
                     distance: post.distance,
                     duration: post.duration,
+                    elevationGain: post.elevationGain,
                     imageUrl: post.imageUrl,
                     userImageUrl: post.userImageUrl,
                     createdAt: post.createdAt,
@@ -3186,7 +3882,10 @@ class SocialViewModel: ObservableObject {
                     splits: post.splits,
                     exercises: post.exercises,
                     pbExerciseName: post.pbExerciseName,
-                    pbValue: post.pbValue
+                    pbValue: post.pbValue,
+                    streakCount: post.streakCount,
+                    source: post.source,
+                    deviceName: post.deviceName
                 )
             }
             return post
@@ -3354,6 +4053,7 @@ class SocialViewModel: ObservableObject {
                 description: post.description,
                 distance: post.distance,
                 duration: post.duration,
+                elevationGain: post.elevationGain,
                 imageUrl: post.imageUrl,
                 userImageUrl: post.userImageUrl,
                 createdAt: post.createdAt,
@@ -3368,7 +4068,10 @@ class SocialViewModel: ObservableObject {
                 splits: post.splits,
                 exercises: post.exercises,
                 pbExerciseName: post.pbExerciseName,
-                pbValue: post.pbValue
+                pbValue: post.pbValue,
+                streakCount: post.streakCount,
+                source: post.source,
+                deviceName: post.deviceName
             )
         }
         
@@ -3414,6 +4117,7 @@ class SocialViewModel: ObservableObject {
                 description: updatedPost.description,
                 distance: updatedPost.distance,
                 duration: updatedPost.duration,
+                elevationGain: updatedPost.elevationGain,
                 imageUrl: updatedPost.imageUrl,
                 userImageUrl: updatedPost.userImageUrl,
                 createdAt: updatedPost.createdAt,
@@ -3428,7 +4132,10 @@ class SocialViewModel: ObservableObject {
                 splits: updatedPost.splits,
                 exercises: updatedPost.exercises,
                 pbExerciseName: updatedPost.pbExerciseName,
-                pbValue: updatedPost.pbValue
+                pbValue: updatedPost.pbValue,
+                streakCount: updatedPost.streakCount,
+                source: updatedPost.source,
+                deviceName: updatedPost.deviceName
             )
             posts[index] = updatedPost
             if let uid = currentUserId {
@@ -3457,6 +4164,7 @@ class SocialViewModel: ObservableObject {
                 description: updatedPost.description,
                 distance: updatedPost.distance,
                 duration: updatedPost.duration,
+                elevationGain: updatedPost.elevationGain,
                 imageUrl: updatedPost.imageUrl,
                 userImageUrl: updatedPost.userImageUrl,
                 createdAt: updatedPost.createdAt,
@@ -3471,7 +4179,10 @@ class SocialViewModel: ObservableObject {
                 splits: updatedPost.splits,
                 exercises: updatedPost.exercises,
                 pbExerciseName: updatedPost.pbExerciseName,
-                pbValue: updatedPost.pbValue
+                pbValue: updatedPost.pbValue,
+                streakCount: updatedPost.streakCount,
+                source: updatedPost.source,
+                deviceName: updatedPost.deviceName
             )
             posts[index] = updatedPost
             if let uid = currentUserId {
@@ -3638,7 +4349,8 @@ struct GymAchievementBanner: View {
     
     // Get the user's first name
     private var firstName: String {
-        guard let name = post.userName else { return "Användaren" }
+        guard let name = post.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else { return "Användaren" }
         return name.components(separatedBy: " ").first ?? name
     }
     
@@ -3718,7 +4430,19 @@ enum GymAchievement {
 struct GymExercisesListView: View {
     let exercises: [GymExercisePost]
     let userImage: String?
+    let userId: String?
+    let postDate: Date?
+    var onTapImage: (() -> Void)? = nil
     @State private var currentPage = 0
+    @State private var prResults: [String: Double] = [:] // exerciseName: percentage
+    
+    init(exercises: [GymExercisePost], userImage: String?, userId: String? = nil, postDate: Date? = nil, onTapImage: (() -> Void)? = nil) {
+        self.exercises = exercises
+        self.userImage = userImage
+        self.userId = userId
+        self.postDate = postDate
+        self.onTapImage = onTapImage
+    }
     
     private var hasUserImage: Bool {
         if let userImage, !userImage.isEmpty { return true }
@@ -3726,26 +4450,70 @@ struct GymExercisesListView: View {
     }
     
     var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(Color(.systemBackground))
-            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
-            .overlay(
+        ZStack(alignment: .bottom) {
+            if hasUserImage {
+                // Swipeable pages using TabView
                 TabView(selection: $currentPage) {
-                    if hasUserImage {
-                        userImagePage
-                            .tag(0)
+                    userImagePage
+                        .tag(0)
+                    
+                    exercisesListPage
+                        .tag(1)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+                )
+            } else {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+                    .overlay(
                         exercisesListPage
-                            .tag(1)
-                    } else {
-                        exercisesListPage
-                            .tag(0)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    )
+            }
+            
+            // Page indicators at bottom (only if has user image)
+            if hasUserImage {
+                HStack(spacing: 8) {
+                    ForEach(0..<2, id: \.self) { index in
+                        Circle()
+                            .fill(currentPage == index ? Color.primary : Color.gray.opacity(0.4))
+                            .frame(width: 8, height: 8)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: hasUserImage ? .automatic : .never))
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.bottom, 12)
+            }
+        }
+        .frame(height: hasUserImage ? 420 : 380)
+        .padding(.horizontal, 16)
+        .task {
+            await loadPRs()
+        }
+    }
+    
+    private func loadPRs() async {
+        guard let userId = userId, let postDate = postDate else { return }
+        
+        var results: [String: Double] = [:]
+        for exercise in exercises {
+            let pr = await ExercisePRService.shared.calculatePR(
+                for: exercise,
+                userId: userId,
+                postDate: postDate
             )
-            .frame(height: hasUserImage ? 420 : 380)
-            .padding(.horizontal, 16)
+            if let percent = pr.displayPercent, percent > 0 {
+                results[exercise.name] = percent
+            }
+        }
+        
+        await MainActor.run {
+            self.prResults = results
+        }
     }
 
     private var exercisesListPage: some View {
@@ -3783,6 +4551,13 @@ struct GymExercisesListView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(2)
+                
+                // Show PR percentage if available
+                if let prPercent = prResults[exercise.name], prPercent > 0 {
+                    Text("+\(String(format: "%.0f", prPercent))% ökning!")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.green)
+                }
                 
                 Text("\(exercise.sets) sets")
                     .font(.system(size: 13))
@@ -3854,6 +4629,16 @@ struct GymExercisesListView: View {
                             .cornerRadius(8)
                             .padding(16),
                         alignment: .bottomLeading
+                    )
+                    // Tap gesture only on the center area of the image
+                    .overlay(
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onTapImage?()
+                            }
+                            .padding(.horizontal, 60) // Leave edges untappable for buttons
+                            .padding(.vertical, 60)
                     )
             }
         }

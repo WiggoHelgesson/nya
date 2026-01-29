@@ -502,6 +502,7 @@ class NotificationNavigationManager: ObservableObject {
     
     @Published var shouldNavigateToNews = false
     @Published var shouldNavigateToPost: String? = nil
+    @Published var shouldNavigateToActiveFriends = false
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -515,9 +516,22 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToActiveFriends() {
+        DispatchQueue.main.async {
+            // First navigate to social tab
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+            // Then switch to active friends tab after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToActiveFriendsTab"), object: nil)
+            }
+            self.shouldNavigateToActiveFriends = true
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
+        shouldNavigateToActiveFriends = false
     }
 }
 
@@ -614,9 +628,17 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 if let postId = userInfo["post_id"] as? String {
                     NotificationNavigationManager.shared.navigateToPost(postId: postId)
                 }
+            case "active_session":
+                // Navigate to active friends map
+                NotificationNavigationManager.shared.navigateToActiveFriends()
             default:
                 break
             }
+        }
+        
+        // Also check for deep link in userInfo
+        if let deepLink = userInfo["deepLink"] as? String, deepLink == "upanddown://active-friends" {
+            NotificationNavigationManager.shared.navigateToActiveFriends()
         }
         
         completionHandler()

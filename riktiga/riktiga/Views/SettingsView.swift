@@ -26,296 +26,15 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    
-                    // MARK: - Prenumeration Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Prenumeration")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        VStack(spacing: 0) {
-                            // Up&Down PRO
-                            Button(action: {
-                                if !isLoadingPremium && !isPremium {
-                                    showSubscriptionView = true
-                                }
-                            }) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "crown.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.black)
-                                        .frame(width: 24)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Up&Down PRO")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.primary)
-                                        
-                                        Text(isLoadingPremium ? "Laddar..." : (isPremium ? "Aktiv prenumeration" : "Inaktiv"))
-                                            .font(.system(size: 13))
-                                            .foregroundColor(isPremium ? .green : .secondary)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    if isPremium {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(.green)
-                                    } else {
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundColor(Color(.systemGray3))
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            // Hantera prenumeration
-                            Button(action: openSubscriptionManagement) {
-                                NewSettingsRow(icon: "creditcard", title: "Hantera prenumeration")
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // MARK: - Bjud in vänner Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Bjud in vänner")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        Button(action: { showReferralView = true }) {
-                            HStack(spacing: 14) {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 24)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Referera en vän och tjäna")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.primary)
-                                    
-                                    Text("Tjäna 30% på alla köp din vän gör")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(.systemGray3))
-                            }
-                            .padding(16)
-                            .background(Color(.systemBackground))
-                            .cornerRadius(12)
-                        }
-                    }
-                    
-                    // MARK: - Ditt konto Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Ditt konto")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        VStack(spacing: 0) {
-                            Button(action: { showPersonalDetails = true }) {
-                                NewSettingsRow(icon: "person.text.rectangle", title: "Personliga detaljer")
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            Button(action: openHealthSettings) {
-                                NewSettingsRow(icon: "heart.fill", title: "Apple Health")
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // MARK: - Näring & mål Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Näring & mål")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        VStack(spacing: 0) {
-                            Button(action: { showNutritionOnboarding = true }) {
-                                NewSettingsRow(icon: "target", title: "Uppdatera näringsinställningar")
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            Button(action: { showPersonalDetails = true }) {
-                                NewSettingsRow(icon: "flag", title: "Mål & nuvarande vikt")
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // MARK: - Kundtjänst & legalt Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Kundtjänst & legalt")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        VStack(spacing: 0) {
-                            Button(action: { openMailTo() }) {
-                                NewSettingsRow(icon: "envelope", title: "Skicka ett mail")
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            Button(action: { openURL("https://www.upanddownapp.com/privacy") }) {
-                                NewSettingsRow(icon: "lock.shield", title: "Privacy Policy")
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            Button(action: { openURL("https://www.upanddownapp.com/terms") }) {
-                                NewSettingsRow(icon: "doc.text", title: "Våra Villkor")
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // MARK: - Följ oss Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Följ oss")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 4)
-                        
-                        VStack(spacing: 0) {
-                            Button(action: { openURL("https://instagram.com/upanddownapp") }) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "camera")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.black)
-                                        .frame(width: 24)
-                                    
-                                    Text("Instagram")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.primary)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(Color(.systemGray3))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                            }
-                            
-                            SettingsItemDivider()
-                            
-                            Button(action: { openURL("https://tiktok.com/@upanddownapp") }) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "play.rectangle")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.primary)
-                                        .frame(width: 24)
-                                    
-                                    Text("TikTok")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.primary)
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(Color(.systemGray3))
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(12)
-                    }
-
-                    // MARK: - ADMIN Section (hidden for normal users)
-                    if isAdmin {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Admin")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 4)
-                            
-                            VStack(spacing: 0) {
-                                Button(action: { showAdmin = true }) {
-                                    NewSettingsRow(icon: "person.badge.key", title: "Admin (ansökningar)")
-                                }
-                                
-                                SettingsItemDivider()
-                                
-                                Button(action: { showAnnouncement = true }) {
-                                    NewSettingsRow(icon: "megaphone", title: "Skicka notis till alla")
-                                }
-                            }
-                            .background(Color(.systemBackground))
-                            .cornerRadius(12)
-                        }
-                    }
-                    
-                    // MARK: - Radera & Logga ut
-                    VStack(spacing: 0) {
-                        Button(action: { showDeleteAccountConfirmation = true }) {
-                            HStack(spacing: 14) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.red)
-                                    .frame(width: 24)
-                                
-                                Text("Radera konto")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.red)
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                        
-                        SettingsItemDivider()
-                        
-                        Button(action: {
-                            authViewModel.logout()
-                            dismiss()
-                        }) {
-                            HStack(spacing: 14) {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.red)
-                                    .frame(width: 24)
-                                
-                                Text("Logga ut")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.red)
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                    }
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                    
+                    prenumerationSection
+                    bjudInVannerSection
+                    dittKontoSection
+                    kopplingarSection
+                    naringOchMalSection
+                    kundtjanstSection
+                    foljOssSection
+                    adminSection
+                    raderaOchLoggaUtSection
                     Spacer(minLength: 20)
                 }
                 .padding(.horizontal, 16)
@@ -407,6 +126,364 @@ struct SettingsView: View {
                 Text("Vill du koppla bort ditt Strava-konto? Dina pass kommer inte längre synkas automatiskt.")
             }
         }
+    }
+    
+    // MARK: - Section Views
+    
+    private var prenumerationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Prenumeration")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: {
+                    if !isLoadingPremium && !isPremium {
+                        showSubscriptionView = true
+                    }
+                }) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.black)
+                            .frame(width: 24)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Up&Down PRO")
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            
+                            Text(isLoadingPremium ? "Laddar..." : (isPremium ? "Aktiv prenumeration" : "Inaktiv"))
+                                .font(.system(size: 13))
+                                .foregroundColor(isPremium ? .green : .secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if isPremium {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.green)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(.systemGray3))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: openSubscriptionManagement) {
+                    NewSettingsRow(icon: "creditcard", title: "Hantera prenumeration")
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var bjudInVannerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Bjud in vänner")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            Button(action: { showReferralView = true }) {
+                HStack(spacing: 14) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 20))
+                        .foregroundColor(.primary)
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Referera en vän och tjäna")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Text("Tjäna 30% på alla köp din vän gör")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(.systemGray3))
+                }
+                .padding(16)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var dittKontoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ditt konto")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: { showPersonalDetails = true }) {
+                    NewSettingsRow(icon: "person.text.rectangle", title: "Personliga detaljer")
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: openHealthSettings) {
+                    NewSettingsRow(icon: "heart.fill", title: "Apple Health")
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var kopplingarSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Kopplingar")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: {
+                    if stravaService.isConnected {
+                        showStravaDisconnectConfirmation = true
+                    } else {
+                        stravaService.startOAuthFlow()
+                    }
+                }) {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.orange)
+                                .frame(width: 28, height: 28)
+                            
+                            Image(systemName: "figure.run")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Strava")
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            
+                            Text(stravaService.isConnected ? "Ansluten" : "Inte ansluten")
+                                .font(.system(size: 13))
+                                .foregroundColor(stravaService.isConnected ? .green : .secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if stravaService.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else if stravaService.isConnected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Anslut")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var naringOchMalSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Näring & mål")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: { showNutritionOnboarding = true }) {
+                    NewSettingsRow(icon: "target", title: "Uppdatera näringsinställningar")
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: { showPersonalDetails = true }) {
+                    NewSettingsRow(icon: "flag", title: "Mål & nuvarande vikt")
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var kundtjanstSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Kundtjänst & legalt")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: { openMailTo() }) {
+                    NewSettingsRow(icon: "envelope", title: "Skicka ett mail")
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: { openURL("https://www.upanddownapp.com/privacy") }) {
+                    NewSettingsRow(icon: "lock.shield", title: "Privacy Policy")
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: { openURL("https://www.upanddownapp.com/terms") }) {
+                    NewSettingsRow(icon: "doc.text", title: "Våra Villkor")
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var foljOssSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Följ oss")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                Button(action: { openURL("https://instagram.com/upanddownapp") }) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "camera")
+                            .font(.system(size: 18))
+                            .foregroundColor(.black)
+                            .frame(width: 24)
+                        
+                        Text("Instagram")
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color(.systemGray3))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+                
+                SettingsItemDivider()
+                
+                Button(action: { openURL("https://tiktok.com/@upanddownapp") }) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.primary)
+                            .frame(width: 24)
+                        
+                        Text("TikTok")
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color(.systemGray3))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
+    @ViewBuilder
+    private var adminSection: some View {
+        if isAdmin {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Admin")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                
+                VStack(spacing: 0) {
+                    Button(action: { showAdmin = true }) {
+                        NewSettingsRow(icon: "person.badge.key", title: "Admin (ansökningar)")
+                    }
+                    
+                    SettingsItemDivider()
+                    
+                    Button(action: { showAnnouncement = true }) {
+                        NewSettingsRow(icon: "megaphone", title: "Skicka notis till alla")
+                    }
+                }
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var raderaOchLoggaUtSection: some View {
+        VStack(spacing: 0) {
+            Button(action: { showDeleteAccountConfirmation = true }) {
+                HStack(spacing: 14) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18))
+                        .foregroundColor(.red)
+                        .frame(width: 24)
+                    
+                    Text("Radera konto")
+                        .font(.system(size: 16))
+                        .foregroundColor(.red)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            
+            SettingsItemDivider()
+            
+            Button(action: {
+                authViewModel.logout()
+                dismiss()
+            }) {
+                HStack(spacing: 14) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 18))
+                        .foregroundColor(.red)
+                        .frame(width: 24)
+                    
+                    Text("Logga ut")
+                        .font(.system(size: 16))
+                        .foregroundColor(.red)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+        }
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
     }
     
     private var isAdmin: Bool {

@@ -9,6 +9,7 @@ import SwiftUI
 import StripePaymentSheet
 import InsertAffiliateSwift
 import RevenueCat
+import GoogleSignIn
 
 @main
 struct UpAndDownApp: App {
@@ -22,6 +23,11 @@ struct UpAndDownApp: App {
     init() {
         // Configure Stripe
         StripeConfig.configure()
+        
+        // Configure Google Sign-In
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(
+            clientID: "748390418907-05k79f4af3tcdftfeasfds1rq0behvoi.apps.googleusercontent.com"
+        )
         
         // Cancel any existing daily steps reminders (feature removed)
         NotificationManager.shared.cancelDailyStepsReminder()
@@ -79,9 +85,15 @@ struct UpAndDownApp: App {
                     }
                 }
             }
-            // Handle deep links (password reset, Insert Affiliate, Strava, etc.)
+            // Handle deep links (password reset, Insert Affiliate, Strava, Google Sign-In, etc.)
             .onOpenURL { url in
                 print("📱 Received deep link: \(url)")
+                
+                // Handle Google Sign-In callback
+                if GIDSignIn.sharedInstance.handle(url) {
+                    print("✅ Google Sign-In URL handled")
+                    return
+                }
                 
                 // Check if this is an Insert Affiliate deep link
                 let urlString = url.absoluteString

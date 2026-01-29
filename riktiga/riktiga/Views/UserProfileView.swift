@@ -5,6 +5,7 @@ struct UserProfileView: View {
     
     @State private var username: String = ""
     @State private var avatarUrl: String? = nil
+    @State private var bannerUrl: String? = nil
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
     @State private var workoutsCount: Int = 0
@@ -28,6 +29,10 @@ struct UserProfileView: View {
     @State private var showChart: Bool = false
     @State private var showPosts: Bool = false
     
+    // Follow list states
+    @State private var showFollowersList: Bool = false
+    @State private var showFollowingList: Bool = false
+    
     // Filter posts with Up&Down Live photos
     private var livePhotoPosts: [SocialWorkoutPost] {
         profilePostsViewModel.posts.filter { post in
@@ -43,6 +48,25 @@ struct UserProfileView: View {
             // Fixed Header Section
             ScrollView {
                 VStack(spacing: 0) {
+                    // MARK: - Banner Section (if user has custom banner)
+                    if let bannerUrl = bannerUrl, !bannerUrl.isEmpty {
+                        ZStack(alignment: .bottom) {
+                            LocalAsyncImage(path: bannerUrl)
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: UIScreen.main.bounds.width, height: 200)
+                                .clipped()
+                            
+                            // Bottom gradient for smooth transition
+                            LinearGradient(
+                                colors: [Color.clear, Color(.systemBackground).opacity(0.8), Color(.systemBackground)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 60)
+                        }
+                        .frame(width: UIScreen.main.bounds.width, height: 200)
+                    }
+                    
                     // MARK: - Up&Down Live Gallery Slider (only if has live photos)
                     if !livePhotoPosts.isEmpty {
                         PublicProfileLiveGallery(
@@ -89,25 +113,37 @@ struct UserProfileView: View {
                                     }
                                     .frame(maxWidth: .infinity)
                                     
-                                    VStack(spacing: 2) {
-                                        Text("\(followersCount)")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .contentTransition(.numericText())
-                                        Text("Följare")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.gray)
+                                    // Followers - tappable
+                                    Button {
+                                        showFollowersList = true
+                                    } label: {
+                                        VStack(spacing: 2) {
+                                            Text("\(followersCount)")
+                                                .font(.system(size: 16, weight: .bold))
+                                                .contentTransition(.numericText())
+                                            Text("Följare")
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.gray)
+                                        }
+                                        .frame(maxWidth: .infinity)
                                     }
-                                    .frame(maxWidth: .infinity)
+                                    .buttonStyle(.plain)
                                     
-                                    VStack(spacing: 2) {
-                                        Text("\(followingCount)")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .contentTransition(.numericText())
-                                        Text("Följer")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.gray)
+                                    // Following - tappable
+                                    Button {
+                                        showFollowingList = true
+                                    } label: {
+                                        VStack(spacing: 2) {
+                                            Text("\(followingCount)")
+                                                .font(.system(size: 16, weight: .bold))
+                                                .contentTransition(.numericText())
+                                            Text("Följer")
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.gray)
+                                        }
+                                        .frame(maxWidth: .infinity)
                                     }
-                                    .frame(maxWidth: .infinity)
+                                    .buttonStyle(.plain)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .opacity(showStats ? 1 : 0)
@@ -289,6 +325,18 @@ struct UserProfileView: View {
                 )
             }
         }
+        .sheet(isPresented: $showFollowersList) {
+            NavigationStack {
+                FollowListView(userId: userId, listType: .followers)
+                    .environmentObject(authViewModel)
+            }
+        }
+        .sheet(isPresented: $showFollowingList) {
+            NavigationStack {
+                FollowListView(userId: userId, listType: .following)
+                    .environmentObject(authViewModel)
+            }
+        }
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
         .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
@@ -311,6 +359,7 @@ struct UserProfileView: View {
             if let profile = profile {
                 self.username = profile.name
                 self.avatarUrl = profile.avatarUrl
+                self.bannerUrl = profile.bannerUrl
                 self.isPro = profile.isProMember
             }
             

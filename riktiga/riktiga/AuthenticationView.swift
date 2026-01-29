@@ -17,8 +17,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     case goal
     case results  // NEW: Shows animated graph
     case targetWeight
+    case motivation  // NEW: Shows motivation comparison
     case referralCode
     case rating  // NEW: Shows ratings and triggers iOS review popup
+    case progress  // NEW: Shows progress graph
     case appleHealth
     case notifications
     
@@ -26,7 +28,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .name: return "Vad heter du?"
+        case .name: return "Välj användarnamn"
         case .profilePicture: return "Lägg till profilbild"
         case .gender: return "Välj ditt kön"
         case .workouts: return "Hur många pass tränar du per vecka?"
@@ -35,8 +37,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .goal: return "Vad är ditt mål?"
         case .results: return "Up&Down gör det lättare för dig att nå dina mål"
         case .targetWeight: return "Vad är din målvikt?"
+        case .motivation: return "Få 2x så mycket motivation genom att träna med Up&Down"
         case .referralCode: return "Ange kod (valfritt)"
         case .rating: return "Betygsätt oss"
+        case .progress: return "Att nå sina mål tar lite tid men du fixar det!"
         case .appleHealth: return "Aktivera Apple Health"
         case .notifications: return "Aktivera notiser"
         }
@@ -44,7 +48,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var subtitle: String {
         switch self {
-        case .name: return "Så här kan dina vänner hitta dig på Up&Down."
+        case .name: return "Välj ett användarnamn som visas för andra."
         case .profilePicture: return "Allt blir roligare med en profilbild."
         case .gender: return "Detta används för att kalibrera din personliga plan."
         case .workouts: return "Detta används för att kalibrera din personliga plan."
@@ -53,8 +57,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .goal: return "Detta hjälper oss skapa en plan för ditt kaloriintag."
         case .results: return ""
         case .targetWeight: return "Välj den vikt du vill uppnå."
+        case .motivation: return ""
         case .referralCode: return "Du kan hoppa över detta steg"
         case .rating: return ""
+        case .progress: return ""
         case .appleHealth: return "Appen behöver hälsodata för att logga dina pass och steg."
         case .notifications: return "Så vi kan påminna dig om mål och belöningar."
         }
@@ -134,6 +140,15 @@ struct AuthenticationView: View {
     @State private var showResultsGraph: Bool = false
     @State private var resultsAnimationComplete: Bool = false
     
+    // Motivation step animation
+    @State private var motivationAnimationComplete: Bool = false
+    @State private var showMotivationBars: Bool = false
+    
+    // Progress step animation
+    @State private var progressAnimationComplete: Bool = false
+    @State private var progressLineWidth: CGFloat = 0
+    @State private var showProgressDots: [Bool] = [false, false, false, false]
+    
     // Profile picture
     @State private var selectedProfileImage: UIImage? = nil
     @State private var profilePhotoPickerItem: PhotosPickerItem? = nil
@@ -202,11 +217,41 @@ struct AuthenticationView: View {
             healthRequestStatus = healthAuthorized ? "Apple Health aktiverad" : nil
             
             // Set up Apple Sign In callback
-            authViewModel.onAppleSignInComplete = { success, _ in
+            authViewModel.onAppleSignInComplete = { success, _, appleFirstName, appleLastName in
                 if success {
-                        showLanding = false
-                        showSignupForm = false
+                    showLanding = false
+                    showSignupForm = false
+                    
+                    // Pre-fill username with Apple's name as a suggestion (user can change it)
+                    if let firstName = appleFirstName, !firstName.isEmpty {
+                        // Suggest username based on Apple name (lowercase, no spaces)
+                        let suggestedUsername = firstName.lowercased().replacingOccurrences(of: " ", with: "_")
+                        data.firstName = suggestedUsername
+                    }
+                    
+                    // Always start from the username step so user can choose their username
+                    onboardingStep = onboardingSteps.first
+                }
+            }
+            
+            // Set up Google Sign In callback
+            authViewModel.onGoogleSignInComplete = { success, onboardingData, googleName in
+                if success {
+                    showLanding = false
+                    showSignupForm = false
+                    
+                    // Only start onboarding for NEW users (googleName is passed only for new users)
+                    if googleName != nil {
+                        // Pre-fill username with Google's name as a suggestion (user can change it)
+                        if let name = googleName, !name.isEmpty {
+                            let suggestedUsername = name.lowercased().replacingOccurrences(of: " ", with: "_")
+                            data.firstName = suggestedUsername
+                        }
+                        
+                        // Start onboarding for new users
                         onboardingStep = onboardingSteps.first
+                    }
+                    // Existing users go directly to main app (isLoggedIn = true handles this)
                 }
             }
         }
@@ -221,9 +266,10 @@ struct AuthenticationView: View {
     private var landingView: some View {
         let autoSwipeTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
         
+        let imageCount = heroImages.count
         return VStack(spacing: 0) {
             TabView(selection: $currentHeroIndex) {
-                ForEach(0..<heroImages.count, id: \.self) { index in
+                ForEach(0..<imageCount, id: \.self) { index in
                     Image(heroImages[index])
                         .resizable()
                         .scaledToFill()
@@ -323,7 +369,26 @@ struct AuthenticationView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20, weight: .medium))
-                            Text("Fortsätt med Apple")
+                            Text("Logga in med Apple")
+                                .font(.system(size: 17, weight: .medium))
+                            Spacer()
+                        }
+                        .foregroundColor(primaryTextColor)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1.5))
+                    }
+                    .disabled(authViewModel.isLoading)
+                    
+                    Button {
+                        authViewModel.signInWithGoogle()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image("78")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
+                            Text("Logga in med Google")
                                 .font(.system(size: 17, weight: .medium))
                             Spacer()
                         }
@@ -378,7 +443,25 @@ struct AuthenticationView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20, weight: .medium))
-                            Text("Fortsätt med Apple")
+                            Text("Skapa konto med Apple")
+                                .font(.system(size: 17, weight: .medium))
+                        }
+                        .foregroundColor(primaryTextColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                    }
+                    .disabled(authViewModel.isLoading)
+                    
+                    Button {
+                        authViewModel.signInWithGoogle(onboardingData: OnboardingData())
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image("78")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
+                            Text("Skapa konto med Google")
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(primaryTextColor)
@@ -546,6 +629,8 @@ struct AuthenticationView: View {
             referralCodeStepContent
         case .rating:
             ratingStepContent
+        case .progress:
+            progressStepContent
         case .gender:
             genderStepContent
         case .workouts:
@@ -560,6 +645,8 @@ struct AuthenticationView: View {
             resultsStepContent
         case .targetWeight:
             targetWeightStepContent
+        case .motivation:
+            motivationStepContent
         case .appleHealth:
             appleHealthStepContent
         case .notifications:
@@ -571,11 +658,12 @@ struct AuthenticationView: View {
     private var nameStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Förnamn")
+                Text("Användarnamn")
                     .font(.system(size: 15))
                     .foregroundColor(primaryTextColor)
-                TextField("", text: $data.firstName)
-                    .textInputAutocapitalization(.words)
+                TextField("t.ex. johan_123", text: $data.firstName)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding(16)
                     .background(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray3), lineWidth: 1))
                     .onChange(of: data.firstName) { _, _ in
@@ -583,21 +671,12 @@ struct AuthenticationView: View {
                     }
             }
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Efternamn")
-                    .font(.system(size: 15))
-                    .foregroundColor(primaryTextColor)
-                TextField("", text: $data.lastName)
-                    .textInputAutocapitalization(.words)
-                    .padding(16)
-                    .background(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray3), lineWidth: 1))
-                    .onChange(of: data.lastName) { _, _ in
-                        checkUsernameAvailability()
-                    }
-            }
+            Text("Detta är namnet som visas för andra användare i appen.")
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
             
             // Username availability status
-            if !data.firstName.isEmpty && !data.lastName.isEmpty {
+            if !data.firstName.isEmpty {
                 HStack(spacing: 8) {
                     if isCheckingUsername {
                         ProgressView()
@@ -608,13 +687,13 @@ struct AuthenticationView: View {
                     } else if usernameIsTaken {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.red)
-                        Text("Namnet \"\(data.fullName)\" är redan taget")
+                        Text("Användarnamnet \"\(data.firstName)\" är redan taget")
                             .font(.system(size: 14))
                             .foregroundColor(.red)
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("Namnet är tillgängligt")
+                        Text("Användarnamnet är tillgängligt")
                             .font(.system(size: 14))
                             .foregroundColor(.green)
                     }
@@ -897,6 +976,174 @@ struct AuthenticationView: View {
     private func requestAppReview() {
         if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
             SKStoreReviewController.requestReview(in: scene)
+        }
+    }
+    
+    // MARK: - Progress Step (Weight Transition Graph)
+    private var progressStepContent: some View {
+        VStack(spacing: 32) {
+            Spacer().frame(height: 20)
+            
+            // Progress graph card
+            VStack(spacing: 20) {
+                Text("Din resa")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                
+                // Graph
+                GeometryReader { geometry in
+                    let width = geometry.size.width - 40
+                    let height: CGFloat = 140
+                    
+                    ZStack(alignment: .bottomLeading) {
+                        // Background gradient
+                        LinearGradient(
+                            colors: [Color.orange.opacity(0.15), Color.orange.opacity(0.05), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .clipShape(
+                            ProgressCurvePath(width: width, height: height, progress: progressLineWidth / width)
+                        )
+                        .padding(.horizontal, 20)
+                        
+                        // Progress line
+                        Path { path in
+                            path.move(to: CGPoint(x: 20, y: height - 20))
+                            path.addLine(to: CGPoint(x: 20 + width * 0.2, y: height - 40))
+                            path.addLine(to: CGPoint(x: 20 + width * 0.45, y: height - 55))
+                            path.addLine(to: CGPoint(x: 20 + width * 0.7, y: height - 80))
+                            path.addLine(to: CGPoint(x: 20 + width, y: height - 120))
+                        }
+                        .trim(from: 0, to: progressLineWidth / width)
+                        .stroke(Color.black, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .animation(.easeOut(duration: 1.5), value: progressLineWidth)
+                        
+                        // Dots on the line
+                        if showProgressDots[0] {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                                .position(x: 20, y: height - 20)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                        
+                        if showProgressDots[1] {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                                .position(x: 20 + width * 0.33, y: height - 47)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                        
+                        if showProgressDots[2] {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
+                                .position(x: 20 + width * 0.66, y: height - 75)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                        
+                        // Trophy at the end
+                        if showProgressDots[3] {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 36, height: 36)
+                                
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                            }
+                            .position(x: 20 + width, y: height - 120)
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .frame(height: height)
+                }
+                .frame(height: 140)
+                
+                // Day labels
+                HStack {
+                    Text("3 Dagar")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("7 Dagar")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("30 Dagar")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 30)
+                
+                // Description
+                Text("Baserat på våra tidigare användare så är det viktigt att man håller igång i ungefär en månad innan resultaten kickar in.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .opacity(showProgressDots[3] ? 1 : 0)
+                    .animation(.easeOut(duration: 0.5), value: showProgressDots[3])
+            }
+            .padding(.vertical, 24)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(.systemGray6).opacity(0.5))
+            )
+            .padding(.horizontal, 20)
+            
+            Spacer()
+        }
+        .onAppear {
+            // Reset animation states
+            progressLineWidth = 0
+            showProgressDots = [false, false, false, false]
+            progressAnimationComplete = false
+            
+            // Animate the line
+            withAnimation(.easeOut(duration: 1.5)) {
+                progressLineWidth = UIScreen.main.bounds.width - 80
+            }
+            
+            // Animate dots sequentially
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    showProgressDots[0] = true
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    showProgressDots[1] = true
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    showProgressDots[2] = true
+                }
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    showProgressDots[3] = true
+                }
+            }
+            
+            // Enable continue button
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                withAnimation {
+                    progressAnimationComplete = true
+                }
+            }
         }
     }
     
@@ -1286,6 +1533,105 @@ struct AuthenticationView: View {
                     }
                 }
     
+    // MARK: - Motivation Step Content
+    private var motivationStepContent: some View {
+        VStack(spacing: 32) {
+            Spacer().frame(height: 40)
+            
+            // Comparison card
+            VStack(spacing: 24) {
+                // Bar chart comparison
+                HStack(spacing: 16) {
+                    // Without Up&Down
+                    VStack(spacing: 12) {
+                        Text("Utan")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        Text("Up&Down")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        // Small bar
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray5))
+                            .frame(width: 100, height: showMotivationBars ? 80 : 0)
+                            .overlay(
+                                Text("1X")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.gray)
+                                    .opacity(showMotivationBars ? 1 : 0)
+                            )
+                            .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.3), value: showMotivationBars)
+                    }
+                    .frame(height: 200)
+                    
+                    // With Up&Down
+                    VStack(spacing: 12) {
+                        Text("Med")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                        Text("Up&Down")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        // Large bar
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black)
+                            .frame(width: 100, height: showMotivationBars ? 160 : 0)
+                            .overlay(
+                                Text("2X")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .opacity(showMotivationBars ? 1 : 0)
+                            )
+                            .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.5), value: showMotivationBars)
+                    }
+                    .frame(height: 200)
+                }
+                .padding(.horizontal, 20)
+                
+                // Description text
+                Text("Genom att dela med vänner, få belöningar, se statistik & tracka dina pass håller våra användare igång längre jämfört med innan de började träna med Up&Down.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .opacity(showMotivationBars ? 1 : 0)
+                    .animation(.easeOut(duration: 0.5).delay(0.8), value: showMotivationBars)
+            }
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(.systemGray6).opacity(0.5))
+            )
+            .padding(.horizontal, 20)
+            
+            Spacer()
+        }
+        .onAppear {
+            // Reset and animate
+            showMotivationBars = false
+            motivationAnimationComplete = false
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation {
+                    showMotivationBars = true
+                }
+            }
+            
+            // Enable continue button after animation completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    motivationAnimationComplete = true
+                }
+            }
+        }
+    }
+    
     private var appleHealthStepContent: some View {
                 VStack(spacing: 20) {
                     Image("30")
@@ -1510,9 +1856,8 @@ struct AuthenticationView: View {
         // Cancel previous check
         usernameCheckTask?.cancel()
         
-        let fullName = data.fullName
-        guard !fullName.trimmingCharacters(in: .whitespaces).isEmpty,
-              fullName.count >= 3 else {
+        let username = data.firstName.trimmingCharacters(in: .whitespaces)
+        guard !username.isEmpty, username.count >= 2 else {
             usernameIsTaken = false
             isCheckingUsername = false
             return
@@ -1530,7 +1875,7 @@ struct AuthenticationView: View {
                 let response: [UsernameCheckResponse] = try await SupabaseConfig.supabase
                     .from("profiles")
                     .select("id")
-                    .eq("username", value: fullName)
+                    .eq("username", value: username)
                     .execute()
                     .value
                 
@@ -1555,13 +1900,14 @@ struct AuthenticationView: View {
         switch step {
         case .name:
             return !data.firstName.trimmingCharacters(in: .whitespaces).isEmpty &&
-                   !data.lastName.trimmingCharacters(in: .whitespaces).isEmpty &&
+                   data.firstName.count >= 2 &&
                    !usernameIsTaken &&
                    !isCheckingUsername
         case .profilePicture:
             return selectedProfileImage != nil
         case .referralCode: return true // Always can continue (optional step)
         case .rating: return true
+        case .progress: return progressAnimationComplete
         case .gender: return !data.gender.isEmpty
         case .workouts: return !data.workoutsPerWeek.isEmpty
         case .heightWeight: return true
@@ -1569,6 +1915,7 @@ struct AuthenticationView: View {
         case .goal: return !data.goal.isEmpty
         case .results: return resultsAnimationComplete
         case .targetWeight: return true
+        case .motivation: return motivationAnimationComplete
         case .appleHealth: return true
         case .notifications: return true
         }
@@ -1873,7 +2220,7 @@ struct AuthenticationView: View {
     private func completeOnboarding() {
         Task {
             if let userId = authViewModel.currentUser?.id {
-                let finalUsername = data.fullName
+                let finalUsername = data.firstName.trimmingCharacters(in: .whitespaces)
                 
                 // Apply referral code if entered
                 if !data.referralCode.isEmpty {
@@ -2030,6 +2377,7 @@ struct AuthenticationView: View {
         // Set user for streak manager (new user starts fresh)
         if let userId = authViewModel.currentUser?.id {
             StreakManager.shared.setUser(userId: userId)
+            GymLocationManager.shared.setUser(userId: userId)
         }
         
         print("✅ Onboarding complete, entering app with name: '\(authViewModel.currentUser?.name ?? "unknown")'")
@@ -2180,6 +2528,52 @@ struct OnboardingReviewCardSimple: View {
         .background(Color(.systemBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+}
+
+// MARK: - Progress Curve Path (for gradient fill)
+struct ProgressCurvePath: Shape {
+    let width: CGFloat
+    let height: CGFloat
+    let progress: CGFloat
+    
+    var animatableData: CGFloat {
+        get { progress }
+        set { }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        let clampedProgress = min(max(progress, 0), 1)
+        
+        // Start at bottom left
+        path.move(to: CGPoint(x: 0, y: height))
+        
+        // Draw the curve up to the current progress point
+        path.addLine(to: CGPoint(x: 0, y: height - 20))
+        path.addLine(to: CGPoint(x: width * 0.2 * clampedProgress, y: height - 20 - (20 * min(clampedProgress / 0.2, 1))))
+        
+        if clampedProgress > 0.2 {
+            let segmentProgress = min((clampedProgress - 0.2) / 0.25, 1)
+            path.addLine(to: CGPoint(x: width * 0.2 + width * 0.25 * segmentProgress, y: height - 40 - (15 * segmentProgress)))
+        }
+        
+        if clampedProgress > 0.45 {
+            let segmentProgress = min((clampedProgress - 0.45) / 0.25, 1)
+            path.addLine(to: CGPoint(x: width * 0.45 + width * 0.25 * segmentProgress, y: height - 55 - (25 * segmentProgress)))
+        }
+        
+        if clampedProgress > 0.7 {
+            let segmentProgress = min((clampedProgress - 0.7) / 0.3, 1)
+            path.addLine(to: CGPoint(x: width * 0.7 + width * 0.3 * segmentProgress, y: height - 80 - (40 * segmentProgress)))
+        }
+        
+        // Close the path back to bottom
+        path.addLine(to: CGPoint(x: width * clampedProgress, y: height))
+        path.closeSubpath()
+        
+        return path
     }
 }
 

@@ -16,6 +16,9 @@ struct SessionCompleteView: View {
     let completedSplits: [WorkoutSplit]
     let gymExercises: [GymExercise]?
     let sessionLivePhoto: UIImage?  // Live photo taken during session
+    var gymSessionStartTime: Date? = nil  // For gym: when session started
+    var gymSessionLatitude: Double? = nil  // For gym: session location
+    var gymSessionLongitude: Double? = nil
     @Binding var isPresented: Bool
     let onComplete: () -> Void
     let onDelete: () -> Void
@@ -38,6 +41,8 @@ struct SessionCompleteView: View {
     @State private var successOpacity: Double = 0.0
     @State private var pendingSharePost: SocialWorkoutPost?
     @State private var showShareGallery = false
+    @State private var showCelebration = false
+    @State private var celebrationPost: SocialWorkoutPost?
     @State private var isEditingTitle = false
     @State private var mapRegion: MKCoordinateRegion = MKCoordinateRegion()
     @State private var mapInitialized = false
@@ -53,6 +58,13 @@ struct SessionCompleteView: View {
     @State private var hasPB = false
     @State private var pbExerciseName: String = ""
     @State private var pbValue: String = ""
+    
+    // Trained with friends detection
+    @State private var trainedWithFriends: [ActiveSessionService.TrainedWithFriend] = []
+    @State private var includeTrainedWith = true // Pre-selected by default
+    @State private var isLoadingTrainedWith = false
+    @State private var sessionStartTime: Date?
+    @State private var sessionLocation: CLLocationCoordinate2D?
     
     // Default titles based on activity
     private var defaultTitle: String {
@@ -116,11 +128,34 @@ struct SessionCompleteView: View {
         .sheet(isPresented: $showLiveCapture) {
             liveCaptureSheet
         }
+        .fullScreenCover(isPresented: $showCelebration) {
+            if let sharePost = celebrationPost {
+                WorkoutCelebrationView(post: sharePost) {
+                    // On dismiss from celebration view - delay to let animation complete
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        isPresented = false
+                        onComplete()
+                        
+                        // Navigate to social tab
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+                        }
+                    }
+                }
+            }
+        }
         .onAppear {
             // If a live photo was taken during the session, use it
             if let livePhoto = sessionLivePhoto {
                 sessionImage = livePhoto
                 isLivePhoto = true
+            }
+            
+            // Load trained-with friends for gym sessions
+            if isGymWorkout {
+                Task {
+                    await loadTrainedWithFriends()
+                }
             }
         }
     }
@@ -206,18 +241,473 @@ struct SessionCompleteView: View {
     }
     
     // MARK: - Content Section
+    @ViewBuilder
     private var contentSection: some View {
-        VStack(spacing: 24) {
-            titleSection
-            difficultySliderSection
-            if isGymWorkout {
-                pbButtonSection
+        if isGymWorkout {
+            gymContentSection
+        } else {
+            VStack(spacing: 24) {
+                titleSection
+                difficultySliderSection
+                descriptionSection
+                photoOptionsSection
+                saveButton
             }
-            descriptionSection
-            photoOptionsSection
-            gymTemplateToggle
-            saveButton
         }
+    }
+    
+    // MARK: - Gym Content Section (Strava-style)
+    private var gymContentSection: some View {
+        VStack(spacing: 0) {
+            // Title input field
+            gymTitleField
+            
+            // Description field
+            gymDescriptionField
+            
+            // Activity type row
+            gymActivityTypeRow
+            
+            // Photo and exercises preview
+            gymMediaSection
+            
+            // Details section
+            gymDetailsSection
+            
+            // Save button
+            gymSaveButton
+        }
+    }
+    
+    // MARK: - Gym Title Field
+    private var gymTitleField: some View {
+        VStack(spacing: 0) {
+            TextField("Morgonpass", text: $title)
+                .font(.system(size: 17))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+        }
+    }
+    
+    // MARK: - Gym Description Field
+    private var gymDescriptionField: some View {
+        ZStack(alignment: .topLeading) {
+            if description.isEmpty {
+                Text("Berätta om ditt pass för dina vänner!")
+                    .font(.system(size: 17))
+                    .foregroundColor(Color(.placeholderText))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+            }
+            
+            TextEditor(text: $description)
+                .font(.system(size: 17))
+                .frame(minHeight: 80)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemBackground))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+    
+    // MARK: - Gym Activity Type Row
+    private var gymActivityTypeRow: some View {
+        HStack {
+            Image(systemName: "dumbbell.fill")
+                .font(.system(size: 18))
+                .foregroundColor(.primary)
+            
+            Text("Gympass")
+                .font(.system(size: 17))
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Image(systemName: "chevron.down")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+    
+    // MARK: - Gym Media Section
+    private var gymMediaSection: some View {
+        VStack(spacing: 12) {
+            // Exercises summary card with stats
+            VStack(alignment: .leading, spacing: 8) {
+                // Exercise count
+                HStack(spacing: 4) {
+                    Image(systemName: "list.bullet.clipboard")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    
+                    Text("\(gymExercises?.count ?? 0) övningar")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+                
+                // Stats - Tid and Volym
+                HStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(formatDuration(duration))
+                            .font(.system(size: 22, weight: .bold))
+                        Text("Tid")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(formatVolume(gymVolume))
+                            .font(.system(size: 22, weight: .bold))
+                        Text("Volym")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.top, 4)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+            
+            // Photo buttons on their own row
+            if sessionImage == nil {
+                HStack(spacing: 10) {
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 18))
+                                .foregroundColor(.gray)
+                            
+                            Text("Lägg till bild")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                    }
+                    
+                    Button(action: {
+                        showLiveCapture = true
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.primary)
+                            
+                            Text("UP&DOWN Live")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                        )
+                    }
+                }
+            } else {
+                // Show selected image with remove button
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: sessionImage!)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity)
+                        .cornerRadius(12)
+                        .clipped()
+                    
+                    Button(action: {
+                        sessionImage = nil
+                        selectedItem = nil
+                        isLivePhoto = false
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .shadow(radius: 2)
+                    }
+                    .padding(8)
+                }
+            }
+            
+            // MARK: - Trained With Friends Section (Gym only)
+            if isGymWorkout && !trainedWithFriends.isEmpty {
+                trainedWithSection
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+    
+    // MARK: - Trained With Section
+    private var trainedWithSection: some View {
+        Button(action: {
+            includeTrainedWith.toggle()
+        }) {
+            HStack(spacing: 12) {
+                // Checkbox
+                Image(systemName: includeTrainedWith ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 22))
+                    .foregroundColor(includeTrainedWith ? .green : .gray)
+                
+                // Text
+                VStack(alignment: .leading, spacing: 2) {
+                    if trainedWithFriends.count == 1 {
+                        Text("Tränade du med \(trainedWithFriends[0].username)?")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                    } else {
+                        Text("Tränade med \(trainedWithFriends.count) vänner")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Profile pictures (max 3)
+                HStack(spacing: -8) {
+                    ForEach(Array(trainedWithFriends.prefix(3).enumerated()), id: \.element.id) { index, friend in
+                        ProfileImage(url: friend.avatarUrl, size: 32)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(.systemBackground), lineWidth: 2)
+                            )
+                            .zIndex(Double(3 - index))
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+    }
+    
+    // MARK: - Gym Details Section
+    private var gymDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Detaljer")
+                .font(.system(size: 20, weight: .bold))
+                .padding(.horizontal, 16)
+                .padding(.top, 24)
+                .padding(.bottom, 12)
+            
+            // PB (Personal Best) row
+            Button(action: {
+                showPBSheet = true
+            }) {
+                HStack {
+                    Image(systemName: hasPB ? "trophy.fill" : "trophy")
+                        .font(.system(size: 18))
+                        .foregroundColor(hasPB ? .yellow : .primary)
+                    
+                    if hasPB {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nytt PB!")
+                                .font(.system(size: 17))
+                                .foregroundColor(.primary)
+                            Text("\(pbExerciseName): \(pbValue)")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                        }
+                    } else {
+                        Text("Tog du ett PB idag?")
+                            .font(.system(size: 17))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 16)
+            
+            // Difficulty row
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 18))
+                        .foregroundColor(.primary)
+                    
+                    Text("Hur kändes passet?")
+                        .font(.system(size: 17))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+                
+                // Difficulty slider
+                VStack(spacing: 8) {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.black.opacity(0.15))
+                                .frame(height: 8)
+                            
+                            Capsule()
+                                .fill(Color.black)
+                                .frame(width: max(8, geometry.size.width * difficultyRating), height: 8)
+                            
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 24, height: 24)
+                                .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+                                .offset(x: max(0, (geometry.size.width - 24) * difficultyRating))
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            let newValue = value.location.x / geometry.size.width
+                                            difficultyRating = min(max(0, newValue), 1)
+                                        }
+                                )
+                        }
+                    }
+                    .frame(height: 24)
+                    
+                    HStack {
+                        Text("Lätt")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Svårt")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(.systemGray4), lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            
+            // Save as template toggle
+            if let gymExercises, !gymExercises.isEmpty {
+                HStack {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 18))
+                        .foregroundColor(.primary)
+                    
+                    Text("Spara som mall")
+                        .font(.system(size: 17))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: Binding(
+                        get: { shouldSaveTemplate },
+                        set: { newValue in
+                            if newValue {
+                                shouldSaveTemplate = true
+                                templateName = templateName.isEmpty ? title : templateName
+                                showSaveTemplateSheet = true
+                            } else {
+                                shouldSaveTemplate = false
+                                templateName = ""
+                            }
+                        }
+                    ))
+                    .toggleStyle(SwitchToggleStyle(tint: .black))
+                    .labelsHidden()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+        }
+        .sheet(isPresented: $showPBSheet) {
+            pbSelectionSheet
+        }
+    }
+    
+    // MARK: - Gym Save Button
+    private var gymSaveButton: some View {
+        Button(action: {
+            guard !saveButtonTapped else { return }
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            saveButtonTapped = true
+            saveWorkout()
+        }) {
+            HStack {
+                Spacer()
+                if isSaving || saveButtonTapped {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text("Spara pass")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                Spacer()
+            }
+            .frame(height: 54)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .frame(height: 54)
+        .background(saveButtonTapped ? Color.gray : Color.black)
+        .foregroundColor(.white)
+        .cornerRadius(14)
+        .disabled(saveButtonTapped)
+        .opacity(saveButtonTapped ? 0.7 : 1.0)
+        .padding(.horizontal, 16)
+        .padding(.top, 32)
+        .padding(.bottom, 40)
+        .allowsHitTesting(!saveButtonTapped)
     }
     
     // MARK: - PB Button Section
@@ -567,7 +1057,7 @@ struct SessionCompleteView: View {
                 .overlay(
                     Group {
                         if description.isEmpty {
-                            Text("Beskriv ditt pass...")
+                            Text("Berätta om ditt pass för dina vänner!")
                                 .foregroundColor(.gray)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 20)
@@ -852,6 +1342,43 @@ struct SessionCompleteView: View {
         }
     }
     
+    // MARK: - Load Trained With Friends
+    private func loadTrainedWithFriends() async {
+        guard let userId = authViewModel.currentUser?.id,
+              let startTime = gymSessionStartTime,
+              let latitude = gymSessionLatitude,
+              let longitude = gymSessionLongitude else {
+            print("⚠️ Missing data for trained-with detection")
+            return
+        }
+        
+        await MainActor.run {
+            isLoadingTrainedWith = true
+        }
+        
+        do {
+            let endTime = Date()
+            let friends = try await ActiveSessionService.shared.findFriendsTrainedWith(
+                userId: userId,
+                myStartTime: startTime,
+                myEndTime: endTime,
+                myLatitude: latitude,
+                myLongitude: longitude
+            )
+            
+            await MainActor.run {
+                trainedWithFriends = friends
+                isLoadingTrainedWith = false
+                print("✅ Found \(friends.count) friends who trained with user")
+            }
+        } catch {
+            print("❌ Error loading trained-with friends: \(error)")
+            await MainActor.run {
+                isLoadingTrainedWith = false
+            }
+        }
+    }
+    
     // MARK: - Helper Functions
     
     private func formatDuration(_ seconds: Int) -> String {
@@ -881,44 +1408,37 @@ struct SessionCompleteView: View {
         return "\(volume) kg"
     }
     
-    // MARK: - Gym Header Section
+    // MARK: - Gym Header Section (Strava-style)
     private var gymHeaderSection: some View {
         VStack(spacing: 0) {
-            // Top bar with close button
+            // Navigation bar
             HStack {
-                Spacer()
                 Button(action: {
                     showDeleteConfirmation = true
                 }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
+                    Text("Avbryt")
+                        .font(.system(size: 17, weight: .regular))
                         .foregroundColor(.primary)
-                        .padding(10)
-                        .background(Color(.systemGray6))
-                        .clipShape(Circle())
                 }
+                
+                Spacer()
+                
+                Text("Spara pass")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                // Invisible placeholder for balance
+                Text("Avbryt")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundColor(.clear)
             }
             .padding(.horizontal, 16)
             .padding(.top, 60)
+            .padding(.bottom, 12)
             
-            // App logo and XP earned
-            VStack(spacing: 16) {
-                Image("23")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .cornerRadius(18)
-                
-                // XP earned
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("+\(earnedPoints)")
-                        .font(.system(size: 36, weight: .black))
-                    Text("XP")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.vertical, 24)
+            Divider()
         }
     }
     
@@ -1035,6 +1555,9 @@ struct SessionCompleteView: View {
                 
                 // Notify recovery zone to refresh if it was a gym workout
                 if activity.rawValue == "Gympass", let exercisesData = exercisesData {
+                    // Save gym location for smart reminders (only when workout is saved)
+                    GymLocationManager.shared.gymSessionSaved()
+                    
                     NotificationCenter.default.post(
                         name: NSNotification.Name("GymWorkoutCompleted"),
                         object: nil,
@@ -1142,27 +1665,15 @@ struct SessionCompleteView: View {
     }
     
     private func triggerSaveSuccessAnimation() {
-        showSaveSuccess = true
-        successScale = 0.7
-        successOpacity = 0.0
-        
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.65, blendDuration: 0.2)) {
-            successScale = 1.0
-            successOpacity = 1.0
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                successOpacity = 0.0
-            }
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            showSaveSuccess = false
+        // Show celebration view with the saved post
+        if let sharePost = pendingSharePost {
+            celebrationPost = sharePost
+            showCelebration = true
+        } else {
+            // Fallback: just dismiss if no share post available
             isPresented = false
             onComplete()
             
-            // Navigate to social tab
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
             }

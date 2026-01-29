@@ -52,6 +52,7 @@ struct StatisticsView: View {
     @State private var show1RMPredictions = false
     @State private var showMuscleBalance = false
     @State private var showTopExercises = false
+    @State private var showSkeleton = true
     
     // Chart animation states
     @State private var chartLineTrim: CGFloat = 0
@@ -72,16 +73,23 @@ struct StatisticsView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // MARK: - Progress Section (Streak & Badges)
-                ProgressSectionView()
-                    .padding(.bottom, 8)
-                
-                // MARK: - Sport Type Filter
-                sportTypeFilter
-                    .padding(.top, 16)
-                    .opacity(showFilter ? 1 : 0)
+        ZStack {
+            // Skeleton loading view - shows immediately
+            if showSkeleton {
+                StatisticsSkeletonView()
+                    .transition(.opacity)
+            }
+            
+            ScrollView {
+                VStack(spacing: 0) {
+                    // MARK: - Progress Section (Streak & Badges)
+                    ProgressSectionView()
+                        .padding(.bottom, 8)
+                    
+                    // MARK: - Sport Type Filter
+                    sportTypeFilter
+                        .padding(.top, 16)
+                        .opacity(showFilter ? 1 : 0)
                     .offset(y: showFilter ? 0 : 10)
                 
                 // MARK: - This Week Stats
@@ -128,7 +136,7 @@ struct StatisticsView: View {
                         Button {
                             SuperwallService.shared.showPaywall()
                         } label: {
-                            Text("Testa 7 dagar gratis")
+                            Text("Bli PRO medlem idag")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -221,6 +229,8 @@ struct StatisticsView: View {
                 Spacer(minLength: 100)
             }
         }
+        .opacity(showSkeleton ? 0 : 1)
+        }
         .background(Color(.systemBackground))
         .navigationTitle("Statistik")
         .navigationBarTitleDisplayMode(.inline)
@@ -237,6 +247,11 @@ struct StatisticsView: View {
     }
     
     private func animateContent() {
+        // Hide skeleton immediately
+        withAnimation(.easeOut(duration: 0.15)) {
+            showSkeleton = false
+        }
+        
         // Reset states if needed to ensure animation re-runs smoothly
         showFilter = false
         showWeekStats = false
@@ -5299,6 +5314,110 @@ struct AllTopExercisesView: View {
                 showContent = true
             }
         }
+    }
+}
+
+// MARK: - Statistics Skeleton View
+private struct StatisticsSkeletonView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Progress section skeleton
+                VStack(spacing: 12) {
+                    HStack(spacing: 16) {
+                        StatSkeletonBox(width: 80, height: 80, cornerRadius: 12)
+                        VStack(alignment: .leading, spacing: 8) {
+                            StatSkeletonBox(width: 120, height: 20, cornerRadius: 4)
+                            StatSkeletonBox(width: 180, height: 14, cornerRadius: 4)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.top, 8)
+                
+                // Filter skeleton
+                HStack(spacing: 12) {
+                    StatSkeletonPill(width: 80, height: 36)
+                    StatSkeletonPill(width: 80, height: 36)
+                }
+                .padding(.top, 8)
+                
+                // Week stats skeleton
+                VStack(spacing: 12) {
+                    StatSkeletonBox(width: UIScreen.main.bounds.width - 32, height: 120, cornerRadius: 16)
+                }
+                .padding(.horizontal, 16)
+                
+                // Chart skeleton
+                VStack(alignment: .leading, spacing: 12) {
+                    StatSkeletonBox(width: 100, height: 20, cornerRadius: 4)
+                        .padding(.horizontal, 16)
+                    StatSkeletonBox(width: UIScreen.main.bounds.width - 32, height: 200, cornerRadius: 16)
+                        .padding(.horizontal, 16)
+                }
+                
+                // Monthly recap skeleton
+                VStack(alignment: .leading, spacing: 12) {
+                    StatSkeletonBox(width: 140, height: 20, cornerRadius: 4)
+                        .padding(.horizontal, 16)
+                    StatSkeletonBox(width: UIScreen.main.bounds.width - 32, height: 100, cornerRadius: 16)
+                        .padding(.horizontal, 16)
+                }
+                
+                Spacer(minLength: 100)
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
+private struct StatSkeletonBox: View {
+    let width: CGFloat
+    let height: CGFloat
+    var cornerRadius: CGFloat = 8
+    @State private var isAnimating = false
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray5), Color(.systemGray4), Color(.systemGray5)],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: width, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+    }
+}
+
+private struct StatSkeletonPill: View {
+    let width: CGFloat
+    let height: CGFloat
+    @State private var isAnimating = false
+    
+    var body: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color(.systemGray5), Color(.systemGray4), Color(.systemGray5)],
+                    startPoint: isAnimating ? .leading : .trailing,
+                    endPoint: isAnimating ? .trailing : .leading
+                )
+            )
+            .frame(width: width, height: height)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
     }
 }
 
