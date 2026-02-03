@@ -24,6 +24,7 @@ struct ProfileActivitiesView: View {
     @State private var showPublicProfile = false
     @State private var navigationPath = NavigationPath()
     @State private var showRoutines = false
+    @State private var showSharedRoutines = false
     @State private var myStories: [Story] = []
     @State private var showStoryViewer = false
     @State private var selectedUserStories: UserStories? = nil
@@ -197,25 +198,37 @@ struct ProfileActivitiesView: View {
                             .stroke(Color.primary, lineWidth: 2)
                     )
                     
-                    // MARK: - Action Buttons (3 in a row)
-                    HStack(spacing: 10) {
-                        ProfileCardButton(
-                            icon: "cart.fill",
-                            label: "Mina köp",
-                            action: { showMyPurchases = true }
-                        )
+                    // MARK: - Action Buttons (2 rows of 2)
+                    VStack(spacing: 10) {
+                        // Row 1: Mina köp & Hitta vänner
+                        HStack(spacing: 10) {
+                            ProfileCardButton(
+                                icon: "cart.fill",
+                                label: "Mina köp",
+                                action: { showMyPurchases = true }
+                            )
+                            
+                            ProfileCardButton(
+                                icon: "person.badge.plus.fill",
+                                label: "Hitta vänner",
+                                action: { showFindFriends = true }
+                            )
+                        }
                         
-                        ProfileCardButton(
-                            icon: "person.badge.plus.fill",
-                            label: "Hitta vänner",
-                            action: { showFindFriends = true }
-                        )
-                        
-                        ProfileCardButton(
-                            icon: "bookmark.fill",
-                            label: "Sparade pass",
-                            action: { showRoutines = true }
-                        )
+                        // Row 2: Sparade pass & Dela pass med vänner
+                        HStack(spacing: 10) {
+                            ProfileCardButton(
+                                icon: "figure.strengthtraining.traditional",
+                                label: "Sparade pass",
+                                action: { showRoutines = true }
+                            )
+                            
+                            ProfileCardButton(
+                                icon: "paperplane.fill",
+                                label: "Dela pass med vänner",
+                                action: { showSharedRoutines = true }
+                            )
+                        }
                     }
                     
                     // MARK: - Up&Down Live Gallery
@@ -337,6 +350,12 @@ struct ProfileActivitiesView: View {
                         .environmentObject(authViewModel)
                 }
             }
+            .sheet(isPresented: $showSharedRoutines) {
+                NavigationStack {
+                    SharedRoutinesView()
+                        .environmentObject(authViewModel)
+                }
+            }
             .sheet(isPresented: $showPublicProfile) {
                 if let userId = authViewModel.currentUser?.id {
                     NavigationStack {
@@ -401,6 +420,9 @@ struct ProfileActivitiesView: View {
                 Task {
                     await loadMyStories()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSharedWorkouts"))) { _ in
+                showSharedRoutines = true
             }
             .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
                 isPremium = newValue

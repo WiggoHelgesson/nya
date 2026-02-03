@@ -105,6 +105,10 @@ struct FoodScannerView: View {
                             await MainActor.run {
                                 AnalyzingFoodManager.shared.startAnalyzing(image: image)
                                 dismiss()
+                                // Navigate to Kalorier tab
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToKalorier"), object: nil)
+                                }
                             }
                         }
                     } else {
@@ -332,8 +336,12 @@ struct FoodScannerView: View {
                     // Start analyzing with the shared manager
                     AnalyzingFoodManager.shared.startAnalyzing(image: image)
                 }
-                // Dismiss to go back to Home
+                // Dismiss and navigate to Kalorier tab
                 dismiss()
+                // Post notification to navigate to Kalorier tab
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToKalorier"), object: nil)
+                }
             }
         } else {
             // For other modes, use normal flow

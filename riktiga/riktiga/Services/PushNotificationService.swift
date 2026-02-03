@@ -455,6 +455,27 @@ final class PushNotificationService: NSObject {
         }
     }
     
+    // MARK: - Notify User About Shared Workout
+    
+    func notifyUserAboutSharedWorkout(
+        receiverId: String,
+        senderName: String,
+        workoutName: String
+    ) async {
+        print("🏋️ [PUSH] Sending shared workout notification to \(receiverId)")
+        print("🏋️ [PUSH] Sender: \(senderName), Workout: \(workoutName)")
+        
+        // Send push notification
+        await sendRealPushNotification(
+            toUserId: receiverId,
+            title: "\(senderName) delade ett pass med dig",
+            body: "Tryck för att komma till passet",
+            data: ["type": "shared_workout", "sender_name": senderName, "workout_name": workoutName]
+        )
+        
+        print("✅ [PUSH] Shared workout notification sent to \(receiverId)")
+    }
+    
     // MARK: - Send Custom Announcement to All Users
     
     func sendAnnouncementToAllUsers(title: String, body: String) async {
@@ -503,6 +524,7 @@ class NotificationNavigationManager: ObservableObject {
     @Published var shouldNavigateToNews = false
     @Published var shouldNavigateToPost: String? = nil
     @Published var shouldNavigateToActiveFriends = false
+    @Published var shouldNavigateToSharedWorkouts = false
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -528,17 +550,29 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToSharedWorkouts() {
+        DispatchQueue.main.async {
+            // Navigate to profile tab first
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToProfile"), object: nil)
+            // Then open shared workouts after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToSharedWorkouts"), object: nil)
+            }
+            self.shouldNavigateToSharedWorkouts = true
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
         shouldNavigateToActiveFriends = false
+        shouldNavigateToSharedWorkouts = false
     }
 }
 
 // MARK: - App Delegate for Push Notifications
 
 import InsertAffiliateSwift
-import TerraiOS
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     
@@ -569,10 +603,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             companyCode: "Ooc4ERYgmYaZtJeCBnR7TjZb1BL2",
             verboseLogging: false
         )
-        
-        // Set up Terra background delivery for Apple Health
-        Terra.setUpBackgroundDelivery()
-        print("✅ Terra background delivery set up")
         
         return true
     }
@@ -631,6 +661,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case "active_session":
                 // Navigate to active friends map
                 NotificationNavigationManager.shared.navigateToActiveFriends()
+            case "shared_workout":
+                // Navigate to shared workouts view
+                NotificationNavigationManager.shared.navigateToSharedWorkouts()
             default:
                 break
             }

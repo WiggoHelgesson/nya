@@ -9,13 +9,19 @@ struct SplashScreenView: View {
             Color.white
                 .ignoresSafeArea()
             
-            // MARK: - Centered Logo (statisk, ingen animation)
-            Image("23")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 180, height: 180)
-                .cornerRadius(32)
-                .shadow(color: .black.opacity(0.08), radius: 30, x: 0, y: 15)
+            VStack {
+                Spacer()
+                
+                // MARK: - Centered Logo (statisk, ingen animation)
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 160, height: 160)
+                    .cornerRadius(32)
+                    .shadow(color: .black.opacity(0.08), radius: 20, x: 0, y: 10)
+                
+                Spacer()
+            }
         }
         .onAppear {
             // Vänta en kort stund och sedan gå vidare

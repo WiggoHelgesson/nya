@@ -18,7 +18,6 @@ struct SettingsView: View {
     @State private var showReferralView = false
     @StateObject private var stravaService = StravaService.shared
     @State private var showStravaDisconnectConfirmation = false
-    @State private var showConnectDevices = false
     @State private var showNutritionOnboarding = false
     @State private var showPersonalDetails = false
     
@@ -85,9 +84,6 @@ struct SettingsView: View {
             .navigationDestination(isPresented: $showPersonalDetails) {
                 PersonalDetailsView()
                     .environmentObject(authViewModel)
-            }
-            .sheet(isPresented: $showConnectDevices) {
-                ConnectDeviceView()
             }
             .sheet(isPresented: $showNutritionOnboarding) {
                 NutritionSettingsView()
@@ -763,19 +759,61 @@ struct PersonalDetailsView: View {
             // Goals loaded
         }
         
-        // Load profile data
+        // Load profile data directly from Supabase to get all fields
         do {
-            if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+            struct ProfileData: Decodable {
+                let height_cm: Int?
+                let weight_kg: Double?
+                let target_weight: Double?
+                let gender: String?
+                let birth_date: String?
+                let daily_step_goal: Int?
+            }
+            
+            let profiles: [ProfileData] = try await SupabaseConfig.supabase
+                .from("profiles")
+                .select("height_cm, weight_kg, target_weight, gender, birth_date, daily_step_goal")
+                .eq("id", value: userId)
+                .execute()
+                .value
+            
+            if let profile = profiles.first {
                 await MainActor.run {
-                    // Set values from profile if available
-                    isLoading = false
+                    if let heightCm = profile.height_cm {
+                        self.height = heightCm
+                    }
+                    if let weightKg = profile.weight_kg {
+                        self.currentWeight = weightKg
+                    }
+                    if let targetWeight = profile.target_weight {
+                        self.goalWeight = targetWeight
+                    }
+                    if let genderValue = profile.gender {
+                        self.gender = genderValue
+                    }
+                    if let birthDateStr = profile.birth_date {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd"
+                        if let date = formatter.date(from: birthDateStr) {
+                            self.birthDate = date
+                        }
+                    }
+                    if let stepGoal = profile.daily_step_goal {
+                        self.dailyStepGoal = stepGoal
+                    }
+                    self.isLoading = false
+                }
+            } else {
+                await MainActor.run {
+                    self.isLoading = false
                 }
             }
         } catch {
-            print("❌ Error loading profile: \(error)")
+            print("❌ Error loading profile data: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
         }
-        
-        isLoading = false
     }
     
     private func saveGoalWeight() {

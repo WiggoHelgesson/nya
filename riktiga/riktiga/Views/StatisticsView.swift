@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - Sport Type Filter
 enum SportType: String, CaseIterable, Identifiable {
@@ -31,16 +32,10 @@ struct StatisticsView: View {
     @State private var progressStats: ProgressStats = ProgressStats()
     @State private var weeklyData: [WeekData] = []
     @State private var workoutDays: Set<Int> = []
-    @State private var currentStreak: Int = 0
-    @State private var streakActivities: Int = 0
     @State private var exerciseHistories: [StatExerciseHistory] = []
     @State private var aiPredictions: [OneRepMaxPredictionService.AIPrediction] = []
     @State private var isLoadingPredictions = false
     @State private var predictionError: String? = nil
-    
-    // Premium status
-    @State private var isPremium = RevenueCatManager.shared.isProMember
-    @State private var showPaywall = false
     
     // Animation states
     @State private var showFilter = false
@@ -48,11 +43,18 @@ struct StatisticsView: View {
     @State private var showChart = false
     @State private var showMonthly = false
     @State private var showCalendar = false
+    @State private var showBMI = false
     @State private var showProgressive = false
     @State private var show1RMPredictions = false
     @State private var showMuscleBalance = false
     @State private var showTopExercises = false
     @State private var showSkeleton = true
+    @State private var showProgressPhotos = false
+
+    // BMI state
+    @State private var userHeightCm: Int? = nil
+    @State private var userWeightKg: Double? = nil
+    @State private var showBMIInfo = false
     
     // Chart animation states
     @State private var chartLineTrim: CGFloat = 0
@@ -82,9 +84,28 @@ struct StatisticsView: View {
             
             ScrollView {
                 VStack(spacing: 0) {
-                    // MARK: - Progress Section (Streak & Badges)
-                    ProgressSectionView()
-                        .padding(.bottom, 8)
+                    // MARK: - Monthly Recap Preview (first section)
+                    monthlyRecapSection
+                        .padding(.top, 16)
+                        .opacity(showMonthly ? 1 : 0)
+                        .offset(y: showMonthly ? 0 : 25)
+                        .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
+                    
+                    // MARK: - BMI Section
+                    Divider()
+                        .padding(.vertical, 24)
+                        .opacity(showBMI ? 1 : 0)
+                    
+                    Group {
+                        if userHeightCm != nil && userWeightKg != nil {
+                            bmiSection
+                        } else if !isLoading {
+                            bmiMissingDataSection
+                        }
+                    }
+                    .opacity(showBMI ? 1 : 0)
+                    .offset(y: showBMI ? 0 : 25)
+                    .scaleEffect(showBMI ? 1 : 0.95, anchor: .top)
                     
                     // MARK: - Sport Type Filter
                     sportTypeFilter
@@ -116,76 +137,26 @@ struct StatisticsView: View {
                     .offset(y: showCalendar ? 0 : 25)
                     .scaleEffect(showCalendar ? 1 : 0.95, anchor: .top)
                 
-                // MARK: - Premium Features Section
-                if !isPremium {
-                    // Unlock potential header for non-premium users
-                    Divider()
-                        .padding(.vertical, 24)
-                        .opacity(showProgressive ? 1 : 0)
-                    
-                    VStack(spacing: 12) {
-                        Text("Lås upp din fulla potential")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Text("Tracka din utveckling & nå din fulla potential med prenumerations funktioner")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        
-                        Button {
-                            SuperwallService.shared.showPaywall()
-                        } label: {
-                            Text("Bli PRO medlem idag")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(Color.black)
-                                .cornerRadius(12)
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
-                    .opacity(showProgressive ? 1 : 0)
-                    .offset(y: showProgressive ? 0 : 15)
-                }
+                // MARK: - Progress Photos Section
+                Divider()
+                    .padding(.vertical, 24)
+                    .opacity(showProgressPhotos ? 1 : 0)
+                
+                ProgressPhotosSectionView()
+                    .environmentObject(authViewModel)
+                    .opacity(showProgressPhotos ? 1 : 0)
+                    .offset(y: showProgressPhotos ? 0 : 25)
+                    .scaleEffect(showProgressPhotos ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Progressive Overload Section
-                if isPremium {
-                    Divider()
-                        .padding(.vertical, 24)
-                        .opacity(showProgressive ? 1 : 0)
-                }
+                Divider()
+                    .padding(.vertical, 24)
+                    .opacity(showProgressive ? 1 : 0)
                 
                 progressiveOverloadSection
                     .opacity(showProgressive ? 1 : 0)
                     .offset(y: showProgressive ? 0 : 25)
                     .scaleEffect(showProgressive ? 1 : 0.95, anchor: .top)
-                    .blur(radius: isPremium ? 0 : 6)
-                    .onTapGesture {
-                        if !isPremium {
-                            SuperwallService.shared.showPaywall()
-                        }
-                    }
-                    .allowsHitTesting(!isPremium ? true : true)
-                
-                Divider()
-                    .padding(.vertical, 24)
-                    .opacity(showMonthly ? 1 : 0)
-                
-                // MARK: - Monthly Recap Preview
-                monthlyRecapSection
-                    .opacity(showMonthly ? 1 : 0)
-                    .offset(y: showMonthly ? 0 : 25)
-                    .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
-                    .blur(radius: isPremium ? 0 : 6)
-                    .onTapGesture {
-                        if !isPremium {
-                            SuperwallService.shared.showPaywall()
-                        }
-                    }
                 
                 Divider()
                     .padding(.vertical, 24)
@@ -195,36 +166,18 @@ struct StatisticsView: View {
                 oneRepMaxPredictionsSection
                     .opacity(show1RMPredictions ? 1 : 0)
                     .offset(y: show1RMPredictions ? 0 : 15)
-                    .blur(radius: isPremium ? 0 : 6)
-                    .onTapGesture {
-                        if !isPremium {
-                            SuperwallService.shared.showPaywall()
-                        }
-                    }
                 
                 // MARK: - Muscle Distribution Section
                 muscleDistributionSection
                     .opacity(showMuscleBalance ? 1 : 0)
                     .offset(y: showMuscleBalance ? 0 : 15)
                     .padding(.top, 24)
-                    .blur(radius: isPremium ? 0 : 6)
-                    .onTapGesture {
-                        if !isPremium {
-                            SuperwallService.shared.showPaywall()
-                        }
-                    }
                 
                 // MARK: - Top Exercises Section
                 topExercisesSection
                     .opacity(showTopExercises ? 1 : 0)
                     .offset(y: showTopExercises ? 0 : 15)
                     .padding(.top, 24)
-                    .blur(radius: isPremium ? 0 : 6)
-                    .onTapGesture {
-                        if !isPremium {
-                            SuperwallService.shared.showPaywall()
-                        }
-                    }
                 
                 Spacer(minLength: 100)
             }
@@ -240,88 +193,28 @@ struct StatisticsView: View {
         .onAppear {
             animateContent()
         }
-        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
-            isPremium = newValue
-        }
         .enableSwipeBack()
     }
     
     private func animateContent() {
-        // Hide skeleton immediately
-        withAnimation(.easeOut(duration: 0.15)) {
-            showSkeleton = false
-        }
-        
-        // Reset states if needed to ensure animation re-runs smoothly
-        showFilter = false
-        showWeekStats = false
-        showChart = false
-        showCalendar = false
-        showProgressive = false
-        showMonthly = false
-        show1RMPredictions = false
-        showMuscleBalance = false
-        showTopExercises = false
-        chartLineTrim = 0
-        chartAreaOpacity = 0
-        chartPointsOpacity = 0
-        statValuesAnimated = false
-        
-        // Staggered animations for smooth appearance with spring
-        let springAnimation = Animation.spring(response: 0.6, dampingFraction: 0.8)
-        let delay = 0.1
-        
-        withAnimation(springAnimation) {
-            showFilter = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 1)) {
-            showWeekStats = true
-            statValuesAnimated = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 2)) {
-            showChart = true
-        }
-        
-        // Chart line animation - draw the line smoothly
-        withAnimation(.easeOut(duration: 1.2).delay(delay * 2.5)) {
-            chartLineTrim = 1.0
-        }
-        
-        // Chart area fade in after line starts
-        withAnimation(.easeIn(duration: 0.5).delay(delay * 3)) {
-            chartAreaOpacity = 1.0
-        }
-        
-        // Chart points appear after line is drawn
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(delay * 3.5)) {
-            chartPointsOpacity = 1.0
-        }
-        
-        withAnimation(springAnimation.delay(delay * 4)) {
-            showCalendar = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 5)) {
-            showProgressive = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 6)) {
-            showMonthly = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 7)) {
-            show1RMPredictions = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 8)) {
-            showMuscleBalance = true
-        }
-        
-        withAnimation(springAnimation.delay(delay * 9)) {
-            showTopExercises = true
-        }
+        // Show everything instantly for fast navigation
+        // Data loading happens in the background via .task
+        showSkeleton = false
+        showFilter = true
+        showWeekStats = true
+        showChart = true
+        showCalendar = true
+        showBMI = true
+        showProgressPhotos = true
+        showProgressive = true
+        showMonthly = true
+        show1RMPredictions = true
+        showMuscleBalance = true
+        showTopExercises = true
+        chartLineTrim = 1.0
+        chartAreaOpacity = 1.0
+        chartPointsOpacity = 1.0
+        statValuesAnimated = true
     }
     
     // MARK: - Sport Type Filter
@@ -568,27 +461,6 @@ struct StatisticsView: View {
                 Spacer()
             }
             
-            // Streak info
-            HStack(spacing: 40) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Din streak")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                    Text("\(currentStreak) veckor")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.primary)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Streak aktiviteter")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                    Text("\(streakActivities)")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.primary)
-                }
-            }
-            
             // Calendar grid
             calendarGrid
         }
@@ -613,10 +485,6 @@ struct StatisticsView: View {
                         .foregroundColor(.gray)
                         .frame(maxWidth: .infinity)
                 }
-                
-                // Streak column
-                Text("")
-                    .frame(width: 50)
             }
             
             // Calendar rows
@@ -659,14 +527,200 @@ struct StatisticsView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    
-                    // Weekly streak indicator (placeholder)
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 32, height: 32)
-                        .frame(width: 50)
                 }
             }
+        }
+    }
+    
+    // MARK: - BMI Section
+    private var bmiSection: some View {
+        let heightM = Double(userHeightCm ?? 170) / 100.0
+        let weight = userWeightKg ?? 70.0
+        let bmi = weight / (heightM * heightM)
+        
+        // Determine BMI category
+        let category: (name: String, color: Color) = {
+            if bmi < 18.5 {
+                return ("Underviktig", Color(red: 0.4, green: 0.6, blue: 0.9))
+            } else if bmi < 25.0 {
+                return ("Hälsosam", Color(red: 0.3, green: 0.7, blue: 0.5))
+            } else if bmi < 30.0 {
+                return ("Överviktig", Color(red: 0.85, green: 0.7, blue: 0.3))
+            } else {
+                return ("Fetma", Color(red: 0.9, green: 0.4, blue: 0.4))
+            }
+        }()
+        
+        // Calculate indicator position (BMI range 15-35 mapped to 0-1)
+        let indicatorPosition: CGFloat = {
+            let clampedBMI = min(max(bmi, 15.0), 35.0)
+            return CGFloat((clampedBMI - 15.0) / 20.0)
+        }()
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            // Header
+            HStack {
+                Text("Ditt BMI")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Button {
+                    showBMIInfo = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            // BMI Value and Category
+            HStack(alignment: .center, spacing: 16) {
+                Text(String(format: "%.1f", bmi))
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                HStack(spacing: 8) {
+                    Text("Din vikt är")
+                        .font(.system(size: 15))
+                        .foregroundColor(.secondary)
+                    
+                    Text(category.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(category.color)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(category.color, lineWidth: 1.5)
+                        )
+                }
+            }
+            
+            // BMI Bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background bar with segments
+                    HStack(spacing: 0) {
+                        // Underweight (blue) - 0 to 18.5
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(red: 0.4, green: 0.6, blue: 0.9))
+                            .frame(width: geometry.size.width * 0.175)
+                        
+                        // Healthy (green) - 18.5 to 25
+                        Rectangle()
+                            .fill(Color(red: 0.3, green: 0.7, blue: 0.5))
+                            .frame(width: geometry.size.width * 0.325)
+                        
+                        // Overweight (yellow) - 25 to 30
+                        Rectangle()
+                            .fill(Color(red: 0.85, green: 0.7, blue: 0.3))
+                            .frame(width: geometry.size.width * 0.25)
+                        
+                        // Obese (red) - 30+
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(red: 0.9, green: 0.4, blue: 0.4))
+                            .frame(width: geometry.size.width * 0.25)
+                    }
+                    .frame(height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    
+                    // Indicator
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.primary)
+                        .frame(width: 4, height: 32)
+                        .offset(x: geometry.size.width * indicatorPosition - 2)
+                }
+            }
+            .frame(height: 32)
+            
+            // Legend
+            HStack(spacing: 0) {
+                BMILegendItem(color: Color(red: 0.4, green: 0.6, blue: 0.9), label: "Underviktig", range: "<18.5")
+                Spacer()
+                BMILegendItem(color: Color(red: 0.3, green: 0.7, blue: 0.5), label: "Hälsosam", range: "18.5–24.9")
+                Spacer()
+                BMILegendItem(color: Color(red: 0.85, green: 0.7, blue: 0.3), label: "Överviktig", range: "25.0–29.9")
+                Spacer()
+                BMILegendItem(color: Color(red: 0.9, green: 0.4, blue: 0.4), label: "Fetma", range: ">30.0")
+            }
+        }
+        .padding(20)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+        .padding(.horizontal, 20)
+        .alert("Vad är BMI?", isPresented: $showBMIInfo) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("BMI (Body Mass Index) är ett mått som relaterar din vikt till din längd. Det används för att ge en indikation på om din vikt är hälsosam, men tar inte hänsyn till muskelmassa, benstomme eller kroppssammansättning.")
+        }
+    }
+    
+    // MARK: - BMI Missing Data Section
+    private var bmiMissingDataSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            HStack {
+                Text("Ditt BMI")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Button {
+                    showBMIInfo = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            // Missing data prompt
+            VStack(spacing: 16) {
+                Image(systemName: "scalemass.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.gray.opacity(0.5))
+                
+                Text("Lägg till din längd och vikt")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Text("Gå till din profil och fyll i din längd och vikt för att se ditt BMI.")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Gå till inställningar")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.black)
+                    .cornerRadius(12)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        }
+        .padding(20)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+        .padding(.horizontal, 20)
+        .alert("Vad är BMI?", isPresented: $showBMIInfo) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("BMI (Body Mass Index) är ett mått som relaterar din vikt till din längd. Det används för att ge en indikation på om din vikt är hälsosam, men tar inte hänsyn till muskelmassa, benstomme eller kroppssammansättning.")
         }
     }
     
@@ -1269,13 +1323,17 @@ struct StatisticsView: View {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         do {
+            // Load workout posts
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: true)
+            
+            // Load BMI data (height and weight) from profiles
+            await loadBMIData(userId: userId)
+            
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     self.allPosts = posts
                     updateStats()
                     calculateCalendarData()
-                    calculateStreaks()
                     computeExerciseHistories()
                     isLoading = false
                 }
@@ -1288,6 +1346,32 @@ struct StatisticsView: View {
             await MainActor.run {
                 isLoading = false
             }
+        }
+    }
+    
+    private func loadBMIData(userId: String) async {
+        do {
+            struct ProfileBMI: Decodable {
+                let height_cm: Int?
+                let weight_kg: Double?
+            }
+            
+            let profiles: [ProfileBMI] = try await SupabaseConfig.supabase
+                .from("profiles")
+                .select("height_cm, weight_kg")
+                .eq("id", value: userId)
+                .execute()
+                .value
+            
+            if let profile = profiles.first {
+                await MainActor.run {
+                    self.userHeightCm = profile.height_cm
+                    self.userWeightKg = profile.weight_kg
+                    print("📊 BMI data loaded: height=\(profile.height_cm ?? 0)cm, weight=\(profile.weight_kg ?? 0)kg")
+                }
+            }
+        } catch {
+            print("⚠️ Error loading BMI data: \(error)")
         }
     }
     
@@ -1438,39 +1522,6 @@ struct StatisticsView: View {
                 }
             }
             workoutDays = days
-        }
-    }
-    
-    private func calculateStreaks() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            // Simple streak calculation
-            let posts = filteredPosts.sorted { parseDate($0.createdAt) ?? Date.distantPast > parseDate($1.createdAt) ?? Date.distantPast }
-            
-            var streak = 0
-            var activities = 0
-            var lastWeek: Int?
-            
-            for post in posts {
-                guard let date = parseDate(post.createdAt) else { continue }
-                let week = calendar.component(.weekOfYear, from: date)
-                
-                if lastWeek == nil {
-                    lastWeek = week
-                    streak = 1
-                    activities = 1
-                } else if week == lastWeek {
-                    activities += 1
-                } else if week == lastWeek! - 1 || (lastWeek == 1 && week >= 52) {
-                    streak += 1
-                    activities += 1
-                    lastWeek = week
-                } else {
-                    break
-                }
-            }
-            
-            currentStreak = streak
-            streakActivities = activities
         }
     }
     
@@ -1629,7 +1680,6 @@ private struct CalendarOverviewView: View {
                     HStack(spacing: 12) {
                         CalendarStatItem(value: "\(workoutDates.count)", label: "Pass", color: .primary)
                         CalendarStatItem(value: "\(workoutSet.count)", label: "Dagar", color: .secondary)
-                        CalendarStatItem(value: "\(currentStreak)", label: "Streak", color: .green)
                     }
                     .padding(.top, 8)
                 }
@@ -5418,6 +5468,31 @@ private struct StatSkeletonPill: View {
                     isAnimating = true
                 }
             }
+    }
+}
+
+// MARK: - BMI Legend Item
+private struct BMILegendItem: View {
+    let color: Color
+    let label: String
+    let range: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+            }
+            
+            Text(range)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
     }
 }
 

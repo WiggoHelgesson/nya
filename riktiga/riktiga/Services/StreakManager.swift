@@ -30,6 +30,8 @@ final class StreakManager {
     private let completedTodayKeyBase = "completed_today"
     private let lastCheckedDateKeyBase = "last_checked_date"
     private let completedDatesKeyBase = "completed_dates" // Store all completed dates for week view
+    private let lostStreakKeyBase = "lost_streak" // Track when streak was just lost
+    private let lostStreakDaysKeyBase = "lost_streak_days" // How many days the lost streak was
     
     // Current user ID - must be set before using
     private var currentUserId: String?
@@ -41,6 +43,8 @@ final class StreakManager {
     private var completedTodayKey: String { "\(completedTodayKeyBase)_\(currentUserId ?? "unknown")" }
     private var lastCheckedDateKey: String { "\(lastCheckedDateKeyBase)_\(currentUserId ?? "unknown")" }
     private var completedDatesKey: String { "\(completedDatesKeyBase)_\(currentUserId ?? "unknown")" }
+    private var lostStreakKey: String { "\(lostStreakKeyBase)_\(currentUserId ?? "unknown")" }
+    private var lostStreakDaysKey: String { "\(lostStreakDaysKeyBase)_\(currentUserId ?? "unknown")" }
     
     private init() {}
     
@@ -66,6 +70,22 @@ final class StreakManager {
     /// Quick access to current streak count
     var currentStreak: Int {
         defaults.integer(forKey: currentStreakKey)
+    }
+    
+    /// Check if streak was just lost (to show StreakLostView)
+    var hasJustLostStreak: Bool {
+        defaults.bool(forKey: lostStreakKey)
+    }
+    
+    /// Get how many days the lost streak was
+    var lostStreakDays: Int {
+        defaults.integer(forKey: lostStreakDaysKey)
+    }
+    
+    /// Clear the lost streak flag (after showing StreakLostView)
+    func clearLostStreakFlag() {
+        defaults.set(false, forKey: lostStreakKey)
+        defaults.removeObject(forKey: lostStreakDaysKey)
     }
     
     // MARK: - Public Methods
@@ -266,6 +286,16 @@ final class StreakManager {
                 defaults.set(0, forKey: currentStreakKey)
                 print("💔 Streak broken on app launch (missed \(daysSinceActivity - 1) days). Was: \(oldStreak)")
                 
+                // Set lost streak flag to show StreakLostView (only if they had a meaningful streak)
+                if oldStreak >= 2 {
+                    defaults.set(true, forKey: lostStreakKey)
+                    defaults.set(oldStreak, forKey: lostStreakDaysKey)
+                    print("📢 Lost streak flag set: \(oldStreak) days")
+                    
+                    // Post notification for UI to show StreakLostView
+                    NotificationCenter.default.post(name: .streakLost, object: nil, userInfo: ["lostDays": oldStreak])
+                }
+                
                 // Send push notification about broken streak (only if they had a streak)
                 if oldStreak > 0 {
                     NotificationManager.shared.sendStreakBrokenNotification()
@@ -311,5 +341,6 @@ final class StreakManager {
 // MARK: - Notification Names
 extension Notification.Name {
     static let streakUpdated = Notification.Name("streakUpdated")
+    static let streakLost = Notification.Name("streakLost")
     static let userBecamePro = Notification.Name("userBecamePro")
 }

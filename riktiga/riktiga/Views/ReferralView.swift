@@ -655,11 +655,33 @@ struct ReferralView: View {
     private func updateCode() {
         guard let userId = authViewModel.currentUser?.id else { return }
         
+        // Validate code format
+        let normalizedCode = editedCode.uppercased().trimmingCharacters(in: .whitespaces)
+        guard normalizedCode.count >= 3 && normalizedCode.count <= 12 else {
+            codeUpdateError = "Koden måste vara 3-12 tecken"
+            return
+        }
+        
         isUpdatingCode = true
         codeUpdateError = nil
         
         Task {
             do {
+                // Check if user can edit (in case they're trying to change to a different code)
+                let (canEdit, daysLeft) = try await ReferralService.shared.canEditCode(userId: userId)
+                
+                // Get current code to check if they're trying to change or keep the same
+                let currentCode = referralCode.uppercased()
+                let isChangingCode = normalizedCode != currentCode
+                
+                if isChangingCode && !canEdit {
+                    await MainActor.run {
+                        isUpdatingCode = false
+                        codeUpdateError = "Du kan ändra koden om \(daysLeft) dagar"
+                    }
+                    return
+                }
+                
                 let success = try await ReferralService.shared.updateReferralCode(userId: userId, newCode: editedCode)
                 
                 await MainActor.run {
@@ -675,13 +697,14 @@ struct ReferralView: View {
                             await checkEditStatus()
                         }
                     } else {
-                        codeUpdateError = "Koden är redan tagen eller ogiltig"
+                        codeUpdateError = "Koden är redan tagen av någon annan"
                     }
                 }
             } catch {
+                print("❌ Error updating code: \(error)")
                 await MainActor.run {
                     isUpdatingCode = false
-                    codeUpdateError = "Kunde inte uppdatera koden"
+                    codeUpdateError = "Kunde inte uppdatera koden. Försök igen."
                 }
             }
         }

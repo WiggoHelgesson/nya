@@ -637,46 +637,16 @@ struct RewardsView: View {
     }
     
     private func animateRewardsContent() {
-        // Hide skeleton immediately
-        withAnimation(.easeOut(duration: 0.15)) {
-            showSkeleton = false
-        }
-        
-        // Header animation
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            showHeader = true
-        }
-        
-        // Hero banner with slight delay
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
-            showHeroBanner = true
-        }
-        
-        // Categories
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
-            showCategories = true
-        }
-        
-        // Staggered section animations
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
-            showGolfSection = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.28)) {
-            showGymSection = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.36)) {
-            showEnergySection = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.44)) {
-            showRunningSection = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.52)) {
-            showSkiSection = true
-        }
+        // Show everything instantly for fast navigation
+        showSkeleton = false
+        showHeader = true
+        showHeroBanner = true
+        showCategories = true
+        showGolfSection = true
+        showGymSection = true
+        showEnergySection = true
+        showRunningSection = true
+        showSkiSection = true
     }
     
     private func resetAnimationStates() {

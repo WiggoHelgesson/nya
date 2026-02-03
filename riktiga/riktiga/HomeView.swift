@@ -5,6 +5,17 @@ import Supabase
 import HealthKit
 import PhotosUI
 
+// MARK: - Food Log Ingredient Model
+struct FoodLogIngredient: Codable, Identifiable {
+    var id: String { name + String(calories) }
+    let name: String
+    let calories: Int
+    let protein: Int
+    let carbs: Int
+    let fat: Int
+    let amount: String
+}
+
 // MARK: - Food Log Entry Model
 struct FoodLogEntry: Identifiable, Codable {
     let id: String
@@ -18,9 +29,10 @@ struct FoodLogEntry: Identifiable, Codable {
     let loggedAt: Date
     let imageUrl: String?
     let nutriScore: String?
+    let ingredients: [FoodLogIngredient]?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, calories, protein, carbs, fat
+        case id, name, calories, protein, carbs, fat, ingredients
         case userId = "user_id"
         case mealType = "meal_type"
         case loggedAt = "logged_at"
@@ -127,6 +139,7 @@ struct HomeView: View {
     @State private var showRecent = false
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
+    @State private var showNutritionDetail = false
     
     // Data transition animation
     @State private var isTransitioning = false
@@ -315,6 +328,9 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showFoodScanner) {
             FoodScannerView(initialMode: .ai)
+        }
+        .fullScreenCover(isPresented: $showNutritionDetail) {
+            FoodNutritionDetailView()
         }
         .fullScreenCover(item: $selectedFoodLog) { foodLog in
             FoodLogDetailView(entry: foodLog)
@@ -702,27 +718,11 @@ struct HomeView: View {
     
     // MARK: - Animation
     private func animateContent() {
-        // Reset states if needed
-        showCalendar = false
-        showCards = false
-        showWater = false
-        showRecent = false
-        
-        let duration = 0.45
-        let delay = 0.08
-        
-        withAnimation(.easeOut(duration: duration)) {
-            showCalendar = true
-        }
-        withAnimation(.easeOut(duration: duration).delay(delay * 1)) {
-            showCards = true
-        }
-        withAnimation(.easeOut(duration: duration).delay(delay * 2)) {
-            showWater = true
-        }
-        withAnimation(.easeOut(duration: duration).delay(delay * 3)) {
-            showRecent = true
-        }
+        // Show everything instantly for fast navigation
+        showCalendar = true
+        showCards = true
+        showWater = true
+        showRecent = true
     }
     
     // MARK: - Load Streak Count
@@ -1041,7 +1041,7 @@ struct HomeView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        // Header with name and time
+                        // Header with name, time and close button
                         HStack {
                             Text(result.foodName)
                                 .font(.system(size: 16, weight: .semibold))
@@ -1053,6 +1053,20 @@ struct HomeView: View {
                             Text(currentTimeString())
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
+                            
+                            // Close/dismiss button
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    analyzingManager.clearResult()
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.black)
+                                    .frame(width: 24, height: 24)
+                                    .background(Color.gray.opacity(0.15))
+                                    .clipShape(Circle())
+                            }
                         }
                         
                         // Calories
@@ -1092,8 +1106,43 @@ struct HomeView: View {
                             }
                         }
                         
+                        // Ingredients count (if available)
+                        if !result.ingredients.isEmpty {
+                            Button {
+                                showNutritionDetail = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "list.bullet")
+                                        .font(.system(size: 12))
+                                    Text("\(result.ingredients.count) ingredienser")
+                                        .font(.system(size: 12, weight: .medium))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundColor(.gray)
+                            }
+                        }
+                        
                         // Action buttons
                         HStack(spacing: 10) {
+                            // Se detaljer button (opens ingredient view)
+                            Button {
+                                showNutritionDetail = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "fork.knife")
+                                        .font(.system(size: 13))
+                                    Text("Se detaljer")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color.gray.opacity(0.12))
+                                .cornerRadius(10)
+                            }
+                            .disabled(analyzingManager.isSaving || analyzingManager.saveSuccess)
+                            
                             Button {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     analyzingManager.addResultToLog()
@@ -1121,21 +1170,6 @@ struct HomeView: View {
                                 .padding(.vertical, 10)
                                 .background(analyzingManager.saveSuccess ? Color.green : Color.black)
                                 .cornerRadius(10)
-                            }
-                            .disabled(analyzingManager.isSaving || analyzingManager.saveSuccess)
-                            
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    analyzingManager.dismissResult()
-                                }
-                            } label: {
-                                Text("Avbryt")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.black)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(Color.gray.opacity(0.12))
-                                    .cornerRadius(10)
                             }
                             .disabled(analyzingManager.isSaving || analyzingManager.saveSuccess)
                         }
@@ -1858,48 +1892,17 @@ struct FoodLogCardView: View {
     }
 }
 
-// MARK: - Food Log Detail View
+// MARK: - Food Log Detail View (matches FoodNutritionDetailView design)
 struct FoodLogDetailView: View {
     @Environment(\.dismiss) var dismiss
     let entry: FoodLogEntry
-    @State private var isSaved = false
+    
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var showFixSheet = false
     @State private var fixDescription = ""
     @State private var isFixing = false
     @State private var fixProgress: Double = 0
-    @State private var fixedResult: FixedFoodResult? = nil
-    
-    // Editable values
-    @State private var editedName: String = ""
-    @State private var editedCalories: String = ""
-    @State private var editedProtein: String = ""
-    @State private var editedCarbs: String = ""
-    @State private var editedFat: String = ""
-    @State private var isEditingName = false
-    @State private var isEditingCalories = false
-    @State private var isEditingProtein = false
-    @State private var isEditingCarbs = false
-    @State private var isEditingFat = false
-    @State private var isSaving = false
-    @State private var hasChanges = false
-    
-    struct FixedFoodResult {
-        let name: String
-        let calories: Int
-        let protein: Int
-        let carbs: Int
-        let fat: Int
-    }
-    
-    struct FoodLogUpdate: Encodable {
-        let name: String
-        let calories: Int
-        let protein: Int
-        let carbs: Int
-        let fat: Int
-    }
     
     private var displayTime: String {
         let formatter = DateFormatter()
@@ -1909,30 +1912,26 @@ struct FoodLogDetailView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Background gradient matching HomeView
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.94, green: 0.94, blue: 0.95),
-                        Color(red: 0.97, green: 0.97, blue: 0.98),
-                        Color.white
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Info card (no background image)
-                    infoCard
-                        .padding(.top, 20)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Header with name and time
+                    headerSection
                     
-                    Spacer()
+                    // MARK: - Macro Summary Cards
+                    macroSummarySection
                     
-                    // Bottom buttons
-                    bottomButtons
+                    // MARK: - Ingredients Section
+                    if let ingredients = entry.ingredients, !ingredients.isEmpty {
+                        ingredientsSection(ingredients: ingredients)
+                    } else {
+                        noIngredientsSection
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 120)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Näringsvärden")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1942,417 +1941,19 @@ struct FoodLogDetailView: View {
                     } label: {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 40, height: 40)
-                            .background(Color.gray.opacity(0.15))
+                            .foregroundColor(.primary)
+                            .padding(10)
+                            .background(Color(.secondarySystemBackground))
                             .clipShape(Circle())
                     }
                 }
-                
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .onAppear {
-                // Initialize editable values from entry
-                editedName = entry.name
-                editedCalories = "\(entry.calories)"
-                editedProtein = "\(entry.protein)"
-                editedCarbs = "\(entry.carbs)"
-                editedFat = "\(entry.fat)"
+            .safeAreaInset(edge: .bottom) {
+                bottomButtons
             }
         }
-    }
-    
-    // MARK: - Info Card
-    private var infoCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Nutri-Score Badge - Prominent at top
-            if let nutriScore = entry.nutriScore, !nutriScore.isEmpty {
-                FoodLogNutriScoreBadge(grade: nutriScore)
-            }
-            
-            // Header row
-            HStack {
-                Button {
-                    isSaved.toggle()
-                } label: {
-                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 20))
-                        .foregroundColor(.black)
-                }
-                
-                Text(displayTime)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.black.opacity(0.6))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(20)
-                
-                Spacer()
-            }
-            
-            // Editable Title
-            if isEditingName {
-                HStack {
-                    TextField("Namn", text: $editedName)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.black)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .padding(12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(12)
-                    
-                    Button {
-                        isEditingName = false
-                        checkForChanges()
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.green)
-                    }
-                }
-            } else {
-                Button {
-                    isEditingName = true
-                } label: {
-                    HStack {
-                        Text(editedName)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.black)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                        
-                        Image(systemName: "pencil")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        
-                        Spacer()
-                    }
-                }
-            }
-            
-            // Nutrition info
-            VStack(spacing: 12) {
-                // Editable Calories card
-                editableCaloriesCard
-                
-                // Editable Macros row
-                HStack(spacing: 10) {
-                    editableMacroCard(
-                        emoji: "🍗",
-                        label: "Protein",
-                        value: $editedProtein,
-                        isEditing: $isEditingProtein,
-                        color: .black,
-                        suffix: "g"
-                    )
-                    editableMacroCard(
-                        emoji: "🌾",
-                        label: "Kolhydrater",
-                        value: $editedCarbs,
-                        isEditing: $isEditingCarbs,
-                        color: .black,
-                        suffix: "g"
-                    )
-                    editableMacroCard(
-                        emoji: "🥑",
-                        label: "Fett",
-                        value: $editedFat,
-                        isEditing: $isEditingFat,
-                        color: .black,
-                        suffix: "g"
-                    )
-                }
-            }
-            
-            // Save button if changes detected
-            if hasChanges {
-                Button {
-                    saveChanges()
-                } label: {
-                    HStack {
-                        if isSaving {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        Text("Spara ändringar")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.green)
-                    .cornerRadius(12)
-                }
-                .disabled(isSaving)
-            }
-        }
-        .padding(20)
-        .background(Color.white)
-        .cornerRadius(24)
-        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
-        .padding(.horizontal, 16)
-    }
-    
-    // MARK: - Editable Calories Card
-    private var editableCaloriesCard: some View {
-        Group {
-            if isEditingCalories {
-                HStack(spacing: 12) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.black)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Kalorier")
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                        TextField("0", text: $editedCalories)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(.black)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(PlainTextFieldStyle())
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        isEditingCalories = false
-                        checkForChanges()
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.green)
-                    }
-                }
-                .padding(14)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(14)
-            } else {
-                Button {
-                    isEditingCalories = true
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(.black)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Kalorier")
-                                .font(.system(size: 13))
-                                .foregroundColor(.gray)
-                            HStack(spacing: 4) {
-                                Text(editedCalories)
-                                    .font(.system(size: 28, weight: .bold))
-                                    .foregroundColor(.black)
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(14)
-                    .background(Color.white)
-                    .cornerRadius(14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-                    )
-                }
-            }
-        }
-    }
-    
-    // MARK: - Editable Macro Card
-    private func editableMacroCard(emoji: String, label: String, value: Binding<String>, isEditing: Binding<Bool>, color: Color, suffix: String) -> some View {
-        Group {
-            if isEditing.wrappedValue {
-                VStack(spacing: 6) {
-                    Text(emoji)
-                        .font(.system(size: 22))
-                        .grayscale(1)
-                    
-                    Text(label)
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
-                    
-                    HStack(spacing: 2) {
-                        TextField("0", text: value)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .multilineTextAlignment(.center)
-                            .frame(width: 40)
-                        Text(suffix)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.gray)
-                    }
-                    
-                    Button {
-                        isEditing.wrappedValue = false
-                        checkForChanges()
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.green)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(14)
-            } else {
-                Button {
-                    isEditing.wrappedValue = true
-                } label: {
-                    VStack(spacing: 6) {
-                        Text(emoji)
-                            .font(.system(size: 22))
-                            .grayscale(1)
-                        
-                        Text(label)
-                            .font(.system(size: 11))
-                            .foregroundColor(.gray)
-                        
-                        HStack(spacing: 2) {
-                            Text(value.wrappedValue)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                            Text(suffix)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
-                            Image(systemName: "pencil")
-                                .font(.system(size: 10))
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .cornerRadius(14)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.gray.opacity(0.12), lineWidth: 1)
-                    )
-                }
-            }
-        }
-    }
-    
-    // MARK: - Check for Changes
-    private func checkForChanges() {
-        let nameChanged = editedName != entry.name
-        let caloriesChanged = Int(editedCalories) != entry.calories
-        let proteinChanged = Int(editedProtein) != entry.protein
-        let carbsChanged = Int(editedCarbs) != entry.carbs
-        let fatChanged = Int(editedFat) != entry.fat
-        
-        withAnimation {
-            hasChanges = nameChanged || caloriesChanged || proteinChanged || carbsChanged || fatChanged
-        }
-    }
-    
-    // MARK: - Save Changes
-    private func saveChanges() {
-        isSaving = true
-        
-        Task {
-            do {
-                let updateData = FoodLogUpdate(
-                    name: editedName,
-                    calories: Int(editedCalories) ?? entry.calories,
-                    protein: Int(editedProtein) ?? entry.protein,
-                    carbs: Int(editedCarbs) ?? entry.carbs,
-                    fat: Int(editedFat) ?? entry.fat
-                )
-                
-                try await SupabaseConfig.supabase
-                    .from("food_logs")
-                    .update(updateData)
-                    .eq("id", value: entry.id)
-                    .execute()
-                
-                print("✅ Saved manual edits to food log")
-                
-                await MainActor.run {
-                    // Haptic feedback
-                    let haptic = UINotificationFeedbackGenerator()
-                    haptic.notificationOccurred(.success)
-                    
-                    isSaving = false
-                    hasChanges = false
-                    
-                    // Notify HomeView to refresh
-                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
-                }
-            } catch {
-                print("❌ Error saving edits: \(error)")
-                await MainActor.run {
-                    isSaving = false
-                }
-            }
-        }
-    }
-    
-    
-    
-    // MARK: - Bottom Button
-    private var bottomButtons: some View {
-        HStack(spacing: 12) {
-            // Delete button
-            Button {
-                showDeleteConfirmation = true
-            } label: {
-                HStack(spacing: 6) {
-                    if isDeleting {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .red))
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16))
-                    }
-                    Text("Radera")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundColor(.red)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.red.opacity(0.1))
-                .cornerRadius(30)
-            }
-            .disabled(isDeleting)
-            
-            // Fix result button (AI)
-            Button {
-                showFixSheet = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Rätta till")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.black)
-                .cornerRadius(30)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.001))
         .sheet(isPresented: $showFixSheet) {
-            FixResultView(
+            FoodLogFixSheet(
                 entry: entry,
                 fixDescription: $fixDescription,
                 isFixing: $isFixing,
@@ -2371,6 +1972,184 @@ struct FoodLogDetailView: View {
         }
     }
     
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Time badge
+            Text(displayTime)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            
+            // Food name
+            Text(entry.name)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.primary)
+            
+            // Calories
+            HStack(spacing: 4) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                Text("\(entry.calories) kcal")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Macro Summary Section
+    private var macroSummarySection: some View {
+        HStack(spacing: 12) {
+            FoodLogMacroCard(
+                emoji: "🥩",
+                label: "Protein",
+                value: "\(entry.protein)g",
+                color: Color(red: 0.95, green: 0.9, blue: 0.9)
+            )
+            
+            FoodLogMacroCard(
+                emoji: "🌾",
+                label: "Kolhydrater",
+                value: "\(entry.carbs)g",
+                color: Color(red: 0.95, green: 0.93, blue: 0.88)
+            )
+            
+            FoodLogMacroCard(
+                emoji: "🥑",
+                label: "Fett",
+                value: "\(entry.fat)g",
+                color: Color(red: 0.9, green: 0.93, blue: 0.98)
+            )
+        }
+    }
+    
+    // MARK: - Ingredients Section
+    private func ingredientsSection(ingredients: [FoodLogIngredient]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Ingredienser")
+                .font(.system(size: 18, weight: .bold))
+            
+            VStack(spacing: 0) {
+                ForEach(ingredients) { ingredient in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(ingredient.name)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.primary)
+                                
+                                Text("• \(ingredient.calories) kcal")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        Text(ingredient.amount)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    
+                    if ingredient.id != ingredients.last?.id {
+                        Divider()
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+        }
+    }
+    
+    // MARK: - No Ingredients Section
+    private var noIngredientsSection: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "list.bullet.rectangle")
+                .font(.system(size: 40))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text("Inga ingredienser sparade")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.secondary)
+            
+            Text("Använd \"Rätta till\" för att lägga till ingredienser med AI")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Bottom Buttons
+    private var bottomButtons: some View {
+        HStack(spacing: 12) {
+            // Delete button
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack(spacing: 6) {
+                    if isDeleting {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .red))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 14))
+                    }
+                    Text("Radera")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .cornerRadius(28)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .disabled(isDeleting)
+            
+            // Fix result button (AI)
+            Button {
+                showFixSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14))
+                    Text("Rätta till")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.black)
+                .cornerRadius(28)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            Color(.systemBackground)
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: -5)
+        )
+    }
+    
     // MARK: - Delete Entry
     private func deleteEntry() {
         isDeleting = true
@@ -2386,7 +2165,6 @@ struct FoodLogDetailView: View {
                 print("✅ Deleted food log: \(entry.name)")
                 
                 await MainActor.run {
-                    // Notify HomeView to refresh
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
                     isDeleting = false
                     dismiss()
@@ -2400,7 +2178,7 @@ struct FoodLogDetailView: View {
         }
     }
     
-    // MARK: - Fix Result with AI
+    // MARK: - Perform Fix with AI
     private func performFix() {
         guard !fixDescription.isEmpty else { return }
         
@@ -2409,50 +2187,43 @@ struct FoodLogDetailView: View {
         
         Task {
             do {
-                // Download the image if available
-                var imageData: Data? = nil
-                if let imageUrl = entry.imageUrl, let url = URL(string: imageUrl) {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    imageData = data
-                }
-                
                 // Animate progress
                 for i in 1...8 {
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    try await Task.sleep(nanoseconds: 200_000_000)
                     await MainActor.run {
-                        withAnimation {
-                            fixProgress = Double(i * 10)
-                        }
+                        fixProgress = Double(i * 10)
                     }
                 }
                 
-                // Call GPT to re-analyze
-                let result = try await reanalyzeWithGPT(
+                // Call GPT for re-analysis
+                let fixedResult = try await reanalyzeWithGPT(
                     originalName: entry.name,
                     originalCalories: entry.calories,
                     originalProtein: entry.protein,
                     originalCarbs: entry.carbs,
                     originalFat: entry.fat,
-                    correction: fixDescription,
-                    imageData: imageData
+                    correction: fixDescription
                 )
                 
-                // Complete progress
                 await MainActor.run {
-                    withAnimation {
-                        fixProgress = 100
-                    }
+                    fixProgress = 100
                 }
                 
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                // Update database with corrected values
+                struct FoodLogFixUpdate: Encodable {
+                    let name: String
+                    let calories: Int
+                    let protein: Int
+                    let carbs: Int
+                    let fat: Int
+                }
                 
-                // Update the database with new values
-                let updateData = FoodLogUpdate(
-                    name: result.name,
-                    calories: result.calories,
-                    protein: result.protein,
-                    carbs: result.carbs,
-                    fat: result.fat
+                let updateData = FoodLogFixUpdate(
+                    name: fixedResult.name,
+                    calories: fixedResult.calories,
+                    protein: fixedResult.protein,
+                    carbs: fixedResult.carbs,
+                    fat: fixedResult.fat
                 )
                 
                 try await SupabaseConfig.supabase
@@ -2464,15 +2235,10 @@ struct FoodLogDetailView: View {
                 print("✅ Updated food log with corrected values")
                 
                 await MainActor.run {
-                    // Haptic feedback
-                    let haptic = UINotificationFeedbackGenerator()
-                    haptic.notificationOccurred(.success)
-                    
                     isFixing = false
                     showFixSheet = false
                     fixDescription = ""
                     
-                    // Refresh and dismiss
                     NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
                     dismiss()
                 }
@@ -2485,14 +2251,21 @@ struct FoodLogDetailView: View {
         }
     }
     
+    private struct FixedFoodResult {
+        let name: String
+        let calories: Int
+        let protein: Int
+        let carbs: Int
+        let fat: Int
+    }
+    
     private func reanalyzeWithGPT(
         originalName: String,
         originalCalories: Int,
         originalProtein: Int,
         originalCarbs: Int,
         originalFat: Int,
-        correction: String,
-        imageData: Data?
+        correction: String
     ) async throws -> FixedFoodResult {
         guard let apiKey = EnvManager.shared.value(for: "OPENAI_API_KEY"), !apiKey.isEmpty else {
             throw NSError(domain: "APIKeyError", code: -1)
@@ -2523,33 +2296,14 @@ struct FoodLogDetailView: View {
             "carbs": 0,
             "fat": 0
         }
-        
-        Alla värden ska vara heltal.
         """
-        
-        var messages: [[String: Any]] = []
-        
-        // If we have an image, include it
-        if let imageData = imageData {
-            let base64Image = imageData.base64EncodedString()
-            messages.append([
-                "role": "user",
-                "content": [
-                    ["type": "text", "text": prompt],
-                    ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64Image)"]]
-                ]
-            ])
-        } else {
-            messages.append([
-                "role": "user",
-                "content": prompt
-            ])
-        }
         
         let requestBody: [String: Any] = [
             "model": "gpt-4o-mini",
-            "messages": messages,
-            "max_tokens": 300
+            "messages": [
+                ["role": "user", "content": prompt]
+            ],
+            "max_tokens": 500
         ]
         
         var request = URLRequest(url: url)
@@ -2557,11 +2311,10 @@ struct FoodLogDetailView: View {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        request.timeoutInterval = 60
         
         let (data, _) = try await URLSession.shared.data(for: request)
         
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
               let message = firstChoice["message"] as? [String: Any],
@@ -2569,23 +2322,150 @@ struct FoodLogDetailView: View {
             throw NSError(domain: "ParseError", code: -1)
         }
         
-        let cleanContent = content
+        let cleanedContent = content
             .replacingOccurrences(of: "```json", with: "")
             .replacingOccurrences(of: "```", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         
-        guard let resultData = cleanContent.data(using: .utf8),
-              let result = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] else {
-            throw NSError(domain: "JSONError", code: -1)
+        guard let responseData = cleanedContent.data(using: .utf8),
+              let resultJson = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+            throw NSError(domain: "JSONParseError", code: -1)
         }
         
         return FixedFoodResult(
-            name: result["name"] as? String ?? originalName,
-            calories: result["calories"] as? Int ?? originalCalories,
-            protein: result["protein"] as? Int ?? originalProtein,
-            carbs: result["carbs"] as? Int ?? originalCarbs,
-            fat: result["fat"] as? Int ?? originalFat
+            name: resultJson["name"] as? String ?? originalName,
+            calories: resultJson["calories"] as? Int ?? originalCalories,
+            protein: resultJson["protein"] as? Int ?? originalProtein,
+            carbs: resultJson["carbs"] as? Int ?? originalCarbs,
+            fat: resultJson["fat"] as? Int ?? originalFat
         )
+    }
+}
+
+// MARK: - Food Log Macro Card
+struct FoodLogMacroCard: View {
+    let emoji: String
+    let label: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(emoji)
+                .font(.system(size: 24))
+            
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(color)
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - Food Log Fix Sheet
+struct FoodLogFixSheet: View {
+    let entry: FoodLogEntry
+    @Binding var fixDescription: String
+    @Binding var isFixing: Bool
+    @Binding var fixProgress: Double
+    let onFix: () -> Void
+    let onDismiss: () -> Void
+    
+    @FocusState private var isTextFieldFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 40))
+                        .foregroundColor(.black)
+                    
+                    Text("Rätta till")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.black)
+                }
+                .padding(.top, 8)
+                
+                TextField("Beskriv vad som ska rättas", text: $fixDescription, axis: .vertical)
+                    .font(.system(size: 16))
+                    .padding(16)
+                    .background(Color.gray.opacity(0.08))
+                    .cornerRadius(16)
+                    .lineLimit(4...8)
+                    .focused($isTextFieldFocused)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Exempel:")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.black)
+                    
+                    Text("\"Det var bara 100g kyckling\" eller \"Lägg till ris och sås\"")
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.gray.opacity(0.06))
+                .cornerRadius(16)
+                
+                Spacer()
+                
+                if isFixing {
+                    VStack(spacing: 12) {
+                        ProgressView(value: fixProgress, total: 100)
+                            .progressViewStyle(LinearProgressViewStyle(tint: .black))
+                            .scaleEffect(y: 2)
+                        
+                        Text("Analyserar...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.bottom, 20)
+                } else {
+                    Button {
+                        onFix()
+                    } label: {
+                        Text("Uppdatera")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(fixDescription.isEmpty ? Color.gray : Color.black)
+                            .cornerRadius(14)
+                    }
+                    .disabled(fixDescription.isEmpty)
+                    .padding(.bottom, 20)
+                }
+            }
+            .padding(.horizontal, 20)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .frame(width: 36, height: 36)
+                            .background(Color.gray.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .onAppear {
+            isTextFieldFocused = true
+        }
     }
 }
 

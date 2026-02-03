@@ -75,6 +75,7 @@ struct MainTabView: View {
     @State private var showAIScanPaywall = false
     @State private var showManualEntry = false
     @State private var showProWelcome = false
+    @State private var showSessionAutoEndedAlert = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -87,17 +88,22 @@ struct MainTabView: View {
     }
     
     // Tab items data - 4 tabs now (removed Starta pass)
-    private let tabItems: [(icon: String, title: String)] = [
-        ("house.fill", "Hem"),
-        ("fork.knife", "Kalorier"),
-        ("gift.fill", "Belöningar"),
-        ("person.fill", "Profil")
+    private let tabItems: [(icon: String, title: String, selectedIcon: String)] = [
+        ("house", "Hem", "house.fill"),
+        ("fork.knife", "Kalorier", "fork.knife"),
+        ("gift", "Belöningar", "gift.fill"),
+        ("person", "Profil", "person.fill")
     ]
     
     var body: some View {
         Group {
-            // Use the same custom tab bar with Tracka button for all iOS versions
-            legacyTabView
+            if #available(iOS 26.0, *) {
+                // iOS 26+ : Native Liquid Glass TabView
+                liquidGlassTabView
+            } else {
+                // iOS 25 and earlier: Custom Tab Bar
+                legacyTabView
+            }
         }
         .fullScreenCover(isPresented: $showStartSession) {
             StartSessionView(initialActivity: startActivityType ?? .running)
@@ -171,8 +177,23 @@ struct MainTabView: View {
             showStartSession = false
             showResumeSession = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToKalorier"))) { _ in
+            selectedTab = 1  // Kalorier tab
+            showStartSession = false
+            showResumeSession = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
             selectedTab = 1  // Socialt tab
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
+            selectedTab = 3  // Profile tab
+            showStartSession = false
+            showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
+            selectedTab = 3  // Profile tab (contains Statistics)
             showStartSession = false
             showResumeSession = false
         }
@@ -255,6 +276,9 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
+                // Check if any active session has exceeded 10 hours and auto-end it
+                SessionManager.shared.checkAndAutoEndExpiredSession()
+                
                 // Reset failure counter and refresh auth session when app becomes active
                 AuthSessionManager.shared.resetFailureCounter()
                 
@@ -303,6 +327,15 @@ struct MainTabView: View {
             TerritoryStore.shared.invalidateCache()
             SocialViewModel.invalidateCache()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionAutoEnded"))) { _ in
+            // Show alert that session was auto-ended
+            showSessionAutoEndedAlert = true
+        }
+        .alert("Passet avslutades", isPresented: $showSessionAutoEndedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Ditt gympass avslutades automatiskt eftersom det varit aktivt i mer än 10 timmar.")
+        }
     }
     
     // MARK: - iOS 26+ Liquid Glass Tab View
@@ -311,7 +344,7 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             // Native TabView with built-in Liquid Glass effect
             TabView(selection: $selectedTab) {
-                Tab("Hem", systemImage: "house.fill", value: 0) {
+                Tab("Hem", systemImage: "house", value: 0) {
                     SocialView()
                 }
                 
@@ -319,11 +352,11 @@ struct MainTabView: View {
                     HomeContainerView()
                 }
                 
-                Tab("Belöningar", systemImage: "gift.fill", value: 2) {
+                Tab("Belöningar", systemImage: "gift", value: 2) {
                     RewardsView()
                 }
                 
-                Tab("Profil", systemImage: "person.fill", value: 3) {
+                Tab("Profil", systemImage: "person", value: 3) {
                     ProfileContainerView()
                 }
             }
@@ -333,6 +366,21 @@ struct MainTabView: View {
             addMealOverlay
                 .opacity(showAddMealSheet ? 1 : 0)
                 .allowsHitTesting(showAddMealSheet)
+            
+            // Floating + button container - hide when navigating to sub-pages
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if !showAddMealSheet && navigationTracker.isAtRootView {
+                        floatingAddButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 90) // Above the tab bar
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             
             // Floating active session banner
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
@@ -549,7 +597,7 @@ struct MainTabView: View {
     // MARK: - Legacy Tab View (iOS 25 and earlier)
     private var legacyTabView: some View {
         ZStack(alignment: .bottom) {
-            // Content views based on selected tab - instant switch
+            // Content views based on selected tab - instant switching
             Group {
                 switch selectedTab {
                 case 0:
@@ -579,187 +627,171 @@ struct MainTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            // Custom Tab Bar with + button - hide when navigating to subpages
-            if !showAddMealSheet && navigationTracker.isAtRootView {
+            // Custom Tab Bar with + button - hide + when navigating
+            if !showAddMealSheet {
                 legacyCustomTabBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
-        .animation(.easeOut(duration: 0.25), value: navigationTracker.isAtRootView)
     }
     
-    // MARK: - Legacy Custom Tab Bar (Golf GameBook style)
-    private var legacyCustomTabBar: some View {
-        VStack(spacing: 0) {
-            // Top border line
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 0.5)
-            
-            // Tab bar content - all 5 items in one row
-            HStack(spacing: 0) {
-                // Tab 0: Hem
-                FixedTabBarItem(
-                    icon: tabItems[0].icon,
-                    title: tabItems[0].title,
-                    isSelected: selectedTab == 0,
-                    action: {
-                        // Always pop to root and reset navigation tracker
-                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootHem"), object: nil)
-                        NavigationDepthTracker.shared.resetToRoot()
-                        if selectedTab != 0 {
-                            switchToTab(0)
-                        }
-                    }
-                )
-                
-                // Tab 1: Kalorier
-                FixedTabBarItem(
-                    icon: tabItems[1].icon,
-                    title: tabItems[1].title,
-                    isSelected: selectedTab == 1,
-                    action: {
-                        // Always pop to root and reset navigation tracker
-                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootKalorier"), object: nil)
-                        NavigationDepthTracker.shared.resetToRoot()
-                        if selectedTab != 1 {
-                            switchToTab(1)
-                        }
-                    }
-                )
-                
-                // Center: Tracka button (sticks up)
-                centerTrackaButton
-                
-                // Tab 2: Belöningar
-                FixedTabBarItem(
-                    icon: tabItems[2].icon,
-                    title: tabItems[2].title,
-                    isSelected: selectedTab == 2,
-                    action: {
-                        // Always pop to root and reset navigation tracker
-                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootBeloningar"), object: nil)
-                        NavigationDepthTracker.shared.resetToRoot()
-                        if selectedTab != 2 {
-                            switchToTab(2)
-                        }
-                    }
-                )
-                
-                // Tab 3: Profil
-                FixedTabBarItem(
-                    icon: tabItems[3].icon,
-                    title: tabItems[3].title,
-                    isSelected: selectedTab == 3,
-                    action: {
-                        // Always pop to root and reset navigation tracker
-                        NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
-                        NavigationDepthTracker.shared.resetToRoot()
-                        if selectedTab != 3 {
-                            switchToTab(3)
-                        }
-                    }
-                )
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 28)
-            .padding(.horizontal, 4)
-        }
-        .background(Color(.systemBackground))
+    // MARK: - Legacy Tab Bar Background
+    @ViewBuilder
+    private var legacyTabBarBackground: some View {
+        // Solid white background - no rounded corners, no floating effect
+        Color(.systemBackground)
     }
     
-    // MARK: - Center Tracka Button (circular, sticks up above tab bar)
-    private var centerTrackaButton: some View {
+    // MARK: - Floating Add Button
+    private var floatingAddButton: some View {
         Button {
             triggerHeavyHaptic()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 showAddMealSheet.toggle()
             }
         } label: {
-            VStack(spacing: 4) {
-                ZStack {
-                    // Outer dark rim for 3D depth effect
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.25),
-                                    Color.black,
-                                    Color(white: 0.15),
-                                    Color.black
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 72, height: 72)
-                        .shadow(color: Color.black.opacity(0.5), radius: 12, x: 0, y: 6)
-                    
-                    // Main button body with gradient
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(white: 0.45),      // Silver highlight at top
-                                    Color(white: 0.3),       // Silver mid
-                                    Color(white: 0.15),      // Dark mid
-                                    Color.black,             // Black bottom
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 64, height: 64)
-                    
-                    // Inner highlight ring at top for 3D pop
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.4),
-                                    Color.white.opacity(0.2),
-                                    Color.clear,
-                                    Color.clear,
-                                    Color.black.opacity(0.3)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 62, height: 62)
-                    
-                    // Subtle inner shadow/bevel
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.4),
-                                    Color.clear,
-                                    Color.clear,
-                                    Color(white: 0.4).opacity(0.3)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                        .frame(width: 58, height: 58)
-                    
-                    // Text inside button - bolder and larger
-                    Text("Tracka")
-                        .font(.system(size: 14, weight: .heavy))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 1)
-                }
-                .offset(y: -16) // Stick up more above other tabs
+            ZStack {
+                floatingButtonBackground
+                
+                Image(systemName: showAddMealSheet ? "xmark" : "plus")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.white)
+                    .rotationEffect(.degrees(showAddMealSheet ? 0 : 0))
             }
-            .frame(maxWidth: .infinity)
+        }
+    }
+    
+    @ViewBuilder
+    private var floatingButtonBackground: some View {
+        // Always black background with shadow
+        Circle()
+            .fill(Color.black)
+            .frame(width: 56, height: 56)
+            .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
+    }
+    
+    // MARK: - Legacy Custom Tab Bar
+    private var legacyCustomTabBar: some View {
+        VStack(spacing: 0) {
+            // Top border line
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(height: 0.5)
+            
+            // Tab bar content
+            HStack(spacing: 0) {
+                // First two tabs (Hem, Kalorier)
+                ForEach(0..<2, id: \.self) { index in
+                    LegacyTabBarItem(
+                        icon: tabItems[index].icon,
+                        selectedIcon: tabItems[index].selectedIcon,
+                        title: tabItems[index].title,
+                        isSelected: selectedTab == index,
+                        action: {
+                            if selectedTab == index {
+                                let notificationName: String
+                                switch index {
+                                case 0: notificationName = "PopToRootHem"
+                                case 1: notificationName = "PopToRootSocialt"
+                                default: notificationName = ""
+                                }
+                                if !notificationName.isEmpty {
+                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
+                                }
+                            } else {
+                                switchToTab(index)
+                            }
+                        }
+                    )
+                }
+                
+                // Center "Tracka" circular button
+                trackaButton
+                
+                // Last two tabs (Belöningar, Profil)
+                ForEach(2..<tabItems.count, id: \.self) { index in
+                    LegacyTabBarItem(
+                        icon: tabItems[index].icon,
+                        selectedIcon: tabItems[index].selectedIcon,
+                        title: tabItems[index].title,
+                        isSelected: selectedTab == index,
+                        action: {
+                            if selectedTab == index {
+                                let notificationName: String
+                                switch index {
+                                case 2: notificationName = "PopToRootBeloningar"
+                                case 3: notificationName = "PopToRootProfil"
+                                default: notificationName = ""
+                                }
+                                if !notificationName.isEmpty {
+                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
+                                }
+                            } else {
+                                switchToTab(index)
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+            .background(legacyTabBarBackground)
+        }
+    }
+    
+    // MARK: - Tracka Button (center of tab bar)
+    private var trackaButton: some View {
+        Button {
+            triggerHeavyHaptic()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showAddMealSheet.toggle()
+            }
+        } label: {
+            ZStack {
+                // Outer silver/gray ring border - clear contour
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(white: 0.75),
+                                Color(white: 0.85),
+                                Color(white: 0.75)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 4
+                    )
+                    .frame(width: 72, height: 72)
+                
+                // Main gradient circle - black to silver
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.black,
+                                Color(white: 0.25),
+                                Color(white: 0.4),
+                                Color(white: 0.25),
+                                Color.black
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+                
+                Text("Tracka")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
+        .offset(y: -25) // Lift the button up above the tab bar
     }
     
     private func triggerHeavyHaptic() {
@@ -782,7 +814,7 @@ struct MainTabView: View {
     }
     
     private func switchToTab(_ index: Int) {
-        // Instant tab switch - each view handles its own loading state
+        // Instant tab switch - no delay
         selectedTab = index
     }
     
@@ -858,34 +890,33 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Fixed Tab Bar Item Component (Golf GameBook style)
-private struct FixedTabBarItem: View {
+// MARK: - Legacy Tab Bar Item Component
+private struct LegacyTabBarItem: View {
     let icon: String
+    let selectedIcon: String
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     private let selectionHaptic = UIImpactFeedbackGenerator(style: .medium)
     
-    // Selected color (black)
-    private var selectedColor: Color {
-        Color.black
-    }
-    
     var body: some View {
         Button {
+            // Strong haptic feedback on tab selection
             selectionHaptic.prepare()
             selectionHaptic.impactOccurred(intensity: 0.8)
             action()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: isSelected ? .bold : .regular))
-                    .foregroundColor(isSelected ? selectedColor : .gray)
+            VStack(spacing: 5) {
+                Image(systemName: isSelected ? selectedIcon : icon)
+                    .font(.system(size: 24, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .primary : .gray)
+                    .frame(height: 28)
                 
                 Text(title)
-                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? selectedColor : .gray)
+                    .font(.system(size: 11, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .primary : .gray)
             }
             .frame(maxWidth: .infinity)
         }
@@ -973,3 +1004,4 @@ private struct SkeletonBox: View {
             }
     }
 }
+

@@ -11,6 +11,9 @@ class SessionManager: ObservableObject {
     private let hasSessionKey = "hasActiveSession"
     private let lastSaveTimeKey = "lastSessionSaveTime"
     
+    // Maximum session duration before auto-end (10 hours in seconds)
+    private let maxSessionDuration: TimeInterval = 10 * 60 * 60
+    
     struct ActiveSession: Codable {
         let activityType: String
         let startTime: Date
@@ -108,11 +111,12 @@ class SessionManager: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         do {
             let session = try JSONDecoder().decode(ActiveSession.self, from: data)
-            // Validate session - must have been saved within last 24 hours
-            if Date().timeIntervalSince(session.savedAt) < 24 * 3600 {
+            // Validate session - must have started within max duration (10 hours)
+            let sessionDuration = Date().timeIntervalSince(session.startTime)
+            if sessionDuration < maxSessionDuration {
                 return session
             } else {
-                print("⚠️ [SessionManager] Session from \(key) is too old, ignoring")
+                print("⚠️ [SessionManager] Session from \(key) has exceeded 10 hours (\(Int(sessionDuration / 3600))h), auto-ending")
                 return nil
             }
         } catch {
@@ -312,6 +316,37 @@ class SessionManager: ObservableObject {
         } else {
             print("  - activeSession: nil")
         }
+    }
+    
+    /// Check if the active session has exceeded the 10 hour limit and auto-end it
+    /// Call this when app becomes active to ensure stale sessions are cleaned up
+    func checkAndAutoEndExpiredSession() {
+        guard let session = activeSession else { return }
+        
+        let sessionDuration = Date().timeIntervalSince(session.startTime)
+        if sessionDuration >= maxSessionDuration {
+            let hours = Int(sessionDuration / 3600)
+            let minutes = Int((sessionDuration.truncatingRemainder(dividingBy: 3600)) / 60)
+            print("⏰ [SessionManager] Session exceeded 10 hours (\(hours)h \(minutes)m), auto-ending")
+            
+            // Finalize the session automatically
+            finalizeSession()
+            
+            // Post notification so UI can show a message if needed
+            NotificationCenter.default.post(
+                name: NSNotification.Name("SessionAutoEnded"),
+                object: nil,
+                userInfo: ["duration": sessionDuration, "reason": "exceeded_10_hours"]
+            )
+        }
+    }
+    
+    /// Get remaining time before auto-end (in seconds), or nil if no active session
+    func remainingTimeBeforeAutoEnd() -> TimeInterval? {
+        guard let session = activeSession else { return nil }
+        let elapsed = Date().timeIntervalSince(session.startTime)
+        let remaining = maxSessionDuration - elapsed
+        return remaining > 0 ? remaining : 0
     }
 }
 

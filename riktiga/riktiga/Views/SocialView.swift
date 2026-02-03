@@ -82,6 +82,17 @@ struct SocialView: View {
     // Timer for active friends refresh
     @State private var activeFriendsRefreshTimer: Timer?
     
+    // Cheer emoji states
+    @State private var selectedFriendToCheer: ActiveFriendSession?
+    @State private var lastCheerTime: Date?
+    @State private var isSendingCheer = false
+    @State private var cheerSentAnimation = false
+    @State private var receivedCheer: ReceivedCheer?
+    @State private var showReceivedCheerAnimation = false
+    
+    // Monthly report banner
+    @State private var showMonthlyReportBanner: Bool = false
+    
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -101,6 +112,16 @@ struct SocialView: View {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 mainContent
+                
+                // Cheer received animation overlay
+                if showReceivedCheerAnimation, let cheer = receivedCheer {
+                    CheerReceivedAnimationView(
+                        cheer: cheer,
+                        isShowing: $showReceivedCheerAnimation
+                    )
+                    .transition(.opacity)
+                    .zIndex(100)
+                }
             }
             .navigationTitle("")
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootHem"))) { _ in
@@ -121,6 +142,10 @@ struct SocialView: View {
             .task(id: authViewModel.currentUser?.id) {
                 await loadInitialData()
             }
+            .task {
+                // Subscribe to cheer notifications
+                await subscribeToCheerNotifications()
+            }
             .refreshable {
                 await refreshData()
             }
@@ -132,6 +157,21 @@ struct SocialView: View {
                     userId: authViewModel.currentUser?.id ?? "",
                     userName: authViewModel.currentUser?.name ?? "Användare"
                 )
+            }
+            .sheet(item: $selectedFriendToCheer) { friend in
+                CheerEmojiPickerView(
+                    friend: friend,
+                    senderName: authViewModel.currentUser?.name ?? "Någon",
+                    senderId: authViewModel.currentUser?.id ?? "",
+                    isSending: $isSendingCheer,
+                    onSend: { emoji in
+                        sendCheerToFriend(friend: friend, emoji: emoji)
+                    },
+                    onDismiss: {
+                        selectedFriendToCheer = nil
+                    }
+                )
+                .presentationDetents([.height(280)])
             }
             .navigationDestination(isPresented: $showFindFriends) {
                 FindFriendsView()
@@ -235,6 +275,18 @@ struct SocialView: View {
                     } else {
                         // Feed content directly here instead of scrollContent to avoid nested scrolls
                         VStack(alignment: .leading, spacing: 0) {
+                            // MARK: - Monthly Report Banner
+                            if showMonthlyReportBanner {
+                                monthlyReportBanner
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 8)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .top)),
+                                        removal: .opacity.combined(with: .scale(scale: 0.95))
+                                    ))
+                            }
+                            
                             // MARK: - Friends at gym section
                             friendsAtGymSection
                             
@@ -265,6 +317,7 @@ struct SocialView: View {
         .onAppear {
             animateContentIn()
             loadStats()
+            checkMonthlyReportBanner()
         }
     }
 
@@ -391,7 +444,21 @@ struct SocialView: View {
             
             // Top Navigation Overlay
             HStack {
+                // Left side - Upgrade to PRO (only show if not already Pro)
+                if !RevenueCatManager.shared.isProMember {
+                    Button {
+                        SuperwallService.shared.showPaywall()
+                    } label: {
+                        Text("Uppgradera till PRO")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4)
+                    }
+                    .padding(.leading, 24)
+                }
+                
                 Spacer()
+                
                 HStack(spacing: 24) {
                     Button {
                         showFindFriends = true
@@ -457,8 +524,11 @@ struct SocialView: View {
                             .font(.system(size: 38, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.4), radius: 5)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.6)
                     }
                     .padding(.leading, 24)
+                    .padding(.trailing, 160) // Leave space for icons on the right
                     .padding(.bottom, 90) // Moved down by increasing banner height
                 }
                 .frame(width: UIScreen.main.bounds.width, height: 420, alignment: .leading)
@@ -596,27 +666,10 @@ struct SocialView: View {
     }
     
     private func animateContentIn() {
-        // Reset states
-        showHeader = false
-        showCarousel = false
-        showPosts = false
-        
-        // Staggered animations
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            showHeader = true
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                showCarousel = true
-            }
-        }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                showPosts = true
-            }
-        }
+        // Show everything instantly for fast navigation
+        showHeader = true
+        showCarousel = true
+        showPosts = true
     }
     
     private var loadingView: some View {
@@ -739,115 +792,232 @@ struct SocialView: View {
         }
     }
     
+    // MARK: - Monthly Report Banner
+    private var monthlyReportBanner: some View {
+        Button {
+            // Navigate to statistics/monthly report
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToStatistics"), object: nil)
+            dismissMonthlyReportBanner()
+        } label: {
+            HStack(spacing: 16) {
+                // Icon
+                Image(systemName: "chart.bar.doc.horizontal.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                // Text content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Din månadsrapport för \(previousMonthName)")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("är nu tillgänglig!")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                
+                Spacer()
+                
+                // Arrow
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                // Black/silver gradient
+                LinearGradient(
+                    colors: [
+                        Color.black,
+                        Color(white: 0.2),
+                        Color(white: 0.35),
+                        Color(white: 0.2),
+                        Color.black
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            // Close button
+            Button {
+                dismissMonthlyReportBanner()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(8)
+                    .background(Circle().fill(Color.white.opacity(0.15)))
+            }
+            .buttonStyle(.plain)
+            .offset(x: -8, y: 8)
+        }
+    }
+    
+    private var previousMonthName: String {
+        let calendar = Calendar.current
+        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: Date()) else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "MMMM"
+        return formatter.string(from: previousMonth).capitalized
+    }
+    
+    private func checkMonthlyReportBanner() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        let calendar = Calendar.current
+        let today = Date()
+        let dayOfMonth = calendar.component(.day, from: today)
+        
+        // Only show banner in first 7 days of the month
+        guard dayOfMonth <= 7 else {
+            showMonthlyReportBanner = false
+            return
+        }
+        
+        // Get previous month identifier (e.g., "2026-01")
+        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: today) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let monthKey = formatter.string(from: previousMonth)
+        
+        // Check if user has dismissed this month's banner
+        let dismissKey = "monthlyReportBanner_dismissed_\(userId)_\(monthKey)"
+        let hasDismissed = UserDefaults.standard.bool(forKey: dismissKey)
+        
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            showMonthlyReportBanner = !hasDismissed
+        }
+    }
+    
+    private func dismissMonthlyReportBanner() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        let calendar = Calendar.current
+        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: Date()) else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        let monthKey = formatter.string(from: previousMonth)
+        
+        // Save dismissal
+        let dismissKey = "monthlyReportBanner_dismissed_\(userId)_\(monthKey)"
+        UserDefaults.standard.set(true, forKey: dismissKey)
+        
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showMonthlyReportBanner = false
+        }
+    }
+    
     // MARK: - Friends at Gym Section
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Vänner på gymmet")
                 .font(.system(size: 20, weight: .bold))
+                .padding(.horizontal, 16)
             
-            if isLoadingActiveFriends {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Laddar...")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else if activeFriends.isEmpty {
-                HStack(spacing: 12) {
-                    // App logo with black/silver gradient ring
-                    ZStack {
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.black, Color(white: 0.7), .black],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 3
-                            )
-                            .frame(width: 60, height: 60)
-                        
-                        Image("23") // App logo
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 52, height: 52)
-                            .clipShape(Circle())
-                    }
+            // Horizontal scroll with app logo + active friends
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    // App logo first (always visible)
+                    friendAtGymCard(
+                        imageContent: AnyView(
+                            Image("23")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 60, height: 60)
+                                .clipShape(Circle())
+                        ),
+                        name: "Up&Down",
+                        duration: nil,
+                        onTap: nil
+                    )
                     
-                    Text("Dina vänner tränar inte för närvarande")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                }
-                .padding(.vertical, 8)
-            } else {
-                // Show active friends with spectate option
-                ForEach(activeFriends) { friend in
-                    NavigationLink(destination: SpectateWorkoutView(session: friend).environmentObject(authViewModel)) {
-                        HStack(spacing: 12) {
-                            // Profile picture with green activity ring
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.green, lineWidth: 3)
-                                    .frame(width: 52, height: 52)
-                                
-                                AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                } placeholder: {
+                    // Active friends or placeholders
+                    if activeFriends.isEmpty && !isLoadingActiveFriends {
+                        // Show placeholder circles when no friends are active
+                        ForEach(0..<3, id: \.self) { index in
+                            friendAtGymCard(
+                                imageContent: AnyView(
                                     Circle()
-                                        .fill(Color.gray.opacity(0.3))
+                                        .fill(Color.gray.opacity(0.15))
+                                        .frame(width: 60, height: 60)
                                         .overlay(
                                             Image(systemName: "person.fill")
-                                                .foregroundColor(.gray)
+                                                .font(.system(size: 28))
+                                                .foregroundColor(.gray.opacity(0.4))
                                         )
-                                }
-                                .frame(width: 44, height: 44)
-                                .clipShape(Circle())
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(friend.userName)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                
-                                HStack(spacing: 4) {
-                                    Image(systemName: activityIconForFriend(friend.activityType))
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.green)
-                                    Text(friend.formattedDuration)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            // "Watch" button
-                            HStack(spacing: 6) {
-                                Image(systemName: "eye.fill")
-                                    .font(.system(size: 12))
-                                Text("Titta")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.green)
-                            .cornerRadius(16)
+                                ),
+                                name: "—",
+                                duration: nil,
+                                onTap: nil
+                            )
                         }
-                        .padding(12)
-                        .background(Color(.tertiarySystemBackground))
-                        .cornerRadius(12)
+                    } else {
+                        ForEach(activeFriends) { friend in
+                            friendAtGymCard(
+                                imageContent: AnyView(
+                                    AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                        case .failure(_), .empty:
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.3))
+                                                .overlay(
+                                                    Image(systemName: "person.fill")
+                                                        .font(.system(size: 24))
+                                                        .foregroundColor(.gray)
+                                                )
+                                        @unknown default:
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.3))
+                                        }
+                                    }
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(Circle())
+                                ),
+                                name: friend.userName.components(separatedBy: " ").first ?? friend.userName,
+                                duration: friend.formattedDuration,
+                                onTap: {
+                                    // Check rate limit (1 cheer per minute)
+                                    if let lastTime = lastCheerTime, Date().timeIntervalSince(lastTime) < 60 {
+                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    } else {
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        selectedFriendToCheer = friend
+                                    }
+                                }
+                            )
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 16)
             }
+            .animation(.easeInOut(duration: 0.3), value: activeFriends.count)
         }
-        .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .task {
             await loadActiveFriendsData()
@@ -857,6 +1027,48 @@ struct SocialView: View {
         }
         .onDisappear {
             stopActiveFriendsTimer()
+        }
+    }
+    
+    // Helper view for friend at gym card
+    private func friendAtGymCard(imageContent: AnyView, name: String, duration: String?, onTap: (() -> Void)?) -> some View {
+        VStack(spacing: 8) {
+            // Profile picture with black/silver gradient ring
+            ZStack {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.black, Color(white: 0.7), .black],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 70, height: 70)
+                
+                imageContent
+            }
+            
+            // Name
+            Text(name)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.black)
+                .lineLimit(1)
+            
+            // Duration (if available)
+            if let duration = duration {
+                Text(duration)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.black)
+            } else {
+                Text(" ")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
         }
     }
     
@@ -894,19 +1106,123 @@ struct SocialView: View {
     private func loadActiveFriendsData() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        isLoadingActiveFriends = true
+        // Only show loading indicator on first load (when we have no data yet)
+        let isFirstLoad = activeFriends.isEmpty && !isLoadingActiveFriends
+        if isFirstLoad {
+            await MainActor.run {
+                isLoadingActiveFriends = true
+            }
+        }
         
         do {
             // Fetch active friends
             let active = try await ActiveSessionService.shared.fetchActiveFriends(userId: userId)
             await MainActor.run {
-                activeFriends = active
-                isLoadingActiveFriends = false
+                // Use animation to smoothly update the list
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    activeFriends = active
+                    isLoadingActiveFriends = false
+                }
             }
         } catch {
             print("⚠️ Failed to load friends data: \(error)")
             await MainActor.run {
-                isLoadingActiveFriends = false
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isLoadingActiveFriends = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Send Cheer to Friend
+    private func sendCheerToFriend(friend: ActiveFriendSession, emoji: String) {
+        guard let senderId = authViewModel.currentUser?.id else { return }
+        let senderName = authViewModel.currentUser?.name ?? "Någon"
+        
+        isSendingCheer = true
+        
+        Task {
+            do {
+                // Send cheer via CheerService
+                try await CheerService.shared.sendCheer(
+                    fromUserId: senderId,
+                    fromUserName: senderName,
+                    toUserId: friend.userId,
+                    toUserName: friend.userName,
+                    emoji: emoji
+                )
+                
+                await MainActor.run {
+                    // Update last cheer time for rate limiting
+                    lastCheerTime = Date()
+                    isSendingCheer = false
+                    selectedFriendToCheer = nil
+                    
+                    // Show success feedback
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                }
+                
+                print("✅ Cheer sent to \(friend.userName): \(emoji)")
+            } catch {
+                print("❌ Failed to send cheer: \(error)")
+                await MainActor.run {
+                    isSendingCheer = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Subscribe to Cheer Notifications
+    private func subscribeToCheerNotifications() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        let channel = SupabaseConfig.supabase.channel("cheers-\(userId)")
+        
+        let insertions = channel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "workout_cheers",
+            filter: "to_user_id=eq.\(userId)"
+        )
+        
+        await channel.subscribe()
+        
+        // Custom decoder for ISO8601 dates
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+            
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
+        }
+        
+        for await insertion in insertions {
+            do {
+                let cheer = try insertion.decodeRecord(as: ReceivedCheer.self, decoder: decoder)
+                
+                await MainActor.run {
+                    receivedCheer = cheer
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showReceivedCheerAnimation = true
+                    }
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                }
+                
+                print("🎉 Received cheer from \(cheer.fromUserName): \(cheer.emoji)")
+            } catch {
+                print("⚠️ Failed to decode cheer: \(error)")
             }
         }
     }

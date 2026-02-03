@@ -232,7 +232,30 @@ class ReferralService: ObservableObject {
             return false
         }
         
-        // Check if user can edit
+        // First, get the user's current code
+        struct CurrentCode: Decodable {
+            let code: String
+        }
+        
+        let currentCodeResult: [CurrentCode] = try await supabase
+            .from("referral_codes")
+            .select("code")
+            .eq("user_id", value: userId)
+            .limit(1)
+            .execute()
+            .value
+        
+        // If the user already has this exact code, just return success (no change needed)
+        if let currentCode = currentCodeResult.first?.code, 
+           currentCode.uppercased() == normalizedCode {
+            print("✅ Code is already set to \(normalizedCode), no update needed")
+            await MainActor.run {
+                self.myReferralCode = normalizedCode
+            }
+            return true
+        }
+        
+        // Check if user can edit (only if actually changing the code)
         let (canEdit, _) = try await canEditCode(userId: userId)
         guard canEdit else {
             print("❌ Cannot edit code yet - 6 days haven't passed")
@@ -248,7 +271,7 @@ class ReferralService: ObservableObject {
         let existingCodes: [CodeCheck] = try await supabase
             .from("referral_codes")
             .select("id, user_id")
-            .eq("code", value: normalizedCode)
+            .ilike("code", pattern: normalizedCode) // Case-insensitive check
             .limit(1)
             .execute()
             .value
@@ -275,11 +298,32 @@ class ReferralService: ObservableObject {
             .eq("user_id", value: userId)
             .execute()
         
+        // Verify the update actually worked by fetching the code back
+        struct VerifyCode: Decodable {
+            let code: String
+        }
+        
+        let verifyResult: [VerifyCode] = try await supabase
+            .from("referral_codes")
+            .select("code")
+            .eq("user_id", value: userId)
+            .limit(1)
+            .execute()
+            .value
+        
+        guard let verified = verifyResult.first, 
+              verified.code.uppercased() == normalizedCode else {
+            print("❌ Code update verification failed - database still has old code")
+            return false
+        }
+        
+        print("✅ Code successfully updated to \(normalizedCode)")
+        
         await MainActor.run {
             self.myReferralCode = normalizedCode
         }
         
-        print("✅ Updated referral code to: \(normalizedCode)")
+        print("✅ Updated and verified referral code to: \(normalizedCode)")
         return true
     }
     

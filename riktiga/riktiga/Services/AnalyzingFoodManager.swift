@@ -109,15 +109,60 @@ class AnalyzingFoodManager: ObservableObject {
         }
     }
     
+    // MARK: - Analyzed Ingredient
+    struct AnalyzedIngredient: Identifiable, Codable {
+        var id = UUID()
+        var name: String
+        var calories: Int
+        var protein: Int
+        var carbs: Int
+        var fat: Int
+        var amount: String // e.g., "100g", "1 serving", "1/4 medium"
+        
+        enum CodingKeys: String, CodingKey {
+            case name, calories, protein, carbs, fat, amount
+        }
+        
+        init(id: UUID = UUID(), name: String, calories: Int, protein: Int, carbs: Int, fat: Int, amount: String) {
+            self.id = id
+            self.name = name
+            self.calories = calories
+            self.protein = protein
+            self.carbs = carbs
+            self.fat = fat
+            self.amount = amount
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.id = UUID()
+            self.name = try container.decode(String.self, forKey: .name)
+            self.calories = try container.decode(Int.self, forKey: .calories)
+            self.protein = try container.decode(Int.self, forKey: .protein)
+            self.carbs = try container.decode(Int.self, forKey: .carbs)
+            self.fat = try container.decode(Int.self, forKey: .fat)
+            self.amount = try container.decode(String.self, forKey: .amount)
+        }
+    }
+    
     struct AnalyzedFoodResult: Identifiable {
         let id = UUID()
-        let foodName: String
-        let calories: Int
-        let protein: Int
-        let carbs: Int
-        let fat: Int
+        var foodName: String
+        var calories: Int
+        var protein: Int
+        var carbs: Int
+        var fat: Int
         let servingSize: String?
         let image: UIImage?
+        var ingredients: [AnalyzedIngredient]
+        
+        // Recalculate totals from ingredients
+        mutating func recalculateTotals() {
+            calories = ingredients.reduce(0) { $0 + $1.calories }
+            protein = ingredients.reduce(0) { $0 + $1.protein }
+            carbs = ingredients.reduce(0) { $0 + $1.carbs }
+            fat = ingredients.reduce(0) { $0 + $1.fat }
+        }
     }
     
     // MARK: - Test Helper (for debugging story posting)
@@ -129,10 +174,23 @@ class AnalyzingFoodManager: ObservableObject {
             carbs: carbs,
             fat: fat,
             servingSize: nil,
-            image: image
+            image: image,
+            ingredients: []
         )
         self.capturedImage = image
         print("📷 TEST: Set test result - \(foodName)")
+    }
+    
+    // MARK: - Clear Result (for dismissing scan without saving)
+    func clearResult() {
+        self.result = nil
+        self.capturedImage = nil
+        self.noFoodDetected = false
+        self.limitReached = false
+        self.errorMessage = nil
+        self.isSaving = false
+        self.saveSuccess = false
+        print("🗑️ Cleared analysis result")
     }
     
     func startAnalyzing(image: UIImage) {
@@ -260,7 +318,8 @@ class AnalyzingFoodManager: ObservableObject {
                             carbs: result.carbs,
                             fat: result.fat,
                             servingSize: result.servingSize,
-                            image: image
+                            image: image,
+                            ingredients: result.ingredients
                         )
                         self.isAnalyzing = false
                         
@@ -288,6 +347,7 @@ class AnalyzingFoodManager: ObservableObject {
         let carbs: Int
         let fat: Int
         let servingSize: String?
+        let ingredients: [AnalyzedIngredient]
     }
     
     private func sendToGPTVision(base64Image: String) async throws -> GPTResult {
@@ -300,7 +360,7 @@ class AnalyzingFoodManager: ObservableObject {
         }
         
         let prompt = """
-        Analysera denna bild. Om du ser mat eller dryck, identifiera vad det är och uppskatta näringsvärden per portion.
+        Analysera denna bild. Om du ser mat eller dryck, identifiera vad det är, uppskatta näringsvärden per portion, och lista alla ingredienser med deras individuella näringsvärden.
         
         Om du INTE kan se någon mat eller dryck i bilden, svara med:
         {
@@ -310,7 +370,8 @@ class AnalyzingFoodManager: ObservableObject {
             "protein": 0,
             "carbs": 0,
             "fat": 0,
-            "serving_size": ""
+            "serving_size": "",
+            "ingredients": []
         }
         
         Om du SER mat eller dryck, svara med:
@@ -321,11 +382,32 @@ class AnalyzingFoodManager: ObservableObject {
             "protein": 0,
             "carbs": 0,
             "fat": 0,
-            "serving_size": "Uppskattad portionsstorlek"
+            "serving_size": "Uppskattad portionsstorlek",
+            "ingredients": [
+                {
+                    "name": "Ingrediens 1",
+                    "calories": 0,
+                    "protein": 0,
+                    "carbs": 0,
+                    "fat": 0,
+                    "amount": "100g"
+                },
+                {
+                    "name": "Ingrediens 2",
+                    "calories": 0,
+                    "protein": 0,
+                    "carbs": 0,
+                    "fat": 0,
+                    "amount": "1 serving"
+                }
+            ]
         }
         
         Svara ENDAST med JSON (inga andra tecken).
         - calories, protein, carbs, fat ska vara heltal
+        - Inkludera alla uppskattade ingredienser med deras individuella näringsvärden
+        - amount ska vara en beskrivande mängd (t.ex. "100g", "1 tablespoon", "1/4 medium", "1 serving")
+        - Totalvärdena (calories, protein, carbs, fat) ska vara summan av alla ingredienser
         """
         
         let requestBody: [String: Any] = [
@@ -370,6 +452,22 @@ class AnalyzingFoodManager: ObservableObject {
             throw NSError(domain: "JSONError", code: -1)
         }
         
+        // Parse ingredients
+        var ingredients: [AnalyzedIngredient] = []
+        if let ingredientsArray = result["ingredients"] as? [[String: Any]] {
+            for ingredientDict in ingredientsArray {
+                let ingredient = AnalyzedIngredient(
+                    name: ingredientDict["name"] as? String ?? "Okänd",
+                    calories: ingredientDict["calories"] as? Int ?? 0,
+                    protein: ingredientDict["protein"] as? Int ?? 0,
+                    carbs: ingredientDict["carbs"] as? Int ?? 0,
+                    fat: ingredientDict["fat"] as? Int ?? 0,
+                    amount: ingredientDict["amount"] as? String ?? "1 portion"
+                )
+                ingredients.append(ingredient)
+            }
+        }
+        
         return GPTResult(
             noFood: result["no_food"] as? Bool ?? false,
             name: result["name"] as? String ?? "Okänd mat",
@@ -377,7 +475,8 @@ class AnalyzingFoodManager: ObservableObject {
             protein: result["protein"] as? Int ?? 0,
             carbs: result["carbs"] as? Int ?? 0,
             fat: result["fat"] as? Int ?? 0,
-            servingSize: result["serving_size"] as? String
+            servingSize: result["serving_size"] as? String,
+            ingredients: ingredients
         )
     }
     
@@ -473,6 +572,18 @@ class AnalyzingFoodManager: ObservableObject {
                     print("   - capturedImageBackup: \(capturedImageBackup != nil)")
                 }
                 
+                // Convert ingredients to insert format
+                let ingredientsToSave: [FoodLogIngredientInsert]? = resultToSave.ingredients.isEmpty ? nil : resultToSave.ingredients.map { ing in
+                    FoodLogIngredientInsert(
+                        name: ing.name,
+                        calories: ing.calories,
+                        protein: ing.protein,
+                        carbs: ing.carbs,
+                        fat: ing.fat,
+                        amount: ing.amount
+                    )
+                }
+                
                 let entry = FoodLogInsertForAnalysis(
                     id: UUID().uuidString,
                     userId: userId,
@@ -483,7 +594,8 @@ class AnalyzingFoodManager: ObservableObject {
                     fat: resultToSave.fat,
                     mealType: "snack",
                     loggedAt: ISO8601DateFormatter().string(from: Date()),
-                    imageUrl: imageUrl
+                    imageUrl: imageUrl,
+                    ingredients: ingredientsToSave
                 )
                 
                 print("📝 Inserting food log...")
@@ -893,6 +1005,16 @@ class AnalyzingFoodManager: ObservableObject {
     }
 }
 
+// MARK: - Ingredient for Insert
+struct FoodLogIngredientInsert: Codable {
+    let name: String
+    let calories: Int
+    let protein: Int
+    let carbs: Int
+    let fat: Int
+    let amount: String
+}
+
 struct FoodLogInsertForAnalysis: Codable {
     let id: String
     let userId: String
@@ -904,9 +1026,10 @@ struct FoodLogInsertForAnalysis: Codable {
     let mealType: String
     let loggedAt: String
     let imageUrl: String?
+    let ingredients: [FoodLogIngredientInsert]?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, calories, protein, carbs, fat
+        case id, name, calories, protein, carbs, fat, ingredients
         case userId = "user_id"
         case mealType = "meal_type"
         case loggedAt = "logged_at"

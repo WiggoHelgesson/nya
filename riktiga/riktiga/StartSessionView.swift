@@ -1683,6 +1683,9 @@ struct SessionMapView: View {
         print("🏁 Ending session... (skipTerritoryCapture: \(skipTerritoryCapture))")
         print("📍 BEFORE STOP - routeCoordinates.count: \(locationManager.routeCoordinates.count)")
         
+        // Cancel any active session reminder notifications
+        NotificationManager.shared.cancelActiveSessionReminders()
+        
         // Get user ID early to ensure we can save territory
         guard let userId = authViewModel.currentUser?.id else {
             print("⚠️ No user ID found in endSession, cannot claim territory")

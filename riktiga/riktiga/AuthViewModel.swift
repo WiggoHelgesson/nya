@@ -496,9 +496,11 @@ class AuthViewModel: NSObject, ObservableObject {
                         let newUser = User(id: userId, name: defaultName, email: email)
                         try await ProfileService.shared.createUserProfile(newUser)
                         
+                        await RevenueCatManager.shared.logInFor(appUserId: userId)
+                        
                         await MainActor.run {
                             self.currentUser = newUser
-                            self.isLoggedIn = true
+                            // DON'T set isLoggedIn = true here - wait for onboarding to complete
                             self.isLoading = false
                             
                             // Set current user for recent exercises (personalized)

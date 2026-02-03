@@ -130,7 +130,7 @@ serve(async (req) => {
 
     // Get all followers of this user
     const { data: followers, error: followersError } = await supabase
-      .from("follows")
+      .from("user_follows")
       .select("follower_id")
       .eq("following_id", userId);
 

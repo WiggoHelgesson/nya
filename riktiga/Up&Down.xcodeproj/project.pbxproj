@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		860308212EAE82D00023EA7B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 860308202EAE82D00023EA7B /* StoreKit.framework */; };
 		860C82212EF8A5F900A317BD /* InsertAffiliateSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 860C82202EF8A5F900A317BD /* InsertAffiliateSwift */; };
-		861411592F152368005BF8CF /* TerraiOS in Frameworks */ = {isa = PBXBuildFile; productRef = 861411582F152368005BF8CF /* TerraiOS */; };
 		861411652F158FE9005BF8CF /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 8614115E2F158FE9005BF8CF /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
@@ -175,7 +174,6 @@
 				86D759BB2EDC536B00CE3755 /* Stripe in Frameworks */,
 				86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */,
 				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
-				861411592F152368005BF8CF /* TerraiOS in Frameworks */,
 				86D759C32EDC536B00CE3755 /* StripeFinancialConnections in Frameworks */,
 				86D759BD2EDC536B00CE3755 /* StripeApplePay in Frameworks */,
 				86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */,
@@ -309,7 +307,6 @@
 				86D759C22EDC536B00CE3755 /* StripeFinancialConnections */,
 				86D759CA2EDC5BC300CE3755 /* StripePaymentSheet */,
 				860C82202EF8A5F900A317BD /* InsertAffiliateSwift */,
-				861411582F152368005BF8CF /* TerraiOS */,
 				8699E37C2F1D91B700AC7ADF /* SuperwallKit */,
 				86672E172F2C0573001DA9A3 /* GoogleSignIn */,
 				86672E192F2C0573001DA9A3 /* GoogleSignInSwift */,
@@ -354,7 +351,6 @@
 				8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */,
 				86D759B92EDC536B00CE3755 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 				860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */,
-				861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */,
 				8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 				86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
@@ -449,7 +445,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -479,7 +475,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -512,7 +508,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -545,7 +541,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -724,7 +720,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -803,7 +799,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 117;
+				MARKETING_VERSION = 118;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -887,14 +883,6 @@
 				minimumVersion = 1.0.0;
 			};
 		};
-		861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tryterra/TerraiOS";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.6.31;
-			};
-		};
 		86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
@@ -950,11 +938,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 860C821F2EF8A5F900A317BD /* XCRemoteSwiftPackageReference "InsertAffiliateSwiftSDK" */;
 			productName = InsertAffiliateSwift;
-		};
-		861411582F152368005BF8CF /* TerraiOS */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 861411572F152368005BF8CF /* XCRemoteSwiftPackageReference "TerraiOS" */;
-			productName = TerraiOS;
 		};
 		86158EAC2EACDAA400064CAA /* ReceiptParser */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -69,6 +69,11 @@ final class ActiveSessionService {
             
             print("✅ Successfully saved active session to database for user \(userId)")
             
+            // Schedule reminder notifications for active session (1h and 5h)
+            await MainActor.run {
+                NotificationManager.shared.scheduleActiveSessionReminders()
+            }
+            
             // Fetch the session ID
             let sessionId = try await getSessionId(userId: userId)
             return sessionId
@@ -162,6 +167,11 @@ final class ActiveSessionService {
             .eq("user_id", value: userId)
             .execute()
         
+        // Cancel the active session reminder notifications
+        await MainActor.run {
+            NotificationManager.shared.cancelActiveSessionReminders()
+        }
+        
         print("✅ Ended active session for user \(userId)")
     }
     
@@ -194,7 +204,7 @@ final class ActiveSessionService {
         
         // Get list of users this person follows (mutual friends would be better, but follows works)
         let followingResponse = try await supabase
-            .from("follows")
+            .from("user_follows")
             .select("following_id")
             .eq("follower_id", value: userId)
             .execute()
@@ -324,7 +334,7 @@ final class ActiveSessionService {
         
         // First get the list of users this person follows
         let followingResponse = try await supabase
-            .from("follows")
+            .from("user_follows")
             .select("following_id")
             .eq("follower_id", value: userId)
             .execute()

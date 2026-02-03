@@ -46,16 +46,17 @@ struct ProfileContainerView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
-                // Hide skeleton after a brief moment to allow content to load
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        showSkeleton = false
-                    }
-                }
+                // Show content instantly for fast navigation
+                showSkeleton = false
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootProfil"))) { _ in
                 navigationPath = NavigationPath()
                 showSettings = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .statistik
+                }
             }
         }
         .sheet(isPresented: $showSettings) {

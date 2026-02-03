@@ -213,6 +213,61 @@ final class NotificationManager {
         }
     }
     
+    // MARK: - Active Session Reminders
+    
+    /// Schedule reminders for users with active gym sessions who haven't been in the app
+    /// - 1 hour: "Gymmar du fortfarande? - Glöm inte stänga av passet."
+    /// - 5 hours: "Glöm inte stänga av passet - Du har ett aktivt pass igång!"
+    func scheduleActiveSessionReminders() {
+        // Remove any existing reminders first
+        cancelActiveSessionReminders()
+        
+        // 1 hour reminder
+        let content1h = UNMutableNotificationContent()
+        content1h.title = "Gymmar du fortfarande?"
+        content1h.body = "Glöm inte stänga av passet."
+        content1h.sound = .default
+        content1h.userInfo = ["type": "active_session_reminder", "hours": 1]
+        
+        let trigger1h = UNTimeIntervalNotificationTrigger(timeInterval: 60 * 60, repeats: false) // 1 hour
+        let request1h = UNNotificationRequest(identifier: "active-session-reminder-1h", content: content1h, trigger: trigger1h)
+        
+        UNUserNotificationCenter.current().add(request1h) { error in
+            if let error = error {
+                print("❌ Failed to schedule 1h session reminder: \(error)")
+            } else {
+                print("✅ 1 hour session reminder scheduled")
+            }
+        }
+        
+        // 5 hour reminder
+        let content5h = UNMutableNotificationContent()
+        content5h.title = "Glöm inte stänga av passet"
+        content5h.body = "Du har ett aktivt pass igång!"
+        content5h.sound = .default
+        content5h.userInfo = ["type": "active_session_reminder", "hours": 5]
+        
+        let trigger5h = UNTimeIntervalNotificationTrigger(timeInterval: 5 * 60 * 60, repeats: false) // 5 hours
+        let request5h = UNNotificationRequest(identifier: "active-session-reminder-5h", content: content5h, trigger: trigger5h)
+        
+        UNUserNotificationCenter.current().add(request5h) { error in
+            if let error = error {
+                print("❌ Failed to schedule 5h session reminder: \(error)")
+            } else {
+                print("✅ 5 hour session reminder scheduled")
+            }
+        }
+    }
+    
+    /// Cancel active session reminders (called when session ends)
+    func cancelActiveSessionReminders() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
+            "active-session-reminder-1h",
+            "active-session-reminder-5h"
+        ])
+        print("🔕 Active session reminders cancelled")
+    }
+    
     // MARK: - Friend Started Workout Notification
     
     /// Send a notification when a friend starts a workout (for local testing)
