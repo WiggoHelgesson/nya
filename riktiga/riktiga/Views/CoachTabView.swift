@@ -134,11 +134,9 @@ struct CoachTabView: View {
                     Text(coach.username ?? "Din tränare")
                         .font(.system(size: 20, weight: .semibold))
                     
-                    if let startedAt = coachRelation?.startedAt {
-                        Text("Coach since \(formatDate(startedAt))")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
+                    Text("Din personliga tränare")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
