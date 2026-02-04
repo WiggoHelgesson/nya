@@ -366,7 +366,7 @@ final class CoachService {
     
     /// Acceptera en coach-inbjudan
     func acceptCoachInvitation(invitationId: String) async throws {
-        print("✅ Accepting coach invitation: \(invitationId)")
+        print("🎯 Starting to accept coach invitation: \(invitationId)")
         
         // Hämta inbjudan för att få coach_id och client_id
         struct InvitationData: Decodable {
@@ -379,6 +379,7 @@ final class CoachService {
             }
         }
         
+        print("1️⃣ Fetching invitation data...")
         let invitations: [InvitationData] = try await supabase
             .from("coach_client_invitations")
             .select("coach_id, client_id")
@@ -386,28 +387,66 @@ final class CoachService {
             .execute()
             .value
         
-        guard let invitation = invitations.first, let clientId = invitation.clientId else {
-            throw NSError(domain: "CoachService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invitation not found"])
+        guard let invitation = invitations.first else {
+            print("❌ Invitation not found in database")
+            throw NSError(domain: "CoachService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Inbjudan hittades inte"])
         }
         
+        guard let clientId = invitation.clientId else {
+            print("❌ Client ID is missing from invitation")
+            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Klient-ID saknas"])
+        }
+        
+        print("   ✅ Found invitation: coach=\(invitation.coachId), client=\(clientId)")
+        
         // 1. Uppdatera inbjudan till accepted
+        print("2️⃣ Updating invitation status to 'accepted'...")
         try await supabase
             .from("coach_client_invitations")
             .update(["status": "accepted"])
             .eq("id", value: invitationId)
             .execute()
+        print("   ✅ Invitation status updated")
         
         // 2. Skapa coach-client relation
-        try await supabase
-            .from("coach_clients")
-            .insert([
-                "coach_id": invitation.coachId,
-                "client_id": clientId,
-                "status": "active"
-            ])
-            .execute()
+        print("3️⃣ Creating coach-client relation...")
+        do {
+            try await supabase
+                .from("coach_clients")
+                .insert([
+                    "coach_id": invitation.coachId,
+                    "client_id": clientId,
+                    "status": "active"
+                ])
+                .execute()
+            print("   ✅ Coach-client relation created")
+        } catch {
+            print("   ⚠️ Failed to create coach-client relation (may already exist): \(error)")
+            // Check if relation already exists
+            let existing: [CoachClientRelation] = try await supabase
+                .from("coach_clients")
+                .select("id, coach_id, client_id, status")
+                .eq("coach_id", value: invitation.coachId)
+                .eq("client_id", value: clientId)
+                .execute()
+                .value
+            
+            if !existing.isEmpty {
+                print("   ℹ️ Coach-client relation already exists, updating status...")
+                try await supabase
+                    .from("coach_clients")
+                    .update(["status": "active"])
+                    .eq("coach_id", value: invitation.coachId)
+                    .eq("client_id", value: clientId)
+                    .execute()
+                print("   ✅ Existing relation updated to active")
+            } else {
+                throw error
+            }
+        }
         
         // 3. Markera relaterad notification som läst
+        print("4️⃣ Marking notification as read...")
         try await supabase
             .from("notifications")
             .update(["is_read": true])
@@ -415,8 +454,9 @@ final class CoachService {
             .eq("type", value: "coach_invitation")
             .eq("actor_id", value: invitation.coachId)
             .execute()
+        print("   ✅ Notification marked as read")
         
-        print("✅ Coach-client relation created and notification marked as read")
+        print("🎉 Successfully accepted coach invitation!")
     }
     
     /// Neka en coach-inbjudan

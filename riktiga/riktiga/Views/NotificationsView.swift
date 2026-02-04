@@ -351,6 +351,11 @@ struct NotificationsView: View {
                 await loadNotifications()
             } catch {
                 print("❌ Failed to accept invitation: \(error)")
+                await MainActor.run {
+                    errorMessage = "Kunde inte acceptera inbjudan: \(error.localizedDescription)"
+                }
+                // Refresh to reset state
+                await loadNotifications()
             }
         }
     }
@@ -365,6 +370,16 @@ struct NotificationsView: View {
                 await MainActor.run {
                     pendingCoachInvitations.removeAll { $0.id == invitation.id }
                 }
+                
+                // Refresh to get updated data
+                await loadNotifications()
+            } catch {
+                print("❌ Failed to decline invitation: \(error)")
+                await MainActor.run {
+                    errorMessage = "Kunde inte avböja inbjudan: \(error.localizedDescription)"
+                }
+                // Refresh to reset state
+                await loadNotifications()
             } catch {
                 print("❌ Failed to decline invitation: \(error)")
             }
