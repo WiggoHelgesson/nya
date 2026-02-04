@@ -211,6 +211,10 @@ struct SocialView: View {
             //         selectedTab = .activeFriends
             //     }
             // }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenNotifications"))) { _ in
+                // Open notifications view
+                showNotifications = true
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPost"))) { notification in
                 if let userInfo = notification.userInfo,
                    let postId = userInfo["postId"] as? String {
@@ -307,6 +311,10 @@ struct SocialView: View {
                 .animation(.easeOut(duration: 0.35), value: socialViewModel.posts.isEmpty)
             }
         }
+        .refreshable {
+            await refreshData()
+        }
+        .background(RefreshControlView())
         .ignoresSafeArea(edges: .top)
         .navigationDestination(isPresented: $showNotifications) {
             NotificationsView(onDismiss: {
@@ -955,24 +963,12 @@ struct SocialView: View {
                     
                     // Active friends or placeholders
                     if activeFriends.isEmpty && !isLoadingActiveFriends {
-                        // Show placeholder circles when no friends are active
-                        ForEach(0..<3, id: \.self) { index in
-                            friendAtGymCard(
-                                imageContent: AnyView(
-                                    Circle()
-                                        .fill(Color.gray.opacity(0.15))
-                                        .frame(width: 60, height: 60)
-                                        .overlay(
-                                            Image(systemName: "person.fill")
-                                                .font(.system(size: 28))
-                                                .foregroundColor(.gray.opacity(0.4))
-                                        )
-                                ),
-                                name: "—",
-                                duration: nil,
-                                onTap: nil
-                            )
-                        }
+                        // Show text when no friends are active
+                        Text("Inga av dina vänner tränar just nu")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 8)
+                            .frame(height: 60)
                     } else {
                         ForEach(activeFriends) { friend in
                             friendAtGymCard(
@@ -1112,10 +1108,13 @@ struct SocialView: View {
             await MainActor.run {
                 isLoadingActiveFriends = true
             }
+            
+            // Cleanup stale sessions on first load
+            await ActiveSessionService.shared.cleanupStaleSessions()
         }
         
         do {
-            // Fetch active friends
+            // Fetch active friends (now filters out stale sessions)
             let active = try await ActiveSessionService.shared.fetchActiveFriends(userId: userId)
             await MainActor.run {
                 // Use animation to smoothly update the list
@@ -1777,7 +1776,8 @@ struct SocialView: View {
                 
                 // Removed recommended friends section
                 
-                if index == 4, shouldShowBrandSlider {
+                // Visa varumärkesslider efter andra inlägget
+                if index == 1, shouldShowBrandSlider {
                     brandSliderInlineSection
                         .opacity(showPosts ? 1 : 0)
                         .offset(y: showPosts ? 0 : 15)
@@ -2213,7 +2213,7 @@ struct SocialView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(brandLogos) { brand in
-                        Button(action: navigateToRewards) {
+                        NavigationLink(destination: BrandProductPageView(brandName: brand.name)) {
                             VStack(spacing: 8) {
                                 Image(brand.imageName)
                                     .resizable()
@@ -2523,26 +2523,20 @@ struct SocialPostCard: View {
                 }
                 
                 // Date and device info
-                HStack(spacing: 4) {
-                    Text(formatDate(post.createdAt))
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(formatStravaDate(post.createdAt))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                     
-                    // Show device name for external posts
-                    if let deviceName = post.deviceName, !deviceName.isEmpty {
-                        Text("•")
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray)
-                        Text(deviceName)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.gray)
+                    if let location = post.location {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.system(size: 10))
+                            Text(location)
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                     }
-                }
-                
-                if let location = post.location {
-                    Text(location)
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
                 }
             }
             
@@ -2555,7 +2549,10 @@ struct SocialPostCard: View {
                     Image(systemName: "ellipsis")
                         .foregroundColor(.primary)
                         .font(.system(size: 16))
+                        .padding(8)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
@@ -2639,17 +2636,37 @@ struct SocialPostCard: View {
             // Always show stats for gym posts, only check showsCleanCard for other posts
             // ExternalActivityCard handles stats for clean/external posts (non-gym)
             if isGymPost || !showsCleanCard {
-                HStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 20) {
                     if isGymPost {
+                        if let volume = gymVolumeText {
+                            statColumn(title: "Volym", value: volume)
+                        }
+                        
+                        if let sets = gymSetsCount {
+                            statColumn(title: "Sets", value: "\(sets)")
+                        }
+                        
                         if let duration = post.duration {
                             statColumn(title: "Tid", value: formatDuration(duration))
                         }
-                        if let volume = gymVolumeText {
-                            if post.duration != nil {
-                                Divider()
-                                    .frame(height: 40)
+                        
+                        // Prestationer (Achievements) section
+                        if let achievements = getAchievementCount(), achievements > 0 {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Prestationer")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "medal.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.yellow)
+                                    Text("\(achievements)")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.primary)
+                                }
                             }
-                            statColumn(title: "Volym", value: volume)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
                         }
                     } else {
                         if let distance = post.distance {
@@ -2663,18 +2680,10 @@ struct SocialPostCard: View {
                         }
                         
                         if let duration = post.duration {
-                            if post.distance != nil {
-                                Divider()
-                                    .frame(height: 40)
-                            }
                             statColumn(title: "Tid", value: formatDuration(duration))
                         }
                         
                         if let pace = averagePaceText {
-                            if post.distance != nil || post.duration != nil {
-                                Divider()
-                                    .frame(height: 40)
-                            }
                             // Show pace per 100m for swimming
                             if post.isSwimmingPost {
                                 statColumn(title: "Tempo/100m", value: pace)
@@ -2684,10 +2693,6 @@ struct SocialPostCard: View {
                         }
                         
                         if let strokes = post.strokes {
-                            if (post.distance != nil || post.duration != nil || averagePaceText != nil) {
-                                Divider()
-                                    .frame(height: 40)
-                            }
                             statColumn(title: "Slag", value: "\(strokes)")
                         }
                     }
@@ -2731,6 +2736,11 @@ struct SocialPostCard: View {
         return "\(text) kg"
     }
     
+    private var gymSetsCount: Int? {
+        guard isGymPost, let exercises = post.exercises else { return nil }
+        return exercises.reduce(0) { $0 + $1.sets }
+    }
+    
     private func totalVolume(for exercises: [GymExercisePost]) -> Double {
         exercises.reduce(0) { result, exercise in
             let setVolume = zip(exercise.kg, exercise.reps).reduce(0) { partial, pair in
@@ -2741,16 +2751,42 @@ struct SocialPostCard: View {
     }
     
     private func statColumn(title: String, value: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
             Text(value)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.primary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+    
+    private func getAchievementCount() -> Int? {
+        guard isGymPost else { return nil }
+        var count = 0
+        
+        // 1. New heaviest lift (PB)
+        if post.pbExerciseName != nil {
+            count += 1
+        }
+        
+        // 2. Longest workout (placeholder for now, could be checked against history)
+        // 3. Heaviest workout (placeholder for now, could be checked against history)
+        
+        // Check if this post is marked as a new record in the title or description
+        // (In a real app, we would check the database for historical records)
+        let titleLower = post.title.lowercased()
+        if titleLower.contains("rekord") || titleLower.contains("longest") || titleLower.contains("heaviest") {
+            count += 1
+        }
+        
+        if let descLower = post.description?.lowercased(), descLower.contains("rekord") || descLower.contains("longest") || descLower.contains("heaviest") {
+            count += 1
+        }
+        
+        return count > 0 ? count : nil
     }
     
     private func deletePost() {
@@ -2997,6 +3033,44 @@ struct SocialPostCard: View {
         default:
             return "figure.walk"
         }
+    }
+    
+    private func formatStravaDate(_ dateString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var date: Date? = formatter.date(from: dateString)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: dateString)
+        }
+        
+        guard let parsedDate = date else { return dateString }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "sv_SE")
+        dateFormatter.dateFormat = "d MMMM, yyyy 'klockan' HH:mm"
+        
+        let datePart = dateFormatter.string(from: parsedDate)
+        
+        let sourcePart: String
+        if let source = post.source?.lowercased() {
+            if source == "app" {
+                sourcePart = "Reggat med Up&Down"
+            } else if source == "strava" {
+                sourcePart = "Strava App"
+            } else if source == "garmin" {
+                sourcePart = "Garmin"
+            } else if source == "apple_watch" || source == "healthkit" {
+                sourcePart = "Apple Watch"
+            } else {
+                sourcePart = source.capitalized
+            }
+        } else {
+            sourcePart = "Reggat med Up&Down"
+        }
+        
+        return "\(datePart) • \(sourcePart)"
     }
     
     func formatDate(_ dateString: String) -> String {
@@ -5418,6 +5492,116 @@ struct ExternalActivityCard: View {
             return String(format: "%dm %02ds", minutes, secs)
         } else {
             return String(format: "%ds", secs)
+        }
+    }
+}
+
+// MARK: - Custom Refresh Control
+struct RefreshControlView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        
+        // Find the scroll view and add a custom refresh control
+        DispatchQueue.main.async {
+            if let scrollView = view.superview?.superview as? UIScrollView {
+                let refreshControl = UIRefreshControl()
+                refreshControl.tintColor = .clear
+                
+                // Add custom icon view
+                let iconView = UIImageView(image: UIImage(systemName: "gearshape.fill"))
+                iconView.tintColor = .systemGray
+                iconView.translatesAutoresizingMaskIntoConstraints = false
+                refreshControl.addSubview(iconView)
+                
+                NSLayoutConstraint.activate([
+                    iconView.centerXAnchor.constraint(equalTo: refreshControl.centerXAnchor),
+                    iconView.centerYAnchor.constraint(equalTo: refreshControl.centerYAnchor),
+                    iconView.widthAnchor.constraint(equalToConstant: 24),
+                    iconView.heightAnchor.constraint(equalToConstant: 24)
+                ])
+                
+                scrollView.refreshControl = refreshControl
+            }
+        }
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+// MARK: - Brand Product Page View
+struct BrandProductPageView: View {
+    let brandName: String
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Brand products from RewardCatalog
+                ForEach(brandProducts, id: \.id) { reward in
+                    NavigationLink(destination: RewardDetailView(reward: reward)) {
+                        BrandProductCard(reward: reward)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+        }
+        .navigationTitle(brandName.capitalized)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    
+    private var brandProducts: [RewardCard] {
+        RewardCatalog.all.filter { $0.brandName.uppercased() == brandName.uppercased() }
+    }
+}
+
+struct BrandProductCard: View {
+    let reward: RewardCard
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(reward.imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(reward.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(reward.description)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(reward.cost)")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    HStack(spacing: 2) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.orange)
+                        Text("XP")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
         }
     }
 }

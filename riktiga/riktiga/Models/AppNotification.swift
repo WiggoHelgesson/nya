@@ -18,6 +18,8 @@ struct AppNotification: Identifiable, Codable {
         case follow
         case newWorkout
         case reply
+        case coachInvitation
+        case coachProgramAssigned
         case unknown(String)
         
         init(rawValue: String) {
@@ -27,6 +29,8 @@ struct AppNotification: Identifiable, Codable {
             case "follow": self = .follow
             case "new_workout": self = .newWorkout
             case "reply": self = .reply
+            case "coach_invitation": self = .coachInvitation
+            case "coach_program_assigned": self = .coachProgramAssigned
             default: self = .unknown(rawValue)
             }
         }
@@ -38,6 +42,8 @@ struct AppNotification: Identifiable, Codable {
             case .follow: return "follow"
             case .newWorkout: return "new_workout"
             case .reply: return "reply"
+            case .coachInvitation: return "coach_invitation"
+            case .coachProgramAssigned: return "coach_program_assigned"
             case .unknown(let value): return value
             }
         }
@@ -131,6 +137,10 @@ struct AppNotification: Identifiable, Codable {
                 return "\(actorUsername ?? "Någon") svarade: \"\(text)\""
             }
             return "\(actorUsername ?? "Någon") svarade på din kommentar"
+        case .coachInvitation:
+            return "\(actorUsername ?? "En tränare") vill coacha dig!"
+        case .coachProgramAssigned:
+            return "\(actorUsername ?? "Din tränare") har tilldelat dig ett träningsprogram"
         case .unknown:
             return "\(actorUsername ?? "Någon") skickade en ny notis"
         }
@@ -148,6 +158,10 @@ struct AppNotification: Identifiable, Codable {
             return "figure.run"
         case .reply:
             return "arrowshape.turn.up.left.fill"
+        case .coachInvitation:
+            return "person.crop.circle.badge.plus"
+        case .coachProgramAssigned:
+            return "dumbbell.fill"
         case .unknown:
             return "bell.fill"
         }
@@ -165,6 +179,10 @@ struct AppNotification: Identifiable, Codable {
             return "orange"
         case .reply:
             return "purple"
+        case .coachInvitation:
+            return "purple"
+        case .coachProgramAssigned:
+            return "indigo"
         case .unknown:
             return "gray"
         }

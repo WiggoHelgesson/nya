@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import UserNotifications
 import Combine
+import MapKit
 
 /// Manages gym location detection and notifications
 /// Saves locations where users have gym sessions and notifies them when they return
@@ -20,6 +21,7 @@ final class GymLocationManager: NSObject, ObservableObject {
     
     @Published var savedGymLocations: [GymLocation] = []
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    @Published var detectedGymName: String? = nil // Currently detected gym name
     
     private var currentUserId: String?
     private var isGymSessionActive = false
@@ -66,9 +68,93 @@ final class GymLocationManager: NSObject, ObservableObject {
     func gymSessionStarted() {
         isGymSessionActive = true
         pendingSessionLocation = nil
+        detectedGymName = nil
         
         // Request current location to store (will be saved only if session is completed)
         locationManager.requestLocation()
+        
+        // Also try to detect nearby gym
+        detectNearbyGym()
+    }
+    
+    /// Detect the nearest gym using MapKit and geocode the city
+    func detectNearbyGym() {
+        guard let currentLocation = locationManager.location else {
+            print("📍 No location available for gym detection")
+            return
+        }
+        
+        // 1. Get city/municipality first
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(currentLocation) { [weak self] placemarks, error in
+            guard let self = self else { return }
+            
+            var locationString = ""
+            if let placemark = placemarks?.first {
+                let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+                let county = placemark.administrativeArea ?? ""
+                
+                if !city.isEmpty && !county.isEmpty {
+                    locationString = "\(city), \(county)"
+                } else {
+                    locationString = city.isEmpty ? county : city
+                }
+            }
+            
+            // 2. Search for nearby gym
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = "gym fitness center"
+            searchRequest.region = MKCoordinateRegion(
+                center: currentLocation.coordinate,
+                latitudinalMeters: 200,
+                longitudinalMeters: 200
+            )
+            
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { [weak self] response, error in
+                guard let self = self else { return }
+                
+                var gymName: String? = nil
+                if let response = response, !response.mapItems.isEmpty {
+                    // Find the closest gym
+                    var closestGym: MKMapItem?
+                    var closestDistance: CLLocationDistance = .infinity
+                    
+                    for item in response.mapItems {
+                        let distance = currentLocation.distance(from: CLLocation(
+                            latitude: item.placemark.coordinate.latitude,
+                            longitude: item.placemark.coordinate.longitude
+                        ))
+                        
+                        if distance < closestDistance {
+                            closestDistance = distance
+                            closestGym = item
+                        }
+                    }
+                    
+                    if let gym = closestGym, closestDistance <= 150 {
+                        gymName = gym.name ?? gym.placemark.name
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    if let gym = gymName {
+                        // Format: "Gym Name • City, County"
+                        self.detectedGymName = "\(gym) • \(locationString)"
+                    } else if !locationString.isEmpty {
+                        self.detectedGymName = locationString
+                    } else {
+                        self.detectedGymName = nil
+                    }
+                    print("🏋️ Detected gym/location: \(self.detectedGymName ?? "Unknown")")
+                }
+            }
+        }
+    }
+    
+    /// Get the current detected gym name (for saving with workout)
+    func getCurrentGymName() -> String? {
+        return detectedGymName
     }
     
     /// Called when user ends a gym session without saving

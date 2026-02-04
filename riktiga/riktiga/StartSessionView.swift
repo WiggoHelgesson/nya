@@ -1365,6 +1365,13 @@ struct SessionMapView: View {
                 saveSessionState()
             }
             
+            // Ping the active session every 2 minutes to keep it alive
+            if Int(sessionDuration) % 120 == 0, let userId = authViewModel.currentUser?.id {
+                Task {
+                    try? await ActiveSessionService.shared.pingSession(userId: userId)
+                }
+            }
+            
             updateSplitsIfNeeded()
         }
     }

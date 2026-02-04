@@ -65,7 +65,7 @@ struct MainTabView: View {
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem (Social), 1=Kalorier (Home), 2=Belöningar, 3=Profil
+    @State private var selectedTab = 0  // 0=Hem, 1=Kalorier, (2=Coach om aktiv), 2/3=Belöningar, 3/4=Profil
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     @State private var showDiscardConfirmation = false
@@ -76,6 +76,7 @@ struct MainTabView: View {
     @State private var showManualEntry = false
     @State private var showProWelcome = false
     @State private var showSessionAutoEndedAlert = false
+    @State private var hasActiveCoach = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -87,13 +88,30 @@ struct MainTabView: View {
         return false
     }
     
-    // Tab items data - 4 tabs now (removed Starta pass)
-    private let tabItems: [(icon: String, title: String, selectedIcon: String)] = [
-        ("house", "Hem", "house.fill"),
-        ("fork.knife", "Kalorier", "fork.knife"),
-        ("gift", "Belöningar", "gift.fill"),
-        ("person", "Profil", "person.fill")
-    ]
+    // Tab items data - dynamiskt baserat på om användaren har coach
+    private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
+        if hasActiveCoach {
+            return [
+                ("house", "Hem", "house.fill"),
+                ("fork.knife", "Kalorier", "fork.knife"),
+                ("person.badge.shield.checkmark", "Coach", "person.badge.shield.checkmark.fill"),
+                ("gift", "Belöningar", "gift.fill"),
+                ("person", "Profil", "person.fill")
+            ]
+        } else {
+            return [
+                ("house", "Hem", "house.fill"),
+                ("fork.knife", "Kalorier", "fork.knife"),
+                ("gift", "Belöningar", "gift.fill"),
+                ("person", "Profil", "person.fill")
+            ]
+        }
+    }
+    
+    // Tab index mapping
+    private var rewardsTabIndex: Int { hasActiveCoach ? 3 : 2 }
+    private var profileTabIndex: Int { hasActiveCoach ? 4 : 3 }
+    private var coachTabIndex: Int { 2 } // Endast om hasActiveCoach
     
     var body: some View {
         Group {
@@ -139,6 +157,9 @@ struct MainTabView: View {
             }
             hapticGenerator.prepare()
         }
+        .task {
+            await checkForActiveCoach()
+        }
         .onChange(of: showStartSession) { _, newValue in
             if newValue {
                 showResumeSession = false
@@ -173,7 +194,7 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
-            selectedTab = 2  // Belöningar is now at index 2
+            selectedTab = rewardsTabIndex
             showStartSession = false
             showResumeSession = false
         }
@@ -188,14 +209,27 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
-            selectedTab = 3  // Profile tab
+            selectedTab = profileTabIndex
             showStartSession = false
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
-            selectedTab = 3  // Profile tab (contains Statistics)
+            selectedTab = profileTabIndex
             showStartSession = false
             showResumeSession = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToCoach"))) { _ in
+            if hasActiveCoach {
+                selectedTab = coachTabIndex
+                showStartSession = false
+                showResumeSession = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CoachStatusChanged"))) { _ in
+            // Refresh coach status when invitation is accepted/declined
+            Task {
+                await checkForActiveCoach()
+            }
         }
         .onChange(of: notificationNav.shouldNavigateToNews) { _, shouldNavigate in
             if shouldNavigate {
@@ -352,12 +386,26 @@ struct MainTabView: View {
                     HomeContainerView()
                 }
                 
-                Tab("Belöningar", systemImage: "gift", value: 2) {
-                    RewardsView()
-                }
-                
-                Tab("Profil", systemImage: "person", value: 3) {
-                    ProfileContainerView()
+                if hasActiveCoach {
+                    Tab("Coach", systemImage: "person.badge.shield.checkmark", value: 2) {
+                        CoachTabView()
+                    }
+                    
+                    Tab("Belöningar", systemImage: "gift", value: 3) {
+                        RewardsView()
+                    }
+                    
+                    Tab("Profil", systemImage: "person", value: 4) {
+                        ProfileContainerView()
+                    }
+                } else {
+                    Tab("Belöningar", systemImage: "gift", value: 2) {
+                        RewardsView()
+                    }
+                    
+                    Tab("Profil", systemImage: "person", value: 3) {
+                        ProfileContainerView()
+                    }
                 }
             }
             .allowsHitTesting(!showAddMealSheet)
@@ -480,35 +528,16 @@ struct MainTabView: View {
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
     
-    // AI Scan option with logo and stars
+    // AI Scan option with logo
     private func aiScanOption(action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    // Stars around the logo
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.primary)
-                        .offset(x: -20, y: -12)
-                    
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.primary)
-                        .offset(x: 18, y: -14)
-                    
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.primary.opacity(0.6))
-                        .offset(x: 22, y: 2)
-                    
-                    // App logo with rounded corners
-                    Image("23")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 36, height: 36)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .frame(height: 44)
+            VStack(spacing: 12) {
+                // App logo with rounded corners
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 Text("Ta bild med AI")
                     .font(.system(size: 14, weight: .medium))
@@ -549,19 +578,8 @@ struct MainTabView: View {
                 SuperwallService.shared.showPaywall()
             }
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 ZStack {
-                    // Stars around the logo (grayed)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.gray.opacity(0.3))
-                        .offset(x: -20, y: -12)
-                    
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.gray.opacity(0.3))
-                        .offset(x: 18, y: -14)
-                    
                     // App logo (grayed) with rounded corners
                     Image("23")
                         .resizable()
@@ -579,7 +597,6 @@ struct MainTabView: View {
                         .clipShape(Circle())
                         .offset(x: 20, y: -8)
                 }
-                .frame(height: 44)
                 
                 Text("Ta bild med AI")
                     .font(.system(size: 14, weight: .medium))
@@ -599,17 +616,34 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             // Content views based on selected tab - instant switching
             Group {
-                switch selectedTab {
-                case 0:
-                    SocialView()
-                case 1:
-                    HomeContainerView()
-                case 2:
-                    RewardsView()
-                case 3:
-                    ProfileContainerView()
-                default:
-                    Color.clear
+                if hasActiveCoach {
+                    switch selectedTab {
+                    case 0:
+                        SocialView()
+                    case 1:
+                        HomeContainerView()
+                    case 2:
+                        CoachTabView()
+                    case 3:
+                        RewardsView()
+                    case 4:
+                        ProfileContainerView()
+                    default:
+                        Color.clear
+                    }
+                } else {
+                    switch selectedTab {
+                    case 0:
+                        SocialView()
+                    case 1:
+                        HomeContainerView()
+                    case 2:
+                        RewardsView()
+                    case 3:
+                        ProfileContainerView()
+                    default:
+                        Color.clear
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -619,6 +653,21 @@ struct MainTabView: View {
             addMealOverlay
                 .opacity(showAddMealSheet ? 1 : 0)
                 .allowsHitTesting(showAddMealSheet)
+            
+            // Floating + button container - hide when navigating to sub-pages
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if !showAddMealSheet && navigationTracker.isAtRootView {
+                        floatingAddButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 90) // Above the tab bar
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             
             // Floating active session banner
             if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
@@ -630,7 +679,6 @@ struct MainTabView: View {
             // Custom Tab Bar with + button - hide + when navigating
             if !showAddMealSheet {
                 legacyCustomTabBar
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -683,8 +731,7 @@ struct MainTabView: View {
             
             // Tab bar content
             HStack(spacing: 0) {
-                // First two tabs (Hem, Kalorier)
-                ForEach(0..<2, id: \.self) { index in
+                ForEach(0..<tabItems.count, id: \.self) { index in
                     LegacyTabBarItem(
                         icon: tabItems[index].icon,
                         selectedIcon: tabItems[index].selectedIcon,
@@ -696,37 +743,14 @@ struct MainTabView: View {
                                 switch index {
                                 case 0: notificationName = "PopToRootHem"
                                 case 1: notificationName = "PopToRootSocialt"
+                                case rewardsTabIndex: notificationName = "PopToRootBeloningar"
+                                case profileTabIndex: notificationName = "PopToRootProfil"
                                 default: notificationName = ""
                                 }
-                                if !notificationName.isEmpty {
-                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
-                                }
-                            } else {
-                                switchToTab(index)
-                            }
-                        }
-                    )
-                }
-                
-                // Center "Tracka" circular button
-                trackaButton
-                
-                // Last two tabs (Belöningar, Profil)
-                ForEach(2..<tabItems.count, id: \.self) { index in
-                    LegacyTabBarItem(
-                        icon: tabItems[index].icon,
-                        selectedIcon: tabItems[index].selectedIcon,
-                        title: tabItems[index].title,
-                        isSelected: selectedTab == index,
-                        action: {
-                            if selectedTab == index {
-                                let notificationName: String
-                                switch index {
-                                case 2: notificationName = "PopToRootBeloningar"
-                                case 3: notificationName = "PopToRootProfil"
-                                default: notificationName = ""
-                                }
-                                if !notificationName.isEmpty {
+                                
+                                if hasActiveCoach && index == coachTabIndex {
+                                    NotificationCenter.default.post(name: NSNotification.Name("PopToRootCoach"), object: nil)
+                                } else if !notificationName.isEmpty {
                                     NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
                                 }
                             } else {
@@ -740,58 +764,6 @@ struct MainTabView: View {
             .padding(.bottom, 20)
             .background(legacyTabBarBackground)
         }
-    }
-    
-    // MARK: - Tracka Button (center of tab bar)
-    private var trackaButton: some View {
-        Button {
-            triggerHeavyHaptic()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                showAddMealSheet.toggle()
-            }
-        } label: {
-            ZStack {
-                // Outer silver/gray ring border - clear contour
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color(white: 0.75),
-                                Color(white: 0.85),
-                                Color(white: 0.75)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 4
-                    )
-                    .frame(width: 72, height: 72)
-                
-                // Main gradient circle - black to silver
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.black,
-                                Color(white: 0.25),
-                                Color(white: 0.4),
-                                Color(white: 0.25),
-                                Color.black
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-                
-                Text("Tracka")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
-        }
-        .buttonStyle(.plain)
-        .offset(y: -25) // Lift the button up above the tab bar
     }
     
     private func triggerHeavyHaptic() {
@@ -816,6 +788,19 @@ struct MainTabView: View {
     private func switchToTab(_ index: Int) {
         // Instant tab switch - no delay
         selectedTab = index
+    }
+    
+    private func checkForActiveCoach() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            let coachRelation = try await CoachService.shared.fetchMyCoach(for: userId)
+            await MainActor.run {
+                hasActiveCoach = coachRelation != nil
+            }
+        } catch {
+            print("❌ Failed to check for active coach: \(error)")
+        }
     }
     
     @ViewBuilder

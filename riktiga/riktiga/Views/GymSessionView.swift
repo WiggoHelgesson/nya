@@ -26,6 +26,7 @@ struct GymSessionView: View {
     @State private var showMissingInfoAlert = false
     @State private var showFinishConfirmation = false
     @State private var navigateToExercisePicker = false
+    @State private var showCoachPrograms = false
     
     // Cheer notification state
     @State private var showCheerNotification = false
@@ -119,27 +120,49 @@ struct GymSessionView: View {
         }
     }
     
-    // Bottom buttons for empty state (Sparade pass & Starta löppass)
+    // Bottom buttons for empty state (Sparade pass, Pass från tränare & Starta löppass)
     private var emptyStateBottomButtons: some View {
             VStack(spacing: 12) {
-            // Saved workouts button
+            // Row with Sparade pass and Pass från tränare
+            HStack(spacing: 12) {
+                // Saved workouts button
                 Button(action: {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                showWorkoutLibrary = true
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showWorkoutLibrary = true
                 }) {
                     HStack {
-                    Image(systemName: "folder.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                    Text("Sparade pass")
-                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Sparade pass")
+                            .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                    .padding(.vertical, 14)
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
                 }
+                
+                // Coach programs button
+                Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showCoachPrograms = true
+                }) {
+                    HStack {
+                        Image(systemName: "person.crop.rectangle.badge.plus")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Från tränare")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+            }
                 
             // Start running session button
             Button(action: {
@@ -415,6 +438,10 @@ struct GymSessionView: View {
                 }
             .sheet(isPresented: $showWorkoutLibrary) {
                 SavedWorkoutsSheet(viewModel: viewModel, isPresented: $showWorkoutLibrary)
+            }
+            .sheet(isPresented: $showCoachPrograms) {
+                CoachProgramsSheet(viewModel: viewModel, isPresented: $showCoachPrograms)
+                    .environmentObject(authViewModel)
             }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {

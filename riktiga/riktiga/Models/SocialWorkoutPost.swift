@@ -20,6 +20,7 @@ struct SocialWorkoutPostRaw: Codable {
     let streakCount: Int?
     let source: String?
     let deviceName: String?
+    let location: String?
     
     // JOIN data
     let profiles: ProfileData?
@@ -45,6 +46,7 @@ struct SocialWorkoutPostRaw: Codable {
         case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
+        case location
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -172,7 +174,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         userName = raw.profiles?.username
         userAvatarUrl = raw.profiles?.avatarUrl
         userIsPro = raw.profiles?.isProMember
-        location = nil // Will be set if available
+        location = raw.location // Gym name or location
         strokes = nil // Will be set if available
         
         // Map like and comment counts
@@ -210,7 +212,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.userName = userName
         self.userAvatarUrl = userAvatarUrl
         self.userIsPro = userIsPro
-        self.location = location
+        self.location = location ?? post.location // Use provided location or fall back to post.location
         self.strokes = strokes
         self.likeCount = likeCount
         self.commentCount = commentCount
