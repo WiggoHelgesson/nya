@@ -56,15 +56,26 @@ serve(async (req) => {
     const { invitationId }: AcceptInvitationRequest = await req.json()
     console.log(`🎯 Accepting invitation: ${invitationId} for user: ${user.id}`)
 
-    // 1. Fetch invitation
-    const { data: invitation, error: inviteError } = await supabaseAdmin
+    // 1. Fetch invitation (without .single() to get better error info)
+    const { data: invitations, error: inviteError } = await supabaseAdmin
       .from('coach_client_invitations')
       .select('id, coach_id, client_id, client_email, status')
       .eq('id', invitationId)
-      .single()
 
-    if (inviteError || !invitation) {
-      console.error('Invitation not found:', inviteError)
+    if (inviteError) {
+      console.error('Database error fetching invitation:', inviteError)
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Databasfel vid hämtning av inbjudan',
+          error: inviteError.message
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!invitations || invitations.length === 0) {
+      console.error('Invitation not found in database')
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -74,6 +85,9 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    const invitation = invitations[0]
+    console.log(`Found invitation: status=${invitation.status}, client_id=${invitation.client_id}`)
 
     // Verify invitation belongs to this user
     if (invitation.client_id !== user.id) {
