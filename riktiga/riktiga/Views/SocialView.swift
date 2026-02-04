@@ -5571,7 +5571,7 @@ struct BrandProductCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(reward.name)
+                    Text(reward.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
                     

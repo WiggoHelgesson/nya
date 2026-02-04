@@ -182,7 +182,6 @@ struct StatisticsView: View {
         showWeekStats = true
         showChart = true
         showCalendar = true
-        showBMI = true
         showProgressPhotos = true
         showProgressive = true
         showMonthly = true
