@@ -376,19 +376,11 @@ final class CoachService {
         }
         
         let request = AcceptRequest(invitationId: invitationId)
-        let requestData = try JSONEncoder().encode(request)
         
-        let response = try await supabase.functions.invoke(
+        let result: AcceptResponse = try await supabase.functions.invoke(
             "accept-coach-invitation",
-            options: FunctionInvokeOptions(body: requestData)
+            options: FunctionInvokeOptions(body: request)
         )
-        
-        guard let responseData = response.data else {
-            print("❌ No response data from edge function")
-            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Inget svar från servern"])
-        }
-        
-        let result = try JSONDecoder().decode(AcceptResponse.self, from: responseData)
         
         if result.success {
             print("✅ Coach invitation accepted successfully!")
@@ -415,19 +407,11 @@ final class CoachService {
         }
         
         let request = DeclineRequest(invitationId: invitationId)
-        let requestData = try JSONEncoder().encode(request)
         
-        let response = try await supabase.functions.invoke(
+        let result: DeclineResponse = try await supabase.functions.invoke(
             "decline-coach-invitation",
-            options: FunctionInvokeOptions(body: requestData)
+            options: FunctionInvokeOptions(body: request)
         )
-        
-        guard let responseData = response.data else {
-            print("❌ No response data from edge function")
-            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Inget svar från servern"])
-        }
-        
-        let result = try JSONDecoder().decode(DeclineResponse.self, from: responseData)
         
         if result.success {
             print("✅ Coach invitation declined successfully!")
