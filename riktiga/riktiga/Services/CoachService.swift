@@ -450,36 +450,51 @@ final class CoachService {
         print("   ✅ Invitation status updated to accepted")
         
         // 3. Skapa eller uppdatera coach-client relation
-        print("3️⃣ Creating coach-client relation...")
-        do {
+        print("3️⃣ Creating/updating coach-client relation...")
+        
+        // Först, kolla om en relation redan finns
+        let existingRelations: [CoachClientRelation] = try await supabase
+            .from("coach_clients")
+            .select("id, coach_id, client_id, status")
+            .eq("coach_id", value: invitation.coachId)
+            .eq("client_id", value: clientId)
+            .execute()
+            .value
+        
+        if let existingRelation = existingRelations.first {
+            print("   ℹ️ Found existing relation: \(existingRelation.id), status: \(existingRelation.status)")
+            
+            // Uppdatera befintlig relation till active
             try await supabase
                 .from("coach_clients")
-                .insert([
-                    "coach_id": invitation.coachId,
-                    "client_id": clientId,
-                    "status": "active"
-                ])
+                .update(["status": "active"])
+                .eq("id", value: existingRelation.id)
                 .execute()
-            print("   ✅ Coach-client relation created!")
-        } catch let insertError {
-            print("   ⚠️ Insert failed: \(insertError)")
-            print("   🔄 Trying to update existing relation...")
+            print("   ✅ Updated relation to active")
+        } else {
+            print("   ℹ️ No existing relation found, creating new one...")
             
+            // Försök skapa ny relation (kan fortfarande faila pga RLS)
             do {
                 try await supabase
                     .from("coach_clients")
-                    .update(["status": "active"])
-                    .eq("coach_id", value: invitation.coachId)
-                    .eq("client_id", value: clientId)
+                    .insert([
+                        "coach_id": invitation.coachId,
+                        "client_id": clientId,
+                        "status": "active"
+                    ])
                     .execute()
-                print("   ✅ Existing relation updated to active")
-            } catch let updateError {
-                print("   ❌ Update also failed: \(updateError)")
-                throw updateError
+                print("   ✅ New relation created!")
+            } catch let insertError {
+                print("   ❌ Insert failed due to RLS: \(insertError)")
+                print("   ⚠️ RLS policy is blocking insert - check Supabase dashboard")
+                throw NSError(domain: "CoachService", code: 403, userInfo: [
+                    NSLocalizedDescriptionKey: "Kunde inte skapa coach-relation. Kontakta support."
+                ])
             }
         }
         
-        // 4. Verifiera att relationen skapades
+        // 4. Verifiera att relationen skapades och har status "active"
         print("4️⃣ Verifying coach-client relation...")
         let relations: [CoachClientRelation] = try await supabase
             .from("coach_clients")
@@ -491,14 +506,29 @@ final class CoachService {
             """)
             .eq("coach_id", value: invitation.coachId)
             .eq("client_id", value: clientId)
+            .eq("status", value: "active")
             .execute()
             .value
         
         if relations.isEmpty {
-            print("   ❌ Relation not found after creation!")
-            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Kunde inte verifiera coach-relation"])
+            print("   ❌ No active relation found after update!")
+            print("   🔍 Checking all relations for this coach-client pair...")
+            
+            let allRelations: [CoachClientRelation] = try await supabase
+                .from("coach_clients")
+                .select("id, coach_id, client_id, status")
+                .eq("coach_id", value: invitation.coachId)
+                .eq("client_id", value: clientId)
+                .execute()
+                .value
+            
+            for relation in allRelations {
+                print("      - Relation \(relation.id): status=\(relation.status)")
+            }
+            
+            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Coach-relationen kunde inte aktiveras. Status är inte 'active'."])
         } else {
-            print("   ✅ Relation verified: \(relations.first!.id), status: \(relations.first!.status)")
+            print("   ✅ Active relation verified: \(relations.first!.id)")
         }
         
         // 5. Markera notifikation som läst
