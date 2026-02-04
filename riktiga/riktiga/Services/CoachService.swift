@@ -411,21 +411,28 @@ final class CoachService {
         // 2. Skapa coach-client relation
         print("3️⃣ Creating coach-client relation...")
         do {
+            let now = ISO8601DateFormatter().string(from: Date())
             try await supabase
                 .from("coach_clients")
                 .insert([
                     "coach_id": invitation.coachId,
                     "client_id": clientId,
-                    "status": "active"
+                    "status": "active",
+                    "started_at": now
                 ])
                 .execute()
             print("   ✅ Coach-client relation created")
         } catch {
             print("   ⚠️ Failed to create coach-client relation (may already exist): \(error)")
-            // Check if relation already exists
-            let existing: [CoachClientRelation] = try await supabase
+            // Check if relation already exists (simplified check without joined data)
+            struct SimpleRelation: Decodable {
+                let id: String
+                let status: String
+            }
+            
+            let existing: [SimpleRelation] = try await supabase
                 .from("coach_clients")
-                .select("id, coach_id, client_id, status")
+                .select("id, status")
                 .eq("coach_id", value: invitation.coachId)
                 .eq("client_id", value: clientId)
                 .execute()
