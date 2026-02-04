@@ -467,7 +467,6 @@ final class CoachService {
         
         print("✅ Coach invitation accepted via direct database!")
     }
-    }
     
     /// Neka en coach-inbjudan via Edge Function
     func declineCoachInvitation(invitationId: String) async throws {
