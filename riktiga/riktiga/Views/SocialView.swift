@@ -2213,7 +2213,7 @@ struct SocialView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(brandLogos) { brand in
-                        NavigationLink(destination: BrandProductPageView(brandName: brand.name)) {
+                        Button(action: navigateToRewards) {
                             VStack(spacing: 8) {
                                 Image(brand.imageName)
                                     .resizable()
@@ -5528,82 +5528,6 @@ struct RefreshControlView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {}
-}
-
-// MARK: - Brand Product Page View
-struct BrandProductPageView: View {
-    let brandName: String
-    @EnvironmentObject var authViewModel: AuthViewModel
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // Brand products from RewardCatalog
-                ForEach(brandProducts, id: \.id) { reward in
-                    NavigationLink(destination: RewardDetailView(reward: reward)) {
-                        BrandProductCard(reward: reward)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-        }
-        .navigationTitle(brandName.capitalized)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private var brandProducts: [RewardCard] {
-        RewardCatalog.all.filter { $0.brandName.uppercased() == brandName.uppercased() }
-    }
-}
-
-struct BrandProductCard: View {
-    let reward: RewardCard
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(reward.imageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(reward.discount)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
-                    
-                    Text(reward.brandName)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(reward.points)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.primary)
-                    
-                    HStack(spacing: 2) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.orange)
-                        Text("XP")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .padding(16)
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-        }
-    }
 }
 
 #Preview {
