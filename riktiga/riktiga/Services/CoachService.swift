@@ -411,32 +411,46 @@ final class CoachService {
         struct InvitationData: Decodable {
             let coachId: String
             let clientId: String?
+            let status: String
             
             enum CodingKeys: String, CodingKey {
                 case coachId = "coach_id"
                 case clientId = "client_id"
+                case status
             }
         }
         
+        print("1️⃣ Fetching invitation...")
         let invitations: [InvitationData] = try await supabase
             .from("coach_client_invitations")
-            .select("coach_id, client_id")
+            .select("coach_id, client_id, status")
             .eq("id", value: invitationId)
             .execute()
             .value
         
-        guard let invitation = invitations.first, let clientId = invitation.clientId else {
+        guard let invitation = invitations.first else {
+            print("❌ Invitation not found in database")
             throw NSError(domain: "CoachService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Inbjudan hittades inte"])
         }
         
+        guard let clientId = invitation.clientId else {
+            print("❌ Client ID is missing from invitation")
+            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Klient-ID saknas"])
+        }
+        
+        print("   ✅ Found invitation: coach=\(invitation.coachId), client=\(clientId), status=\(invitation.status)")
+        
         // 2. Uppdatera inbjudan
+        print("2️⃣ Updating invitation status...")
         try await supabase
             .from("coach_client_invitations")
             .update(["status": "accepted"])
             .eq("id", value: invitationId)
             .execute()
+        print("   ✅ Invitation status updated to accepted")
         
         // 3. Skapa eller uppdatera coach-client relation
+        print("3️⃣ Creating coach-client relation...")
         do {
             try await supabase
                 .from("coach_clients")
@@ -446,17 +460,49 @@ final class CoachService {
                     "status": "active"
                 ])
                 .execute()
-        } catch {
-            // Om relationen redan finns, uppdatera den
-            try await supabase
-                .from("coach_clients")
-                .update(["status": "active"])
-                .eq("coach_id", value: invitation.coachId)
-                .eq("client_id", value: clientId)
-                .execute()
+            print("   ✅ Coach-client relation created!")
+        } catch let insertError {
+            print("   ⚠️ Insert failed: \(insertError)")
+            print("   🔄 Trying to update existing relation...")
+            
+            do {
+                try await supabase
+                    .from("coach_clients")
+                    .update(["status": "active"])
+                    .eq("coach_id", value: invitation.coachId)
+                    .eq("client_id", value: clientId)
+                    .execute()
+                print("   ✅ Existing relation updated to active")
+            } catch let updateError {
+                print("   ❌ Update also failed: \(updateError)")
+                throw updateError
+            }
         }
         
-        // 4. Markera notifikation som läst
+        // 4. Verifiera att relationen skapades
+        print("4️⃣ Verifying coach-client relation...")
+        let relations: [CoachClientRelation] = try await supabase
+            .from("coach_clients")
+            .select("""
+                id,
+                coach_id,
+                client_id,
+                status
+            """)
+            .eq("coach_id", value: invitation.coachId)
+            .eq("client_id", value: clientId)
+            .execute()
+            .value
+        
+        if relations.isEmpty {
+            print("   ❌ Relation not found after creation!")
+            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Kunde inte verifiera coach-relation"])
+        } else {
+            print("   ✅ Relation verified: \(relations.first!.id), status: \(relations.first!.status)")
+        }
+        
+        // 5. Markera notifikation som läst
+        print("5️⃣ Marking notification as read...")
         try await supabase
             .from("notifications")
             .update(["is_read": true])
@@ -464,8 +510,9 @@ final class CoachService {
             .eq("type", value: "coach_invitation")
             .eq("actor_id", value: invitation.coachId)
             .execute()
+        print("   ✅ Notification marked as read")
         
-        print("✅ Coach invitation accepted via direct database!")
+        print("🎉 Coach invitation accepted via direct database!")
     }
     
     /// Neka en coach-inbjudan via Edge Function
