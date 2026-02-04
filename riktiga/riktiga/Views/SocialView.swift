@@ -2665,7 +2665,7 @@ struct SocialPostCard: View {
                                         .foregroundColor(.primary)
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(alignment: .leading)
                             .padding(.vertical, 8)
                         }
                     } else {
@@ -2759,7 +2759,7 @@ struct SocialPostCard: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.primary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(alignment: .leading)
         .padding(.vertical, 8)
     }
     
