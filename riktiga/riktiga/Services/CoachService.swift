@@ -361,155 +361,80 @@ final class CoachService {
     
     // MARK: - Coach-inbjudan (coach_client_invitations table)
     
-    /// Acceptera en coach-inbjudan
+    /// Acceptera en coach-inbjudan via Edge Function
     func acceptCoachInvitation(invitationId: String) async throws {
-        print("🎯 Starting to accept coach invitation: \(invitationId)")
+        print("🎯 Accepting coach invitation via edge function: \(invitationId)")
         
-        // Hämta inbjudan för att få coach_id och client_id
-        struct InvitationData: Decodable {
-            let coachId: String
-            let clientId: String?
-            
-            enum CodingKeys: String, CodingKey {
-                case coachId = "coach_id"
-                case clientId = "client_id"
+        struct AcceptRequest: Encodable {
+            let invitationId: String
+        }
+        
+        struct AcceptResponse: Decodable {
+            let success: Bool
+            let message: String
+            let coachName: String?
+        }
+        
+        let request = AcceptRequest(invitationId: invitationId)
+        let requestData = try JSONEncoder().encode(request)
+        
+        let response = try await supabase.functions.invoke(
+            "accept-coach-invitation",
+            options: FunctionInvokeOptions(body: requestData)
+        )
+        
+        guard let responseData = response.data else {
+            print("❌ No response data from edge function")
+            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Inget svar från servern"])
+        }
+        
+        let result = try JSONDecoder().decode(AcceptResponse.self, from: responseData)
+        
+        if result.success {
+            print("✅ Coach invitation accepted successfully!")
+            if let coachName = result.coachName {
+                print("   🎉 Now connected to coach: \(coachName)")
             }
+        } else {
+            print("❌ Failed to accept invitation: \(result.message)")
+            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: result.message])
         }
-        
-        print("1️⃣ Fetching invitation data...")
-        let invitations: [InvitationData] = try await supabase
-            .from("coach_client_invitations")
-            .select("coach_id, client_id")
-            .eq("id", value: invitationId)
-            .execute()
-            .value
-        
-        guard let invitation = invitations.first else {
-            print("❌ Invitation not found in database")
-            throw NSError(domain: "CoachService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Inbjudan hittades inte"])
-        }
-        
-        guard let clientId = invitation.clientId else {
-            print("❌ Client ID is missing from invitation")
-            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Klient-ID saknas"])
-        }
-        
-        print("   ✅ Found invitation: coach=\(invitation.coachId), client=\(clientId)")
-        
-        // 1. Uppdatera inbjudan till accepted
-        print("2️⃣ Updating invitation status to 'accepted'...")
-        try await supabase
-            .from("coach_client_invitations")
-            .update(["status": "accepted"])
-            .eq("id", value: invitationId)
-            .execute()
-        print("   ✅ Invitation status updated")
-        
-        // 2. Skapa coach-client relation
-        print("3️⃣ Creating coach-client relation...")
-        do {
-            try await supabase
-                .from("coach_clients")
-                .insert([
-                    "coach_id": invitation.coachId,
-                    "client_id": clientId,
-                    "status": "active"
-                ])
-                .execute()
-            print("   ✅ Coach-client relation created")
-        } catch {
-            print("   ⚠️ Failed to create coach-client relation (may already exist): \(error)")
-            // Check if relation already exists (simplified check without joined data)
-            struct SimpleRelation: Decodable {
-                let id: String
-                let status: String
-            }
-            
-            let existing: [SimpleRelation] = try await supabase
-                .from("coach_clients")
-                .select("id, status")
-                .eq("coach_id", value: invitation.coachId)
-                .eq("client_id", value: clientId)
-                .execute()
-                .value
-            
-            if !existing.isEmpty {
-                print("   ℹ️ Coach-client relation already exists, updating status...")
-                try await supabase
-                    .from("coach_clients")
-                    .update(["status": "active"])
-                    .eq("coach_id", value: invitation.coachId)
-                    .eq("client_id", value: clientId)
-                    .execute()
-                print("   ✅ Existing relation updated to active")
-            } else {
-                throw error
-            }
-        }
-        
-        // 3. Markera relaterad notification som läst
-        print("4️⃣ Marking notification as read...")
-        try await supabase
-            .from("notifications")
-            .update(["is_read": true])
-            .eq("user_id", value: clientId)
-            .eq("type", value: "coach_invitation")
-            .eq("actor_id", value: invitation.coachId)
-            .execute()
-        print("   ✅ Notification marked as read")
-        
-        print("🎉 Successfully accepted coach invitation!")
     }
     
-    /// Neka en coach-inbjudan
+    /// Neka en coach-inbjudan via Edge Function
     func declineCoachInvitation(invitationId: String) async throws {
-        print("❌ Declining coach invitation: \(invitationId)")
+        print("❌ Declining coach invitation via edge function: \(invitationId)")
         
-        // Hämta inbjudan för att få coach_id och client_id
-        struct InvitationData: Decodable {
-            let coachId: String
-            let clientId: String?
-            
-            enum CodingKeys: String, CodingKey {
-                case coachId = "coach_id"
-                case clientId = "client_id"
-            }
+        struct DeclineRequest: Encodable {
+            let invitationId: String
         }
         
-        let invitations: [InvitationData] = try await supabase
-            .from("coach_client_invitations")
-            .select("coach_id, client_id")
-            .eq("id", value: invitationId)
-            .execute()
-            .value
-        
-        guard let invitation = invitations.first, let clientId = invitation.clientId else {
-            // Om vi inte kan hämta, uppdatera ändå statusen
-            try await supabase
-                .from("coach_client_invitations")
-                .update(["status": "rejected"])
-                .eq("id", value: invitationId)
-                .execute()
-            return
+        struct DeclineResponse: Decodable {
+            let success: Bool
+            let message: String
         }
         
-        // 1. Uppdatera inbjudan till rejected
-        try await supabase
-            .from("coach_client_invitations")
-            .update(["status": "rejected"])
-            .eq("id", value: invitationId)
-            .execute()
+        let request = DeclineRequest(invitationId: invitationId)
+        let requestData = try JSONEncoder().encode(request)
         
-        // 2. Ta bort relaterad notification
-        try await supabase
-            .from("notifications")
-            .delete()
-            .eq("user_id", value: clientId)
-            .eq("type", value: "coach_invitation")
-            .eq("actor_id", value: invitation.coachId)
-            .execute()
+        let response = try await supabase.functions.invoke(
+            "decline-coach-invitation",
+            options: FunctionInvokeOptions(body: requestData)
+        )
         
-        print("❌ Invitation rejected and notification deleted")
+        guard let responseData = response.data else {
+            print("❌ No response data from edge function")
+            throw NSError(domain: "CoachService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Inget svar från servern"])
+        }
+        
+        let result = try JSONDecoder().decode(DeclineResponse.self, from: responseData)
+        
+        if result.success {
+            print("✅ Coach invitation declined successfully!")
+        } else {
+            print("❌ Failed to decline invitation: \(result.message)")
+            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: result.message])
+        }
     }
     
     /// Hämta pending coach-inbjudningar från coach_client_invitations
