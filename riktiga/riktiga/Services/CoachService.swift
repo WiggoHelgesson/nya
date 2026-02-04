@@ -373,24 +373,100 @@ final class CoachService {
             let success: Bool
             let message: String
             let coachName: String?
+            let error: String?
         }
         
         let request = AcceptRequest(invitationId: invitationId)
         
-        let result: AcceptResponse = try await supabase.functions.invoke(
-            "accept-coach-invitation",
-            options: FunctionInvokeOptions(body: request)
-        )
-        
-        if result.success {
-            print("✅ Coach invitation accepted successfully!")
-            if let coachName = result.coachName {
-                print("   🎉 Now connected to coach: \(coachName)")
+        do {
+            let result: AcceptResponse = try await supabase.functions.invoke(
+                "accept-coach-invitation",
+                options: FunctionInvokeOptions(body: request)
+            )
+            
+            if result.success {
+                print("✅ Coach invitation accepted successfully!")
+                if let coachName = result.coachName {
+                    print("   🎉 Now connected to coach: \(coachName)")
+                }
+            } else {
+                let errorMsg = result.error ?? result.message
+                print("❌ Failed to accept invitation: \(errorMsg)")
+                throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: errorMsg])
             }
-        } else {
-            print("❌ Failed to accept invitation: \(result.message)")
-            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: result.message])
+        } catch {
+            print("❌ Edge function failed, trying direct database approach...")
+            print("   Error: \(error)")
+            
+            // Fallback: Använd direkta databasoperationer
+            try await acceptCoachInvitationDirect(invitationId: invitationId)
         }
+    }
+    
+    /// Fallback-metod: Acceptera inbjudan med direkta databasoperationer
+    private func acceptCoachInvitationDirect(invitationId: String) async throws {
+        print("🔄 Using direct database approach...")
+        
+        // 1. Hämta inbjudan
+        struct InvitationData: Decodable {
+            let coachId: String
+            let clientId: String?
+            
+            enum CodingKeys: String, CodingKey {
+                case coachId = "coach_id"
+                case clientId = "client_id"
+            }
+        }
+        
+        let invitations: [InvitationData] = try await supabase
+            .from("coach_client_invitations")
+            .select("coach_id, client_id")
+            .eq("id", value: invitationId)
+            .execute()
+            .value
+        
+        guard let invitation = invitations.first, let clientId = invitation.clientId else {
+            throw NSError(domain: "CoachService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Inbjudan hittades inte"])
+        }
+        
+        // 2. Uppdatera inbjudan
+        try await supabase
+            .from("coach_client_invitations")
+            .update(["status": "accepted"])
+            .eq("id", value: invitationId)
+            .execute()
+        
+        // 3. Skapa eller uppdatera coach-client relation
+        do {
+            try await supabase
+                .from("coach_clients")
+                .insert([
+                    "coach_id": invitation.coachId,
+                    "client_id": clientId,
+                    "status": "active"
+                ])
+                .execute()
+        } catch {
+            // Om relationen redan finns, uppdatera den
+            try await supabase
+                .from("coach_clients")
+                .update(["status": "active"])
+                .eq("coach_id", value: invitation.coachId)
+                .eq("client_id", value: clientId)
+                .execute()
+        }
+        
+        // 4. Markera notifikation som läst
+        try await supabase
+            .from("notifications")
+            .update(["is_read": true])
+            .eq("user_id", value: clientId)
+            .eq("type", value: "coach_invitation")
+            .eq("actor_id", value: invitation.coachId)
+            .execute()
+        
+        print("✅ Coach invitation accepted via direct database!")
+    }
     }
     
     /// Neka en coach-inbjudan via Edge Function
@@ -408,17 +484,67 @@ final class CoachService {
         
         let request = DeclineRequest(invitationId: invitationId)
         
-        let result: DeclineResponse = try await supabase.functions.invoke(
-            "decline-coach-invitation",
-            options: FunctionInvokeOptions(body: request)
-        )
-        
-        if result.success {
-            print("✅ Coach invitation declined successfully!")
-        } else {
-            print("❌ Failed to decline invitation: \(result.message)")
-            throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: result.message])
+        do {
+            let result: DeclineResponse = try await supabase.functions.invoke(
+                "decline-coach-invitation",
+                options: FunctionInvokeOptions(body: request)
+            )
+            
+            if result.success {
+                print("✅ Coach invitation declined successfully!")
+            } else {
+                print("❌ Failed to decline invitation: \(result.message)")
+                throw NSError(domain: "CoachService", code: 400, userInfo: [NSLocalizedDescriptionKey: result.message])
+            }
+        } catch {
+            print("❌ Edge function failed, trying direct database approach...")
+            
+            // Fallback: Använd direkta databasoperationer
+            try await declineCoachInvitationDirect(invitationId: invitationId)
         }
+    }
+    
+    /// Fallback-metod: Neka inbjudan med direkta databasoperationer
+    private func declineCoachInvitationDirect(invitationId: String) async throws {
+        print("🔄 Using direct database approach for decline...")
+        
+        // 1. Uppdatera inbjudan till rejected
+        try await supabase
+            .from("coach_client_invitations")
+            .update(["status": "rejected"])
+            .eq("id", value: invitationId)
+            .execute()
+        
+        // 2. Hämta inbjudan för att få client_id och coach_id
+        struct InvitationData: Decodable {
+            let coachId: String
+            let clientId: String?
+            
+            enum CodingKeys: String, CodingKey {
+                case coachId = "coach_id"
+                case clientId = "client_id"
+            }
+        }
+        
+        let invitations: [InvitationData] = try await supabase
+            .from("coach_client_invitations")
+            .select("coach_id, client_id")
+            .eq("id", value: invitationId)
+            .execute()
+            .value
+        
+        if let invitation = invitations.first, let clientId = invitation.clientId {
+            // 3. Radera notifikation
+            try await supabase
+                .from("notifications")
+                .delete()
+                .eq("user_id", value: clientId)
+                .eq("type", value: "coach_invitation")
+                .eq("actor_id", value: invitation.coachId)
+                .execute()
+        }
+        
+        print("✅ Coach invitation declined via direct database!")
     }
     
     /// Hämta pending coach-inbjudningar från coach_client_invitations
