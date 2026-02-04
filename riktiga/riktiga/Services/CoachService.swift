@@ -256,7 +256,6 @@ struct CoachClientRelation: Codable {
     let coachId: String
     let clientId: String
     let status: String
-    let startedAt: String
     let coach: CoachProfile?
     
     enum CodingKeys: String, CodingKey {
@@ -264,7 +263,6 @@ struct CoachClientRelation: Codable {
         case coachId = "coach_id"
         case clientId = "client_id"
         case status
-        case startedAt = "started_at"
         case coach
     }
 }
@@ -340,7 +338,6 @@ final class CoachService {
                 coach_id,
                 client_id,
                 status,
-                started_at,
                 coach:profiles!coach_id (
                     id,
                     username,
@@ -411,14 +408,12 @@ final class CoachService {
         // 2. Skapa coach-client relation
         print("3️⃣ Creating coach-client relation...")
         do {
-            let now = ISO8601DateFormatter().string(from: Date())
             try await supabase
                 .from("coach_clients")
                 .insert([
                     "coach_id": invitation.coachId,
                     "client_id": clientId,
-                    "status": "active",
-                    "started_at": now
+                    "status": "active"
                 ])
                 .execute()
             print("   ✅ Coach-client relation created")
@@ -556,7 +551,7 @@ final class CoachService {
         
         try await supabase
             .from("coach_clients")
-            .update(["status": "ended", "ended_at": ISO8601DateFormatter().string(from: Date())])
+            .update(["status": "ended"])
             .eq("id", value: relationId)
             .execute()
         
