@@ -5571,11 +5571,11 @@ struct BrandProductCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(reward.title)
+                    Text(reward.discount)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
                     
-                    Text(reward.description)
+                    Text(reward.brandName)
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .lineLimit(2)
@@ -5584,8 +5584,8 @@ struct BrandProductCard: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(reward.cost)")
-                        .font(.system(size: 18, weight: .bold))
+                    Text(reward.points)
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 2) {
