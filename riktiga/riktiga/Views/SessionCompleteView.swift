@@ -1495,6 +1495,9 @@ struct SessionCompleteView: View {
             // Get current streak for achievement banner
             let currentStreak = StreakManager.shared.currentStreak
             
+            // Get detected gym name for gym sessions
+            let gymLocation: String? = activity.rawValue == "Gympass" ? GymLocationManager.shared.getCurrentGymName() : nil
+            
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
                 activityType: activity.rawValue,
@@ -1511,7 +1514,8 @@ struct SessionCompleteView: View {
                 routeData: routeDataJson,
                 pbExerciseName: hasPB ? pbExerciseName : nil,
                 pbValue: hasPB ? pbValue : nil,
-                streakCount: currentStreak > 0 ? currentStreak : nil
+                streakCount: currentStreak > 0 ? currentStreak : nil,
+                location: gymLocation
             )
             
             do {

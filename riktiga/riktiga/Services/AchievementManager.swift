@@ -53,42 +53,48 @@ class AchievementManager: ObservableObject {
     
     // MARK: - Unlock Achievement
     func unlock(_ achievementId: String) {
+        // DISABLED: Achievements are turned off
+        return
+        
         // Check if already unlocked
-        guard !isUnlocked(achievementId) else {
-            print("⚠️ Achievement \(achievementId) already unlocked")
-            return
-        }
-        
-        // Find the achievement
-        guard var achievement = Achievement.getAchievement(id: achievementId) else {
-            print("❌ Achievement \(achievementId) not found")
-            return
-        }
-        
-        // Set unlock date
-        achievement.unlockedAt = Date()
-        
-        // Add to unlocked list
-        unlockedAchievements.append(achievement)
-        saveUnlockedAchievements()
-        
-        print("🏆 Achievement unlocked: \(achievement.name)")
-        
-        // Show the achievement popup
-        DispatchQueue.main.async {
-            self.showAchievement(achievement)
-        }
+        // guard !isUnlocked(achievementId) else {
+        //     print("⚠️ Achievement \(achievementId) already unlocked")
+        //     return
+        // }
+        // 
+        // // Find the achievement
+        // guard var achievement = Achievement.getAchievement(id: achievementId) else {
+        //     print("❌ Achievement \(achievementId) not found")
+        //     return
+        // }
+        // 
+        // // Set unlock date
+        // achievement.unlockedAt = Date()
+        // 
+        // // Add to unlocked list
+        // unlockedAchievements.append(achievement)
+        // saveUnlockedAchievements()
+        // 
+        // print("🏆 Achievement unlocked: \(achievement.name)")
+        // 
+        // // Show the achievement popup
+        // DispatchQueue.main.async {
+        //     self.showAchievement(achievement)
+        // }
     }
     
     // MARK: - Show Achievement Popup
     func showAchievement(_ achievement: Achievement) {
-        // Trigger strong haptic feedback
-        triggerAchievementHaptic()
+        // DISABLED: Achievement popups are turned off
+        return
         
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-            currentlyShowingAchievement = achievement
-            showAchievementPopup = true
-        }
+        // Trigger strong haptic feedback
+        // triggerAchievementHaptic()
+        
+        // withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+        //     currentlyShowingAchievement = achievement
+        //     showAchievementPopup = true
+        // }
     }
     
     // MARK: - Dismiss Achievement Popup

@@ -21,6 +21,7 @@ struct WorkoutPost: Codable, Identifiable {
     let streakCount: Int?  // User's streak when post was created
     let source: String?  // "app", "garmin", "fitbit", etc.
     let deviceName: String?  // "Garmin Forerunner 265", etc.
+    let location: String?  // Gym name or location (e.g., "Nordic Wellness Lund")
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -43,6 +44,7 @@ struct WorkoutPost: Codable, Identifiable {
         case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
+        case location
     }
     
     init(from decoder: Decoder) throws {
@@ -67,6 +69,7 @@ struct WorkoutPost: Codable, Identifiable {
         streakCount = try container.decodeIfPresent(Int.self, forKey: .streakCount)
         source = try container.decodeIfPresent(String.self, forKey: .source)
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
     }
     
     init(id: String = UUID().uuidString,
@@ -87,7 +90,8 @@ struct WorkoutPost: Codable, Identifiable {
          pbValue: String? = nil,
          streakCount: Int? = nil,
          source: String? = "app",
-         deviceName: String? = nil) {
+         deviceName: String? = nil,
+         location: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -108,6 +112,7 @@ struct WorkoutPost: Codable, Identifiable {
         self.streakCount = streakCount
         self.source = source
         self.deviceName = deviceName
+        self.location = location
     }
     
     func encode(to encoder: Encoder) throws {
@@ -132,6 +137,7 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(streakCount, forKey: .streakCount)
         try container.encodeIfPresent(source, forKey: .source)
         try container.encodeIfPresent(deviceName, forKey: .deviceName)
+        try container.encodeIfPresent(location, forKey: .location)
     }
 }
 

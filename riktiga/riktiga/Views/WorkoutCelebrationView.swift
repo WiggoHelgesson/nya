@@ -27,12 +27,6 @@ struct WorkoutCelebrationView: View {
     private var templates: [ShareCardTemplate] {
         var list: [ShareCardTemplate] = [.stats, .compact]
         
-        // Only show streak card if user has an actual streak (2+ consecutive days)
-        let streakDays = insightsLoader.insights.streakInfo.currentStreak
-        if streakDays >= 2 {
-            list.append(.streak)
-        }
-        
         list.append(.calendar)
         
         if (post.exercises?.isEmpty == false) {

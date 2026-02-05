@@ -12,6 +12,7 @@ struct XpCelebrationData: Identifiable {
 
 struct StartSessionView: View {
     private let initialActivity: ActivityType?
+    private let coachWorkout: SavedGymWorkout?
     @State private var showActivitySelection: Bool
     @State private var selectedActivityType: ActivityType?
     @State private var carouselSelection: ActivityType = .walking
@@ -21,11 +22,12 @@ struct StartSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authViewModel: AuthViewModel
     
-    init(initialActivity: ActivityType? = nil) {
+    init(initialActivity: ActivityType? = nil, coachWorkout: SavedGymWorkout? = nil) {
         self.initialActivity = initialActivity
-        _showActivitySelection = State(initialValue: initialActivity == nil)
-        _selectedActivityType = State(initialValue: initialActivity)
-        _forceNewSession = State(initialValue: initialActivity != nil)
+        self.coachWorkout = coachWorkout
+        _showActivitySelection = State(initialValue: initialActivity == nil && coachWorkout == nil)
+        _selectedActivityType = State(initialValue: initialActivity ?? (coachWorkout != nil ? .walking : nil))
+        _forceNewSession = State(initialValue: initialActivity != nil || coachWorkout != nil)
     }
     
     var body: some View {
@@ -53,7 +55,7 @@ struct StartSessionView: View {
             } else if let activity = selectedActivityType {
                 // Check if gym session
                 if activity == .walking {
-                    GymSessionView()
+                    GymSessionView(initialCoachWorkout: coachWorkout)
                 } else {
                     SessionMapView(activity: activity, isPresented: $showActivitySelection, resumeSession: false, forceNewSession: $forceNewSession, autoStart: forceNewSession)
                 }
@@ -1363,6 +1365,13 @@ struct SessionMapView: View {
             // Auto-save session state every 5 seconds to prevent data loss
             if Int(sessionDuration) % 5 == 0 {
                 saveSessionState()
+            }
+            
+            // Ping the active session every 2 minutes to keep it alive
+            if Int(sessionDuration) % 120 == 0, let userId = authViewModel.currentUser?.id {
+                Task {
+                    try? await ActiveSessionService.shared.pingSession(userId: userId)
+                }
             }
             
             updateSplitsIfNeeded()

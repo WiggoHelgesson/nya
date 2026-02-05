@@ -72,13 +72,11 @@ class ExercisePopularityService {
         }
         
         do {
-            let params = GetPopularExercisesParams(
-                p_body_part: bodyPart ?? "all",
-                p_limit: limit
-            )
-            
             let exercises: [PopularExerciseResponse] = try await supabase
-                .rpc("get_popular_exercises", params: params)
+                .rpc("get_popular_exercises", params: [
+                    "p_body_part": AnyJSON.string(bodyPart ?? "all"),
+                    "p_limit": AnyJSON.integer(limit)
+                ])
                 .execute()
                 .value
             
@@ -150,8 +148,3 @@ struct PopularExerciseResponse: Codable {
     let usage_count: Int
 }
 
-// RPC parameter structs
-struct GetPopularExercisesParams: Encodable {
-    let p_body_part: String
-    let p_limit: Int
-}

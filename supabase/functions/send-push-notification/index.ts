@@ -7,9 +7,9 @@ const corsHeaders = {
 }
 
 // APNs Configuration - Set these in Supabase Dashboard > Edge Functions > Secrets
-const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')!
-const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')!
-const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')! // Your existing secret
+const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')
+const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')
+const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')
 const BUNDLE_ID = 'roboreabapp.productions'
 
 interface PushPayload {
@@ -20,6 +20,19 @@ interface PushPayload {
 }
 
 async function createJWT(): Promise<string> {
+  // Validate environment variables
+  if (!APNS_KEY_ID) {
+    throw new Error('APNS_KEY_ID is not set')
+  }
+  if (!APNS_TEAM_ID) {
+    throw new Error('APNS_TEAM_ID is not set')
+  }
+  if (!APNS_PRIVATE_KEY) {
+    throw new Error('APNS_P8_KEY is not set')
+  }
+
+  console.log('🔑 Creating JWT with Key ID:', APNS_KEY_ID, 'Team ID:', APNS_TEAM_ID)
+
   const header = {
     alg: 'ES256',
     kid: APNS_KEY_ID,
@@ -31,42 +44,62 @@ async function createJWT(): Promise<string> {
     iat: now,
   }
   
-  // Import the private key
-  const pemContents = APNS_PRIVATE_KEY
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s/g, '')
+  // Import the private key - handle various formats
+  let pemContents = APNS_PRIVATE_KEY
+    // Remove PEM headers/footers
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    // Handle literal \n characters (stored as string in env vars)
+    .replace(/\\n/g, '')
+    // Remove actual newlines and whitespace
+    .replace(/[\r\n\s]/g, '')
   
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+  console.log('🔑 PEM contents length after cleanup:', pemContents.length)
   
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    binaryKey,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign']
-  )
+  if (pemContents.length < 100) {
+    throw new Error(`Private key seems too short (${pemContents.length} chars). Check APNS_P8_KEY format.`)
+  }
   
-  // Create JWT
-  const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-  const claimsB64 = btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-  const message = `${headerB64}.${claimsB64}`
-  
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    key,
-    new TextEncoder().encode(message)
-  )
-  
-  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-  
-  return `${message}.${signatureB64}`
+  try {
+    const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+    console.log('🔑 Binary key length:', binaryKey.length)
+    
+    const key = await crypto.subtle.importKey(
+      'pkcs8',
+      binaryKey,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['sign']
+    )
+    
+    // Create JWT
+    const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const claimsB64 = btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    const message = `${headerB64}.${claimsB64}`
+    
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      key,
+      new TextEncoder().encode(message)
+    )
+    
+    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    
+    console.log('✅ JWT created successfully')
+    return `${message}.${signatureB64}`
+  } catch (keyError) {
+    console.error('❌ Failed to import/sign with key:', keyError)
+    throw new Error(`Key import failed: ${keyError.message}`)
+  }
 }
 
 async function sendAPNS(deviceToken: string, title: string, body: string, data?: Record<string, string>): Promise<boolean> {
   try {
+    console.log('📤 sendAPNS starting for token:', deviceToken.substring(0, 20) + '...')
+    
     const jwt = await createJWT()
+    console.log('✅ JWT created, length:', jwt.length)
     
     // Check if we have an avatar to attach (triggers Notification Service Extension)
     const hasAvatar = data?.actor_avatar && data.actor_avatar.length > 0
@@ -86,6 +119,8 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       ...data,
     }
     
+    console.log('📦 Payload:', JSON.stringify(payload).substring(0, 200))
+    
     // Try production first, then sandbox if it fails
     // Production APNs URL (App Store builds)
     const productionUrl = `https://api.push.apple.com/3/device/${deviceToken}`
@@ -99,6 +134,8 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       'apns-priority': '10',
     }
     
+    console.log('🌐 Trying production APNs...')
+    
     // Try production first
     let response = await fetch(productionUrl, {
       method: 'POST',
@@ -106,9 +143,13 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       body: JSON.stringify(payload),
     })
     
+    console.log('📡 Production response status:', response.status)
+    
     if (!response.ok) {
       const prodError = await response.text()
-      console.log('Production APNs failed, trying sandbox...', prodError)
+      console.log('⚠️ Production APNs failed:', response.status, prodError)
+      
+      console.log('🌐 Trying sandbox APNs...')
       
       // Try sandbox as fallback (for development builds)
       response = await fetch(sandboxUrl, {
@@ -117,20 +158,23 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
         body: JSON.stringify(payload),
       })
       
+      console.log('📡 Sandbox response status:', response.status)
+      
       if (!response.ok) {
         const sandboxError = await response.text()
-        console.error('Both APNs endpoints failed. Sandbox error:', sandboxError)
+        console.error('❌ Both APNs endpoints failed. Sandbox error:', response.status, sandboxError)
         return false
       }
       
-      console.log('Sandbox APNs succeeded!')
+      console.log('✅ Sandbox APNs succeeded!')
     } else {
-      console.log('Production APNs succeeded!')
+      console.log('✅ Production APNs succeeded!')
     }
     
     return true
   } catch (error) {
-    console.error('Failed to send APNS:', error)
+    console.error('❌ Failed to send APNS:', error)
+    console.error('❌ Error stack:', error.stack)
     return false
   }
 }
@@ -139,6 +183,27 @@ serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Early validation of APNs configuration
+  const missingSecrets: string[] = []
+  if (!APNS_KEY_ID) missingSecrets.push('APNS_KEY_ID')
+  if (!APNS_TEAM_ID) missingSecrets.push('APNS_TEAM_ID')
+  if (!APNS_PRIVATE_KEY) missingSecrets.push('APNS_P8_KEY')
+  
+  if (missingSecrets.length > 0) {
+    console.error('❌ Missing APNs secrets:', missingSecrets.join(', '))
+    console.log('Available env vars:', Object.keys(Deno.env.toObject()).filter(k => k.includes('APNS') || k.includes('P8')))
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: `Missing APNs configuration: ${missingSecrets.join(', ')}` 
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
   }
 
   try {
@@ -150,6 +215,7 @@ serve(async (req) => {
     const { user_id, title, body, data } = await req.json() as PushPayload
 
     console.log(`📱 Sending push to user: ${user_id}, title: ${title}`)
+    console.log(`🔑 APNs config: KEY_ID=${APNS_KEY_ID?.substring(0,4)}..., TEAM_ID=${APNS_TEAM_ID?.substring(0,4)}..., KEY_LENGTH=${APNS_PRIVATE_KEY?.length}`)
     
     // Get device tokens for the user
     const { data: tokens, error } = await supabaseClient
@@ -194,9 +260,14 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error:', error)
+    console.error('❌ Edge function error:', error)
+    console.error('❌ Error stack:', error.stack)
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        details: error.stack?.substring(0, 500) 
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

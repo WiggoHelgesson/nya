@@ -26,11 +26,14 @@ struct GymSessionView: View {
     @State private var showMissingInfoAlert = false
     @State private var showFinishConfirmation = false
     @State private var navigateToExercisePicker = false
-    
     // Cheer notification state
     @State private var showCheerNotification = false
     @State private var cheerEmoji: String = ""
     @State private var cheerFromUsername: String = ""
+    
+    // Coach workout - pre-load exercises from coach's routine
+    var initialCoachWorkout: SavedGymWorkout?
+    @State private var didLoadCoachWorkout = false
     
     private var durationVolumeHeader: some View {
         VStack(spacing: 12) {
@@ -123,23 +126,23 @@ struct GymSessionView: View {
     private var emptyStateBottomButtons: some View {
             VStack(spacing: 12) {
             // Saved workouts button
-                Button(action: {
+            Button(action: {
                 let generator = UIImpactFeedbackGenerator(style: .light)
                 generator.impactOccurred()
                 showWorkoutLibrary = true
-                }) {
-                    HStack {
+            }) {
+                HStack {
                     Image(systemName: "folder.fill")
-                            .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                     Text("Sparade pass")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
+                        .font(.system(size: 15, weight: .semibold))
                 }
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+            }
                 
             // Start running session button
             Button(action: {
@@ -694,6 +697,13 @@ extension GymSessionView {
         viewModel.startTimer(startTime: now)
         lastPersistedElapsedSeconds = 0
         persistSession(force: true)
+        
+        // Load coach workout if provided
+        if let coachWorkout = initialCoachWorkout, !didLoadCoachWorkout {
+            didLoadCoachWorkout = true
+            print("🏋️ Loading coach workout: \(coachWorkout.name) with \(coachWorkout.exercises.count) exercises")
+            viewModel.loadWorkout(coachWorkout)
+        }
         
         // Track gym location for smart reminders
         GymLocationManager.shared.gymSessionStarted()

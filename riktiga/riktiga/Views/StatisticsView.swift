@@ -43,7 +43,6 @@ struct StatisticsView: View {
     @State private var showChart = false
     @State private var showMonthly = false
     @State private var showCalendar = false
-    @State private var showBMI = false
     @State private var showProgressive = false
     @State private var show1RMPredictions = false
     @State private var showMuscleBalance = false
@@ -51,11 +50,6 @@ struct StatisticsView: View {
     @State private var showSkeleton = true
     @State private var showProgressPhotos = false
 
-    // BMI state
-    @State private var userHeightCm: Int? = nil
-    @State private var userWeightKg: Double? = nil
-    @State private var showBMIInfo = false
-    
     // Chart animation states
     @State private var chartLineTrim: CGFloat = 0
     @State private var chartAreaOpacity: Double = 0
@@ -90,22 +84,6 @@ struct StatisticsView: View {
                         .opacity(showMonthly ? 1 : 0)
                         .offset(y: showMonthly ? 0 : 25)
                         .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
-                    
-                    // MARK: - BMI Section
-                    Divider()
-                        .padding(.vertical, 24)
-                        .opacity(showBMI ? 1 : 0)
-                    
-                    Group {
-                        if userHeightCm != nil && userWeightKg != nil {
-                            bmiSection
-                        } else if !isLoading {
-                            bmiMissingDataSection
-                        }
-                    }
-                    .opacity(showBMI ? 1 : 0)
-                    .offset(y: showBMI ? 0 : 25)
-                    .scaleEffect(showBMI ? 1 : 0.95, anchor: .top)
                     
                     // MARK: - Sport Type Filter
                     sportTypeFilter
@@ -204,7 +182,6 @@ struct StatisticsView: View {
         showWeekStats = true
         showChart = true
         showCalendar = true
-        showBMI = true
         showProgressPhotos = true
         showProgressive = true
         showMonthly = true
@@ -533,197 +510,6 @@ struct StatisticsView: View {
     }
     
     // MARK: - BMI Section
-    private var bmiSection: some View {
-        let heightM = Double(userHeightCm ?? 170) / 100.0
-        let weight = userWeightKg ?? 70.0
-        let bmi = weight / (heightM * heightM)
-        
-        // Determine BMI category
-        let category: (name: String, color: Color) = {
-            if bmi < 18.5 {
-                return ("Underviktig", Color(red: 0.4, green: 0.6, blue: 0.9))
-            } else if bmi < 25.0 {
-                return ("Hälsosam", Color(red: 0.3, green: 0.7, blue: 0.5))
-            } else if bmi < 30.0 {
-                return ("Överviktig", Color(red: 0.85, green: 0.7, blue: 0.3))
-            } else {
-                return ("Fetma", Color(red: 0.9, green: 0.4, blue: 0.4))
-            }
-        }()
-        
-        // Calculate indicator position (BMI range 15-35 mapped to 0-1)
-        let indicatorPosition: CGFloat = {
-            let clampedBMI = min(max(bmi, 15.0), 35.0)
-            return CGFloat((clampedBMI - 15.0) / 20.0)
-        }()
-        
-        return VStack(alignment: .leading, spacing: 20) {
-            // Header
-            HStack {
-                Text("Ditt BMI")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button {
-                    showBMIInfo = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            // BMI Value and Category
-            HStack(alignment: .center, spacing: 16) {
-                Text(String(format: "%.1f", bmi))
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                HStack(spacing: 8) {
-                    Text("Din vikt är")
-                        .font(.system(size: 15))
-                        .foregroundColor(.secondary)
-                    
-                    Text(category.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(category.color)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(category.color, lineWidth: 1.5)
-                        )
-                }
-            }
-            
-            // BMI Bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background bar with segments
-                    HStack(spacing: 0) {
-                        // Underweight (blue) - 0 to 18.5
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(red: 0.4, green: 0.6, blue: 0.9))
-                            .frame(width: geometry.size.width * 0.175)
-                        
-                        // Healthy (green) - 18.5 to 25
-                        Rectangle()
-                            .fill(Color(red: 0.3, green: 0.7, blue: 0.5))
-                            .frame(width: geometry.size.width * 0.325)
-                        
-                        // Overweight (yellow) - 25 to 30
-                        Rectangle()
-                            .fill(Color(red: 0.85, green: 0.7, blue: 0.3))
-                            .frame(width: geometry.size.width * 0.25)
-                        
-                        // Obese (red) - 30+
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(red: 0.9, green: 0.4, blue: 0.4))
-                            .frame(width: geometry.size.width * 0.25)
-                    }
-                    .frame(height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    
-                    // Indicator
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.primary)
-                        .frame(width: 4, height: 32)
-                        .offset(x: geometry.size.width * indicatorPosition - 2)
-                }
-            }
-            .frame(height: 32)
-            
-            // Legend
-            HStack(spacing: 0) {
-                BMILegendItem(color: Color(red: 0.4, green: 0.6, blue: 0.9), label: "Underviktig", range: "<18.5")
-                Spacer()
-                BMILegendItem(color: Color(red: 0.3, green: 0.7, blue: 0.5), label: "Hälsosam", range: "18.5–24.9")
-                Spacer()
-                BMILegendItem(color: Color(red: 0.85, green: 0.7, blue: 0.3), label: "Överviktig", range: "25.0–29.9")
-                Spacer()
-                BMILegendItem(color: Color(red: 0.9, green: 0.4, blue: 0.4), label: "Fetma", range: ">30.0")
-            }
-        }
-        .padding(20)
-        .background(Color(.systemBackground))
-        .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
-        .padding(.horizontal, 20)
-        .alert("Vad är BMI?", isPresented: $showBMIInfo) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("BMI (Body Mass Index) är ett mått som relaterar din vikt till din längd. Det används för att ge en indikation på om din vikt är hälsosam, men tar inte hänsyn till muskelmassa, benstomme eller kroppssammansättning.")
-        }
-    }
-    
-    // MARK: - BMI Missing Data Section
-    private var bmiMissingDataSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Header
-            HStack {
-                Text("Ditt BMI")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button {
-                    showBMIInfo = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            // Missing data prompt
-            VStack(spacing: 16) {
-                Image(systemName: "scalemass.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(.gray.opacity(0.5))
-                
-                Text("Lägg till din längd och vikt")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
-                
-                Text("Gå till din profil och fyll i din längd och vikt för att se ditt BMI.")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("Gå till inställningar")
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.black)
-                    .cornerRadius(12)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-        }
-        .padding(20)
-        .background(Color(.systemBackground))
-        .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
-        .padding(.horizontal, 20)
-        .alert("Vad är BMI?", isPresented: $showBMIInfo) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("BMI (Body Mass Index) är ett mått som relaterar din vikt till din längd. Det används för att ge en indikation på om din vikt är hälsosam, men tar inte hänsyn till muskelmassa, benstomme eller kroppssammansättning.")
-        }
-    }
-    
     // MARK: - Progressive Overload Section
     private var progressiveOverloadSection: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1326,9 +1112,6 @@ struct StatisticsView: View {
             // Load workout posts
             let posts = try await WorkoutService.shared.getUserWorkoutPosts(userId: userId, forceRefresh: true)
             
-            // Load BMI data (height and weight) from profiles
-            await loadBMIData(userId: userId)
-            
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     self.allPosts = posts
@@ -1346,32 +1129,6 @@ struct StatisticsView: View {
             await MainActor.run {
                 isLoading = false
             }
-        }
-    }
-    
-    private func loadBMIData(userId: String) async {
-        do {
-            struct ProfileBMI: Decodable {
-                let height_cm: Int?
-                let weight_kg: Double?
-            }
-            
-            let profiles: [ProfileBMI] = try await SupabaseConfig.supabase
-                .from("profiles")
-                .select("height_cm, weight_kg")
-                .eq("id", value: userId)
-                .execute()
-                .value
-            
-            if let profile = profiles.first {
-                await MainActor.run {
-                    self.userHeightCm = profile.height_cm
-                    self.userWeightKg = profile.weight_kg
-                    print("📊 BMI data loaded: height=\(profile.height_cm ?? 0)cm, weight=\(profile.weight_kg ?? 0)kg")
-                }
-            }
-        } catch {
-            print("⚠️ Error loading BMI data: \(error)")
         }
     }
     
@@ -5470,32 +5227,6 @@ private struct StatSkeletonPill: View {
             }
     }
 }
-
-// MARK: - BMI Legend Item
-private struct BMILegendItem: View {
-    let color: Color
-    let label: String
-    let range: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 8, height: 8)
-                
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
-            }
-            
-            Text(range)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
 
 #Preview {
     NavigationStack {

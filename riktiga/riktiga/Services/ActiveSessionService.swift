@@ -145,6 +145,22 @@ final class ActiveSessionService {
             .execute()
     }
     
+    /// Keep the session alive by updating the updated_at timestamp
+    /// Call this periodically (every 5-10 minutes) during an active session
+    func pingSession(userId: String) async throws {
+        let updateData = SessionPing(
+            updatedAt: ISO8601DateFormatter().string(from: Date())
+        )
+        
+        try await supabase
+            .from("active_sessions")
+            .update(updateData)
+            .eq("user_id", value: userId)
+            .execute()
+        
+        print("📡 Pinged active session for user \(userId)")
+    }
+    
     private struct LocationUpdate: Encodable {
         let latitude: Double
         let longitude: Double
@@ -153,6 +169,14 @@ final class ActiveSessionService {
         enum CodingKeys: String, CodingKey {
             case latitude
             case longitude
+            case updatedAt = "updated_at"
+        }
+    }
+    
+    private struct SessionPing: Encodable {
+        let updatedAt: String
+        
+        enum CodingKeys: String, CodingKey {
             case updatedAt = "updated_at"
         }
     }
@@ -353,27 +377,74 @@ final class ActiveSessionService {
         }
         
         // Then fetch active sessions for those users
-        print("🔍 [ActiveFriends] Checking for active sessions from \(followingIds.count) followed users...")
+        // Only fetch sessions started within last 12 hours to filter out stale sessions
+        let maxSessionAge: TimeInterval = 12 * 60 * 60 // 12 hours
+        let cutoffDate = Date().addingTimeInterval(-maxSessionAge)
+        let cutoffDateString = ISO8601DateFormatter().string(from: cutoffDate)
+        
+        print("🔍 [ActiveFriends] Checking for active sessions from \(followingIds.count) followed users (since \(cutoffDateString))...")
         
         let sessionsResponse = try await supabase
             .from("active_sessions")
-            .select("id, user_id, activity_type, started_at, latitude, longitude, is_active")
+            .select("id, user_id, activity_type, started_at, latitude, longitude, is_active, updated_at")
             .in("user_id", values: followingIds)
             .eq("is_active", value: true)
+            .gte("started_at", value: cutoffDateString)
             .execute()
         
         let rawJson = String(data: sessionsResponse.data, encoding: .utf8) ?? "nil"
         print("📄 [ActiveFriends] Raw sessions response: \(rawJson)")
         
-        let sessions = try JSONDecoder().decode([ActiveSessionBasic].self, from: sessionsResponse.data)
+        let sessions = try JSONDecoder().decode([ActiveSessionWithUpdate].self, from: sessionsResponse.data)
         print("✅ [ActiveFriends] Found \(sessions.count) active sessions from friends")
         
-        for session in sessions {
-            print("  👤 Session: user=\(session.userId), type=\(session.activityType), started=\(session.startedAt)")
+        // Additional filter: exclude sessions that haven't been updated in the last 30 minutes
+        // This helps catch sessions where the app crashed/was force closed
+        let staleThreshold: TimeInterval = 30 * 60 // 30 minutes
+        let staleDate = Date().addingTimeInterval(-staleThreshold)
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let recentSessions = sessions.filter { session in
+            // Check updated_at if available, otherwise use started_at
+            let lastUpdateString = session.updatedAt ?? session.startedAt
+            
+            // Try parsing with fractional seconds first, then without
+            var lastUpdate = isoFormatter.date(from: lastUpdateString)
+            if lastUpdate == nil {
+                isoFormatter.formatOptions = [.withInternetDateTime]
+                lastUpdate = isoFormatter.date(from: lastUpdateString)
+            }
+            
+            guard let updateDate = lastUpdate else {
+                print("  ⚠️ Could not parse date for session: \(session.userId)")
+                return false
+            }
+            
+            // Session is stale if it hasn't been updated in 30+ minutes AND started over 30 min ago
+            let sessionStart = isoFormatter.date(from: session.startedAt) ?? Date()
+            let sessionAge = Date().timeIntervalSince(sessionStart)
+            
+            // If session just started (< 30 min), always include it
+            if sessionAge < staleThreshold {
+                print("  ✅ Session \(session.userId): New session (\(Int(sessionAge/60)) min old)")
+                return true
+            }
+            
+            // For older sessions, require recent update
+            let isRecent = updateDate > staleDate
+            if !isRecent {
+                print("  ⏰ Session \(session.userId): Stale - last update was \(Int(Date().timeIntervalSince(updateDate)/60)) min ago")
+            } else {
+                print("  ✅ Session \(session.userId): Active - updated \(Int(Date().timeIntervalSince(updateDate)/60)) min ago")
+            }
+            return isRecent
         }
         
+        print("📋 [ActiveFriends] After staleness filter: \(recentSessions.count) sessions")
+        
         // Now fetch the profile info for each user
-        let userIds = sessions.map { $0.userId }
+        let userIds = recentSessions.map { $0.userId }
         guard !userIds.isEmpty else { return [] }
         
         let profilesResponse = try await supabase
@@ -385,18 +456,46 @@ final class ActiveSessionService {
         let profiles = try JSONDecoder().decode([ActiveSessionProfileInfo].self, from: profilesResponse.data)
         let profileMap: [String: ActiveSessionProfileInfo] = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
         
-        return sessions.compactMap { session -> ActiveFriendSession? in
+        return recentSessions.compactMap { session -> ActiveFriendSession? in
             guard let profile = profileMap[session.userId] else { return nil }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var startDate = formatter.date(from: session.startedAt)
+            if startDate == nil {
+                formatter.formatOptions = [.withInternetDateTime]
+                startDate = formatter.date(from: session.startedAt)
+            }
+            
             return ActiveFriendSession(
                 id: session.id,
                 oderId: session.userId,
                 userName: profile.username ?? "Användare",
                 avatarUrl: profile.avatarUrl,
                 activityType: session.activityType,
-                startedAt: ISO8601DateFormatter().date(from: session.startedAt) ?? Date(),
+                startedAt: startDate ?? Date(),
                 latitude: session.latitude,
                 longitude: session.longitude
             )
+        }
+    }
+    
+    /// Cleanup stale sessions from database (sessions older than 12 hours)
+    /// Call this periodically to keep the database clean
+    func cleanupStaleSessions() async {
+        let maxAge: TimeInterval = 12 * 60 * 60 // 12 hours
+        let cutoffDate = Date().addingTimeInterval(-maxAge)
+        let cutoffDateString = ISO8601DateFormatter().string(from: cutoffDate)
+        
+        do {
+            try await supabase
+                .from("active_sessions")
+                .delete()
+                .lt("started_at", value: cutoffDateString)
+                .execute()
+            
+            print("🧹 Cleaned up stale active sessions older than 12 hours")
+        } catch {
+            print("⚠️ Failed to cleanup stale sessions: \(error)")
         }
     }
 }

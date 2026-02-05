@@ -298,7 +298,8 @@ class WorkoutService {
             routeData: post.routeData,
             pbExerciseName: post.pbExerciseName,
             pbValue: post.pbValue,
-            streakCount: post.streakCount
+            streakCount: post.streakCount,
+            location: post.location
         )
         
         do {
@@ -365,6 +366,12 @@ class WorkoutService {
             // Save streak count for achievement banners
             if let streakCount = postToSave.streakCount {
                 minimalPost["streak_count"] = DynamicEncodable(streakCount)
+            }
+            
+            // Save gym location name
+            if let location = postToSave.location, !location.isEmpty {
+                minimalPost["location"] = DynamicEncodable(location)
+                print("📍 Saving post with gym location: \(location)")
             }
             
             try await supabase

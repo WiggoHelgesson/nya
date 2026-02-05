@@ -525,6 +525,7 @@ class NotificationNavigationManager: ObservableObject {
     @Published var shouldNavigateToPost: String? = nil
     @Published var shouldNavigateToActiveFriends = false
     @Published var shouldNavigateToSharedWorkouts = false
+    @Published var shouldNavigateToNotifications = false
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -562,11 +563,24 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToNotifications() {
+        DispatchQueue.main.async {
+            // Navigate to social tab first (where notifications bell is)
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+            // Then open notifications view after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("OpenNotifications"), object: nil)
+            }
+            self.shouldNavigateToNotifications = true
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
         shouldNavigateToActiveFriends = false
         shouldNavigateToSharedWorkouts = false
+        shouldNavigateToNotifications = false
     }
 }
 
@@ -664,6 +678,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case "shared_workout":
                 // Navigate to shared workouts view
                 NotificationNavigationManager.shared.navigateToSharedWorkouts()
+            case "coach_invitation":
+                // Navigate to notifications to see and respond to coach invitation
+                NotificationNavigationManager.shared.navigateToNotifications()
+            case "coach_program_assigned":
+                // Navigate to notifications to see assigned program
+                NotificationNavigationManager.shared.navigateToNotifications()
             default:
                 break
             }
