@@ -1,5 +1,7 @@
 import SwiftUI
 import Combine
+import CoreLocation
+import Supabase
 
 enum GymSessionInputField: Hashable {
     case kg(exerciseId: String, setIndex: Int)
@@ -29,6 +31,10 @@ struct GymSessionView: View {
     // Cheer notification state
     @State private var showCheerNotification = false
     @State private var cheerEmoji: String = ""
+    // Uppy state
+    @State private var receivedUppys: [Uppy] = []
+    @State private var isLoadingUppys = false
+    @State private var uppySubscriptionTask: Task<Void, Never>?
     @State private var cheerFromUsername: String = ""
     
     // Coach workout - pre-load exercises from coach's routine
@@ -254,6 +260,30 @@ struct GymSessionView: View {
                     }
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.exercises.count)
                     
+                    // Uppy Progress Section
+                    uppyProgressSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                    
+                    // Bottom action button
+                    Button(action: {
+                        showCancelConfirmation = true
+                    }) {
+                        Text("Avbryt pass")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    
                     // Add Exercise Button
                     Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -271,25 +301,6 @@ struct GymSessionView: View {
                         .padding(.vertical, 16)
                         .background(Color.primary)
                         .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    
-                    // Bottom action button
-                    Button(action: {
-                        showCancelConfirmation = true
-                    }) {
-                        Text("Avbryt pass")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.red)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -502,10 +513,13 @@ struct GymSessionView: View {
             }
             .onAppear {
                 initializeSessionIfNeeded()
+                loadUppys()
+                subscribeToUppys()
             }
             .onDisappear {
                 persistSession(force: true)
                 viewModel.stopTimer()
+                uppySubscriptionTask?.cancel()
             }
             .onReceive(NotificationCenter.default.publisher(for: .savedGymWorkoutCreated)) { _ in
                 guard let userId = authViewModel.currentUser?.id else { return }
@@ -598,6 +612,99 @@ struct GymSessionView: View {
         }
     }
     
+    // MARK: - Uppy Progress Section
+    
+    private var uppyProgressSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text("Få tre Uppys från dina vänner och få 10+ poäng")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+            
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 12)
+                    
+                    // Progress fill
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.green, Color.green.opacity(0.7)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * (CGFloat(receivedUppys.count) / 3.0), height: 12)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: receivedUppys.count)
+                }
+            }
+            .frame(height: 12)
+            
+            // Count indicator
+            HStack(spacing: 4) {
+                Text("\(receivedUppys.count)/3")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(receivedUppys.count >= 3 ? .green : .secondary)
+                
+                if receivedUppys.count >= 3 {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.green)
+                }
+            }
+            
+            // Friend avatars who sent uppys
+            if !receivedUppys.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(receivedUppys) { uppy in
+                        VStack(spacing: 4) {
+                            // Avatar
+                            AsyncImage(url: URL(string: uppy.fromUserAvatar ?? "")) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 32, height: 32)
+                                        .clipShape(Circle())
+                                case .failure(_), .empty:
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 32, height: 32)
+                                        .overlay(
+                                            Image(systemName: "person.fill")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.gray)
+                                        )
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                            
+                            // Name
+                            Text(uppy.fromUserName.components(separatedBy: " ").first ?? uppy.fromUserName)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+    }
+    
     // MARK: - Cheer Notification Overlay
     
     private var cheerNotificationOverlay: some View {
@@ -665,6 +772,10 @@ extension GymSessionView {
     private func initializeSessionIfNeeded() {
         guard !hasInitializedSession else { return }
         hasInitializedSession = true
+        
+        // CRITICAL: Request location permissions EARLY for friend detection
+        GymLocationManager.shared.requestPermissions()
+        print("📍 Location permissions requested for gym session")
 
         if !didLoadSavedWorkouts, let userId = authViewModel.currentUser?.id {
             didLoadSavedWorkouts = true
@@ -714,10 +825,18 @@ extension GymSessionView {
             print("🚀 Starting active session - userId: \(userId), userName: \(userName ?? "nil")")
             Task {
                 do {
+                    // CRITICAL: Get current location for friend detection
+                    let currentLocation = GymLocationManager.shared.currentLocation
+                    if currentLocation != nil {
+                        print("📍 Starting session with location: \(currentLocation!.coordinate.latitude), \(currentLocation!.coordinate.longitude)")
+                    } else {
+                        print("⚠️ Starting session without location - friend detection may not work")
+                    }
+                    
                     let sessionId = try await ActiveSessionService.shared.startSession(
                         userId: userId,
                         activityType: "gym",
-                        location: nil,
+                        location: currentLocation,
                         userName: userName
                     )
                     print("✅ Active session started successfully!")
@@ -743,6 +862,89 @@ extension GymSessionView {
         }
     }
 
+    // MARK: - Load Uppys
+    
+    private func loadUppys() {
+        guard let sessionId = viewModel.currentSessionId else { 
+            print("⚠️ No session ID available for loading uppys")
+            return 
+        }
+        
+        guard !isLoadingUppys else { return }
+        isLoadingUppys = true
+        
+        Task {
+            do {
+                let uppys = try await UppyService.shared.getUppysForSession(sessionId: sessionId)
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                        self.receivedUppys = uppys
+                    }
+                    self.isLoadingUppys = false
+                }
+                print("✅ Loaded \(uppys.count) uppys for session")
+            } catch {
+                print("❌ Failed to load uppys: \(error)")
+                await MainActor.run {
+                    self.isLoadingUppys = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Subscribe to Real-time Uppys
+    
+    private func subscribeToUppys() {
+        guard let sessionId = viewModel.currentSessionId else {
+            print("⚠️ No session ID for Uppy subscription")
+            return
+        }
+        
+        // Cancel any existing subscription
+        uppySubscriptionTask?.cancel()
+        
+        uppySubscriptionTask = Task {
+            let channel = SupabaseConfig.supabase.channel("uppys-\(sessionId)")
+            
+            let insertions = channel.postgresChange(
+                InsertAction.self,
+                schema: "public",
+                table: "session_uppys",
+                filter: "session_id=eq.\(sessionId)"
+            )
+            
+            await channel.subscribe()
+            print("👂 Subscribed to Uppy updates for session \(sessionId)")
+            
+            for await insertion in insertions {
+                do {
+                    let uppy = try insertion.decodeRecord(as: Uppy.self, decoder: JSONDecoder())
+                    
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            // Add the new uppy if not already in list
+                            if !receivedUppys.contains(where: { $0.id == uppy.id }) {
+                                receivedUppys.append(uppy)
+                                
+                                // Haptic feedback
+                                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                                
+                                // Show celebration animation if 3rd uppy
+                                if receivedUppys.count == 3 {
+                                    print("🎉 Reached 3 Uppys! Bonus unlocked!")
+                                }
+                            }
+                        }
+                    }
+                    
+                    print("💪 Real-time Uppy received from \(uppy.fromUserName)")
+                } catch {
+                    print("⚠️ Failed to decode Uppy: \(error)")
+                }
+            }
+        }
+    }
+    
     private func persistSession(force: Bool = false) {
         guard let startTime = viewModel.sessionStartTime else { return }
         let elapsed = viewModel.elapsedSeconds
@@ -768,7 +970,11 @@ extension GymSessionView {
     // MARK: - Location Helpers for Trained-With Detection
     
     private func getGymLatitude() -> Double? {
-        // Try to get current location first, then fall back to saved gym location
+        // CRITICAL: Prioritize current location over saved locations for accuracy
+        if let currentLocation = GymLocationManager.shared.currentLocation {
+            return currentLocation.coordinate.latitude
+        }
+        // Fallback to saved gym location
         if let savedGym = GymLocationManager.shared.savedGymLocations.first {
             return savedGym.latitude
         }
@@ -776,7 +982,11 @@ extension GymSessionView {
     }
     
     private func getGymLongitude() -> Double? {
-        // Try to get current location first, then fall back to saved gym location
+        // CRITICAL: Prioritize current location over saved locations for accuracy
+        if let currentLocation = GymLocationManager.shared.currentLocation {
+            return currentLocation.coordinate.longitude
+        }
+        // Fallback to saved gym location
         if let savedGym = GymLocationManager.shared.savedGymLocations.first {
             return savedGym.longitude
         }

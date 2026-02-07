@@ -169,6 +169,8 @@ struct HomeView: View {
     // Streak count
     @State private var streakCount: Int = 0
     
+    // Pro banner always visible
+    
     // Check if nutrition onboarding has been completed (user-specific)
     private var hasCompletedNutritionOnboarding: Bool {
         guard let userId = authViewModel.currentUser?.id else { return false }
@@ -180,7 +182,16 @@ struct HomeView: View {
             // MARK: - Standard App Header
             SimpleAppHeader()
                 .environmentObject(authViewModel)
+                .zIndex(2)
+            
+            // MARK: - Pro Banner (Sticky)
+            // Only show for non-Pro members
+            if !(authViewModel.currentUser?.isProMember ?? false) {
+                ProBannerView(onTap: {
+                    SuperwallService.shared.showPaywall()
+                })
                 .zIndex(1)
+            }
             
             ZStack {
                 // Background gradient - light blue
@@ -197,6 +208,15 @@ struct HomeView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
+                        // Scroll offset detector
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geometry.frame(in: .named("scroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+                        
                         // MARK: - App Logo & Streak
                         HStack {
                             Image("23")
@@ -268,9 +288,11 @@ struct HomeView: View {
                 }
                 .padding(.top, 8)
             }
+            .coordinateSpace(name: "scroll")
         } // ZStack
         } // VStack
         .onAppear {
+            
             animateContent()
             loadNutritionGoals()
             loadStreakCount()
@@ -3106,6 +3128,92 @@ struct FoodLogNutriScoreBadge: View {
         .padding(16)
         .background(Color.white)
         .cornerRadius(16)
+    }
+}
+
+// MARK: - Scroll Offset Preference Key
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Pro Banner View
+private struct ProBannerView: View {
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                // Background gradient (Black to Silver)
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.1, blue: 0.1),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.5, green: 0.5, blue: 0.5),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.1, green: 0.1, blue: 0.1)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                
+                // Content
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Skaffa Up&Down Pro och lås upp alla förmåner")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        // CTA Button (White)
+                        HStack(spacing: 4) {
+                            Text("Prenumerera nu")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Color.white)
+                        .cornerRadius(20)
+                    }
+                    
+                    Spacer()
+                    
+                    // App Logo
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)
+                        .cornerRadius(10)
+                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .frame(height: 70)
+            .overlay(
+                RoundedRectangle(cornerRadius: 0)
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.1)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

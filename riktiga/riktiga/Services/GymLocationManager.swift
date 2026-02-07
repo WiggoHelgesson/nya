@@ -23,6 +23,11 @@ final class GymLocationManager: NSObject, ObservableObject {
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var detectedGymName: String? = nil // Currently detected gym name
     
+    /// Current location (public access for testing)
+    var currentLocation: CLLocation? {
+        locationManager.location
+    }
+    
     private var currentUserId: String?
     private var isGymSessionActive = false
     private var pendingSessionLocation: CLLocation? // Store location during session

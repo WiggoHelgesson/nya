@@ -31,18 +31,28 @@ async function createJWT(): Promise<string> {
     throw new Error('APNS_P8_KEY is not set')
   }
 
-  console.log('🔑 Creating JWT with Key ID:', APNS_KEY_ID, 'Team ID:', APNS_TEAM_ID)
+  // Log full values for debugging (remove in production!)
+  console.log('🔑 ===== APNs Configuration =====')
+  console.log('🔑 APNS_KEY_ID (full):', APNS_KEY_ID)
+  console.log('🔑 APNS_TEAM_ID (full):', APNS_TEAM_ID)
+  console.log('🔑 APNS_P8_KEY length:', APNS_PRIVATE_KEY.length)
+  console.log('🔑 APNS_P8_KEY starts with:', APNS_PRIVATE_KEY.substring(0, 50))
+  console.log('🔑 APNS_P8_KEY ends with:', APNS_PRIVATE_KEY.substring(APNS_PRIVATE_KEY.length - 50))
+  console.log('🔑 ================================')
 
   const header = {
     alg: 'ES256',
-    kid: APNS_KEY_ID,
+    kid: APNS_KEY_ID.trim(), // Trim any whitespace
   }
   
   const now = Math.floor(Date.now() / 1000)
   const claims = {
-    iss: APNS_TEAM_ID,
+    iss: APNS_TEAM_ID.trim(), // Trim any whitespace
     iat: now,
   }
+  
+  console.log('🔑 JWT Header:', JSON.stringify(header))
+  console.log('🔑 JWT Claims:', JSON.stringify(claims))
   
   // Import the private key - handle various formats
   let pemContents = APNS_PRIVATE_KEY
@@ -55,6 +65,7 @@ async function createJWT(): Promise<string> {
     .replace(/[\r\n\s]/g, '')
   
   console.log('🔑 PEM contents length after cleanup:', pemContents.length)
+  console.log('🔑 PEM first 20 chars:', pemContents.substring(0, 20))
   
   if (pemContents.length < 100) {
     throw new Error(`Private key seems too short (${pemContents.length} chars). Check APNS_P8_KEY format.`)
@@ -62,7 +73,7 @@ async function createJWT(): Promise<string> {
   
   try {
     const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
-    console.log('🔑 Binary key length:', binaryKey.length)
+    console.log('🔑 Binary key length:', binaryKey.length, '(expected ~121 for P-256)')
     
     const key = await crypto.subtle.importKey(
       'pkcs8',
@@ -71,6 +82,8 @@ async function createJWT(): Promise<string> {
       false,
       ['sign']
     )
+    
+    console.log('✅ Key imported successfully!')
     
     // Create JWT
     const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
@@ -86,8 +99,10 @@ async function createJWT(): Promise<string> {
     const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
     
-    console.log('✅ JWT created successfully')
-    return `${message}.${signatureB64}`
+    const jwt = `${message}.${signatureB64}`
+    console.log('✅ JWT created successfully, length:', jwt.length)
+    console.log('🔑 JWT header part:', jwt.split('.')[0])
+    return jwt
   } catch (keyError) {
     console.error('❌ Failed to import/sign with key:', keyError)
     throw new Error(`Key import failed: ${keyError.message}`)

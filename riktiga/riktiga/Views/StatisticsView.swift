@@ -49,6 +49,8 @@ struct StatisticsView: View {
     @State private var showTopExercises = false
     @State private var showSkeleton = true
     @State private var showProgressPhotos = false
+    @State private var showTrophyCase = false
+    @State private var showTrophyDetail = false
 
     // Chart animation states
     @State private var chartLineTrim: CGFloat = 0
@@ -87,27 +89,27 @@ struct StatisticsView: View {
                     
                     // MARK: - Sport Type Filter
                     sportTypeFilter
-                        .padding(.top, 16)
+                        .padding(.top, 24)
                         .opacity(showFilter ? 1 : 0)
                     .offset(y: showFilter ? 0 : 10)
                 
                 // MARK: - This Week Stats
                 thisWeekSection
-                    .padding(.top, 24)
+                    .padding(.top, 32)
                     .opacity(showWeekStats ? 1 : 0)
                     .offset(y: showWeekStats ? 0 : 20)
                     .scaleEffect(showWeekStats ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Past 12 Weeks Chart
                 past12WeeksChart
-                    .padding(.top, 8)
+                    .padding(.top, 16)
                     .opacity(showChart ? 1 : 0)
                     .offset(y: showChart ? 0 : 25)
                     .scaleEffect(showChart ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Calendar Section
                 Divider()
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 32)
                     .opacity(showCalendar ? 1 : 0)
                 
                 calendarSection
@@ -117,7 +119,7 @@ struct StatisticsView: View {
                 
                 // MARK: - Progress Photos Section
                 Divider()
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 32)
                     .opacity(showProgressPhotos ? 1 : 0)
                 
                 ProgressPhotosSectionView()
@@ -128,7 +130,7 @@ struct StatisticsView: View {
                 
                 // MARK: - Progressive Overload Section
                 Divider()
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 32)
                     .opacity(showProgressive ? 1 : 0)
                 
                 progressiveOverloadSection
@@ -137,7 +139,7 @@ struct StatisticsView: View {
                     .scaleEffect(showProgressive ? 1 : 0.95, anchor: .top)
                 
                 Divider()
-                    .padding(.vertical, 24)
+                    .padding(.vertical, 32)
                     .opacity(show1RMPredictions ? 1 : 0)
                 
                 // MARK: - 1RM Predictions Section
@@ -149,13 +151,13 @@ struct StatisticsView: View {
                 muscleDistributionSection
                     .opacity(showMuscleBalance ? 1 : 0)
                     .offset(y: showMuscleBalance ? 0 : 15)
-                    .padding(.top, 24)
+                    .padding(.top, 32)
                 
                 // MARK: - Top Exercises Section
                 topExercisesSection
                     .opacity(showTopExercises ? 1 : 0)
                     .offset(y: showTopExercises ? 0 : 15)
-                    .padding(.top, 24)
+                    .padding(.top, 32)
                 
                 Spacer(minLength: 100)
             }
@@ -185,6 +187,7 @@ struct StatisticsView: View {
         showProgressPhotos = true
         showProgressive = true
         showMonthly = true
+        showTrophyCase = true
         show1RMPredictions = true
         showMuscleBalance = true
         showTopExercises = true
@@ -419,6 +422,142 @@ struct StatisticsView: View {
                     .cornerRadius(30)
             }
             .padding(.horizontal, 20)
+        }
+    }
+    
+    // MARK: - Prestationer Section
+    private var trophyCaseSection: some View {
+        let totalActivities = allPosts.count
+        let milestones = [5, 10, 20, 50, 100, 150, 200, 250, 300, 500]
+        let displayedMilestones = milestones.prefix(4) // Show top 4
+        
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Prestationer")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Text("\(milestones.filter { totalActivities >= $0 }.count)")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 20)
+            
+            // Trophy Grid
+            HStack(spacing: 16) {
+                ForEach(Array(displayedMilestones.enumerated()), id: \.offset) { index, milestone in
+                    Button(action: {
+                        showTrophyDetail = true
+                    }) {
+                            VStack(spacing: 12) {
+                                ZStack {
+                                    let isLocked = totalActivities < milestone
+                                    
+                                    // Trophy badge - Shield shape
+                                    ShieldShape()
+                                        .fill(getTrophyColor(for: milestone, isLocked: isLocked))
+                                        .frame(width: 70, height: 80)
+                                        .overlay(
+                                            // Main border
+                                            ShieldShape()
+                                                .stroke(getTrophyBorderColor(for: milestone, isLocked: isLocked), lineWidth: 3)
+                                        )
+                                        .overlay(
+                                            // Decorative inner lines (top notches)
+                                            ZStack {
+                                                // Top decorative notches
+                                                HStack(spacing: 8) {
+                                                    ForEach(0..<5, id: \.self) { _ in
+                                                        Rectangle()
+                                                            .fill(getTrophyBorderColor(for: milestone, isLocked: isLocked).opacity(0.3))
+                                                            .frame(width: 2, height: 6)
+                                                    }
+                                                }
+                                                .offset(y: -28)
+                                            }
+                                        )
+                                        .shadow(
+                                            color: isLocked ? Color.black.opacity(0.1) : getTrophyColor(for: milestone, isLocked: false).opacity(0.3),
+                                            radius: 8,
+                                            x: 0,
+                                            y: 4
+                                        )
+                                    
+                                    // Number text (always visible, no lock icon)
+                                    Text("\(milestone)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(getTrophyTextColor(for: milestone, isLocked: isLocked))
+                                        .offset(y: -2)
+                                }
+                                
+                                Text("\(milestone) pass")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                            }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            // View all button
+            Button(action: {
+                showTrophyDetail = true
+            }) {
+                HStack {
+                    Text("Alla prestationer")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+        }
+        .sheet(isPresented: $showTrophyDetail) {
+            TrophyDetailView(totalActivities: allPosts.count)
+        }
+    }
+    
+    private func getTrophyColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Light gray background
+            return Color(red: 220/255, green: 220/255, blue: 225/255)
+        } else {
+            // Unlocked badge: Bronze/copper color
+            return Color(red: 180/255, green: 110/255, blue: 60/255)
+        }
+    }
+    
+    private func getTrophyBorderColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Darker gray border
+            return Color(red: 180/255, green: 180/255, blue: 190/255)
+        } else {
+            // Unlocked badge: Darker bronze border
+            return Color(red: 150/255, green: 90/255, blue: 50/255)
+        }
+    }
+    
+    private func getTrophyTextColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Orange text
+            return Color(red: 255/255, green: 140/255, blue: 0/255)
+        } else {
+            // Unlocked badge: White text
+            return .white
         }
     }
     
@@ -3741,16 +3880,20 @@ struct AllExercisesListView: View {
                 for exercise in exercises {
                     let normalizedName = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     
+                    // Only process strength training exercises (with kg and reps)
+                    let reps = exercise.reps
+                    let kg = exercise.kg
+                    
                     // Build sets for this session
                     var sets: [StatSetSnapshot] = []
                     var bestSet: StatSetSnapshot?
                     
-                    for i in 0..<min(exercise.reps.count, exercise.kg.count) {
-                        let setSnapshot = StatSetSnapshot(weight: exercise.kg[i], reps: exercise.reps[i])
+                    for i in 0..<min(reps.count, kg.count) {
+                        let setSnapshot = StatSetSnapshot(weight: kg[i], reps: reps[i])
                         sets.append(setSnapshot)
                         
-                        if bestSet == nil || exercise.kg[i] > bestSet!.weight || 
-                           (exercise.kg[i] == bestSet!.weight && exercise.reps[i] > bestSet!.reps) {
+                        if bestSet == nil || kg[i] > bestSet!.weight || 
+                           (kg[i] == bestSet!.weight && reps[i] > bestSet!.reps) {
                             bestSet = setSnapshot
                         }
                     }
@@ -5124,6 +5267,150 @@ struct AllTopExercisesView: View {
     }
 }
 
+// MARK: - Trophy Detail View
+struct TrophyDetailView: View {
+    @Environment(\.dismiss) var dismiss
+    let totalActivities: Int
+    @State private var showContent = false
+    
+    private let milestones = [5, 10, 20, 50, 100, 150, 200, 250, 300, 500]
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Milstolpar Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Milstolpar")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 20)
+                        
+                        Text("Se alla dina prestationer baserat på antal genomförda pass.")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 20)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 16)
+                    
+                    // Trophy Grid
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 24) {
+                        ForEach(milestones, id: \.self) { milestone in
+                            VStack(spacing: 12) {
+                                ZStack {
+                                    let isLocked = totalActivities < milestone
+                                    
+                                    // Trophy badge - Shield shape
+                                    ShieldShape()
+                                        .fill(getTrophyColor(for: milestone, isLocked: isLocked))
+                                        .frame(width: 85, height: 95)
+                                        .overlay(
+                                            // Main border
+                                            ShieldShape()
+                                                .stroke(getTrophyBorderColor(for: milestone, isLocked: isLocked), lineWidth: 4)
+                                        )
+                                        .overlay(
+                                            // Decorative inner lines (top notches)
+                                            ZStack {
+                                                // Top decorative notches
+                                                HStack(spacing: 10) {
+                                                    ForEach(0..<5, id: \.self) { _ in
+                                                        Rectangle()
+                                                            .fill(getTrophyBorderColor(for: milestone, isLocked: isLocked).opacity(0.3))
+                                                            .frame(width: 2, height: 7)
+                                                    }
+                                                }
+                                                .offset(y: -33)
+                                            }
+                                        )
+                                        .shadow(
+                                            color: isLocked ? Color.black.opacity(0.1) : getTrophyColor(for: milestone, isLocked: false).opacity(0.3),
+                                            radius: 10,
+                                            x: 0,
+                                            y: 5
+                                        )
+                                    
+                                    // Number text (always visible, no lock icon)
+                                    Text("\(milestone)")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundColor(getTrophyTextColor(for: milestone, isLocked: isLocked))
+                                        .offset(y: -2)
+                                }
+                                
+                                Text("\(milestone) pass")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                }
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 15)
+            }
+            .background(Color(.systemBackground))
+            .navigationTitle("Prestationer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text("Statistik")
+                            .font(.system(size: 17))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    showContent = true
+                }
+            }
+        }
+    }
+    
+    private func getTrophyColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Light gray background
+            return Color(red: 220/255, green: 220/255, blue: 225/255)
+        } else {
+            // Unlocked badge: Bronze/copper color
+            return Color(red: 180/255, green: 110/255, blue: 60/255)
+        }
+    }
+    
+    private func getTrophyBorderColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Darker gray border
+            return Color(red: 180/255, green: 180/255, blue: 190/255)
+        } else {
+            // Unlocked badge: Darker bronze border
+            return Color(red: 150/255, green: 90/255, blue: 50/255)
+        }
+    }
+    
+    private func getTrophyTextColor(for milestone: Int, isLocked: Bool) -> Color {
+        if isLocked {
+            // Locked badges: Orange text
+            return Color(red: 255/255, green: 140/255, blue: 0/255)
+        } else {
+            // Unlocked badge: White text
+            return .white
+        }
+    }
+}
+
 // MARK: - Statistics Skeleton View
 private struct StatisticsSkeletonView: View {
     @State private var isAnimating = false
@@ -5225,6 +5512,53 @@ private struct StatSkeletonPill: View {
                     isAnimating = true
                 }
             }
+    }
+}
+
+// MARK: - Shield Shape
+struct ShieldShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        let width = rect.width
+        let height = rect.height
+        
+        // Start at top center
+        path.move(to: CGPoint(x: width / 2, y: 0))
+        
+        // Top left curve
+        path.addQuadCurve(
+            to: CGPoint(x: 0, y: height * 0.25),
+            control: CGPoint(x: width * 0.1, y: height * 0.05)
+        )
+        
+        // Left side
+        path.addLine(to: CGPoint(x: 0, y: height * 0.65))
+        
+        // Bottom left curve
+        path.addQuadCurve(
+            to: CGPoint(x: width / 2, y: height),
+            control: CGPoint(x: width * 0.1, y: height * 0.9)
+        )
+        
+        // Bottom right curve
+        path.addQuadCurve(
+            to: CGPoint(x: width, y: height * 0.65),
+            control: CGPoint(x: width * 0.9, y: height * 0.9)
+        )
+        
+        // Right side
+        path.addLine(to: CGPoint(x: width, y: height * 0.25))
+        
+        // Top right curve
+        path.addQuadCurve(
+            to: CGPoint(x: width / 2, y: 0),
+            control: CGPoint(x: width * 0.9, y: height * 0.05)
+        )
+        
+        path.closeSubpath()
+        
+        return path
     }
 }
 

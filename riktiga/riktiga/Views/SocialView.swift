@@ -82,16 +82,8 @@ struct SocialView: View {
     // Timer for active friends refresh
     @State private var activeFriendsRefreshTimer: Timer?
     
-    // Cheer emoji states
-    @State private var selectedFriendToCheer: ActiveFriendSession?
-    @State private var lastCheerTime: Date?
-    @State private var isSendingCheer = false
-    @State private var cheerSentAnimation = false
-    @State private var receivedCheer: ReceivedCheer?
-    @State private var showReceivedCheerAnimation = false
-    
-    // Monthly report banner
-    @State private var showMonthlyReportBanner: Bool = false
+    // Friend location map state
+    @State private var showFriendsMap = false
     
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
@@ -112,16 +104,6 @@ struct SocialView: View {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 mainContent
-                
-                // Cheer received animation overlay
-                if showReceivedCheerAnimation, let cheer = receivedCheer {
-                    CheerReceivedAnimationView(
-                        cheer: cheer,
-                        isShowing: $showReceivedCheerAnimation
-                    )
-                    .transition(.opacity)
-                    .zIndex(100)
-                }
             }
             .navigationTitle("")
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootHem"))) { _ in
@@ -142,10 +124,6 @@ struct SocialView: View {
             .task(id: authViewModel.currentUser?.id) {
                 await loadInitialData()
             }
-            .task {
-                // Subscribe to cheer notifications
-                await subscribeToCheerNotifications()
-            }
             .refreshable {
                 await refreshData()
             }
@@ -158,20 +136,9 @@ struct SocialView: View {
                     userName: authViewModel.currentUser?.name ?? "Användare"
                 )
             }
-            .sheet(item: $selectedFriendToCheer) { friend in
-                CheerEmojiPickerView(
-                    friend: friend,
-                    senderName: authViewModel.currentUser?.name ?? "Någon",
-                    senderId: authViewModel.currentUser?.id ?? "",
-                    isSending: $isSendingCheer,
-                    onSend: { emoji in
-                        sendCheerToFriend(friend: friend, emoji: emoji)
-                    },
-                    onDismiss: {
-                        selectedFriendToCheer = nil
-                    }
-                )
-                .presentationDetents([.height(280)])
+            .navigationDestination(isPresented: $showFriendsMap) {
+                FriendsLocationMapView(friends: activeFriends)
+                    .environmentObject(authViewModel)
             }
             .navigationDestination(isPresented: $showFindFriends) {
                 FindFriendsView()
@@ -279,18 +246,6 @@ struct SocialView: View {
                     } else {
                         // Feed content directly here instead of scrollContent to avoid nested scrolls
                         VStack(alignment: .leading, spacing: 0) {
-                            // MARK: - Monthly Report Banner
-                            if showMonthlyReportBanner {
-                                monthlyReportBanner
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 8)
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .move(edge: .top)),
-                                        removal: .opacity.combined(with: .scale(scale: 0.95))
-                                    ))
-                            }
-                            
                             // MARK: - Friends at gym section
                             friendsAtGymSection
                             
@@ -314,7 +269,6 @@ struct SocialView: View {
         .refreshable {
             await refreshData()
         }
-        .background(RefreshControlView())
         .ignoresSafeArea(edges: .top)
         .navigationDestination(isPresented: $showNotifications) {
             NotificationsView(onDismiss: {
@@ -322,10 +276,15 @@ struct SocialView: View {
             })
             .environmentObject(authViewModel)
         }
+        .onChange(of: showPaywall) { _, newValue in
+            if newValue {
+                SuperwallService.shared.showPaywall()
+                showPaywall = false
+            }
+        }
         .onAppear {
             animateContentIn()
             loadStats()
-            checkMonthlyReportBanner()
         }
     }
 
@@ -800,149 +759,18 @@ struct SocialView: View {
         }
     }
     
-    // MARK: - Monthly Report Banner
-    private var monthlyReportBanner: some View {
-        Button {
-            // Navigate to statistics/monthly report
-            NotificationCenter.default.post(name: NSNotification.Name("NavigateToStatistics"), object: nil)
-            dismissMonthlyReportBanner()
-        } label: {
-            HStack(spacing: 16) {
-                // Icon
-                Image(systemName: "chart.bar.doc.horizontal.fill")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                
-                // Text content
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Din månadsrapport för \(previousMonthName)")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text("är nu tillgänglig!")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                
-                Spacer()
-                
-                // Arrow
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                // Black/silver gradient
-                LinearGradient(
-                    colors: [
-                        Color.black,
-                        Color(white: 0.2),
-                        Color(white: 0.35),
-                        Color(white: 0.2),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .topTrailing) {
-            // Close button
-            Button {
-                dismissMonthlyReportBanner()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(8)
-                    .background(Circle().fill(Color.white.opacity(0.15)))
-            }
-            .buttonStyle(.plain)
-            .offset(x: -8, y: 8)
-        }
-    }
-    
-    private var previousMonthName: String {
-        let calendar = Calendar.current
-        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: Date()) else { return "" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: previousMonth).capitalized
-    }
-    
-    private func checkMonthlyReportBanner() {
-        guard let userId = authViewModel.currentUser?.id else { return }
-        
-        let calendar = Calendar.current
-        let today = Date()
-        let dayOfMonth = calendar.component(.day, from: today)
-        
-        // Only show banner in first 7 days of the month
-        guard dayOfMonth <= 7 else {
-            showMonthlyReportBanner = false
-            return
-        }
-        
-        // Get previous month identifier (e.g., "2026-01")
-        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: today) else { return }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let monthKey = formatter.string(from: previousMonth)
-        
-        // Check if user has dismissed this month's banner
-        let dismissKey = "monthlyReportBanner_dismissed_\(userId)_\(monthKey)"
-        let hasDismissed = UserDefaults.standard.bool(forKey: dismissKey)
-        
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            showMonthlyReportBanner = !hasDismissed
-        }
-    }
-    
-    private func dismissMonthlyReportBanner() {
-        guard let userId = authViewModel.currentUser?.id else { return }
-        
-        let calendar = Calendar.current
-        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: Date()) else { return }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM"
-        let monthKey = formatter.string(from: previousMonth)
-        
-        // Save dismissal
-        let dismissKey = "monthlyReportBanner_dismissed_\(userId)_\(monthKey)"
-        UserDefaults.standard.set(true, forKey: dismissKey)
-        
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            showMonthlyReportBanner = false
-        }
-    }
-    
     // MARK: - Friends at Gym Section
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Vänner på gymmet")
-                .font(.system(size: 20, weight: .bold))
-                .padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Vänner på gymmet")
+                    .font(.system(size: 20, weight: .bold))
+                
+                Text("Tryck på dina vänner för att se exakt vart de tränar")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
             
             // Horizontal scroll with app logo + active friends
             ScrollView(.horizontal, showsIndicators: false) {
@@ -998,23 +826,20 @@ struct SocialView: View {
                                 name: friend.userName.components(separatedBy: " ").first ?? friend.userName,
                                 duration: friend.formattedDuration,
                                 onTap: {
-                                    // Check rate limit (1 cheer per minute)
-                                    if let lastTime = lastCheerTime, Date().timeIntervalSince(lastTime) < 60 {
-                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    } else {
-                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                        selectedFriendToCheer = friend
-                                    }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    showFriendsMap = true
                                 }
                             )
                         }
                     }
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
             }
             .animation(.easeInOut(duration: 0.3), value: activeFriends.count)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .task {
             await loadActiveFriendsData()
         }
@@ -1110,7 +935,7 @@ struct SocialView: View {
             }
             
             // Cleanup stale sessions on first load
-            await ActiveSessionService.shared.cleanupStaleSessions()
+            try? await ActiveSessionService.shared.cleanupStaleSessions()
         }
         
         do {
@@ -1129,99 +954,6 @@ struct SocialView: View {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isLoadingActiveFriends = false
                 }
-            }
-        }
-    }
-    
-    // MARK: - Send Cheer to Friend
-    private func sendCheerToFriend(friend: ActiveFriendSession, emoji: String) {
-        guard let senderId = authViewModel.currentUser?.id else { return }
-        let senderName = authViewModel.currentUser?.name ?? "Någon"
-        
-        isSendingCheer = true
-        
-        Task {
-            do {
-                // Send cheer via CheerService
-                try await CheerService.shared.sendCheer(
-                    fromUserId: senderId,
-                    fromUserName: senderName,
-                    toUserId: friend.userId,
-                    toUserName: friend.userName,
-                    emoji: emoji
-                )
-                
-                await MainActor.run {
-                    // Update last cheer time for rate limiting
-                    lastCheerTime = Date()
-                    isSendingCheer = false
-                    selectedFriendToCheer = nil
-                    
-                    // Show success feedback
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                }
-                
-                print("✅ Cheer sent to \(friend.userName): \(emoji)")
-            } catch {
-                print("❌ Failed to send cheer: \(error)")
-                await MainActor.run {
-                    isSendingCheer = false
-                }
-            }
-        }
-    }
-    
-    // MARK: - Subscribe to Cheer Notifications
-    private func subscribeToCheerNotifications() async {
-        guard let userId = authViewModel.currentUser?.id else { return }
-        
-        let channel = SupabaseConfig.supabase.channel("cheers-\(userId)")
-        
-        let insertions = channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "workout_cheers",
-            filter: "to_user_id=eq.\(userId)"
-        )
-        
-        await channel.subscribe()
-        
-        // Custom decoder for ISO8601 dates
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateString = try container.decode(String.self)
-            
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
-            if let date = formatter.date(from: dateString) {
-                return date
-            }
-            
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: dateString) {
-                return date
-            }
-            
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
-        }
-        
-        for await insertion in insertions {
-            do {
-                let cheer = try insertion.decodeRecord(as: ReceivedCheer.self, decoder: decoder)
-                
-                await MainActor.run {
-                    receivedCheer = cheer
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showReceivedCheerAnimation = true
-                    }
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                }
-                
-                print("🎉 Received cheer from \(cheer.fromUserName): \(cheer.emoji)")
-            } catch {
-                print("⚠️ Failed to decode cheer: \(error)")
             }
         }
     }
@@ -1774,6 +1506,19 @@ struct SocialView: View {
                     }
                 }
                 
+                // Pro upgrade banner after 4th post
+                // Only show for non-Pro members
+                if index == 3, !(authViewModel.currentUser?.isProMember ?? false) {
+                    ProUpgradeBanner(onTap: {
+                        showPaywall = true
+                    })
+                    .opacity(showPosts ? 1 : 0)
+                    .offset(y: showPosts ? 0 : 15)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: showPosts)
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
+                
                 // Removed recommended friends section
                 
                 // Visa varumärkesslider efter andra inlägget
@@ -2206,9 +1951,16 @@ struct SocialView: View {
     
     private var brandSliderInlineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Varumärken")
-                .font(.system(size: 18, weight: .bold))
-                .padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Varumärken")
+                    .font(.system(size: 18, weight: .bold))
+                
+                Text("Få rabatter hos dessa varumärken genom att samla poäng genom dina gympass")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 16)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
@@ -2536,6 +2288,34 @@ struct SocialPostCard: View {
                         }
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
+                    }
+                    
+                    // Trained with friends
+                    if let trainedWith = post.trainedWith, !trainedWith.isEmpty {
+                        HStack(spacing: -8) { // Overlap avatars
+                            ForEach(Array(trainedWith.prefix(3).enumerated()), id: \.element.id) { index, friend in
+                                ProfileImage(url: friend.avatarUrl, size: 20)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color(.systemBackground), lineWidth: 2)
+                                    )
+                                    .zIndex(Double(trainedWith.count - index))
+                            }
+                            if trainedWith.count > 3 {
+                                Text("+\(trainedWith.count - 3)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color(.systemGray5)))
+                                    .offset(x: 2)
+                            }
+                            Text("Tränade med")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, trainedWith.count > 3 ? 6 : 10)
+                        }
                     }
                 }
             }
@@ -5496,38 +5276,341 @@ struct ExternalActivityCard: View {
     }
 }
 
-// MARK: - Custom Refresh Control
-struct RefreshControlView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        
-        // Find the scroll view and add a custom refresh control
-        DispatchQueue.main.async {
-            if let scrollView = view.superview?.superview as? UIScrollView {
-                let refreshControl = UIRefreshControl()
-                refreshControl.tintColor = .clear
+// MARK: - Pro Upgrade Banner
+private struct ProUpgradeBanner: View {
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                // Background gradient (Black to Silver)
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.1, blue: 0.1),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.5, green: 0.5, blue: 0.5),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.1, green: 0.1, blue: 0.1)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
                 
-                // Add custom icon view
-                let iconView = UIImageView(image: UIImage(systemName: "gearshape.fill"))
-                iconView.tintColor = .systemGray
-                iconView.translatesAutoresizingMaskIntoConstraints = false
-                refreshControl.addSubview(iconView)
-                
-                NSLayoutConstraint.activate([
-                    iconView.centerXAnchor.constraint(equalTo: refreshControl.centerXAnchor),
-                    iconView.centerYAnchor.constraint(equalTo: refreshControl.centerYAnchor),
-                    iconView.widthAnchor.constraint(equalToConstant: 24),
-                    iconView.heightAnchor.constraint(equalToConstant: 24)
-                ])
-                
-                scrollView.refreshControl = refreshControl
+                // Content
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("UPPGRADERA TILL")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.8))
+                            .tracking(1.2)
+                        
+                        Text("PRO MEDLEMSKAP")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        // CTA Button (White)
+                        HStack(spacing: 6) {
+                            Text("LÄS MER")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color.white)
+                        .cornerRadius(25)
+                    }
+                    
+                    Spacer()
+                    
+                    // App Logo
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 100, height: 100)
+                        .cornerRadius(20)
+                        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                }
+                .padding(24)
             }
+            .frame(height: 160)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.1)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: .black.opacity(0.4), radius: 15, x: 0, y: 8)
         }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Friends Location Map View
+struct FriendsLocationMapView: View {
+    let friends: [ActiveFriendSession]
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var region: MKCoordinateRegion
+    @State private var selectedFriend: ActiveFriendSession?
+    @State private var showUppyConfirmation = false
+    @State private var isSendingUppy = false
+    
+    init(friends: [ActiveFriendSession]) {
+        self.friends = friends
         
-        return view
+        // Calculate region to fit all friends
+        let friendsWithLocation = friends.compactMap { $0.coordinate }
+        
+        if !friendsWithLocation.isEmpty {
+            // Calculate center and span to include all friends
+            let latitudes = friendsWithLocation.map { $0.latitude }
+            let longitudes = friendsWithLocation.map { $0.longitude }
+            
+            let minLat = latitudes.min() ?? 59.3293
+            let maxLat = latitudes.max() ?? 59.3293
+            let minLon = longitudes.min() ?? 18.0686
+            let maxLon = longitudes.max() ?? 18.0686
+            
+            let centerLat = (minLat + maxLat) / 2
+            let centerLon = (minLon + maxLon) / 2
+            
+            let spanLat = max(abs(maxLat - minLat) * 1.5, 0.01) // Add 50% padding
+            let spanLon = max(abs(maxLon - minLon) * 1.5, 0.01)
+            
+            _region = State(initialValue: MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
+                span: MKCoordinateSpan(latitudeDelta: spanLat, longitudeDelta: spanLon)
+            ))
+        } else {
+            // Default to Stockholm if no locations
+            _region = State(initialValue: MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
+                span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+            ))
+        }
     }
     
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    var body: some View {
+        ZStack {
+            // Always show map
+            let friendsWithLocation = friends.filter { $0.coordinate != nil }
+            
+            Map(coordinateRegion: $region, annotationItems: friendsWithLocation) { friend in
+                        MapAnnotation(coordinate: friend.coordinate!) {
+                            Button {
+                                selectedFriend = friend
+                                showUppyConfirmation = true
+                            } label: {
+                                VStack(spacing: 4) {
+                                    // Friend avatar
+                                    AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 50, height: 50)
+                                                .clipShape(Circle())
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Color.white, lineWidth: 3)
+                                                )
+                                                .shadow(radius: 5)
+                                        case .failure(_), .empty:
+                                            Circle()
+                                                .fill(Color.gray.opacity(0.3))
+                                                .frame(width: 50, height: 50)
+                                                .overlay(
+                                                    Image(systemName: "person.fill")
+                                                        .font(.system(size: 24))
+                                                        .foregroundColor(.gray)
+                                                )
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Color.white, lineWidth: 3)
+                                                )
+                                                .shadow(radius: 5)
+                                        @unknown default:
+                                            EmptyView()
+                                        }
+                                    }
+                                    
+                                    // Name and duration
+                                    VStack(spacing: 2) {
+                                        Text(friend.userName.components(separatedBy: " ").first ?? friend.userName)
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                        
+                                        // Live duration timer
+                                        TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                                            let currentDuration = timeline.date.timeIntervalSince(friend.startedAt)
+                                            Text(formatDuration(currentDuration))
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundColor(.white.opacity(0.8))
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.black.opacity(0.7))
+                                    .cornerRadius(8)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .mapControls {
+                        // Hide all map controls (zoom buttons etc.)
+                    }
+                    .ignoresSafeArea()
+            
+            // Overlay message if no active friends
+            if friendsWithLocation.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "figure.run.circle")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    
+                    Text("Inga aktiva vänner")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Dina vänner tränar inte just nu")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(.systemBackground).opacity(0.95))
+                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+                )
+                .padding()
+            } else {
+                // Info overlay - show count of active friends
+                VStack {
+                    Spacer()
+                    
+                    HStack {
+                        // Friends count card
+                        HStack(spacing: 12) {
+                            Image("upanddownlog")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(friendsWithLocation.count) vänner tränar")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Aktiva gympass")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
+                        )
+                        .padding()
+                    }
+                }
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Vänner på gymmet")
+        .alert("Skicka en Uppy till \(selectedFriend?.userName ?? "")", isPresented: $showUppyConfirmation) {
+            Button("Avbryt", role: .cancel) {
+                selectedFriend = nil
+            }
+            Button("Skicka 💪") {
+                if let friend = selectedFriend {
+                    sendUppy(to: friend)
+                }
+            }
+        } message: {
+            Text("Heja på din vän under deras träningspass!")
+        }
+    }
+    
+    private func sendUppy(to friend: ActiveFriendSession) {
+        guard let senderId = authViewModel.currentUser?.id,
+              let senderName = authViewModel.currentUser?.name,
+              !isSendingUppy else { return }
+        
+        isSendingUppy = true
+        
+        Task {
+            do {
+                try await UppyService.shared.sendUppy(
+                    sessionId: friend.id,
+                    fromUserId: senderId,
+                    fromUserName: senderName,
+                    fromUserAvatar: authViewModel.currentUser?.avatarUrl,
+                    toUserId: friend.userId,
+                    toUserName: friend.userName
+                )
+                
+                await MainActor.run {
+                    isSendingUppy = false
+                    selectedFriend = nil
+                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                    
+                    // Post notification for real-time update
+                    NotificationCenter.default.post(name: .uppyReceived, object: nil)
+                }
+                
+                print("✅ Uppy sent successfully")
+            } catch UppyError.alreadySent {
+                await MainActor.run {
+                    isSendingUppy = false
+                    selectedFriend = nil
+                }
+                print("⚠️ Already sent Uppy to this session")
+            } catch {
+                print("❌ Failed to send Uppy: \(error)")
+                await MainActor.run {
+                    isSendingUppy = false
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+        let seconds = Int(duration) % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %02dm", hours, minutes)
+        } else if minutes > 0 {
+            return String(format: "%dm %02ds", minutes, seconds)
+        } else {
+            return String(format: "%ds", seconds)
+        }
+    }
 }
 
 #Preview {

@@ -76,7 +76,8 @@ class GymSessionViewModel: ObservableObject {
     
     // Real-time spectate support
     @Published var spectatorCount: Int = 0
-    private var currentSessionId: String?
+    var currentSessionId: String? { _currentSessionId }
+    private var _currentSessionId: String?
     private var currentUserId: String?
     private var realtimeService = RealtimeWorkoutService.shared
     
@@ -126,7 +127,7 @@ class GymSessionViewModel: ObservableObject {
     
     /// Start real-time syncing for spectators
     func startRealtimeSync(sessionId: String, userId: String) {
-        currentSessionId = sessionId
+        _currentSessionId = sessionId
         currentUserId = userId
         realtimeService.startSyncingExercises(sessionId: sessionId, userId: userId)
         
@@ -144,7 +145,7 @@ class GymSessionViewModel: ObservableObject {
             }
         }
         realtimeService.stopSyncing()
-        currentSessionId = nil
+        _currentSessionId = nil
         currentUserId = nil
     }
     

@@ -154,6 +154,20 @@ class ProfileService {
         do {
             print("🔧 Creating profile for user: \(user.name)")
             
+            // First check if profile already exists
+            let existingProfile: [User] = try await supabase
+                .from("profiles")
+                .select()
+                .eq("id", value: user.id)
+                .limit(1)
+                .execute()
+                .value
+            
+            if !existingProfile.isEmpty {
+                print("ℹ️ Profile already exists for user: \(user.name), skipping creation")
+                return
+            }
+            
             let profileData: [String: DynamicEncodable] = [
                 "id": DynamicEncodable(user.id),
                 "username": DynamicEncodable(user.name),
@@ -169,6 +183,14 @@ class ProfileService {
                 .execute()
             
             print("✅ Profile created successfully for user: \(user.name)")
+        } catch let error as PostgrestError {
+            // If error is duplicate key (23505), it means profile was created by trigger or another process
+            if error.code == "23505" {
+                print("ℹ️ Profile already exists (created by trigger or another process), continuing...")
+                return
+            }
+            print("❌ Error creating profile: \(error)")
+            throw error
         } catch {
             print("❌ Error creating profile: \(error)")
             throw error

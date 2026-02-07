@@ -299,7 +299,8 @@ class WorkoutService {
             pbExerciseName: post.pbExerciseName,
             pbValue: post.pbValue,
             streakCount: post.streakCount,
-            location: post.location
+            location: post.location,
+            trainedWith: post.trainedWith
         )
         
         do {
@@ -372,6 +373,15 @@ class WorkoutService {
             if let location = postToSave.location, !location.isEmpty {
                 minimalPost["location"] = DynamicEncodable(location)
                 print("📍 Saving post with gym location: \(location)")
+            }
+            
+            // Save trained with friends
+            if let trainedWith = postToSave.trainedWith, !trainedWith.isEmpty {
+                let trainedWithData = trainedWith.map { person in
+                    ["id": person.id, "username": person.username, "avatarUrl": person.avatarUrl ?? ""]
+                }
+                minimalPost["trained_with"] = DynamicEncodable(trainedWithData)
+                print("👥 Saving post with trained_with: \(trainedWith.count) friends")
             }
             
             try await supabase

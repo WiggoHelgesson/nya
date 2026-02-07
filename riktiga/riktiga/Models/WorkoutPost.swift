@@ -22,6 +22,19 @@ struct WorkoutPost: Codable, Identifiable {
     let source: String?  // "app", "garmin", "fitbit", etc.
     let deviceName: String?  // "Garmin Forerunner 265", etc.
     let location: String?  // Gym name or location (e.g., "Nordic Wellness Lund")
+    let trainedWith: [TrainedWithPerson]?  // Friends who trained together
+    
+    struct TrainedWithPerson: Codable, Identifiable, Hashable {
+        let id: String
+        let username: String
+        let avatarUrl: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id
+            case username
+            case avatarUrl = "avatarUrl"
+        }
+    }
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -45,6 +58,7 @@ struct WorkoutPost: Codable, Identifiable {
         case source
         case deviceName = "device_name"
         case location
+        case trainedWith = "trained_with"
     }
     
     init(from decoder: Decoder) throws {
@@ -70,6 +84,7 @@ struct WorkoutPost: Codable, Identifiable {
         source = try container.decodeIfPresent(String.self, forKey: .source)
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
         location = try container.decodeIfPresent(String.self, forKey: .location)
+        trainedWith = try container.decodeIfPresent([TrainedWithPerson].self, forKey: .trainedWith)
     }
     
     init(id: String = UUID().uuidString,
@@ -91,7 +106,8 @@ struct WorkoutPost: Codable, Identifiable {
          streakCount: Int? = nil,
          source: String? = "app",
          deviceName: String? = nil,
-         location: String? = nil) {
+         location: String? = nil,
+         trainedWith: [TrainedWithPerson]? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -113,6 +129,7 @@ struct WorkoutPost: Codable, Identifiable {
         self.source = source
         self.deviceName = deviceName
         self.location = location
+        self.trainedWith = trainedWith
     }
     
     func encode(to encoder: Encoder) throws {
@@ -138,6 +155,7 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(source, forKey: .source)
         try container.encodeIfPresent(deviceName, forKey: .deviceName)
         try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(trainedWith, forKey: .trainedWith)
     }
 }
 

@@ -485,7 +485,16 @@ struct RewardsView: View {
                     // MARK: - Fixed Strava-Style Navigation Header
                     StravaStyleHeaderView()
                         .environmentObject(authViewModel)
+                        .zIndex(2)
+                    
+                    // MARK: - Pro Banner (Sticky)
+                    // Only show for non-Pro members
+                    if !(authViewModel.currentUser?.isProMember ?? false) {
+                        ProBannerView(onTap: {
+                            SuperwallService.shared.showPaywall()
+                        })
                         .zIndex(1)
+                    }
                     
                     ScrollView {
                         VStack(spacing: 0) {
@@ -1944,6 +1953,84 @@ struct AllRewardsCard: View {
         case "75": return "76" // J.LINDEBERG
         default: return imageName // Use the image itself as logo if no mapping
         }
+    }
+}
+
+// MARK: - Pro Banner View
+private struct ProBannerView: View {
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                // Background gradient (Black to Silver)
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.1, blue: 0.1),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.5, green: 0.5, blue: 0.5),
+                        Color(red: 0.3, green: 0.3, blue: 0.3),
+                        Color(red: 0.1, green: 0.1, blue: 0.1)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                
+                // Content
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Skaffa Up&Down Pro och lås upp alla förmåner")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        // CTA Button (White)
+                        HStack(spacing: 4) {
+                            Text("Prenumerera nu")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black)
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.black)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Color.white)
+                        .cornerRadius(20)
+                    }
+                    
+                    Spacer()
+                    
+                    // App Logo
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)
+                        .cornerRadius(10)
+                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .frame(height: 70)
+            .overlay(
+                RoundedRectangle(cornerRadius: 0)
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.1)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

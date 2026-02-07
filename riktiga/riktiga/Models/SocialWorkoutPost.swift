@@ -21,6 +21,7 @@ struct SocialWorkoutPostRaw: Codable {
     let source: String?
     let deviceName: String?
     let location: String?
+    let trainedWith: [TrainedWithPerson]?
     
     // JOIN data
     let profiles: ProfileData?
@@ -47,6 +48,7 @@ struct SocialWorkoutPostRaw: Codable {
         case source
         case deviceName = "device_name"
         case location
+        case trainedWith = "trained_with"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -73,6 +75,12 @@ struct CommentCountData: Codable {
     let count: Int
 }
 
+struct TrainedWithPerson: Codable, Identifiable, Hashable {
+    let id: String
+    let username: String
+    let avatarUrl: String?
+}
+
 struct SocialWorkoutPost: Codable, Identifiable {
     let id: String
     let userId: String
@@ -97,6 +105,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let isLikedByCurrentUser: Bool?
     let splits: [WorkoutSplit]?
     let exercises: [GymExercisePost]?  // For gym sessions
+    let trainedWith: [TrainedWithPerson]?  // Friends who trained together
     
     // Personal Best data
     let pbExerciseName: String?
@@ -146,6 +155,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case isLikedByCurrentUser = "is_liked_by_current_user"
         case splits = "split_data"
         case exercises = "exercises_data"
+        case trainedWith = "trained_with"
         case pbExerciseName = "pb_exercise_name"
         case pbValue = "pb_value"
         case streakCount = "streak_count"
@@ -184,6 +194,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         isLikedByCurrentUser = false // Will be set separately
         splits = raw.splits
         exercises = raw.exercises
+        trainedWith = raw.trainedWith
         
         // Map PB data
         pbExerciseName = raw.pbExerciseName
@@ -197,7 +208,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         deviceName = raw.deviceName
     }
     
-    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil, streakCount: Int? = nil) {
+    init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil, streakCount: Int? = nil, trainedWith: [TrainedWithPerson]? = nil) {
         self.id = post.id
         self.userId = post.userId
         self.activityType = post.activityType
@@ -219,6 +230,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = post.splits
         self.exercises = post.exercises
+        self.trainedWith = trainedWith ?? post.trainedWith?.map { TrainedWithPerson(id: $0.id, username: $0.username, avatarUrl: $0.avatarUrl) }
         self.pbExerciseName = post.pbExerciseName
         self.pbValue = post.pbValue
         self.streakCount = streakCount ?? post.streakCount
@@ -249,6 +261,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         isLikedByCurrentUser: Bool?,
         splits: [WorkoutSplit]?,
         exercises: [GymExercisePost]? = nil,
+        trainedWith: [TrainedWithPerson]? = nil,
         pbExerciseName: String? = nil,
         pbValue: String? = nil,
         streakCount: Int? = nil,
@@ -276,6 +289,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.isLikedByCurrentUser = isLikedByCurrentUser
         self.splits = splits
         self.exercises = exercises
+        self.trainedWith = trainedWith
         self.pbExerciseName = pbExerciseName
         self.pbValue = pbValue
         self.streakCount = streakCount

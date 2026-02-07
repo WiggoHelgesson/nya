@@ -981,7 +981,9 @@ class SocialService {
                     streak_count,
                     source,
                     device_name,
-                    profiles!workout_posts_user_id_fkey(username, avatar_url),
+                    location,
+                    trained_with,
+                    profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
                 """)
@@ -1059,6 +1061,8 @@ class SocialService {
                     streak_count,
                     source,
                     device_name,
+                    location,
+                    trained_with,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1107,6 +1111,8 @@ class SocialService {
                     streak_count,
                     source,
                     device_name,
+                    location,
+                    trained_with,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1361,6 +1367,8 @@ class SocialService {
                     streak_count,
                     source,
                     device_name,
+                    location,
+                    trained_with,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)

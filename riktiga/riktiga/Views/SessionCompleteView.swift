@@ -65,6 +65,12 @@ struct SessionCompleteView: View {
     @State private var isLoadingTrainedWith = false
     @State private var sessionStartTime: Date?
     @State private var sessionLocation: CLLocationCoordinate2D?
+    @State private var detectedGymName: String?
+    
+    // Gym location search
+    @State private var showGymSearchSheet = false
+    @State private var gymSearchResults: [MKMapItem] = []
+    @State private var isSearchingGyms = false
     
     // Default titles based on activity
     private var defaultTitle: String {
@@ -151,9 +157,12 @@ struct SessionCompleteView: View {
                 isLivePhoto = true
             }
             
-            // Load trained-with friends for gym sessions
+            // Load trained-with friends and detect gym for gym sessions
             if isGymWorkout {
                 Task {
+                    // Auto-search and select closest gym
+                    await searchAndSelectClosestGym()
+                    // Load trained-with friends
                     await loadTrainedWithFriends()
                 }
             }
@@ -460,6 +469,11 @@ struct SessionCompleteView: View {
                 }
             }
             
+            // MARK: - Gym Location Section (Gym only)
+            if isGymWorkout {
+                gymLocationSection
+            }
+            
             // MARK: - Trained With Friends Section (Gym only)
             if isGymWorkout && !trainedWithFriends.isEmpty {
                 trainedWithSection
@@ -513,6 +527,130 @@ struct SessionCompleteView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
+    }
+    
+    // MARK: - Gym Location Section
+    private var gymLocationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(.black)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plats")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    
+                    if let gymName = detectedGymName, !gymName.isEmpty {
+                        Text(gymName)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                    } else {
+                        Text("Ingen plats detekterad")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: {
+                    showGymSearchSheet = true
+                }) {
+                    Text("Ändra")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.black)
+                }
+            }
+            .padding(14)
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+        .padding(.top, 8)
+        .sheet(isPresented: $showGymSearchSheet) {
+            gymSearchSheet
+        }
+    }
+    
+    // MARK: - Gym Search Sheet
+    private var gymSearchSheet: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                if isSearchingGyms {
+                    ProgressView("Söker efter gym...")
+                        .padding()
+                } else if gymSearchResults.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "mappin.slash")
+                            .font(.system(size: 50))
+                            .foregroundColor(.secondary)
+                        Text("Inga gym hittades i närheten")
+                            .font(.system(size: 17))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(gymSearchResults, id: \.self) { mapItem in
+                        Button(action: {
+                            selectGym(mapItem)
+                            showGymSearchSheet = false
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.black)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(mapItem.name ?? "Okänt gym")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    
+                                    if let address = mapItem.placemark.title {
+                                        Text(address)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    // Show distance
+                                    if let currentLocation = GymLocationManager.shared.currentLocation {
+                                        let distance = currentLocation.distance(from: CLLocation(
+                                            latitude: mapItem.placemark.coordinate.latitude,
+                                            longitude: mapItem.placemark.coordinate.longitude
+                                        ))
+                                        Text("\(Int(distance))m bort")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Välj gym")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Stäng") {
+                        showGymSearchSheet = false
+                    }
+                }
+            }
+            .onAppear {
+                Task {
+                    await searchNearbyGyms()
+                }
+            }
+        }
     }
     
     // MARK: - Gym Details Section
@@ -1379,6 +1517,99 @@ struct SessionCompleteView: View {
         }
     }
     
+    // MARK: - Gym Search Functions
+    
+    private func searchNearbyGyms() async {
+        guard let currentLocation = GymLocationManager.shared.currentLocation else {
+            print("⚠️ No current location for gym search")
+            return
+        }
+        
+        await MainActor.run {
+            isSearchingGyms = true
+        }
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = "gym"
+        request.resultTypes = [.pointOfInterest]
+        request.region = MKCoordinateRegion(
+            center: currentLocation.coordinate,
+            latitudinalMeters: 5000, // 5 km radius
+            longitudinalMeters: 5000
+        )
+        
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            
+            // Sort by distance
+            let sortedResults = response.mapItems.sorted { item1, item2 in
+                let loc1 = CLLocation(latitude: item1.placemark.coordinate.latitude,
+                                     longitude: item1.placemark.coordinate.longitude)
+                let loc2 = CLLocation(latitude: item2.placemark.coordinate.latitude,
+                                     longitude: item2.placemark.coordinate.longitude)
+                return currentLocation.distance(from: loc1) < currentLocation.distance(from: loc2)
+            }
+            
+            await MainActor.run {
+                gymSearchResults = sortedResults
+                isSearchingGyms = false
+                print("✅ Found \(sortedResults.count) gyms nearby")
+            }
+        } catch {
+            print("❌ Error searching for gyms: \(error)")
+            await MainActor.run {
+                isSearchingGyms = false
+            }
+        }
+    }
+    
+    private func searchAndSelectClosestGym() async {
+        guard let currentLocation = GymLocationManager.shared.currentLocation else {
+            await MainActor.run {
+                detectedGymName = GymLocationManager.shared.getCurrentGymName()
+            }
+            return
+        }
+        
+        await MainActor.run {
+            isSearchingGyms = true
+        }
+        
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = "gym"
+        request.resultTypes = [.pointOfInterest]
+        request.region = MKCoordinateRegion(
+            center: currentLocation.coordinate,
+            latitudinalMeters: 5000, // 5 km radius
+            longitudinalMeters: 5000
+        )
+        
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            await MainActor.run {
+                isSearchingGyms = false
+                if let closest = response.mapItems.first {
+                    selectGym(closest)
+                } else {
+                    detectedGymName = GymLocationManager.shared.getCurrentGymName()
+                }
+            }
+        } catch {
+            print("❌ Error searching for closest gym: \(error)")
+            await MainActor.run {
+                isSearchingGyms = false
+                detectedGymName = GymLocationManager.shared.getCurrentGymName()
+            }
+        }
+    }
+    
+    private func selectGym(_ mapItem: MKMapItem) {
+        detectedGymName = mapItem.name
+        print("📍 Selected gym: \(mapItem.name ?? "Unknown")")
+    }
+    
     // MARK: - Helper Functions
     
     private func formatDuration(_ seconds: Int) -> String {
@@ -1495,8 +1726,44 @@ struct SessionCompleteView: View {
             // Get current streak for achievement banner
             let currentStreak = StreakManager.shared.currentStreak
             
-            // Get detected gym name for gym sessions
-            let gymLocation: String? = activity.rawValue == "Gympass" ? GymLocationManager.shared.getCurrentGymName() : nil
+            // Get location - gym name for gym sessions, city for running sessions
+            var workoutLocation: String? = nil
+            if activity.rawValue == "Gympass" {
+                // For gym sessions, use detected gym name
+                workoutLocation = detectedGymName ?? GymLocationManager.shared.getCurrentGymName()
+            } else if !routeCoordinates.isEmpty {
+                // For running/outdoor activities, reverse geocode first coordinate to get city
+                let firstCoord = routeCoordinates[0]
+                let location = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
+                
+                do {
+                    let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
+                    if let placemark = placemarks.first {
+                        // Get city and county/state
+                        let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+                        let county = placemark.administrativeArea ?? ""
+                        
+                        if !city.isEmpty && !county.isEmpty {
+                            workoutLocation = "\(city), \(county)"
+                        } else if !city.isEmpty {
+                            workoutLocation = city
+                        } else if !county.isEmpty {
+                            workoutLocation = county
+                        }
+                    }
+                } catch {
+                    print("⚠️ Reverse geocoding failed: \(error)")
+                }
+            }
+            
+            // Map trained with friends to WorkoutPost format (only if user wants to include them)
+            let trainedWithData: [WorkoutPost.TrainedWithPerson]? = (activity.rawValue == "Gympass" && includeTrainedWith && !trainedWithFriends.isEmpty) ? trainedWithFriends.map { friend in
+                WorkoutPost.TrainedWithPerson(
+                    id: friend.id,
+                    username: friend.username,
+                    avatarUrl: friend.avatarUrl
+                )
+            } : nil
             
             let post = WorkoutPost(
                 userId: authViewModel.currentUser?.id ?? "",
@@ -1515,7 +1782,8 @@ struct SessionCompleteView: View {
                 pbExerciseName: hasPB ? pbExerciseName : nil,
                 pbValue: hasPB ? pbValue : nil,
                 streakCount: currentStreak > 0 ? currentStreak : nil,
-                location: gymLocation
+                location: workoutLocation,
+                trainedWith: trainedWithData
             )
             
             do {

@@ -51,6 +51,11 @@ final class ActiveSessionService {
     func startSession(userId: String, activityType: String, location: CLLocation?, userName: String? = nil) async throws -> String? {
         print("🏋️ Starting active session for user: \(userId), name: \(userName ?? "unknown"), type: \(activityType)")
         
+        // Cleanup stale sessions before starting new one (fire and forget)
+        Task.detached(priority: .background) {
+            try? await self.cleanupStaleSessions()
+        }
+        
         let sessionData = ActiveSessionInsert(
             userId: userId,
             activityType: activityType,
@@ -265,11 +270,11 @@ final class ActiveSessionService {
             // Only gym sessions
             guard session.activityType.lowercased().contains("gym") else { continue }
             
-            // Check distance
+            // Check distance (300m radius - covers large gyms and GPS inaccuracy)
             guard let friendLat = session.latitude, let friendLon = session.longitude else { continue }
             let distance = calculateDistance(lat1: myLatitude, lon1: myLongitude, lat2: friendLat, lon2: friendLon)
             
-            guard distance <= 100 else {
+            guard distance <= 300 else {
                 print("  ❌ Friend \(session.userId) too far: \(Int(distance))m")
                 continue
             }
@@ -348,6 +353,25 @@ final class ActiveSessionService {
         
         let overlapSeconds = overlapEnd.timeIntervalSince(overlapStart)
         return max(0, Int(overlapSeconds / 60))
+    }
+    
+    /// Cleanup stale active sessions (older than 12 hours)
+    func cleanupStaleSessions() async throws {
+        let maxSessionAge: TimeInterval = 12 * 60 * 60 // 12 hours
+        let cutoffDate = Date().addingTimeInterval(-maxSessionAge)
+        let cutoffDateString = ISO8601DateFormatter().string(from: cutoffDate)
+        
+        print("🧹 Cleaning up stale active sessions older than 12 hours")
+        
+        // Delete sessions that are marked as active but haven't been updated in 12+ hours
+        // OR sessions that were updated more than 12 hours ago
+        try await supabase
+            .from("active_sessions")
+            .delete()
+            .or("updated_at.lt.\(cutoffDateString),started_at.lt.\(cutoffDateString)")
+            .execute()
+        
+        print("✅ Cleaned up stale active sessions")
     }
     
     // MARK: - Fetch Active Friends
@@ -476,26 +500,6 @@ final class ActiveSessionService {
                 latitude: session.latitude,
                 longitude: session.longitude
             )
-        }
-    }
-    
-    /// Cleanup stale sessions from database (sessions older than 12 hours)
-    /// Call this periodically to keep the database clean
-    func cleanupStaleSessions() async {
-        let maxAge: TimeInterval = 12 * 60 * 60 // 12 hours
-        let cutoffDate = Date().addingTimeInterval(-maxAge)
-        let cutoffDateString = ISO8601DateFormatter().string(from: cutoffDate)
-        
-        do {
-            try await supabase
-                .from("active_sessions")
-                .delete()
-                .lt("started_at", value: cutoffDateString)
-                .execute()
-            
-            print("🧹 Cleaned up stale active sessions older than 12 hours")
-        } catch {
-            print("⚠️ Failed to cleanup stale sessions: \(error)")
         }
     }
 }
