@@ -16,6 +16,7 @@ class AuthViewModel: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var showUsernameRequiredPopup = false
     @Published var showPaywallAfterSignup = false
+    @Published var needsOnboarding = false
     
     private let supabase = SupabaseConfig.supabase
     private var cancellables = Set<AnyCancellable>()
@@ -118,6 +119,24 @@ class AuthViewModel: NSObject, ObservableObject {
                 
                 // Hämta profil-data från Supabase
                 if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                    
+                    // Check if onboarding was completed
+                    if !profile.onboardingCompleted {
+                        // User has a session + profile but never finished onboarding
+                        print("⚠️ User has profile but onboarding not completed, showing onboarding")
+                        await MainActor.run {
+                            self.currentUser = profile
+                            self.needsOnboarding = true
+                            self.isLoggedIn = false
+                            self.isLoading = false
+                            
+                            // Set current user for recent exercises (personalized)
+                            RecentExerciseStore.shared.setUser(userId: profile.id)
+                        }
+                        await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
+                        return
+                    }
+                    
                     // IMPORTANT: Update database Pro status BEFORE RevenueCat login
                     // to ensure combined status is correct
                     await MainActor.run {
@@ -304,18 +323,9 @@ class AuthViewModel: NSObject, ObservableObject {
                 
                 await MainActor.run {
                     self.currentUser = newUser
-                    self.isLoggedIn = true
+                    // DON'T set isLoggedIn = true here - onboarding must complete first
                     self.isLoading = false
                     self.prefetchAvatar(url: newUser.avatarUrl)
-                    
-                    // Set current user for AI scan limit manager
-                    AIScanLimitManager.shared.setCurrentUser(userId: newUser.id)
-                    
-                    // Set current user for streak manager (per-user streaks)
-                    StreakManager.shared.setUser(userId: newUser.id)
-                    
-                    // Set current user for gym location tracking
-                    GymLocationManager.shared.setUser(userId: newUser.id)
                     
                     // Set current user for recent exercises (personalized)
                     RecentExerciseStore.shared.setUser(userId: newUser.id)
@@ -475,42 +485,48 @@ class AuthViewModel: NSObject, ObservableObject {
             
             Task {
                 do {
-                    // Sign in with Supabase using Google ID token
-                    let session = try await self.supabase.auth.signInWithIdToken(
-                        credentials: .init(
-                            provider: .google,
-                            idToken: idToken,
-                            accessToken: accessToken
+                    // Step 1: Sign in with Supabase using Google ID token
+                    print("🔐 [Google] Step 1: Signing in with Supabase ID token...")
+                    let session: Session
+                    do {
+                        session = try await self.supabase.auth.signInWithIdToken(
+                            credentials: .init(
+                                provider: .google,
+                                idToken: idToken,
+                                accessToken: accessToken
+                            )
                         )
-                    )
+                        print("✅ [Google] Step 1 success: Auth session created, userId: \(session.user.id.uuidString)")
+                    } catch {
+                        print("❌ [Google] Step 1 FAILED - signInWithIdToken error: \(error)")
+                        print("❌ [Google] Error type: \(type(of: error))")
+                        print("❌ [Google] Error details: \(String(describing: error))")
+                        await MainActor.run {
+                            self.errorMessage = "Google-inloggning misslyckades (auth): \(error.localizedDescription)\n\nDetaljer: \(String(describing: error))"
+                            self.isLoading = false
+                            self.onGoogleSignInComplete?(false, nil, nil)
+                        }
+                        return
+                    }
                     
                     let userId = session.user.id.uuidString
                     let email = session.user.email ?? ""
                     
-                    // Check if profile exists
-                    let existingProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId)
+                    // Step 2: Check if profile exists
+                    print("🔍 [Google] Step 2: Checking existing profile for userId: \(userId)")
+                    let existingProfile: User?
+                    do {
+                        existingProfile = try await ProfileService.shared.fetchUserProfile(userId: userId)
+                        print("✅ [Google] Step 2 success: Profile exists = \(existingProfile != nil), onboardingCompleted = \(existingProfile?.onboardingCompleted ?? false)")
+                    } catch {
+                        print("⚠️ [Google] Step 2 WARNING - fetchUserProfile error: \(error)")
+                        print("⚠️ [Google] Continuing with existingProfile = nil")
+                        existingProfile = nil
+                    }
                     
-                    if existingProfile == nil {
-                        // New user - create profile
-                        let defaultName = googleName ?? email.components(separatedBy: "@").first ?? "Användare"
-                        let newUser = User(id: userId, name: defaultName, email: email)
-                        try await ProfileService.shared.createUserProfile(newUser)
-                        
-                        await RevenueCatManager.shared.logInFor(appUserId: userId)
-                        
-                        await MainActor.run {
-                            self.currentUser = newUser
-                            // DON'T set isLoggedIn = true here - wait for onboarding to complete
-                            self.isLoading = false
-                            
-                            // Set current user for recent exercises (personalized)
-                            RecentExerciseStore.shared.setUser(userId: newUser.id)
-                            
-                            // Trigger onboarding for new users
-                            self.onGoogleSignInComplete?(true, self.pendingGoogleOnboardingData, googleName)
-                        }
-                    } else if let profile = existingProfile {
-                        // Existing user - just log in
+                    if let profile = existingProfile, profile.onboardingCompleted {
+                        // Existing user who completed onboarding - just log in
+                        print("✅ [Google] Existing user with completed onboarding - logging in")
                         await MainActor.run {
                             self.currentUser = profile
                             self.isLoggedIn = true
@@ -521,11 +537,54 @@ class AuthViewModel: NSObject, ObservableObject {
                             
                             self.onGoogleSignInComplete?(true, nil, nil)
                         }
+                    } else {
+                        // New user OR user who didn't finish onboarding - start onboarding
+                        var userForOnboarding: User
+                        if let profile = existingProfile {
+                            // Profile exists but onboarding not completed
+                            print("🔄 [Google] Profile exists but onboarding not completed")
+                            userForOnboarding = profile
+                        } else {
+                            // Brand new user - create profile
+                            print("🆕 [Google] Step 3: Creating new profile...")
+                            let defaultName = googleName ?? email.components(separatedBy: "@").first ?? "Användare"
+                            userForOnboarding = User(id: userId, name: defaultName, email: email)
+                            do {
+                                try await ProfileService.shared.createUserProfile(userForOnboarding)
+                                print("✅ [Google] Step 3 success: Profile created")
+                            } catch {
+                                print("❌ [Google] Step 3 FAILED - createUserProfile error: \(error)")
+                                print("❌ [Google] Error type: \(type(of: error))")
+                                print("❌ [Google] Error details: \(String(describing: error))")
+                                await MainActor.run {
+                                    self.errorMessage = "Google-inloggning misslyckades (profil): \(error.localizedDescription)\n\nDetaljer: \(String(describing: error))"
+                                    self.isLoading = false
+                                    self.onGoogleSignInComplete?(false, nil, nil)
+                                }
+                                return
+                            }
+                        }
+                        
+                        await RevenueCatManager.shared.logInFor(appUserId: userId)
+                        
+                        await MainActor.run {
+                            self.currentUser = userForOnboarding
+                            // DON'T set isLoggedIn = true here - wait for onboarding to complete
+                            self.isLoading = false
+                            
+                            // Set current user for recent exercises (personalized)
+                            RecentExerciseStore.shared.setUser(userId: userForOnboarding.id)
+                            
+                            // Trigger onboarding for new/incomplete users
+                            self.onGoogleSignInComplete?(true, self.pendingGoogleOnboardingData, googleName)
+                        }
                     }
                     
                 } catch {
+                    print("❌ [Google] Unexpected error: \(error)")
+                    print("❌ [Google] Error type: \(type(of: error))")
                     await MainActor.run {
-                        self.errorMessage = "Google-inloggning misslyckades: \(error.localizedDescription)"
+                        self.errorMessage = "Google-inloggning misslyckades: \(error.localizedDescription)\n\nDetaljer: \(String(describing: error))"
                         self.isLoading = false
                         self.onGoogleSignInComplete?(false, nil, nil)
                     }
@@ -645,33 +704,35 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                 let appleFirstName = fullName?.givenName
                 let appleLastName = fullName?.familyName
                 
-                // Check if profile exists
-                if let existingProfile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
-                    // Existing user - just log in
+                // Check if profile exists and whether onboarding was completed
+                let existingProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId)
+                
+                if let profile = existingProfile, profile.onboardingCompleted {
+                    // Existing user who completed onboarding - just log in
                     await MainActor.run {
-                        self.currentUser = existingProfile
+                        self.currentUser = profile
                         self.isLoggedIn = true
                         self.isLoading = false
-                        self.prefetchAvatar(url: existingProfile.avatarUrl)
+                        self.prefetchAvatar(url: profile.avatarUrl)
                         
                         // Set current user for AI scan limit manager
-                        AIScanLimitManager.shared.setCurrentUser(userId: existingProfile.id)
+                        AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         
                         // Set current user for streak manager (per-user streaks)
-                        StreakManager.shared.setUser(userId: existingProfile.id)
+                        StreakManager.shared.setUser(userId: profile.id)
                         
                         // Set current user for gym location tracking
-                        GymLocationManager.shared.setUser(userId: existingProfile.id)
+                        GymLocationManager.shared.setUser(userId: profile.id)
                         
                         // Set current user for recent exercises (personalized)
-                        RecentExerciseStore.shared.setUser(userId: existingProfile.id)
+                        RecentExerciseStore.shared.setUser(userId: profile.id)
                         
-                        RevenueCatManager.shared.updateDatabaseProStatus(existingProfile.isProMember)
+                        RevenueCatManager.shared.updateDatabaseProStatus(profile.isProMember)
                         
                         // Check if user has a valid username
-                        let hasValidUsername = !existingProfile.name.isEmpty && 
-                                              existingProfile.name != "Användare" &&
-                                              !existingProfile.name.hasPrefix("user-")
+                        let hasValidUsername = !profile.name.isEmpty && 
+                                              profile.name != "Användare" &&
+                                              !profile.name.hasPrefix("user-")
                         
                         if !hasValidUsername {
                             self.showUsernameRequiredPopup = true
@@ -681,47 +742,53 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: userId)
                 } else {
-                    // New user - create profile with Apple's provided name
-                    // Use Apple name directly as username (no onboarding name step needed)
-                    let appleFullName = [appleFirstName, appleLastName]
-                        .compactMap { $0 }
-                        .joined(separator: " ")
+                    // New user OR user who didn't finish onboarding - start onboarding
+                    var userForOnboarding: User
                     
-                    // Use Apple name or fallback to placeholder
-                    let initialUsername = appleFullName.isEmpty ? "user-\(userId.prefix(6))" : appleFullName
-                    
-                    var newUser = User(
-                        id: userId,
-                        name: initialUsername,
-                        email: email ?? session.user.email ?? ""
-                    )
-                    
-                    try await ProfileService.shared.createUserProfile(newUser)
-                    
-                    // If Apple provided a name, also update the username in profiles table
-                    if !appleFullName.isEmpty {
-                        try? await ProfileService.shared.updateUsername(userId: userId, username: appleFullName)
-                    }
-                    
-                    // Fetch updated profile
-                    if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
-                        newUser = profile
+                    if let profile = existingProfile {
+                        // Profile exists but onboarding not completed
+                        userForOnboarding = profile
+                    } else {
+                        // Brand new user - create profile with Apple's provided name
+                        let appleFullName = [appleFirstName, appleLastName]
+                            .compactMap { $0 }
+                            .joined(separator: " ")
+                        
+                        let initialUsername = appleFullName.isEmpty ? "user-\(userId.prefix(6))" : appleFullName
+                        
+                        userForOnboarding = User(
+                            id: userId,
+                            name: initialUsername,
+                            email: email ?? session.user.email ?? ""
+                        )
+                        
+                        try await ProfileService.shared.createUserProfile(userForOnboarding)
+                        
+                        // If Apple provided a name, also update the username in profiles table
+                        if !appleFullName.isEmpty {
+                            try? await ProfileService.shared.updateUsername(userId: userId, username: appleFullName)
+                        }
+                        
+                        // Fetch updated profile
+                        if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
+                            userForOnboarding = profile
+                        }
                     }
                     
                     await RevenueCatManager.shared.logInFor(appUserId: userId)
                     
                     await MainActor.run {
-                        self.currentUser = newUser
+                        self.currentUser = userForOnboarding
                         self.appleProvidedFirstName = appleFirstName
                         self.appleProvidedLastName = appleLastName
                         // DON'T set isLoggedIn = true here - wait for onboarding to complete
                         self.isLoading = false
-                        self.prefetchAvatar(url: newUser.avatarUrl)
+                        self.prefetchAvatar(url: userForOnboarding.avatarUrl)
                         
                         // Set current user for recent exercises (personalized)
-                        RecentExerciseStore.shared.setUser(userId: newUser.id)
+                        RecentExerciseStore.shared.setUser(userId: userForOnboarding.id)
                         
-                        // Signal that this is a new user who needs onboarding, pass Apple name
+                        // Signal that this user needs onboarding, pass Apple name
                         self.onAppleSignInComplete?(true, OnboardingData(), appleFirstName, appleLastName)
                     }
                 }

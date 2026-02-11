@@ -246,7 +246,13 @@ private struct ConfirmationDetailRow: View {
             totalReviews: nil,
             totalLessons: nil,
             isActive: true,
-            serviceRadiusKm: 15
+            serviceRadiusKm: 15,
+            instagramUrl: nil,
+            facebookUrl: nil,
+            websiteUrl: nil,
+            phoneNumber: nil,
+            contactEmail: nil,
+            galleryUrls: nil
         ),
         lessonType: TrainerLessonType(
             id: UUID(),

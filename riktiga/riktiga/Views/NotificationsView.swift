@@ -462,7 +462,7 @@ struct CoachInvitationNotificationRow: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.green)
+                    .background(Color.black)
                     .cornerRadius(8)
                 }
                 .disabled(isAccepting || isDeclining)
@@ -595,6 +595,10 @@ struct NotificationRowStrava: View {
             return "Coach-inbjudan"
         case .coachProgramAssigned:
             return "Nytt träningsprogram"
+        case .trainerChatMessage:
+            return "Nytt meddelande"
+        case .coachScheduleUpdated:
+            return "Schema uppdaterat"
         case .unknown:
             return "Notis"
         }
@@ -624,6 +628,10 @@ struct NotificationRowStrava: View {
             return "\(name) vill coacha dig! Tryck för att svara."
         case .coachProgramAssigned:
             return "\(name) har tilldelat dig ett nytt träningsprogram"
+        case .trainerChatMessage:
+            return "\(name) skickade ett meddelande"
+        case .coachScheduleUpdated:
+            return "\(name) uppdaterade ditt träningsschema"
         case .unknown:
             return "\(name) skickade en notis"
         }

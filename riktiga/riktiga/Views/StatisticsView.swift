@@ -86,12 +86,14 @@ struct StatisticsView: View {
                         .opacity(showMonthly ? 1 : 0)
                         .offset(y: showMonthly ? 0 : 25)
                         .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
+                        .pageEntrance()
                     
                     // MARK: - Sport Type Filter
                     sportTypeFilter
                         .padding(.top, 24)
                         .opacity(showFilter ? 1 : 0)
                     .offset(y: showFilter ? 0 : 10)
+                    .pageEntrance(delay: 0.05)
                 
                 // MARK: - This Week Stats
                 thisWeekSection
@@ -99,6 +101,7 @@ struct StatisticsView: View {
                     .opacity(showWeekStats ? 1 : 0)
                     .offset(y: showWeekStats ? 0 : 20)
                     .scaleEffect(showWeekStats ? 1 : 0.95, anchor: .top)
+                    .pageEntrance(delay: 0.1)
                 
                 // MARK: - Past 12 Weeks Chart
                 past12WeeksChart

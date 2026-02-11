@@ -29,15 +29,6 @@ struct ProfileContainerView: View {
                         .environmentObject(authViewModel)
                         .zIndex(2)
                     
-                    // MARK: - Pro Banner (Sticky)
-                    // Only show for non-Pro members
-                    if !(authViewModel.currentUser?.isProMember ?? false) {
-                        ProBannerView(onTap: {
-                            SuperwallService.shared.showPaywall()
-                        })
-                        .zIndex(1)
-                    }
-                    
                     // Swipeable content
                     TabView(selection: $selectedTab) {
                         StatisticsView()

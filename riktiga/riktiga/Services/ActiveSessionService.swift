@@ -35,6 +35,68 @@ struct ActiveFriendSession: Identifiable, Codable {
     }
 }
 
+/// Model for gym leaderboard (workout count or volume)
+struct GymVolumeLeader: Identifiable, Codable, Equatable {
+    let id: String              // userId
+    let name: String
+    let avatarUrl: String?
+    let totalVolume: Double     // Total kg × reps
+    let exerciseCount: Int      // Antal övningar
+    let duration: TimeInterval  // Tid sen session startade
+    let isPro: Bool
+    let sessionId: String?
+    let workoutCount: Int       // Antal pass under året
+    
+    var formattedVolume: String {
+        if totalVolume >= 1000 {
+            return String(format: "%.1fk kg", totalVolume / 1000)
+        }
+        return String(format: "%.0f kg", totalVolume)
+    }
+    
+    var formattedWorkoutCount: String {
+        return "\(workoutCount) pass"
+    }
+    
+    var powerZone: PowerZone {
+        switch totalVolume {
+        case 0..<1000:
+            return .warmingUp
+        case 1000..<3000:
+            return .beastMode
+        case 3000..<5000:
+            return .absoluteUnit
+        default:
+            return .gymLegend
+        }
+    }
+    
+    enum PowerZone {
+        case warmingUp
+        case beastMode
+        case absoluteUnit
+        case gymLegend
+        
+        var title: String {
+            switch self {
+            case .warmingUp: return "Warming Up"
+            case .beastMode: return "Beast Mode"
+            case .absoluteUnit: return "Absolute Unit"
+            case .gymLegend: return "Gym Legend"
+            }
+        }
+        
+        var color: String {
+            switch self {
+            case .warmingUp: return "gray"
+            case .beastMode: return "orange"
+            case .absoluteUnit: return "purple"
+            case .gymLegend: return "yellow"
+            }
+        }
+    }
+}
+
 /// Service to manage active sessions and share location with friends
 final class ActiveSessionService {
     static let shared = ActiveSessionService()
@@ -501,6 +563,116 @@ final class ActiveSessionService {
                 longitude: session.longitude
             )
         }
+    }
+    
+    // MARK: - Gym Volume Leaderboard
+    
+    /// Fetch gym leaderboard - top users by workout count this year
+    func fetchActiveGymLeaderboard(userId: String) async throws -> [GymVolumeLeader] {
+        print("🏆 [Leaderboard] Fetching gym leaderboard for all users")
+        
+        // Get start of current year
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        var components = DateComponents()
+        components.year = currentYear
+        components.month = 1
+        components.day = 1
+        guard let yearStart = calendar.date(from: components) else {
+            return []
+        }
+        let yearStartString = ISO8601DateFormatter().string(from: yearStart)
+        
+        print("📋 [Leaderboard] Counting workouts since: \(yearStartString)")
+        
+        // Use RPC function to count gym workouts per user for the year
+        // We'll query workout_posts and count by user_id
+        let workoutsResponse = try await supabase
+            .from("workout_posts")
+            .select("user_id")
+            .eq("activity_type", value: "Gympass")
+            .gte("created_at", value: yearStartString)
+            .execute()
+        
+        // Count workouts per user
+        struct WorkoutRecord: Codable {
+            let userId: String
+            
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+            }
+        }
+        
+        let workouts = try JSONDecoder().decode([WorkoutRecord].self, from: workoutsResponse.data)
+        print("✅ [Leaderboard] Found \(workouts.count) total gym workouts this year")
+        
+        // Group by user_id and count
+        var userWorkoutCounts: [String: Int] = [:]
+        for workout in workouts {
+            userWorkoutCounts[workout.userId, default: 0] += 1
+        }
+        
+        // Filter to top 50 users to avoid fetching too many profiles
+        let topUsers = userWorkoutCounts.sorted { $0.value > $1.value }.prefix(50)
+        
+        guard !topUsers.isEmpty else {
+            print("⚠️ [Leaderboard] No users with workouts this year")
+            return []
+        }
+        
+        print("✅ [Leaderboard] Top user has \(topUsers.first?.value ?? 0) workouts")
+        
+        // Fetch profiles for top users
+        struct ProfileData: Codable {
+            let id: String
+            let username: String?
+            let avatarUrl: String?
+            let isProMember: Bool?
+            
+            enum CodingKeys: String, CodingKey {
+                case id
+                case username
+                case avatarUrl = "avatar_url"
+                case isProMember = "is_pro_member"
+            }
+        }
+        
+        let userIds = topUsers.map { $0.key }
+        let profilesResponse = try await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, is_pro_member")
+            .in("id", values: userIds)
+            .execute()
+        
+        let profiles = try JSONDecoder().decode([ProfileData].self, from: profilesResponse.data)
+        let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+        
+        // Build leaderboard
+        var leaderboard: [GymVolumeLeader] = []
+        
+        for (userId, workoutCount) in topUsers {
+            guard let profile = profileMap[userId] else { continue }
+            
+            let leader = GymVolumeLeader(
+                id: userId,
+                name: profile.username ?? "Användare",
+                avatarUrl: profile.avatarUrl,
+                totalVolume: 0, // Not used for workout count leaderboard
+                exerciseCount: 0, // Not used
+                duration: 0, // Not used
+                isPro: profile.isProMember ?? false,
+                sessionId: nil,
+                workoutCount: workoutCount
+            )
+            
+            leaderboard.append(leader)
+        }
+        
+        // Sort by workout count (highest first)
+        leaderboard.sort { $0.workoutCount > $1.workoutCount }
+        
+        print("✅ [Leaderboard] Built leaderboard with \(leaderboard.count) entries")
+        return leaderboard
     }
 }
 

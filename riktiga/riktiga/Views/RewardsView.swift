@@ -240,16 +240,16 @@ struct RewardsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     
-    // Animation states
-    @State private var showHeader = false
-    @State private var showHeroBanner = false
-    @State private var showCategories = false
-    @State private var showGolfSection = false
-    @State private var showGymSection = false
-    @State private var showEnergySection = false
-    @State private var showRunningSection = false
-    @State private var showSkiSection = false
-    @State private var showSkeleton = true
+    // Animation states - default to showing content (no skeleton needed for static data)
+    @State private var showHeader = true
+    @State private var showHeroBanner = true
+    @State private var showCategories = true
+    @State private var showGolfSection = true
+    @State private var showGymSection = true
+    @State private var showEnergySection = true
+    @State private var showRunningSection = true
+    @State private var showSkiSection = true
+    @State private var showSkeleton = false
     
     // Adaptive colors
     private var pageBackgroundColor: Color {
@@ -482,20 +482,6 @@ struct RewardsView: View {
                 }
                 
                 VStack(spacing: 0) {
-                    // MARK: - Fixed Strava-Style Navigation Header
-                    StravaStyleHeaderView()
-                        .environmentObject(authViewModel)
-                        .zIndex(2)
-                    
-                    // MARK: - Pro Banner (Sticky)
-                    // Only show for non-Pro members
-                    if !(authViewModel.currentUser?.isProMember ?? false) {
-                        ProBannerView(onTap: {
-                            SuperwallService.shared.showPaywall()
-                        })
-                        .zIndex(1)
-                    }
-                    
                     ScrollView {
                         VStack(spacing: 0) {
                         // MARK: - Header with Search, Favorites, and Points
@@ -571,6 +557,7 @@ struct RewardsView: View {
                         .background(sectionBackgroundColor)
                         .opacity(showHeader ? 1 : 0)
                         .offset(y: showHeader ? 0 : 10)
+                        .pageEntrance()
                         
                         LazyVStack(spacing: 12) {
                             // Hero banner ads hidden
@@ -585,11 +572,13 @@ struct RewardsView: View {
                                 .background(sectionBackgroundColor)
                                 .opacity(showCategories ? 1 : 0)
                                 .offset(y: showCategories ? 0 : 20)
+                                .pageEntrance(delay: 0.05)
                             
                             // Golf section
                             sliderSectionOptimized(title: "Golf", rewards: golfRewards)
                                 .opacity(showGolfSection ? 1 : 0)
                                 .offset(y: showGolfSection ? 0 : 25)
+                                .pageEntrance(delay: 0.1)
                             
                             // Gym section
                             sliderSectionOptimized(title: "Gym", rewards: gymRewards)
@@ -631,9 +620,6 @@ struct RewardsView: View {
             }
             .onAppear {
                 animateRewardsContent()
-            }
-            .onDisappear {
-                resetAnimationStates()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootBeloningar"))) { _ in
                 navigationPath = NavigationPath()

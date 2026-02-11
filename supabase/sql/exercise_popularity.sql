@@ -113,5 +113,43 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ============================================
+-- 5. Function to get trending exercises (recent usage weighted higher)
+-- ============================================
+CREATE OR REPLACE FUNCTION get_trending_exercises(
+    p_body_part TEXT DEFAULT NULL,
+    p_days INTEGER DEFAULT 30,
+    p_limit INTEGER DEFAULT 30
+)
+RETURNS TABLE (
+    exercise_id TEXT,
+    exercise_name TEXT,
+    body_part TEXT,
+    usage_count INTEGER,
+    trend_score NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ep.exercise_id,
+        ep.exercise_name,
+        ep.body_part,
+        ep.usage_count,
+        (ep.usage_count * 
+         CASE 
+            WHEN ep.last_used_at > NOW() - INTERVAL '7 days' THEN 3.0
+            WHEN ep.last_used_at > NOW() - INTERVAL '14 days' THEN 2.0
+            WHEN ep.last_used_at > NOW() - INTERVAL '30 days' THEN 1.5
+            ELSE 1.0
+         END
+        )::NUMERIC as trend_score
+    FROM exercise_popularity ep
+    WHERE (p_body_part IS NULL OR p_body_part = 'all' OR ep.body_part = p_body_part)
+      AND ep.last_used_at > NOW() - (p_days || ' days')::INTERVAL
+    ORDER BY trend_score DESC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Comment
 COMMENT ON TABLE exercise_popularity IS 'Tracks global exercise usage to show most popular exercises first';

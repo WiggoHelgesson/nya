@@ -262,7 +262,13 @@ struct TrainerPaymentView: View {
             totalReviews: nil,
             totalLessons: nil,
             isActive: true,
-            serviceRadiusKm: 10.0
+            serviceRadiusKm: 10.0,
+            instagramUrl: nil,
+            facebookUrl: nil,
+            websiteUrl: nil,
+            phoneNumber: nil,
+            contactEmail: nil,
+            galleryUrls: nil
         ),
         onPaymentSuccess: { }
     )

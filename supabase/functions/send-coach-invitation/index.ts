@@ -6,10 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// APNs Configuration
-const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')!
-const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')!
-const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')!
 const BUNDLE_ID = 'roboreabapp.productions'
 
 interface CoachInvitationRequest {
@@ -21,21 +17,30 @@ interface CoachInvitationRequest {
 }
 
 async function createJWT(): Promise<string> {
+  const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')
+  const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')
+  const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')
+
+  if (!APNS_KEY_ID || !APNS_TEAM_ID || !APNS_PRIVATE_KEY) {
+    throw new Error('Missing APNs secrets')
+  }
+
   const header = {
     alg: 'ES256',
-    kid: APNS_KEY_ID,
+    kid: APNS_KEY_ID.trim(),
   }
   
   const now = Math.floor(Date.now() / 1000)
   const claims = {
-    iss: APNS_TEAM_ID,
+    iss: APNS_TEAM_ID.trim(),
     iat: now,
   }
   
   const pemContents = APNS_PRIVATE_KEY
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s/g, '')
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\\n/g, '')
+    .replace(/[\r\n\s]/g, '')
   
   const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
   

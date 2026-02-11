@@ -7,6 +7,7 @@ class ProfileService {
     static let shared = ProfileService()
     private let supabase = SupabaseConfig.supabase
     private var personalBestColumnsAvailable: Bool?
+    private var onboardingColumnAvailable: Bool?
     private let avatarBucket = "profile-images"
     
     private struct UsernameRow: Decodable { let id: String }
@@ -43,41 +44,69 @@ class ProfileService {
             
             // Försök att dekoda - Email finns INTE i profiles tabellen
             do {
-                let baseColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races"
+                let coreColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races"
+                let onboardingColumn = ", onboarding_completed"
                 let personalBestColumns = ", pb_5km_minutes, pb_10km_hours, pb_10km_minutes, pb_marathon_hours, pb_marathon_minutes"
                 var profiles: [User]
                 let shouldAttemptPBColumns = personalBestColumnsAvailable ?? true
+                let shouldAttemptOnboardingColumn = onboardingColumnAvailable ?? true
 
-                if shouldAttemptPBColumns {
-                    do {
-                        profiles = try await supabase
-                            .from("profiles")
-                            .select(baseColumns + personalBestColumns)
-                            .eq("id", value: userId)
-                            .execute()
-                            .value
-                        personalBestColumnsAvailable = true
-                    } catch {
-                        if isMissingPersonalBestColumnsError(error) {
-                            personalBestColumnsAvailable = false
-                            print("ℹ️ Personal best columns missing. Falling back to basic profile select.")
-                            profiles = try await supabase
-                                .from("profiles")
-                                .select(baseColumns)
-                                .eq("id", value: userId)
-                                .execute()
-                                .value
-                        } else {
-                            throw error
-                        }
-                    }
-                } else {
+                // Build the best SELECT we can, falling back if columns are missing
+                func buildSelect() -> String {
+                    var cols = coreColumns
+                    if shouldAttemptOnboardingColumn { cols += onboardingColumn }
+                    if shouldAttemptPBColumns { cols += personalBestColumns }
+                    return cols
+                }
+                
+                do {
                     profiles = try await supabase
                         .from("profiles")
-                        .select(baseColumns)
+                        .select(buildSelect())
                         .eq("id", value: userId)
                         .execute()
                         .value
+                    // If we got here, all attempted columns exist
+                    if shouldAttemptPBColumns { personalBestColumnsAvailable = true }
+                    if shouldAttemptOnboardingColumn { onboardingColumnAvailable = true }
+                } catch {
+                    if isMissingColumnError(error) {
+                        // Try without optional columns one by one
+                        print("ℹ️ Some columns missing, trying fallback selects...")
+                        
+                        // Try without PB columns first
+                        if shouldAttemptPBColumns {
+                            personalBestColumnsAvailable = false
+                        }
+                        
+                        // Try core + onboarding (no PB)
+                        do {
+                            let fallbackCols = shouldAttemptOnboardingColumn ? (coreColumns + onboardingColumn) : coreColumns
+                            profiles = try await supabase
+                                .from("profiles")
+                                .select(fallbackCols)
+                                .eq("id", value: userId)
+                                .execute()
+                                .value
+                            if shouldAttemptOnboardingColumn { onboardingColumnAvailable = true }
+                        } catch {
+                            if isMissingColumnError(error) && shouldAttemptOnboardingColumn {
+                                // onboarding_completed column doesn't exist yet
+                                onboardingColumnAvailable = false
+                                print("ℹ️ onboarding_completed column not found, falling back to core columns only.")
+                                profiles = try await supabase
+                                    .from("profiles")
+                                    .select(coreColumns)
+                                    .eq("id", value: userId)
+                                    .execute()
+                                    .value
+                            } else {
+                                throw error
+                            }
+                        }
+                    } else {
+                        throw error
+                    }
                 }
 
                 print("✅ Decoded profiles: \(profiles)")
@@ -194,6 +223,30 @@ class ProfileService {
         } catch {
             print("❌ Error creating profile: \(error)")
             throw error
+        }
+    }
+    
+    func updateOnboardingCompleted(userId: String) async throws {
+        do {
+            print("🔄 Marking onboarding as completed for userId: \(userId)")
+            
+            try await supabase
+                .from("profiles")
+                .update(["onboarding_completed": true])
+                .eq("id", value: userId)
+                .execute()
+            
+            onboardingColumnAvailable = true
+            print("✅ Onboarding marked as completed")
+        } catch {
+            // If the column doesn't exist yet, just log and continue gracefully
+            if isMissingColumnError(error) {
+                onboardingColumnAvailable = false
+                print("⚠️ onboarding_completed column not found in database, skipping update. Run the SQL migration.")
+            } else {
+                print("❌ Error marking onboarding as completed: \(error)")
+                throw error
+            }
         }
     }
     
@@ -463,9 +516,18 @@ class ProfileService {
     }
 
     func isMissingPersonalBestColumnsError(_ error: Error) -> Bool {
+        isMissingColumnError(error)
+    }
+    
+    func isMissingColumnError(_ error: Error) -> Bool {
         guard let postgrestError = error as? PostgrestError else { return false }
         let missingColumnCodes: Set<String> = ["42703", "PGRST204"]
         if let code = postgrestError.code, missingColumnCodes.contains(code) {
+            return true
+        }
+        // Also check error message for column-not-found hints
+        let message = postgrestError.message.lowercased()
+        if message.contains("column") && (message.contains("does not exist") || message.contains("not found")) {
             return true
         }
         return false

@@ -1501,13 +1501,46 @@ struct GolfTrainer: Identifiable, Codable, Equatable {
     let isActive: Bool?
     let serviceRadiusKm: Double?
     
+    // Social media & contact
+    let instagramUrl: String?
+    let facebookUrl: String?
+    let websiteUrl: String?
+    let phoneNumber: String?
+    let contactEmail: String?
+    
+    // Gallery images (up to 4 images total including avatar)
+    let galleryUrls: [String]?
+    
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
     
+    /// All images for the gallery slider (avatar first, then gallery images, max 4 total)
+    var allGalleryImages: [String] {
+        var images: [String] = []
+        
+        // Add avatar first if it exists
+        if let avatar = avatarUrl, !avatar.isEmpty {
+            images.append(avatar)
+        }
+        
+        // Add gallery images (up to 4 total)
+        if let gallery = galleryUrls {
+            let remainingSlots = 4 - images.count
+            images.append(contentsOf: gallery.prefix(remainingSlots))
+        }
+        
+        return images
+    }
+    
     var formattedRating: String {
-        guard let rating = averageRating, rating > 0 else { return "Ny" }
+        guard let rating = averageRating, rating > 0 else { return "-" }
         return String(format: "%.1f", rating)
+    }
+    
+    var hasRating: Bool {
+        guard let rating = averageRating else { return false }
+        return rating > 0
     }
     
     enum CodingKeys: String, CodingKey {
@@ -1530,6 +1563,12 @@ struct GolfTrainer: Identifiable, Codable, Equatable {
         case totalLessons = "total_lessons"
         case isActive = "is_active"
         case serviceRadiusKm = "service_radius_km"
+        case instagramUrl = "instagram_url"
+        case facebookUrl = "facebook_url"
+        case websiteUrl = "website_url"
+        case phoneNumber = "phone_number"
+        case contactEmail = "contact_email"
+        case galleryUrls = "gallery_urls"
     }
 }
 

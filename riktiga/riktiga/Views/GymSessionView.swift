@@ -128,9 +128,9 @@ struct GymSessionView: View {
         }
     }
     
-    // Bottom buttons for empty state (Sparade pass & Starta löppass)
+    // Bottom buttons for empty state (Sparade pass)
     private var emptyStateBottomButtons: some View {
-            VStack(spacing: 12) {
+        VStack(spacing: 12) {
             // Saved workouts button
             Button(action: {
                 let generator = UIImpactFeedbackGenerator(style: .light)
@@ -149,33 +149,8 @@ struct GymSessionView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(12)
             }
-                
-            // Start running session button
-            Button(action: {
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("SwitchActivity"),
-                    object: nil,
-                    userInfo: ["activity": ActivityType.running.rawValue]
-                )
-            }) {
-                HStack {
-                    Image(systemName: "figure.run")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Starta löppass")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(.systemGray4), lineWidth: 1)
-                )
-            }
         }
-            .padding(.horizontal, 16)
+        .padding(.horizontal, 16)
         .padding(.bottom, 20)
     }
     
@@ -260,6 +235,27 @@ struct GymSessionView: View {
                     }
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.exercises.count)
                     
+                    // Add Exercise Button
+                    Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    navigateToExercisePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Lägg till övning")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(Color(.systemBackground))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.primary)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    
                     // Uppy Progress Section
                     uppyProgressSection
                         .padding(.horizontal, 16)
@@ -280,27 +276,6 @@ struct GymSessionView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    
-                    // Add Exercise Button
-                    Button(action: {
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-                    navigateToExercisePicker = true
-                    }) {
-                        HStack {
-                            Image(systemName: "plus")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text("Lägg till övning")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(Color(.systemBackground))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.primary)
-                        .cornerRadius(12)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -1550,11 +1525,9 @@ struct ExercisePickerView: View {
             // Recent exercises first (user's own history)
             if aRecent != bRecent { return aRecent }
             
-            // Then sort by global popularity
+            // Smart ranking (global popularity + trending combined)
             let aRank = popularityRanking[a.id] ?? Int.max
             let bRank = popularityRanking[b.id] ?? Int.max
-            
-            // If we have popularity data, use it
             if aRank != bRank { return aRank < bRank }
             
             // Fallback to static popular list if no database data
@@ -1982,7 +1955,14 @@ struct ExercisePickerView: View {
     }
     
     private func loadPopularityData(for bodyPart: String?) async {
-        let ranking = await ExercisePopularityService.shared.getPopularExerciseIds(bodyPart: bodyPart)
+        let userId = AuthViewModel.shared.currentUser?.id
+        let recentIds = RecentExerciseStore.shared.load()
+        
+        let ranking = await ExercisePopularityService.shared.getSmartRanking(
+            bodyPart: bodyPart,
+            userRecentIds: recentIds,
+            userId: userId
+        )
         await MainActor.run {
             popularityRanking = ranking
         }

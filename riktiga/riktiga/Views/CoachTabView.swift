@@ -1,4 +1,7 @@
 import SwiftUI
+import Supabase
+import PostgREST
+import Realtime
 
 struct CoachTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -7,6 +10,8 @@ struct CoachTabView: View {
     @State private var isLoading = true
     @State private var showChat = false
     @State private var selectedRoutineWrapper: SelectedRoutineWrapper?
+    @State private var coachTrainerProfile: GolfTrainer?
+    @State private var realtimeChannel: RealtimeChannelV2?
     
     // Day selection
     @State private var selectedDate: Date = Date()
@@ -83,88 +88,214 @@ struct CoachTabView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // MARK: - Top Navigation (samma som andra sidor)
-            CoachHeaderView(showChat: $showChat, hasCoach: coachRelation != nil)
-                .environmentObject(authViewModel)
-            
-            ZStack {
-                // Background
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+        NavigationStack {
+            VStack(spacing: 0) {
+                // MARK: - Top Navigation (samma som Belöningar-sidan)
+                CoachHeaderView(showChat: $showChat, hasCoach: coachRelation != nil)
+                    .environmentObject(authViewModel)
                 
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if coachRelation != nil {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // MARK: - Day Picker
-                            weekCalendarView
-                                .padding(.top, 8)
-                            
-                            // MARK: - Dagens träning
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Dagens träning")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 20)
+                ZStack {
+                    // Background
+                    Color(.systemGroupedBackground)
+                        .ignoresSafeArea()
+                    
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if coachRelation != nil {
+                        ScrollView {
+                            VStack(spacing: 16) {
+                                // MARK: - Day Picker
+                                weekCalendarView
+                                    .padding(.top, 8)
                                 
-                                if routinesForSelectedDay.isEmpty {
-                                    noWorkoutForDayView
-                                        .padding(.horizontal, 16)
-                                } else {
-                                    ForEach(routinesForSelectedDay, id: \.routine.id) { item in
-                                        routineCard(routine: item.routine, program: item.program, coachName: item.coachName)
-                                            .padding(.horizontal, 16)
-                                    }
-                                }
-                            }
-                            
-                            // MARK: - Tips från tränaren
-                            if let tip = tipForSelectedDay, !tip.isEmpty {
+                                // MARK: - Dagens träning
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Tips från tränaren")
+                                    Text("Dagens träning")
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundColor(.black)
                                         .padding(.horizontal, 20)
                                     
-                                    coachTipCard(tip: tip)
-                                        .padding(.horizontal, 16)
+                                    if routinesForSelectedDay.isEmpty {
+                                        noWorkoutForDayView
+                                            .padding(.horizontal, 16)
+                                    } else {
+                                        ForEach(routinesForSelectedDay, id: \.routine.id) { item in
+                                            routineCard(routine: item.routine, program: item.program, coachName: item.coachName)
+                                                .padding(.horizontal, 16)
+                                        }
+                                    }
                                 }
-                            }
-                            
-                            // MARK: - Program & Tränare info
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Mitt program")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 20)
                                 
-                                if let coach = coachRelation?.coach {
-                                    coachAndProgramCard(coach: coach)
-                                        .padding(.horizontal, 16)
+                                // MARK: - Meddelande från tränaren
+                                if let tip = tipForSelectedDay, !tip.isEmpty {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Dagens meddelande")
+                                            .font(.system(size: 18, weight: .bold))
+                                            .foregroundColor(.black)
+                                            .padding(.horizontal, 20)
+                                        
+                                        coachTipCard(tip: tip)
+                                            .padding(.horizontal, 16)
+                                    }
                                 }
+                                
+                                // MARK: - Mitt program
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Mitt program")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                        .padding(.horizontal, 20)
+                                    
+                                    if let program = currentProgram {
+                                        programInfoCard(program: program)
+                                            .padding(.horizontal, 16)
+                                    }
+                                }
+                                
+                                // MARK: - Coach Info & Chat Button (längst ner)
+                                if let coach = coachRelation?.coach {
+                                    VStack(spacing: 12) {
+                                        // Coach avatar & name
+                                        HStack(spacing: 14) {
+                                            if let avatarUrl = coach.avatarUrl, !avatarUrl.isEmpty {
+                                                AsyncImage(url: URL(string: avatarUrl)) { image in
+                                                    image
+                                                        .resizable()
+                                                        .aspectRatio(contentMode: .fill)
+                                                } placeholder: {
+                                                    Circle()
+                                                        .fill(Color(.systemGray4))
+                                                }
+                                                .frame(width: 56, height: 56)
+                                                .clipShape(Circle())
+                                            } else {
+                                                Circle()
+                                                    .fill(Color(.systemGray4))
+                                                    .frame(width: 56, height: 56)
+                                                    .overlay(
+                                                        Image(systemName: "person.fill")
+                                                            .font(.system(size: 24))
+                                                            .foregroundColor(.gray)
+                                                    )
+                                            }
+                                            
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(coach.username ?? "Din tränare")
+                                                    .font(.system(size: 17, weight: .semibold))
+                                                    .foregroundColor(.black)
+                                                
+                                                Text("Din personliga tränare")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            
+                                            Spacer()
+                                        }
+                                        
+                                        // "Skriv med tränaren" button
+                                        Button {
+                                            // If profile already loaded, open chat immediately
+                                            if coachTrainerProfile != nil {
+                                                showChat = true
+                                            } else {
+                                                // Load profile first, then open chat
+                                                Task {
+                                                    if let coachId = coachRelation?.coachId {
+                                                        await loadCoachTrainerProfile(coachUserId: coachId)
+                                                        await MainActor.run {
+                                                            if coachTrainerProfile != nil {
+                                                                showChat = true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                                    .font(.system(size: 16))
+                                                Text("Skriv med tränaren")
+                                                    .font(.system(size: 16, weight: .semibold))
+                                            }
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 14)
+                                            .background(Color.black)
+                                            .cornerRadius(12)
+                                        }
+                                    }
+                                    .padding(16)
+                                    .background(Color(.systemBackground))
+                                    .cornerRadius(16)
+                                    .padding(.horizontal, 16)
+                                }
+                                
+                                Spacer(minLength: 120)
                             }
-                            
-                            Spacer(minLength: 120)
+                            .padding(.top, 0)
                         }
-                        .padding(.top, 8)
+                    } else {
+                        noCoachView
                     }
-                } else {
-                    noCoachView
                 }
             }
+            .navigationBarHidden(true)
         }
         .task {
             generateWeekDates()
             await loadData()
+            await setupRealtimeListener()
         }
         .refreshable {
             await loadData()
         }
+        .onDisappear {
+            // Clean up realtime channel when view disappears
+            Task {
+                await realtimeChannel?.unsubscribe()
+                realtimeChannel = nil
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenCoachChat"))) { _ in
+            if coachTrainerProfile != nil {
+                showChat = true
+            }
+        }
         .sheet(isPresented: $showChat) {
-            CoachChatPlaceholderView()
+            NavigationStack {
+                if let trainer = coachTrainerProfile {
+                    TrainerChatView(trainer: trainer)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("Stäng") {
+                                    showChat = false
+                                }
+                                .foregroundColor(.black)
+                            }
+                        }
+                } else {
+                    // If no trainer profile, close sheet immediately
+                    Color.clear
+                        .task {
+                            // Try one quick load attempt
+                            if let coachId = coachRelation?.coachId {
+                                await loadCoachTrainerProfile(coachUserId: coachId)
+                                // If still no profile after load, close sheet
+                                if coachTrainerProfile == nil {
+                                    await MainActor.run {
+                                        showChat = false
+                                    }
+                                }
+                            } else {
+                                // No coachId, close immediately
+                                await MainActor.run {
+                                    showChat = false
+                                }
+                            }
+                        }
+                }
+            }
         }
         .sheet(item: $selectedRoutineWrapper) { item in
             RoutineDetailSheet(
@@ -242,31 +373,14 @@ struct CoachTabView: View {
     
     private func routineCard(routine: ProgramRoutine, program: CoachProgram, coachName: String?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(routine.name)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
-                    
-                    Text("\(routine.exercises.count) övningar")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(routine.name)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.black)
                 
-                Spacer()
-                
-                Menu {
-                    Button {
-                        selectedRoutineWrapper = SelectedRoutineWrapper(id: routine.id, routine: routine, program: program, coachName: coachName)
-                    } label: {
-                        Label("Visa detaljer", systemImage: "eye")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary)
-                        .frame(width: 32, height: 32)
-                }
+                Text("\(routine.exercises.count) övningar")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
             }
             
             // Övningslista (max 3)
@@ -311,11 +425,38 @@ struct CoachTabView: View {
     // MARK: - Coach Tip Card
     
     private func coachTipCard(tip: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "lightbulb.fill")
-                .font(.system(size: 20))
-                .foregroundColor(.orange)
+        VStack(alignment: .leading, spacing: 12) {
+            // Tränare info rad
+            HStack(spacing: 10) {
+                // Tränarens profilbild
+                if let avatarUrl = coachRelation?.coach?.avatarUrl, !avatarUrl.isEmpty {
+                    AsyncImage(url: URL(string: avatarUrl)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle()
+                            .fill(Color(.systemGray4))
+                    }
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray)
+                        )
+                }
+                
+                Text("Meddelande från \(coachRelation?.coach?.username ?? "tränaren")")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
             
+            // Meddelande
             Text(tip)
                 .font(.system(size: 15))
                 .foregroundColor(.primary)
@@ -327,75 +468,34 @@ struct CoachTabView: View {
         .cornerRadius(16)
     }
     
-    // MARK: - Coach and Program Card
+    // MARK: - Program Info Card
     
-    private func coachAndProgramCard(coach: CoachProfile) -> some View {
-        VStack(spacing: 16) {
-            // Coach info
-            HStack(spacing: 14) {
-                if let avatarUrl = coach.avatarUrl, !avatarUrl.isEmpty {
-                    AsyncImage(url: URL(string: avatarUrl)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(Color(.systemGray4))
-                    }
-                    .frame(width: 56, height: 56)
-                    .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(Color(.systemGray4))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.gray)
-                        )
-                }
+    private func programInfoCard(program: CoachProgram) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(program.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(coach.username ?? "Din tränare")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.black)
-                    
-                    Text("Din personliga tränare")
+                if let note = program.note, !note.isEmpty {
+                    Text(note)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
+                        .lineLimit(2)
                 }
-                
-                Spacer()
             }
             
-            // Program info
-            if let program = currentProgram {
-                Divider()
-                
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Program")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        
-                        Text(program.title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                    }
+            Spacer()
+            
+            if let routines = program.programData.routines {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(routines.count)")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.black)
                     
-                    Spacer()
-                    
-                    if let routines = program.programData.routines {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Pass")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                            
-                            Text("\(routines.count)")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                    }
+                    Text("pass")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -548,22 +648,147 @@ struct CoachTabView: View {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         do {
-            async let coachTask = CoachService.shared.fetchMyCoach(for: userId)
-            async let programsTask = CoachService.shared.fetchAssignedPrograms(for: userId)
+            // Fetch coach first to get coachId
+            let coach = try await CoachService.shared.fetchMyCoach(for: userId)
             
-            let (coach, programs) = try await (coachTask, programsTask)
-            
-            await MainActor.run {
-                coachRelation = coach
-                assignments = programs
-                isLoading = false
-                updateWorkoutStatus()
+            // If we have a coach, load profile and programs in parallel
+            if let coachId = coach?.coachId {
+                async let profileTask = loadCoachTrainerProfileAsync(coachUserId: coachId)
+                async let programsTask = CoachService.shared.fetchAssignedPrograms(for: userId)
+                
+                let (_, programs) = try await (profileTask, programsTask)
+                
+                await MainActor.run {
+                    coachRelation = coach
+                    assignments = programs
+                    isLoading = false
+                    updateWorkoutStatus()
+                }
+            } else {
+                // No coach, just load programs
+                let programs = try await CoachService.shared.fetchAssignedPrograms(for: userId)
+                
+                await MainActor.run {
+                    coachRelation = coach
+                    assignments = programs
+                    isLoading = false
+                    updateWorkoutStatus()
+                }
             }
         } catch {
             print("❌ Failed to load coach data: \(error)")
             await MainActor.run {
                 isLoading = false
             }
+        }
+    }
+    
+    // MARK: - Realtime Listener
+    
+    /// Listen for changes to coach programs and assignments in real-time
+    private func setupRealtimeListener() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        // Clean up any existing channel
+        if let existing = realtimeChannel {
+            await existing.unsubscribe()
+        }
+        
+        let channel = SupabaseConfig.supabase.channel("coach-updates-\(userId)")
+        
+        // Listen for new program assignments
+        let newAssignments = channel.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "coach_program_assignments",
+            filter: "client_id=eq.\(userId)"
+        )
+        
+        // Listen for assignment status changes (active → paused, etc.)
+        let assignmentUpdates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "coach_program_assignments",
+            filter: "client_id=eq.\(userId)"
+        )
+        
+        // Listen for program updates (schedule changes, daily tips, etc.)
+        let programUpdates = channel.postgresChange(
+            UpdateAction.self,
+            schema: "public",
+            table: "coach_programs"
+        )
+        
+        await channel.subscribe()
+        realtimeChannel = channel
+        
+        print("📡 [COACH] Realtime listener set up for user \(userId)")
+        
+        // Listen for new assignments
+        Task {
+            for await _ in newAssignments {
+                print("📡 [COACH] New program assigned - reloading data")
+                await loadData()
+            }
+        }
+        
+        // Listen for assignment updates
+        Task {
+            for await _ in assignmentUpdates {
+                print("📡 [COACH] Program assignment updated - reloading data")
+                await loadData()
+            }
+        }
+        
+        // Listen for program changes (schedule, tips, etc.)
+        Task {
+            for await _ in programUpdates {
+                print("📡 [COACH] Program updated - reloading data")
+                await loadData()
+            }
+        }
+    }
+    
+    /// Fetch the trainer_profiles entry for this coach so we can open chat
+    private func loadCoachTrainerProfile(coachUserId: String) async {
+        do {
+            let trainers: [GolfTrainer] = try await SupabaseConfig.supabase
+                .from("trainer_profiles")
+                .select()
+                .eq("user_id", value: coachUserId)
+                .limit(1)
+                .execute()
+                .value
+            
+            if let trainer = trainers.first {
+                await MainActor.run {
+                    coachTrainerProfile = trainer
+                }
+                print("✅ Loaded coach trainer profile: \(trainer.name)")
+            } else {
+                print("⚠️ Coach has no trainer_profiles entry, chat will use placeholder")
+            }
+        } catch {
+            print("❌ Failed to load coach trainer profile: \(error)")
+        }
+    }
+    
+    private func loadCoachTrainerProfileAsync(coachUserId: String) async throws {
+        let trainers: [GolfTrainer] = try await SupabaseConfig.supabase
+            .from("trainer_profiles")
+            .select()
+            .eq("user_id", value: coachUserId)
+            .limit(1)
+            .execute()
+            .value
+        
+        if let trainer = trainers.first {
+            await MainActor.run {
+                coachTrainerProfile = trainer
+            }
+            print("✅ Loaded coach trainer profile: \(trainer.name)")
+        } else {
+            print("⚠️ Coach has no trainer_profiles entry, chat will use placeholder")
         }
     }
 }
@@ -575,30 +800,157 @@ struct CoachHeaderView: View {
     @Binding var showChat: Bool
     let hasCoach: Bool
     
+    @State private var showMonthlyPrize = false
+    @State private var showNonProAlert = false
+    @State private var showPublicProfile = false
+    @State private var unreadNotifications = 0
+    @State private var isFetchingUnread = false
+    
+    private var isPremium: Bool {
+        authViewModel.currentUser?.isProMember ?? false
+    }
+    
     var body: some View {
-        HStack {
-            Spacer()
-            
-            Text("Coach")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.black)
-            
-            Spacer()
-        }
-        .overlay(alignment: .trailing) {
-            if hasCoach {
+        VStack(spacing: 0) {
+            // Top Row: Profile pic | Månadens pris | Find friends + Bell
+            ZStack {
+                // Center: Månadens pris
                 Button {
-                    showChat = true
+                    if isPremium {
+                        showMonthlyPrize = true
+                    } else {
+                        showNonProAlert = true
+                    }
                 } label: {
-                    Image(systemName: "message")
-                        .font(.system(size: 18))
-                        .foregroundColor(.black)
+                    HStack(spacing: 6) {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Månadens pris")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.black)
+                    .cornerRadius(20)
                 }
-                .padding(.trailing, 16)
+                .buttonStyle(.plain)
+                
+                // Left and Right sides
+                HStack {
+                    // Profile picture
+                    Button {
+                        showPublicProfile = true
+                    } label: {
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    // Find Friends + Notifications
+                    HStack(spacing: 12) {
+                        // Find friends
+                        NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
+                            Image(systemName: "person.badge.plus")
+                                .font(.system(size: 22, weight: .regular))
+                                .foregroundColor(.primary)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Notification bell
+                        NavigationLink(destination: NotificationsView(onDismiss: {
+                            Task { await refreshUnreadCount() }
+                        }).environmentObject(authViewModel)) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 22, weight: .regular))
+                                    .foregroundColor(.primary)
+                                
+                                // Notification badge
+                                if unreadNotifications > 0 {
+                                    Circle()
+                                        .fill(Color.black)
+                                        .frame(width: 18, height: 18)
+                                        .overlay(
+                                            Text("\(min(unreadNotifications, 99))")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                        .offset(x: 8, y: -6)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+        }
+        .background(Color(.systemBackground))
+        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+        .zIndex(2)
+        .task {
+            await refreshUnreadCount()
+        }
+        .sheet(isPresented: $showMonthlyPrize) {
+            MonthlyPrizeView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showPublicProfile) {
+            if let userId = authViewModel.currentUser?.id {
+                NavigationStack {
+                    UserProfileView(userId: userId)
+                        .environmentObject(authViewModel)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Stäng") {
+                                    showPublicProfile = false
+                                }
+                            }
+                        }
+                }
             }
         }
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
+        .alert("Enbart för pro medlemmar", isPresented: $showNonProAlert) {
+            Button("Stäng", role: .cancel) { }
+            Button("Bli Pro") {
+                showNonProAlert = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    SuperwallService.shared.showPaywall()
+                }
+            }
+        } message: {
+            Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
+        }
+    }
+    
+    private func refreshUnreadCount() async {
+        guard !isFetchingUnread else { return }
+        guard let userId = authViewModel.currentUser?.id else {
+            await MainActor.run { unreadNotifications = 0 }
+            return
+        }
+        isFetchingUnread = true
+        do {
+            let count = try await NotificationService.shared.fetchUnreadCount(userId: userId)
+            await MainActor.run {
+                unreadNotifications = count
+            }
+        } catch {
+            print("⚠️ Failed to fetch unread notifications: \(error)")
+        }
+        isFetchingUnread = false
     }
 }
 

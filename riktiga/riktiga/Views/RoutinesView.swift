@@ -797,13 +797,19 @@ struct ExerciseSearchView: View {
     @State private var allExercises: [ExerciseDBExercise] = []
     @State private var isLoading = false
     @State private var hasSearched = false
+    @State private var popularityRanking: [String: Int] = [:]
+    @State private var dynamicPopularSearches: [String] = []
     
-    // Popular/suggested exercises
-    private let popularExercises = [
+    // Fallback popular exercises (used when no database data exists)
+    private let fallbackPopularExercises = [
         "bench press", "squat", "deadlift", "shoulder press",
         "lat pulldown", "bicep curl", "tricep", "leg press",
         "row", "chest fly", "lunges", "plank"
     ]
+    
+    private var popularExercises: [String] {
+        dynamicPopularSearches.isEmpty ? fallbackPopularExercises : dynamicPopularSearches
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -936,6 +942,9 @@ struct ExerciseSearchView: View {
                 }
             }
         }
+        .task {
+            await loadPopularSearchSuggestions()
+        }
     }
     
     private func searchExercises() {
@@ -950,6 +959,15 @@ struct ExerciseSearchView: View {
                     allExercises = try await ExerciseDBService.shared.fetchAllExercises()
                 }
                 
+                // Load popularity ranking if not loaded yet
+                if popularityRanking.isEmpty {
+                    popularityRanking = await ExercisePopularityService.shared.getSmartRanking(
+                        bodyPart: nil,
+                        userRecentIds: [],
+                        userId: AuthViewModel.shared.currentUser?.id
+                    )
+                }
+                
                 // Filter locally by search text
                 let query = searchText.lowercased()
                 let results = allExercises.filter { exercise in
@@ -959,8 +977,17 @@ struct ExerciseSearchView: View {
                     exercise.equipment.lowercased().contains(query)
                 }
                 
+                // Sort by popularity (most used first)
+                let ranking = self.popularityRanking
+                let sorted = results.sorted { a, b in
+                    let aRank = ranking[a.id] ?? Int.max
+                    let bRank = ranking[b.id] ?? Int.max
+                    if aRank != bRank { return aRank < bRank }
+                    return a.name < b.name
+                }
+                
                 await MainActor.run {
-                    self.exercises = Array(results.prefix(50)) // Limit to 50 results
+                    self.exercises = Array(sorted.prefix(50)) // Limit to 50 results
                     self.isLoading = false
                 }
             } catch {
@@ -969,6 +996,15 @@ struct ExerciseSearchView: View {
                     self.exercises = []
                     self.isLoading = false
                 }
+            }
+        }
+    }
+    
+    private func loadPopularSearchSuggestions() async {
+        let popular = await ExercisePopularityService.shared.getPopularExercises(limit: 12)
+        if !popular.isEmpty {
+            await MainActor.run {
+                dynamicPopularSearches = popular.map { $0.exerciseName.lowercased() }
             }
         }
     }

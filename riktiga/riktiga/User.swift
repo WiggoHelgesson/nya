@@ -16,6 +16,7 @@ struct User: Codable, Identifiable {
     var pbMarathonMinutes: Int? = nil
     var climbedMountains: [String] = []
     var completedRaces: [String] = []
+    var onboardingCompleted: Bool = false
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -33,6 +34,7 @@ struct User: Codable, Identifiable {
         case pbMarathonMinutes = "pb_marathon_minutes"
         case climbedMountains = "climbed_mountains"
         case completedRaces = "completed_races"
+        case onboardingCompleted = "onboarding_completed"
     }
     
     // Custom decode för att hantera att email inte finns i profiles
@@ -53,6 +55,7 @@ struct User: Codable, Identifiable {
         pbMarathonMinutes = try container.decodeIfPresent(Int.self, forKey: .pbMarathonMinutes)
         climbedMountains = try container.decodeIfPresent([String].self, forKey: .climbedMountains) ?? []
         completedRaces = try container.decodeIfPresent([String].self, forKey: .completedRaces) ?? []
+        onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
     }
     
     func encode(to encoder: Encoder) throws {
@@ -72,9 +75,10 @@ struct User: Codable, Identifiable {
         try container.encodeIfPresent(pbMarathonMinutes, forKey: .pbMarathonMinutes)
         try container.encode(climbedMountains, forKey: .climbedMountains)
         try container.encode(completedRaces, forKey: .completedRaces)
+        try container.encode(onboardingCompleted, forKey: .onboardingCompleted)
     }
     
-    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, bannerUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil, climbedMountains: [String] = [], completedRaces: [String] = []) {
+    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, bannerUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil, climbedMountains: [String] = [], completedRaces: [String] = [], onboardingCompleted: Bool = false) {
         self.id = id
         self.name = name
         self.email = email
@@ -90,6 +94,7 @@ struct User: Codable, Identifiable {
         self.pbMarathonMinutes = pbMarathonMinutes
         self.climbedMountains = climbedMountains
         self.completedRaces = completedRaces
+        self.onboardingCompleted = onboardingCompleted
     }
 }
 

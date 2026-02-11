@@ -372,6 +372,28 @@ extension View {
     func shimmer() -> some View {
         modifier(ShimmerModifier())
     }
+    
+    /// Apple-style entrance animation - content fades in and slides up from its resting position
+    func pageEntrance(delay: Double = 0) -> some View {
+        modifier(PageEntranceModifier(delay: delay))
+    }
+}
+
+// MARK: - Apple-Style Page Entrance Animation
+struct PageEntranceModifier: ViewModifier {
+    let delay: Double
+    @State private var isVisible = false
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : 18)
+            .onAppear {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.82).delay(delay)) {
+                    isVisible = true
+                }
+            }
+    }
 }
 
 // MARK: - Profile Image Component

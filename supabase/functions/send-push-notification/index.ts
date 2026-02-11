@@ -6,10 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// APNs Configuration - Set these in Supabase Dashboard > Edge Functions > Secrets
-const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')
-const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')
-const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')
 const BUNDLE_ID = 'roboreabapp.productions'
 
 interface PushPayload {
@@ -20,103 +16,66 @@ interface PushPayload {
 }
 
 async function createJWT(): Promise<string> {
-  // Validate environment variables
-  if (!APNS_KEY_ID) {
-    throw new Error('APNS_KEY_ID is not set')
-  }
-  if (!APNS_TEAM_ID) {
-    throw new Error('APNS_TEAM_ID is not set')
-  }
-  if (!APNS_PRIVATE_KEY) {
-    throw new Error('APNS_P8_KEY is not set')
-  }
+  const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')
+  const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')
+  const APNS_PRIVATE_KEY = Deno.env.get('APNS_P8_KEY')
 
-  // Log full values for debugging (remove in production!)
-  console.log('🔑 ===== APNs Configuration =====')
-  console.log('🔑 APNS_KEY_ID (full):', APNS_KEY_ID)
-  console.log('🔑 APNS_TEAM_ID (full):', APNS_TEAM_ID)
-  console.log('🔑 APNS_P8_KEY length:', APNS_PRIVATE_KEY.length)
-  console.log('🔑 APNS_P8_KEY starts with:', APNS_PRIVATE_KEY.substring(0, 50))
-  console.log('🔑 APNS_P8_KEY ends with:', APNS_PRIVATE_KEY.substring(APNS_PRIVATE_KEY.length - 50))
-  console.log('🔑 ================================')
+  if (!APNS_KEY_ID || !APNS_TEAM_ID || !APNS_PRIVATE_KEY) {
+    const missing = []
+    if (!APNS_KEY_ID) missing.push('APNS_KEY_ID')
+    if (!APNS_TEAM_ID) missing.push('APNS_TEAM_ID')
+    if (!APNS_PRIVATE_KEY) missing.push('APNS_P8_KEY')
+    throw new Error(`Missing APNs secrets: ${missing.join(', ')}`)
+  }
 
   const header = {
     alg: 'ES256',
-    kid: APNS_KEY_ID.trim(), // Trim any whitespace
+    kid: APNS_KEY_ID.trim(),
   }
   
   const now = Math.floor(Date.now() / 1000)
   const claims = {
-    iss: APNS_TEAM_ID.trim(), // Trim any whitespace
+    iss: APNS_TEAM_ID.trim(),
     iat: now,
   }
   
-  console.log('🔑 JWT Header:', JSON.stringify(header))
-  console.log('🔑 JWT Claims:', JSON.stringify(claims))
-  
   // Import the private key - handle various formats
   let pemContents = APNS_PRIVATE_KEY
-    // Remove PEM headers/footers
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
     .replace(/-----END PRIVATE KEY-----/g, '')
-    // Handle literal \n characters (stored as string in env vars)
     .replace(/\\n/g, '')
-    // Remove actual newlines and whitespace
     .replace(/[\r\n\s]/g, '')
   
-  console.log('🔑 PEM contents length after cleanup:', pemContents.length)
-  console.log('🔑 PEM first 20 chars:', pemContents.substring(0, 20))
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
   
-  if (pemContents.length < 100) {
-    throw new Error(`Private key seems too short (${pemContents.length} chars). Check APNS_P8_KEY format.`)
-  }
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign']
+  )
   
-  try {
-    const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
-    console.log('🔑 Binary key length:', binaryKey.length, '(expected ~121 for P-256)')
-    
-    const key = await crypto.subtle.importKey(
-      'pkcs8',
-      binaryKey,
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['sign']
-    )
-    
-    console.log('✅ Key imported successfully!')
-    
-    // Create JWT
-    const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-    const claimsB64 = btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-    const message = `${headerB64}.${claimsB64}`
-    
-    const signature = await crypto.subtle.sign(
-      { name: 'ECDSA', hash: 'SHA-256' },
-      key,
-      new TextEncoder().encode(message)
-    )
-    
-    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-    
-    const jwt = `${message}.${signatureB64}`
-    console.log('✅ JWT created successfully, length:', jwt.length)
-    console.log('🔑 JWT header part:', jwt.split('.')[0])
-    return jwt
-  } catch (keyError) {
-    console.error('❌ Failed to import/sign with key:', keyError)
-    throw new Error(`Key import failed: ${keyError.message}`)
-  }
+  const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  const claimsB64 = btoa(JSON.stringify(claims)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  const message = `${headerB64}.${claimsB64}`
+  
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    key,
+    new TextEncoder().encode(message)
+  )
+  
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  
+  return `${message}.${signatureB64}`
 }
 
 async function sendAPNS(deviceToken: string, title: string, body: string, data?: Record<string, string>): Promise<boolean> {
   try {
-    console.log('📤 sendAPNS starting for token:', deviceToken.substring(0, 20) + '...')
-    
     const jwt = await createJWT()
-    console.log('✅ JWT created, length:', jwt.length)
     
-    // Check if we have an avatar to attach (triggers Notification Service Extension)
     const hasAvatar = data?.actor_avatar && data.actor_avatar.length > 0
     
     const payload = {
@@ -127,19 +86,12 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
         },
         sound: 'default',
         badge: 1,
-        // mutable-content: 1 allows the Notification Service Extension to modify the notification
         ...(hasAvatar && { 'mutable-content': 1 }),
       },
-      // Include all data including actor_avatar for the extension to use
       ...data,
     }
     
-    console.log('📦 Payload:', JSON.stringify(payload).substring(0, 200))
-    
-    // Try production first, then sandbox if it fails
-    // Production APNs URL (App Store builds)
     const productionUrl = `https://api.push.apple.com/3/device/${deviceToken}`
-    // Sandbox APNs URL (Xcode development builds)
     const sandboxUrl = `https://api.sandbox.push.apple.com/3/device/${deviceToken}`
     
     const headers = {
@@ -149,8 +101,6 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       'apns-priority': '10',
     }
     
-    console.log('🌐 Trying production APNs...')
-    
     // Try production first
     let response = await fetch(productionUrl, {
       method: 'POST',
@@ -158,70 +108,44 @@ async function sendAPNS(deviceToken: string, title: string, body: string, data?:
       body: JSON.stringify(payload),
     })
     
-    console.log('📡 Production response status:', response.status)
-    
     if (!response.ok) {
       const prodError = await response.text()
-      console.log('⚠️ Production APNs failed:', response.status, prodError)
+      console.log('Production APNs failed, trying sandbox...', prodError)
       
-      console.log('🌐 Trying sandbox APNs...')
-      
-      // Try sandbox as fallback (for development builds)
       response = await fetch(sandboxUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
       })
       
-      console.log('📡 Sandbox response status:', response.status)
-      
       if (!response.ok) {
         const sandboxError = await response.text()
-        console.error('❌ Both APNs endpoints failed. Sandbox error:', response.status, sandboxError)
+        console.error('Both APNs endpoints failed. Sandbox error:', sandboxError)
         return false
       }
-      
-      console.log('✅ Sandbox APNs succeeded!')
-    } else {
-      console.log('✅ Production APNs succeeded!')
     }
     
     return true
   } catch (error) {
-    console.error('❌ Failed to send APNS:', error)
-    console.error('❌ Error stack:', error.stack)
+    console.error('Failed to send APNS:', error)
     return false
   }
 }
 
 serve(async (req) => {
-  // Handle CORS
+  console.log('🚀 send-push-notification v103 WIGGO CODE RUNNING')
+  
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Early validation of APNs configuration
-  const missingSecrets: string[] = []
-  if (!APNS_KEY_ID) missingSecrets.push('APNS_KEY_ID')
-  if (!APNS_TEAM_ID) missingSecrets.push('APNS_TEAM_ID')
-  if (!APNS_PRIVATE_KEY) missingSecrets.push('APNS_P8_KEY')
-  
-  if (missingSecrets.length > 0) {
-    console.error('❌ Missing APNs secrets:', missingSecrets.join(', '))
-    console.log('Available env vars:', Object.keys(Deno.env.toObject()).filter(k => k.includes('APNS') || k.includes('P8')))
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: `Missing APNs configuration: ${missingSecrets.join(', ')}` 
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-  }
-
   try {
+    // Check APNs secrets availability
+    const keyId = Deno.env.get('APNS_KEY_ID')
+    const teamId = Deno.env.get('APNS_TEAM_ID')
+    const p8Key = Deno.env.get('APNS_P8_KEY')
+    console.log(`🔑 APNs secrets: KEY_ID=${keyId ? 'SET' : 'MISSING'}, TEAM_ID=${teamId ? 'SET' : 'MISSING'}, P8_KEY=${p8Key ? 'SET' : 'MISSING'}`)
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -229,8 +153,16 @@ serve(async (req) => {
 
     const { user_id, title, body, data } = await req.json() as PushPayload
 
-    console.log(`📱 Sending push to user: ${user_id}, title: ${title}`)
-    console.log(`🔑 APNs config: KEY_ID=${APNS_KEY_ID?.substring(0,4)}..., TEAM_ID=${APNS_TEAM_ID?.substring(0,4)}..., KEY_LENGTH=${APNS_PRIVATE_KEY?.length}`)
+    // Validate user_id is a real UUID
+    if (!user_id || user_id === 'undefined' || user_id === 'null' || user_id.length < 10) {
+      console.error('Invalid user_id:', user_id)
+      return new Response(
+        JSON.stringify({ success: false, error: `Invalid user_id: "${user_id}". Must be a valid UUID.` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(`📱 Push to user: ${user_id}, title: ${title}`)
     
     // Get device tokens for the user
     const { data: tokens, error } = await supabaseClient
@@ -240,30 +172,24 @@ serve(async (req) => {
       .eq('is_active', true)
 
     if (error) {
-      console.error('Database error fetching tokens:', error)
+      console.error('Database error:', error)
       throw error
     }
 
-    console.log(`📱 Found ${tokens?.length || 0} device tokens for user`)
-
     if (!tokens || tokens.length === 0) {
-      console.log(`⚠️ No active device tokens found for user ${user_id}`)
       return new Response(
         JSON.stringify({ success: false, message: 'No device tokens found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-    
-    console.log(`📱 Device tokens: ${tokens.map(t => t.token.substring(0, 10) + '...').join(', ')}`)
 
     // Send to all user's devices
-    console.log(`📱 Sending to ${tokens.length} devices...`)
     const results = await Promise.all(
       tokens.map(t => sendAPNS(t.token, title, body, data))
     )
 
     const successCount = results.filter(r => r).length
-    console.log(`✅ Push notifications sent: ${successCount}/${tokens.length} succeeded`)
+    console.log(`✅ Push sent: ${successCount}/${tokens.length}`)
 
     return new Response(
       JSON.stringify({ 
@@ -275,13 +201,11 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('❌ Edge function error:', error)
-    console.error('❌ Error stack:', error.stack)
+    console.error('Edge function error:', error)
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
-        details: error.stack?.substring(0, 500) 
+        error: error.message 
       }),
       { 
         status: 500,
@@ -290,4 +214,3 @@ serve(async (req) => {
     )
   }
 })
-

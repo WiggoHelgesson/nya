@@ -775,6 +775,34 @@ https://v2.exercisedb.io/image/{exerciseId}
 
 ---
 
+## Push-notis vid schema-uppdatering
+
+**VIKTIGT:** När tränaren sparar/uppdaterar ett veckoschema eller daily_tips, skicka en push-notis till klienten så de vet att schemat uppdaterats:
+
+```typescript
+// After updating the schedule/program, notify the client
+const notifyClientOfScheduleUpdate = async (clientId: string, coachName: string) => {
+  await supabase.functions.invoke('send-push-notification', {
+    body: {
+      user_id: clientId,
+      title: `${coachName} uppdaterade ditt schema`,
+      body: 'Ditt träningsprogram har uppdaterats. Kolla in det!',
+      data: {
+        type: 'coach_schedule_updated',
+        coach_name: coachName,
+      }
+    }
+  });
+};
+```
+
+iOS-appen använder också **Supabase Realtime** för att automatiskt uppdatera Coach-tabben i realtid. Kör denna SQL om inte redan gjort:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.coach_programs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.coach_program_assignments;
+```
+
 ## Kontakt
 
 Vid frågor, kontakta iOS-utvecklaren.

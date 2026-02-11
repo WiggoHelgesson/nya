@@ -163,6 +163,16 @@ struct HomeView: View {
     // Nutrition onboarding for existing users
     @State private var showNutritionOnboarding = false
     
+    // AI text food search
+    @State private var aiTextInput: String = ""
+    @State private var isAISearching: Bool = false
+    @State private var aiSearchResult: FoodScannerService.AIFoodAnalysis? = nil
+    @State private var aiSearchError: Bool = false
+    @State private var aiSearchSaved: Bool = false
+    @State private var aiDebounceTask: Task<Void, Never>? = nil
+    @State private var showManualFoodEntry: Bool = false
+    @State private var aiTextUsageCount: Int = 0
+    
     // Achievement manager
     @ObservedObject private var achievementManager = AchievementManager.shared
     
@@ -246,11 +256,13 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
+                        .pageEntrance()
                         
                         // MARK: - Week Calendar
                         weekCalendarView
                         .opacity(showCalendar ? 1 : 0)
                         .offset(y: showCalendar ? 0 : 10)
+                        .pageEntrance(delay: 0.05)
                     
                     // MARK: - Calorie Card
                     calorieTrackerCard
@@ -259,6 +271,7 @@ struct HomeView: View {
                         .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
                         .scaleEffect(isTransitioning ? 0.98 : 1)
                         .offset(y: showCards ? 0 : 15)
+                        .pageEntrance(delay: 0.08)
                     
                     // MARK: - Macro Cards
                     macroCardsRow
@@ -267,6 +280,48 @@ struct HomeView: View {
                         .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
                         .scaleEffect(isTransitioning ? 0.98 : 1)
                         .offset(y: showCards ? 0 : 15)
+                        .pageEntrance(delay: 0.12)
+                    
+                    // MARK: - AI Text Food Input
+                    aiTextInputSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                    
+                    // Limit reached message
+                    if !canUseAITextForFree {
+                        Button {
+                            SuperwallService.shared.showPaywall()
+                        } label: {
+                            Text("Din maxgräns är nådd. Uppgradera till Pro för full tillgång till kaloritracking med AI")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 6)
+                        }
+                    }
+                    
+                    // Manual food entry button
+                    Button {
+                        showManualFoodEntry = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Registrera måltid manuellt")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.white)
+                                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                        )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     
                     // MARK: - AI Analyzing Section
                     if analyzingManager.isAnalyzing || analyzingManager.result != nil || analyzingManager.noFoodDetected || analyzingManager.limitReached {
@@ -289,10 +344,13 @@ struct HomeView: View {
                 .padding(.top, 8)
             }
             .coordinateSpace(name: "scroll")
+            .refreshable {
+                await refreshAllData()
+            }
         } // ZStack
         } // VStack
         .onAppear {
-            
+            loadAITextUsage()
             animateContent()
             loadNutritionGoals()
             loadStreakCount()
@@ -356,6 +414,10 @@ struct HomeView: View {
         }
         .fullScreenCover(item: $selectedFoodLog) { foodLog in
             FoodLogDetailView(entry: foodLog)
+        }
+        .fullScreenCover(isPresented: $showManualFoodEntry) {
+            ManualFoodEntryView()
+                .environmentObject(authViewModel)
         }
         .fullScreenCover(isPresented: $showNutritionOnboarding) {
             ExistingUserNutritionOnboardingView()
@@ -681,6 +743,329 @@ struct HomeView: View {
         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
     }
     
+    // MARK: - AI Text Food Input Section
+    
+    private var confidenceScore: Int {
+        guard let result = aiSearchResult else { return 0 }
+        switch result.confidence {
+        case "high": return 9
+        case "medium": return 6
+        case "low": return 3
+        default: return 5
+        }
+    }
+    
+    private var aiTextInputSection: some View {
+        VStack(spacing: 0) {
+            // Main input row
+            Button {
+                if let result = aiSearchResult, !aiSearchSaved {
+                    saveAISearchResult(result)
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    // Text field
+                    TextField("Skriv vad du åt, AI räknar kalorier...", text: $aiTextInput)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.primary)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            if canUseAITextForFree {
+                                analyzeFromText()
+                            } else {
+                                SuperwallService.shared.showPaywall()
+                            }
+                        }
+                        .onChange(of: aiTextInput) { _, newValue in
+                            // Reset previous result when typing new text
+                            if aiSearchResult != nil && !isAISearching {
+                                withAnimation {
+                                    aiSearchResult = nil
+                                    aiSearchSaved = false
+                                    aiSearchError = false
+                                }
+                            }
+                            
+                            // Auto-search with debounce: start shimmer immediately, search after 1.2s pause
+                            aiDebounceTask?.cancel()
+                            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if trimmed.count >= 3 {
+                                // Check if user can use AI text for free
+                                if !canUseAITextForFree {
+                                    // Show paywall immediately
+                                    SuperwallService.shared.showPaywall()
+                                } else {
+                                    // Show shimmer immediately while user types
+                                    if !isAISearching {
+                                        withAnimation {
+                                            isAISearching = true
+                                            aiSearchError = false
+                                        }
+                                    }
+                                    // Debounce: wait for user to stop typing before actually calling API
+                                    aiDebounceTask = Task {
+                                        try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2 seconds
+                                        guard !Task.isCancelled else { return }
+                                        await MainActor.run {
+                                            analyzeFromText()
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Clear searching state if text is too short
+                                if isAISearching {
+                                    withAnimation {
+                                        isAISearching = false
+                                    }
+                                }
+                            }
+                        }
+                    
+                    // Right side: status indicator
+                    if isAISearching {
+                        // Shimmer "Söker" text
+                        Text("Söker")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.gray)
+                            .modifier(ShimmerEffect())
+                    } else if let result = aiSearchResult, !aiSearchSaved {
+                        // Result: sparkle + calories
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("\(result.calories) cal")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(.black)
+                    } else if aiSearchSaved {
+                        // Saved checkmark
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.black)
+                    } else if aiSearchError {
+                        Text("Försök igen")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.red)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                )
+            }
+            .buttonStyle(.plain)
+            
+            // Sources + confidence scale + log button (always visible when result exists)
+            if let _ = aiSearchResult, !aiSearchSaved {
+                VStack(spacing: 10) {
+                    // Confidence scale 1-10
+                    HStack(spacing: 3) {
+                        Text("Träffsäkerhet")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        // Visual scale bars 1-10
+                        HStack(spacing: 2) {
+                            ForEach(1...10, id: \.self) { i in
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(i <= confidenceScore ? Color.black : Color.black.opacity(0.12))
+                                    .frame(width: 8, height: 12)
+                            }
+                        }
+                        
+                        Text("\(confidenceScore)/10")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(.black)
+                        
+                        Spacer()
+                        
+                        // Log button
+                        Button {
+                            if let result = aiSearchResult {
+                                saveAISearchResult(result)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 12))
+                                Text("Logga")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.08))
+                            )
+                        }
+                    }
+                    
+                    // Sources
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 9))
+                        Text("Källa: GPT-4o nutritionsdata")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                    }
+                    .foregroundColor(.secondary.opacity(0.7))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isAISearching)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: aiSearchResult != nil)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: aiSearchSaved)
+    }
+    
+    // MARK: - AI Text Search Functions
+    
+    private var isProUser: Bool {
+        authViewModel.currentUser?.isProMember ?? false
+    }
+    
+    private var aiTextFreeLimit: Int { 2 }
+    
+    private var canUseAITextForFree: Bool {
+        isProUser || aiTextUsageCount < aiTextFreeLimit
+    }
+    
+    private var aiTextUsageKey: String {
+        let userId = authViewModel.currentUser?.id ?? "unknown"
+        return "ai_text_search_usage_\(userId)"
+    }
+    
+    private func loadAITextUsage() {
+        aiTextUsageCount = UserDefaults.standard.integer(forKey: aiTextUsageKey)
+    }
+    
+    private func incrementAITextUsage() {
+        aiTextUsageCount += 1
+        UserDefaults.standard.set(aiTextUsageCount, forKey: aiTextUsageKey)
+    }
+    
+    private func analyzeFromText() {
+        let text = aiTextInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        
+        // Check limit for non-pro users
+        if !isProUser && aiTextUsageCount >= aiTextFreeLimit {
+            withAnimation {
+                isAISearching = false
+            }
+            SuperwallService.shared.showPaywall()
+            return
+        }
+        
+        if !isAISearching {
+            withAnimation {
+                isAISearching = true
+            }
+        }
+        aiSearchResult = nil
+        aiSearchError = false
+        aiSearchSaved = false
+        
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        
+        Task {
+            do {
+                let result = try await FoodScannerService.shared.analyzeFoodFromDescription(text)
+                
+                // Count usage on successful result
+                await MainActor.run {
+                    incrementAITextUsage()
+                }
+                
+                await MainActor.run {
+                    withAnimation {
+                        aiSearchResult = result
+                        isAISearching = false
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation {
+                        isAISearching = false
+                        aiSearchError = true
+                    }
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
+                print("❌ AI text analysis failed: \(error)")
+                
+                // Clear error after 3 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation {
+                        aiSearchError = false
+                    }
+                }
+            }
+        }
+    }
+    
+    private func saveAISearchResult(_ result: FoodScannerService.AIFoodAnalysis) {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        
+        withAnimation {
+            aiSearchSaved = true
+        }
+        
+        Task {
+            do {
+                let entry = ManualFoodLogInsert(
+                    id: UUID().uuidString,
+                    userId: userId,
+                    name: result.name,
+                    calories: result.calories,
+                    protein: result.protein,
+                    carbs: result.carbs,
+                    fat: result.fat,
+                    mealType: "snack",
+                    loggedAt: ISO8601DateFormatter().string(from: Date()),
+                    imageUrl: nil
+                )
+                
+                try await SupabaseConfig.supabase
+                    .from("food_logs")
+                    .insert(entry)
+                    .execute()
+                
+                print("✅ AI text food saved: \(result.name) - \(result.calories) cal")
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                    viewModel.loadData()
+                    updateDisplayedValues(animated: true)
+                }
+                
+                // Reset after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation {
+                        aiTextInput = ""
+                        aiSearchResult = nil
+                        aiSearchSaved = false
+                    }
+                }
+            } catch {
+                print("❌ Failed to save AI food: \(error)")
+                await MainActor.run {
+                    withAnimation {
+                        aiSearchSaved = false
+                    }
+                }
+            }
+        }
+    }
+    
     // MARK: - Recently Logged Section
     private var recentlyLoggedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -750,6 +1135,21 @@ struct HomeView: View {
     // MARK: - Load Streak Count
     private func loadStreakCount() {
         streakCount = StreakManager.shared.getCurrentStreak().currentStreak
+    }
+    
+    // MARK: - Pull to Refresh
+    private func refreshAllData() async {
+        // Reload user profile from server
+        await authViewModel.loadUserProfile()
+        
+        // Reload all local data
+        await MainActor.run {
+            loadNutritionGoals()
+            loadStreakCount()
+            loadAITextUsage()
+            viewModel.loadData()
+            updateDisplayedValues(animated: true)
+        }
     }
     
     // MARK: - Load Nutrition Goals (User-Specific)
@@ -3163,10 +3563,10 @@ private struct ProBannerView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Skaffa Up&Down Pro och lås upp alla förmåner")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(.white)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         
                         // CTA Button (White)
                         HStack(spacing: 4) {
@@ -3222,4 +3622,32 @@ private struct ProBannerView: View {
         .environmentObject(AuthViewModel())
 }
 
-
+// MARK: - Shimmer Effect (ChatGPT-style)
+struct ShimmerEffect: ViewModifier {
+    @State private var phase: CGFloat = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .white.opacity(0.6),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geometry.size.width * 0.6)
+                    .offset(x: -geometry.size.width * 0.3 + phase * geometry.size.width * 1.6)
+                    .blendMode(.sourceAtop)
+                }
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
+            }
+    }
+}

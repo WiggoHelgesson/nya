@@ -20,6 +20,8 @@ struct AppNotification: Identifiable, Codable {
         case reply
         case coachInvitation
         case coachProgramAssigned
+        case trainerChatMessage
+        case coachScheduleUpdated
         case unknown(String)
         
         init(rawValue: String) {
@@ -31,6 +33,8 @@ struct AppNotification: Identifiable, Codable {
             case "reply": self = .reply
             case "coach_invitation": self = .coachInvitation
             case "coach_program_assigned": self = .coachProgramAssigned
+            case "trainer_chat_message": self = .trainerChatMessage
+            case "coach_schedule_updated": self = .coachScheduleUpdated
             default: self = .unknown(rawValue)
             }
         }
@@ -44,6 +48,8 @@ struct AppNotification: Identifiable, Codable {
             case .reply: return "reply"
             case .coachInvitation: return "coach_invitation"
             case .coachProgramAssigned: return "coach_program_assigned"
+            case .trainerChatMessage: return "trainer_chat_message"
+            case .coachScheduleUpdated: return "coach_schedule_updated"
             case .unknown(let value): return value
             }
         }
@@ -141,6 +147,10 @@ struct AppNotification: Identifiable, Codable {
             return "\(actorUsername ?? "En tränare") vill coacha dig!"
         case .coachProgramAssigned:
             return "\(actorUsername ?? "Din tränare") har tilldelat dig ett träningsprogram"
+        case .trainerChatMessage:
+            return "\(actorUsername ?? "Din tränare") skickade ett meddelande"
+        case .coachScheduleUpdated:
+            return "\(actorUsername ?? "Din tränare") uppdaterade ditt schema"
         case .unknown:
             return "\(actorUsername ?? "Någon") skickade en ny notis"
         }
@@ -162,6 +172,10 @@ struct AppNotification: Identifiable, Codable {
             return "person.crop.circle.badge.plus"
         case .coachProgramAssigned:
             return "dumbbell.fill"
+        case .trainerChatMessage:
+            return "message.fill"
+        case .coachScheduleUpdated:
+            return "calendar.badge.clock"
         case .unknown:
             return "bell.fill"
         }
@@ -183,6 +197,10 @@ struct AppNotification: Identifiable, Codable {
             return "purple"
         case .coachProgramAssigned:
             return "indigo"
+        case .trainerChatMessage:
+            return "blue"
+        case .coachScheduleUpdated:
+            return "orange"
         case .unknown:
             return "gray"
         }

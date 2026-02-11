@@ -149,10 +149,12 @@ final class PushNotificationService: NSObject {
                     print("✅ [PUSH] In-app notification created for \(followerId)")
                     
                     // 2. Send real iOS push notification via Edge Function
+                    let firstName = userName.components(separatedBy: " ").first ?? userName
+                    let (activityLabel, article) = Self.activityDisplayText(activityType)
                     await sendRealPushNotification(
                         toUserId: followerId,
-                        title: "Nytt träningspass",
-                        body: "\(userName) har slutfört ett \(activityType.lowercased())",
+                        title: "\(firstName) har slutfört \(article) \(activityLabel)",
+                        body: "Kolla in passet! 💪",
                         data: ["type": "new_workout", "post_id": postId, "actor_id": userId]
                     )
                     print("✅ [PUSH] Push notification sent to \(followerId)")
@@ -384,6 +386,25 @@ final class PushNotificationService: NSObject {
         }
     }
     
+    // MARK: - Activity Display Text Helper
+    
+    static func activityDisplayText(_ activityType: String) -> (label: String, article: String) {
+        let lower = activityType.lowercased()
+        if lower == "gympass" || lower == "gym" || lower == "walking" {
+            return ("gympass", "ett")
+        } else if lower == "löppass" || lower == "running" {
+            return ("löppass", "ett")
+        } else if lower == "golfrunda" || lower == "golf" {
+            return ("golfrunda", "en")
+        } else if lower == "bestiga berg" || lower == "hiking" || lower == "promenad" {
+            return ("promenad", "en")
+        } else if lower == "skidåkning" || lower == "skiing" {
+            return ("skidpass", "ett")
+        } else {
+            return ("träningspass", "ett")
+        }
+    }
+    
     private func createWorkoutNotification(
         forUserId userId: String,
         fromUserId: String,
@@ -526,6 +547,7 @@ class NotificationNavigationManager: ObservableObject {
     @Published var shouldNavigateToActiveFriends = false
     @Published var shouldNavigateToSharedWorkouts = false
     @Published var shouldNavigateToNotifications = false
+    @Published var shouldNavigateToCoachChat = false
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -575,12 +597,32 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToCoachChat() {
+        DispatchQueue.main.async {
+            // Navigate to coach tab first
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToCoach"), object: nil)
+            // Then open chat after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("OpenCoachChat"), object: nil)
+            }
+            self.shouldNavigateToCoachChat = true
+        }
+    }
+    
+    func navigateToCoachTab() {
+        DispatchQueue.main.async {
+            // Navigate to coach tab to see updated schedule
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToCoach"), object: nil)
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
         shouldNavigateToActiveFriends = false
         shouldNavigateToSharedWorkouts = false
         shouldNavigateToNotifications = false
+        shouldNavigateToCoachChat = false
     }
 }
 
@@ -684,6 +726,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case "coach_program_assigned":
                 // Navigate to notifications to see assigned program
                 NotificationNavigationManager.shared.navigateToNotifications()
+            case "trainer_chat_message":
+                // Navigate to coach chat
+                NotificationNavigationManager.shared.navigateToCoachChat()
+            case "coach_schedule_updated":
+                // Navigate to coach tab to see updated schedule
+                NotificationNavigationManager.shared.navigateToCoachTab()
             default:
                 break
             }

@@ -81,12 +81,12 @@ struct CoachProgramsSheet: View {
                         // Ikon
                         ZStack {
                             Circle()
-                                .fill(Color.green.opacity(0.15))
+                                .fill(Color.black.opacity(0.1))
                                 .frame(width: 50, height: 50)
                             
                             Image(systemName: "dumbbell.fill")
                                 .font(.system(size: 20))
-                                .foregroundColor(.green)
+                                .foregroundColor(.black)
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
@@ -355,7 +355,7 @@ struct RoutineDetailSheet: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(routine.exercises.isEmpty ? Color.gray : Color.green)
+                        .background(routine.exercises.isEmpty ? Color.gray : Color.black)
                         .cornerRadius(14)
                     }
                     .disabled(routine.exercises.isEmpty)
@@ -430,7 +430,7 @@ struct CoachInvitationView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.green)
+                    .background(Color.black)
                     .cornerRadius(12)
                 }
                 .disabled(isAccepting || isDeclining)

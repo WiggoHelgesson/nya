@@ -208,8 +208,24 @@ struct AuthenticationView: View {
             }
         }
         .onAppear {
-            showLanding = true
-            onboardingStep = nil
+            // If user has a session but needs onboarding (e.g. app restart after partial signup),
+            // skip the landing/login screens and go straight to onboarding
+            if authViewModel.needsOnboarding {
+                showLanding = false
+                showSignupForm = false
+                onboardingStep = onboardingSteps.first
+                
+                // Pre-fill username from existing profile if available
+                if let existingName = authViewModel.currentUser?.name,
+                   !existingName.isEmpty,
+                   !existingName.hasPrefix("user-"),
+                   existingName != "Användare" {
+                    data.firstName = existingName.lowercased().replacingOccurrences(of: " ", with: "_")
+                }
+            } else {
+                showLanding = true
+                onboardingStep = nil
+            }
             authViewModel.errorMessage = ""
             
             let healthAuthorized = HealthKitManager.shared.isHealthDataAuthorized()
@@ -240,7 +256,8 @@ struct AuthenticationView: View {
                     showLanding = false
                     showSignupForm = false
                     
-                    // Only start onboarding for NEW users (googleName is passed only for new users)
+                    // Start onboarding for new users or users who didn't finish onboarding
+                    // googleName is non-nil when the user needs onboarding (new or incomplete)
                     if googleName != nil {
                         // Pre-fill username with Google's name as a suggestion (user can change it)
                         if let name = googleName, !name.isEmpty {
@@ -248,10 +265,10 @@ struct AuthenticationView: View {
                             data.firstName = suggestedUsername
                         }
                         
-                        // Start onboarding for new users
+                        // Start onboarding
                         onboardingStep = onboardingSteps.first
                     }
-                    // Existing users go directly to main app (isLoggedIn = true handles this)
+                    // Existing users who completed onboarding go directly to main app (isLoggedIn = true handles this)
                 }
             }
         }
@@ -2370,6 +2387,17 @@ struct AuthenticationView: View {
     /// Called after paywall is dismissed (either purchased or skipped)
     private func finalizeOnboarding() {
         guard onboardingDataReady else { return }
+        
+        // Mark onboarding as completed in database
+        if let userId = authViewModel.currentUser?.id {
+            Task {
+                try? await ProfileService.shared.updateOnboardingCompleted(userId: userId)
+            }
+        }
+        
+        // Update local user model
+        authViewModel.currentUser?.onboardingCompleted = true
+        authViewModel.needsOnboarding = false
         
         // Enter the app
         authViewModel.isLoggedIn = true

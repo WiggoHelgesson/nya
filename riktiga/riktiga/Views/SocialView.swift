@@ -73,7 +73,6 @@ struct SocialView: View {
     @State private var friendCount: Int = 0
     @State private var friendAvatars: [String?] = []
     @State private var showNotifications = false
-    @State private var showQRCodeSheet = false
     
     // Navigation states
     @State private var showFollowersList = false
@@ -123,18 +122,18 @@ struct SocialView: View {
             }
             .task(id: authViewModel.currentUser?.id) {
                 await loadInitialData()
+                // Setup real-time listeners
+                await MainActor.run {
+                    socialViewModel.setupRealtimeListeners()
+                    RealtimeSocialService.shared.startListening()
+                }
             }
-            .refreshable {
-                await refreshData()
+            .onDisappear {
+                // Stop real-time updates when view disappears
+                RealtimeSocialService.shared.stopListening()
             }
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
-            }
-            .sheet(isPresented: $showQRCodeSheet) {
-                MyQRCodeView(
-                    userId: authViewModel.currentUser?.id ?? "",
-                    userName: authViewModel.currentUser?.name ?? "Användare"
-                )
             }
             .navigationDestination(isPresented: $showFriendsMap) {
                 FriendsLocationMapView(friends: activeFriends)
@@ -223,68 +222,76 @@ struct SocialView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Hero Banner Section (Now inside ScrollView and goes up to top)
-                heroBannerSection
-                    .zIndex(2)
-                
-                // Overlapping Friends & Stats section
-                friendsAndStatsSection
-                    .offset(y: -40)
-                    .zIndex(3)
-                
+        GeometryReader { geometry in
+            let topInset = geometry.safeAreaInsets.top
+            
+            ScrollView {
                 VStack(spacing: 0) {
-                    // Show skeleton while initially loading (before first successful load)
-                    if !hasInitiallyLoaded || (socialViewModel.isLoading && socialViewModel.posts.isEmpty) {
-                        loadingView
-                    } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
-                        // Show featured posts when user has no following
-                        featuredPostsContent
-                    } else if socialViewModel.posts.isEmpty && hasInitiallyLoaded {
-                        emptyStateView
-                    } else {
-                        // Feed content directly here instead of scrollContent to avoid nested scrolls
-                        VStack(alignment: .leading, spacing: 0) {
-                            // MARK: - Friends at gym section
-                            friendsAtGymSection
-                            
-                            // Separator line between friends section and posts
-                            Divider()
-                                .background(Color(.systemGray5))
-                            
-                            // Always show feed content
-                            feedContent
-                                .opacity(showPosts ? 1 : 0)
-                                .offset(y: showPosts ? 0 : 30)
+                    // Hero Banner Section - extends behind status bar via negative padding
+                    heroBannerSection
+                        .padding(.top, -topInset)
+                        .zIndex(2)
+                        .pageEntrance()
+                    
+                    // Overlapping Friends & Stats section
+                    friendsAndStatsSection
+                        .offset(y: -40)
+                        .zIndex(3)
+                        .pageEntrance(delay: 0.05)
+                    
+                    VStack(spacing: 0) {
+                        // Show skeleton while initially loading (before first successful load)
+                        if !hasInitiallyLoaded || (socialViewModel.isLoading && socialViewModel.posts.isEmpty) {
+                            loadingView
+                        } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
+                            // Show featured posts when user has no following
+                            featuredPostsContent
+                        } else if socialViewModel.posts.isEmpty && hasInitiallyLoaded {
+                            emptyStateView
+                        } else {
+                            // Feed content directly here instead of scrollContent to avoid nested scrolls
+                            VStack(alignment: .leading, spacing: 0) {
+                                // MARK: - Friends at gym section
+                                friendsAtGymSection
+                                
+                                // Separator line between friends section and posts
+                                Divider()
+                                    .background(Color(.systemGray5))
+                                
+                                // Always show feed content
+                                feedContent
+                                    .opacity(showPosts ? 1 : 0)
+                                    .offset(y: showPosts ? 0 : 30)
+                            }
+                            .transition(.opacity.combined(with: .offset(y: 20)))
                         }
-                        .transition(.opacity.combined(with: .offset(y: 20)))
                     }
+                    .padding(.top, -30) // Adjust for the overlapping section
+                    .pageEntrance(delay: 0.1)
+                    .animation(.easeOut(duration: 0.35), value: hasInitiallyLoaded)
+                    .animation(.easeOut(duration: 0.35), value: socialViewModel.posts.isEmpty)
                 }
-                .padding(.top, -30) // Adjust for the overlapping section
-                .animation(.easeOut(duration: 0.35), value: hasInitiallyLoaded)
-                .animation(.easeOut(duration: 0.35), value: socialViewModel.posts.isEmpty)
             }
-        }
-        .refreshable {
-            await refreshData()
-        }
-        .ignoresSafeArea(edges: .top)
-        .navigationDestination(isPresented: $showNotifications) {
-            NotificationsView(onDismiss: {
-                showNotifications = false
-            })
-            .environmentObject(authViewModel)
-        }
-        .onChange(of: showPaywall) { _, newValue in
-            if newValue {
-                SuperwallService.shared.showPaywall()
-                showPaywall = false
+            .scrollClipDisabled()
+            .refreshable {
+                await refreshData()
             }
-        }
-        .onAppear {
-            animateContentIn()
-            loadStats()
+            .navigationDestination(isPresented: $showNotifications) {
+                NotificationsView(onDismiss: {
+                    showNotifications = false
+                })
+                .environmentObject(authViewModel)
+            }
+            .onChange(of: showPaywall) { _, newValue in
+                if newValue {
+                    SuperwallService.shared.showPaywall()
+                    showPaywall = false
+                }
+            }
+            .onAppear {
+                animateContentIn()
+                loadStats()
+            }
         }
     }
 
@@ -425,27 +432,6 @@ struct SocialView: View {
                 }
                 
                 Spacer()
-                
-                HStack(spacing: 24) {
-                    Button {
-                        showFindFriends = true
-                    } label: {
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 4)
-                    }
-                    
-                    Button {
-                        showNotifications = true
-                    } label: {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 4)
-                    }
-                }
-                .padding(.trailing, 24)
             }
             .padding(.top, 60)
             
@@ -502,23 +488,11 @@ struct SocialView: View {
             }
             .buttonStyle(.plain)
             
-            // QR Code & Edit Banner Buttons
+            // Edit Banner Button
             VStack {
                 Spacer()
                 HStack(spacing: 12) {
                     Spacer()
-                    Button {
-                        showQRCodeSheet = true
-                    } label: {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 28))
-                            .foregroundColor(.black)
-                            .frame(width: 60, height: 60)
-                            .background(Color.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                            .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
-                    }
-                    
                     Button {
                         showBannerPicker = true
                     } label: {
@@ -641,7 +615,7 @@ struct SocialView: View {
     
     private var loadingView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Skeleton for "Vänner på gymmet" section
+            // Skeleton for "Vänner som tränar" section
             VStack(alignment: .leading, spacing: 12) {
                 SkeletonLine(width: 160, height: 20)
                 
@@ -763,7 +737,7 @@ struct SocialView: View {
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Vänner på gymmet")
+                Text("Vänner som tränar")
                     .font(.system(size: 20, weight: .bold))
                 
                 Text("Tryck på dina vänner för att se exakt vart de tränar")
@@ -775,7 +749,7 @@ struct SocialView: View {
             // Horizontal scroll with app logo + active friends
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    // App logo first (always visible)
+                    // App logo first (always visible) - tap to open map
                     friendAtGymCard(
                         imageContent: AnyView(
                             Image("23")
@@ -786,7 +760,10 @@ struct SocialView: View {
                         ),
                         name: "Up&Down",
                         duration: nil,
-                        onTap: nil
+                        onTap: {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            showFriendsMap = true
+                        }
                     )
                     
                     // Active friends or placeholders
@@ -913,15 +890,35 @@ struct SocialView: View {
     
     private func activityIconForFriend(_ activityType: String) -> String {
         switch activityType.lowercased() {
-        case "running", "löpning": return "figure.run"
-        case "gym", "strength": return "dumbbell.fill"
+        case "running", "löpning", "löppass": return "figure.run"
+        case "gym", "strength", "walking", "gympass": return "dumbbell.fill"
         case "cycling", "cykling": return "bicycle"
-        case "walking", "promenad": return "figure.walk"
+        case "promenad", "bestiga berg", "hiking": return "figure.walk"
         case "swimming", "simning": return "figure.pool.swim"
         case "yoga": return "figure.yoga"
-        case "golf": return "figure.golf"
+        case "golf", "golfrunda": return "figure.golf"
+        case "skidåkning", "skiing": return "figure.skiing.downhill"
         default: return "flame.fill"
         }
+    }
+    
+    private func activityLabelForFriend(_ activityType: String) -> String {
+        switch activityType.lowercased() {
+        case "running", "löpning", "löppass": return "Löppass"
+        case "gym", "strength", "walking", "gympass": return "Gympass"
+        case "cycling", "cykling": return "Cykling"
+        case "promenad", "bestiga berg", "hiking": return "Promenad"
+        case "swimming", "simning": return "Simning"
+        case "yoga": return "Yoga"
+        case "golf", "golfrunda": return "Golfrunda"
+        case "skidåkning", "skiing": return "Skidpass"
+        default: return "Tränar"
+        }
+    }
+    
+    private func isGymSession(_ activityType: String) -> Bool {
+        let lower = activityType.lowercased()
+        return lower == "gym" || lower == "walking" || lower == "gympass" || lower == "strength"
     }
     
     private func loadActiveFriendsData() async {
@@ -1506,9 +1503,9 @@ struct SocialView: View {
                     }
                 }
                 
-                // Pro upgrade banner after 4th post
+                // Pro upgrade banner after 8th post
                 // Only show for non-Pro members
-                if index == 3, !(authViewModel.currentUser?.isProMember ?? false) {
+                if index == 7, !(authViewModel.currentUser?.isProMember ?? false) {
                     ProUpgradeBanner(onTap: {
                         showPaywall = true
                     })
@@ -1519,7 +1516,29 @@ struct SocialView: View {
                         .background(Color(.systemGray5))
                 }
                 
+                // Sponsored post from Up&DownCoach after 4th post
+                if index == 3 {
+                    SponsoredPostCard()
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 15)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
+                
                 // Removed recommended friends section
+                
+                // Become a trainer promo after 10th post
+                if index == 9 {
+                    BecomeTrainerPromoCard()
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .opacity(showPosts ? 1 : 0)
+                        .offset(y: showPosts ? 0 : 15)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
                 
                 // Visa varumärkesslider efter andra inlägget
                 if index == 1, shouldShowBrandSlider {
@@ -3145,6 +3164,9 @@ struct CommentsView: View {
             // Track navigation depth to hide tab bar
             NavigationDepthTracker.shared.setAtRoot(false)
             
+            // Setup real-time listeners for comment likes
+            commentsViewModel.setupRealtimeListeners(currentUserId: authViewModel.currentUser?.id)
+            
             // Elegant staggered entrance animation
             withAnimation(.easeOut(duration: 0.4)) {
                 headerAppeared = true
@@ -3820,6 +3842,10 @@ class SocialViewModel: ObservableObject {
     // CRITICAL: Store the "known good" counts that should never be replaced with 0
     private var knownGoodCounts: [String: (likeCount: Int, commentCount: Int)] = [:]
     
+    // Real-time updates
+    private let realtimeService = RealtimeSocialService.shared
+    private var cancellables = Set<AnyCancellable>()
+    
     /// Invalidate cache to force fresh data on next fetch
     static func invalidateCache() {
         shared.lastSuccessfulFetch = nil
@@ -3856,6 +3882,187 @@ class SocialViewModel: ObservableObject {
             let rd = parseDate(rhs.createdAt)
             return ld > rd
         }
+    }
+    
+    // MARK: - Real-time Updates
+    
+    func setupRealtimeListeners() {
+        // Listen for post like updates
+        realtimeService.$postLikeUpdated
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handlePostLikeUpdate(postId: update.postId, delta: update.delta, userId: update.userId)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for new comments
+        realtimeService.$commentAdded
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleCommentAdded(postId: update.postId, comment: update.comment)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for deleted comments
+        realtimeService.$commentDeleted
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleCommentDeleted(postId: update.postId, commentId: update.commentId)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for comment like updates
+        realtimeService.$commentLikeUpdated
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleCommentLikeUpdate(commentId: update.commentId, delta: update.delta, userId: update.userId)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handlePostLikeUpdate(postId: String, delta: Int, userId: String) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        
+        let oldPost = posts[index]
+        let newCount = max(0, (oldPost.likeCount ?? 0) + delta)
+        let newIsLiked = userId == currentUserId ? (delta > 0) : oldPost.isLikedByCurrentUser
+        
+        // Create new post with updated values
+        let updatedPost = SocialWorkoutPost(
+            id: oldPost.id,
+            userId: oldPost.userId,
+            activityType: oldPost.activityType,
+            title: oldPost.title,
+            description: oldPost.description,
+            distance: oldPost.distance,
+            duration: oldPost.duration,
+            elevationGain: oldPost.elevationGain,
+            imageUrl: oldPost.imageUrl,
+            userImageUrl: oldPost.userImageUrl,
+            createdAt: oldPost.createdAt,
+            userName: oldPost.userName,
+            userAvatarUrl: oldPost.userAvatarUrl,
+            userIsPro: oldPost.userIsPro,
+            location: oldPost.location,
+            strokes: oldPost.strokes,
+            likeCount: newCount,
+            commentCount: oldPost.commentCount,
+            isLikedByCurrentUser: newIsLiked,
+            splits: oldPost.splits,
+            exercises: oldPost.exercises,
+            trainedWith: oldPost.trainedWith,
+            pbExerciseName: oldPost.pbExerciseName,
+            pbValue: oldPost.pbValue,
+            streakCount: oldPost.streakCount,
+            source: oldPost.source,
+            deviceName: oldPost.deviceName
+        )
+        
+        posts[index] = updatedPost
+        
+        // Update known good counts
+        if newCount > 0 {
+            knownGoodCounts[postId] = (likeCount: newCount, commentCount: updatedPost.commentCount ?? 0)
+        }
+        
+        print("✅ Updated post \(postId) likes: \(newCount)")
+    }
+    
+    private func handleCommentAdded(postId: String, comment: PostComment) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        
+        let oldPost = posts[index]
+        let newCount = (oldPost.commentCount ?? 0) + 1
+        
+        // Create new post with updated values
+        let updatedPost = SocialWorkoutPost(
+            id: oldPost.id,
+            userId: oldPost.userId,
+            activityType: oldPost.activityType,
+            title: oldPost.title,
+            description: oldPost.description,
+            distance: oldPost.distance,
+            duration: oldPost.duration,
+            elevationGain: oldPost.elevationGain,
+            imageUrl: oldPost.imageUrl,
+            userImageUrl: oldPost.userImageUrl,
+            createdAt: oldPost.createdAt,
+            userName: oldPost.userName,
+            userAvatarUrl: oldPost.userAvatarUrl,
+            userIsPro: oldPost.userIsPro,
+            location: oldPost.location,
+            strokes: oldPost.strokes,
+            likeCount: oldPost.likeCount,
+            commentCount: newCount,
+            isLikedByCurrentUser: oldPost.isLikedByCurrentUser,
+            splits: oldPost.splits,
+            exercises: oldPost.exercises,
+            trainedWith: oldPost.trainedWith,
+            pbExerciseName: oldPost.pbExerciseName,
+            pbValue: oldPost.pbValue,
+            streakCount: oldPost.streakCount,
+            source: oldPost.source,
+            deviceName: oldPost.deviceName
+        )
+        
+        posts[index] = updatedPost
+        
+        // Update known good counts
+        knownGoodCounts[postId] = (likeCount: updatedPost.likeCount ?? 0, commentCount: newCount)
+        
+        print("✅ Updated post \(postId) comments: \(newCount)")
+    }
+    
+    private func handleCommentDeleted(postId: String, commentId: String) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        
+        let oldPost = posts[index]
+        let newCount = max(0, (oldPost.commentCount ?? 0) - 1)
+        
+        // Create new post with updated values
+        let updatedPost = SocialWorkoutPost(
+            id: oldPost.id,
+            userId: oldPost.userId,
+            activityType: oldPost.activityType,
+            title: oldPost.title,
+            description: oldPost.description,
+            distance: oldPost.distance,
+            duration: oldPost.duration,
+            elevationGain: oldPost.elevationGain,
+            imageUrl: oldPost.imageUrl,
+            userImageUrl: oldPost.userImageUrl,
+            createdAt: oldPost.createdAt,
+            userName: oldPost.userName,
+            userAvatarUrl: oldPost.userAvatarUrl,
+            userIsPro: oldPost.userIsPro,
+            location: oldPost.location,
+            strokes: oldPost.strokes,
+            likeCount: oldPost.likeCount,
+            commentCount: newCount,
+            isLikedByCurrentUser: oldPost.isLikedByCurrentUser,
+            splits: oldPost.splits,
+            exercises: oldPost.exercises,
+            trainedWith: oldPost.trainedWith,
+            pbExerciseName: oldPost.pbExerciseName,
+            pbValue: oldPost.pbValue,
+            streakCount: oldPost.streakCount,
+            source: oldPost.source,
+            deviceName: oldPost.deviceName
+        )
+        
+        posts[index] = updatedPost
+        
+        // Update known good counts
+        if newCount > 0 {
+            knownGoodCounts[postId] = (likeCount: updatedPost.likeCount ?? 0, commentCount: newCount)
+        }
+        
+        print("✅ Updated post \(postId) comments after deletion: \(newCount)")
+    }
+    
+    private func handleCommentLikeUpdate(commentId: String, delta: Int, userId: String) {
+        // This will be used in comment detail views
+        print("✅ Comment \(commentId) like updated: delta \(delta)")
     }
     
     func fetchSocialFeed(userId: String) {
@@ -4379,9 +4586,50 @@ class CommentsViewModel: ObservableObject {
     @Published private(set) var threads: [CommentThread] = []
     @Published private(set) var isLoading = false
     private var postId: String = ""
+    private let realtimeService = RealtimeSocialService.shared
+    private var cancellables = Set<AnyCancellable>()
     
     var totalCommentCount: Int {
         threads.reduce(0) { $0 + 1 + $1.replies.count }
+    }
+    
+    func setupRealtimeListeners(currentUserId: String?) {
+        // Listen for comment like updates
+        realtimeService.$commentLikeUpdated
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleCommentLikeUpdate(commentId: update.commentId, delta: update.delta, userId: update.userId, currentUserId: currentUserId)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleCommentLikeUpdate(commentId: String, delta: Int, userId: String, currentUserId: String?) {
+        // Find and update the comment in threads
+        for (threadIndex, thread) in threads.enumerated() {
+            // Check if it's the main comment
+            if thread.comment.id == commentId {
+                var updatedComment = thread.comment
+                updatedComment.likeCount = max(0, updatedComment.likeCount + delta)
+                if userId == currentUserId {
+                    updatedComment.isLikedByCurrentUser = delta > 0
+                }
+                threads[threadIndex].comment = updatedComment
+                return
+            }
+            
+            // Check if it's a reply
+            for (replyIndex, reply) in thread.replies.enumerated() {
+                if reply.id == commentId {
+                    var updatedReply = reply
+                    updatedReply.likeCount = max(0, updatedReply.likeCount + delta)
+                    if userId == currentUserId {
+                        updatedReply.isLikedByCurrentUser = delta > 0
+                    }
+                    threads[threadIndex].replies[replyIndex] = updatedReply
+                    return
+                }
+            }
+        }
     }
     
     func fetchComments(postId: String, currentUserId: String?) {
@@ -5276,6 +5524,97 @@ struct ExternalActivityCard: View {
     }
 }
 
+// MARK: - Sponsored Post Card (Up&DownCoach)
+private struct SponsoredPostCard: View {
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack(spacing: 12) {
+                // Profile picture - Up&DownCoach logo
+                Image("logga")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("Up&DownCoach")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Text("Sponsrad")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.gray)
+                            )
+                    }
+                    
+                    Text("Annons")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            // Post image
+            Button(action: {
+                if let url = URL(string: "https://upanddowncoach.com") {
+                    UIApplication.shared.open(url)
+                }
+            }) {
+                Image("80")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 400)
+                    .clipped()
+            }
+            .buttonStyle(.plain)
+            
+            // Bottom CTA
+            Button(action: {
+                if let url = URL(string: "https://upanddowncoach.com") {
+                    UIApplication.shared.open(url)
+                }
+            }) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Up&DownCoach")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                        Text("upanddowncoach.com")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Besök")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(Color.primary)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
 // MARK: - Pro Upgrade Banner
 private struct ProUpgradeBanner: View {
     let onTap: () -> Void
@@ -5412,8 +5751,10 @@ struct FriendsLocationMapView: View {
             Map(coordinateRegion: $region, annotationItems: friendsWithLocation) { friend in
                         MapAnnotation(coordinate: friend.coordinate!) {
                             Button {
-                                selectedFriend = friend
-                                showUppyConfirmation = true
+                                if isGymSession(friend.activityType) {
+                                    selectedFriend = friend
+                                    showUppyConfirmation = true
+                                }
                             } label: {
                                 VStack(spacing: 4) {
                                     // Friend avatar
@@ -5477,35 +5818,24 @@ struct FriendsLocationMapView: View {
                     }
                     .ignoresSafeArea()
             
-            // Overlay message if no active friends
-            if friendsWithLocation.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "figure.run.circle")
-                        .font(.system(size: 60))
-                        .foregroundColor(.gray)
-                    
-                    Text("Inga aktiva vänner")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.primary)
-                    
-                    Text("Dina vänner tränar inte just nu")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color(.systemBackground).opacity(0.95))
-                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
-                )
-                .padding()
-            } else {
-                // Info overlay - show count of active friends
-                VStack {
+            // Overlays
+            VStack {
                     Spacer()
                     
-                    HStack {
+                    // Bottom text overlay
+                    if friendsWithLocation.isEmpty {
+                        // Simple text when no active friends
+                        Text("Dina vänner tränar inte just nu")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(Color(.systemBackground).opacity(0.9))
+                            )
+                            .padding(.bottom, 100)
+                    } else {
                         // Friends count card
                         HStack(spacing: 12) {
                             Image("upanddownlog")
@@ -5519,7 +5849,7 @@ struct FriendsLocationMapView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                                 
-                                Text("Aktiva gympass")
+                                Text("Aktiva pass just nu")
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                             }
@@ -5532,13 +5862,13 @@ struct FriendsLocationMapView: View {
                                 .fill(Color(.systemBackground))
                                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
                         )
-                        .padding()
+                        .padding(.horizontal)
+                        .padding(.bottom, 100)
                     }
                 }
-            }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("Vänner på gymmet")
+        .navigationTitle("Vänner som tränar")
         .alert("Skicka en Uppy till \(selectedFriend?.userName ?? "")", isPresented: $showUppyConfirmation) {
             Button("Avbryt", role: .cancel) {
                 selectedFriend = nil
@@ -5549,8 +5879,21 @@ struct FriendsLocationMapView: View {
                 }
             }
         } message: {
-            Text("Heja på din vän under deras träningspass!")
+            Text("Heja på din vän under deras gympass!")
         }
+        .onAppear {
+            // Hide the floating add button when map is shown
+            NotificationCenter.default.post(name: NSNotification.Name("HideFloatingButton"), object: nil)
+        }
+        .onDisappear {
+            // Show the floating add button again when leaving map
+            NotificationCenter.default.post(name: NSNotification.Name("ShowFloatingButton"), object: nil)
+        }
+    }
+    
+    private func isGymSession(_ activityType: String) -> Bool {
+        let lower = activityType.lowercased()
+        return lower == "gym" || lower == "walking" || lower == "gympass" || lower == "strength"
     }
     
     private func sendUppy(to friend: ActiveFriendSession) {

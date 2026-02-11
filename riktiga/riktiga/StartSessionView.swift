@@ -25,9 +25,13 @@ struct StartSessionView: View {
     init(initialActivity: ActivityType? = nil, coachWorkout: SavedGymWorkout? = nil) {
         self.initialActivity = initialActivity
         self.coachWorkout = coachWorkout
+        
+        // Gym sessions (.walking) and coach workouts skip activity selection and auto-start
+        // Running sessions show the session map but don't auto-start (user presses start)
+        let isGymOrCoach = initialActivity == .walking || coachWorkout != nil
         _showActivitySelection = State(initialValue: initialActivity == nil && coachWorkout == nil)
         _selectedActivityType = State(initialValue: initialActivity ?? (coachWorkout != nil ? .walking : nil))
-        _forceNewSession = State(initialValue: initialActivity != nil || coachWorkout != nil)
+        _forceNewSession = State(initialValue: isGymOrCoach)
     }
     
     var body: some View {
@@ -751,6 +755,25 @@ struct SessionMapView: View {
                                 startTimer()
                                 isRunning = true
                                 print("🏃 Auto-started \(activity.rawValue) session")
+                                
+                                // Notify followers about session start
+                                if let userId = authViewModel.currentUser?.id {
+                                    let userName = authViewModel.currentUser?.name ?? "Användare"
+                                    Task {
+                                        let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+                                        try? await ActiveSessionService.shared.startSession(
+                                            userId: userId,
+                                            activityType: activity.rawValue,
+                                            location: currentLocation,
+                                            userName: userName
+                                        )
+                                        await ActiveSessionService.shared.notifyFollowers(
+                                            userId: userId,
+                                            userName: userName,
+                                            activityType: activity.rawValue
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1091,6 +1114,25 @@ struct SessionMapView: View {
                                             forceNewSession = true
                                             startTimer()
                                             isRunning = true
+                                            
+                                            // Notify followers about session start
+                                            if let userId = authViewModel.currentUser?.id {
+                                                let userName = authViewModel.currentUser?.name ?? "Användare"
+                                                Task {
+                                                    let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+                                                    try? await ActiveSessionService.shared.startSession(
+                                                        userId: userId,
+                                                        activityType: activity.rawValue,
+                                                        location: currentLocation,
+                                                        userName: userName
+                                                    )
+                                                    await ActiveSessionService.shared.notifyFollowers(
+                                                        userId: userId,
+                                                        userName: userName,
+                                                        activityType: activity.rawValue
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1141,13 +1183,13 @@ struct SessionMapView: View {
                                 
                                 HStack(spacing: 12) {
                                     OtherActivityButton(
-                                        icon: "figure.strengthtraining.traditional",
-                                        title: "Gym",
+                                        icon: "figure.walk",
+                                        title: "Promenad",
                                         action: {
                                             NotificationCenter.default.post(
                                                 name: NSNotification.Name("SwitchActivity"),
                                                 object: nil,
-                                                userInfo: ["activity": ActivityType.walking.rawValue]
+                                                userInfo: ["activity": ActivityType.hiking.rawValue]
                                             )
                                         }
                                     )
@@ -1699,6 +1741,11 @@ struct SessionMapView: View {
         guard let userId = authViewModel.currentUser?.id else {
             print("⚠️ No user ID found in endSession, cannot claim territory")
             return
+        }
+        
+        // End active session for friends map
+        Task {
+            try? await ActiveSessionService.shared.endSession(userId: userId)
         }
         print("✅ User ID found: \(userId)")
         

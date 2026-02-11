@@ -149,16 +149,8 @@ struct FollowListView: View {
                 }
             }
         }
-        .navigationTitle("Anslutningar")
+        .navigationTitle("Vänner")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
-                    dismiss()
-                }
-                .foregroundColor(.black)
-            }
-        }
         .onAppear {
             NavigationDepthTracker.shared.pushView()
             Task {

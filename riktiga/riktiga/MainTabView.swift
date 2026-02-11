@@ -78,6 +78,10 @@ struct MainTabView: View {
     @State private var showSessionAutoEndedAlert = false
     @State private var hasActiveCoach = false
     @State private var coachWorkoutToStart: SavedGymWorkout? = nil
+    @State private var pendingCoachInvitation: CoachInvitation? = nil
+    @State private var showCoachInvitationPopup = false
+    @State private var hasCheckedInvitations = false
+    @State private var hideFloatingButton = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -166,6 +170,7 @@ struct MainTabView: View {
         }
         .task {
             await checkForActiveCoach()
+            await checkForPendingInvitations()
         }
         .onChange(of: showStartSession) { _, newValue in
             if newValue {
@@ -178,7 +183,7 @@ struct MainTabView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 1
+            selectedTab = 0  // Navigate to Hem tab (which has Social + Find Trainers)
             showStartSession = false
             showResumeSession = false
         }
@@ -221,7 +226,7 @@ struct MainTabView: View {
             showResumeSession = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 1  // Socialt tab
+            selectedTab = 0  // Hem tab (which has Social + Find Trainers)
             showStartSession = false
             showResumeSession = false
         }
@@ -250,7 +255,7 @@ struct MainTabView: View {
         }
         .onChange(of: notificationNav.shouldNavigateToNews) { _, shouldNavigate in
             if shouldNavigate {
-                selectedTab = 1  // Switch to Socialt tab
+                selectedTab = 0  // Switch to Hem tab
                 // Post notification to SocialView to switch to News tab
                 NotificationCenter.default.post(name: NSNotification.Name("NavigateToNewsTab"), object: nil)
                 notificationNav.resetNavigation()
@@ -258,7 +263,7 @@ struct MainTabView: View {
         }
         .onChange(of: notificationNav.shouldNavigateToPost) { _, postId in
             if let postId = postId {
-                selectedTab = 1  // Switch to Socialt tab
+                selectedTab = 0  // Switch to Hem tab
                 // Post notification to SocialView to open the specific post
                 NotificationCenter.default.post(
                     name: NSNotification.Name("NavigateToPost"),
@@ -266,6 +271,13 @@ struct MainTabView: View {
                     userInfo: ["postId": postId]
                 )
                 notificationNav.resetNavigation()
+            }
+        }
+        .onChange(of: notificationNav.shouldNavigateToCoachChat) { _, shouldNavigate in
+            if shouldNavigate && hasActiveCoach {
+                selectedTab = coachTabIndex
+                // OpenCoachChat is posted by the NavigationManager with delay
+                notificationNav.shouldNavigateToCoachChat = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
@@ -278,11 +290,63 @@ struct MainTabView: View {
             initialScannerMode = .ai
             showFoodScanner = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideFloatingButton"))) { _ in
+            withAnimation {
+                hideFloatingButton = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFloatingButton"))) { _ in
+            withAnimation {
+                hideFloatingButton = false
+            }
+        }
         .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
             UsernameRequiredView().environmentObject(authViewModel)
         }
         .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
             PaywallAfterSignupView().environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showCoachInvitationPopup) {
+            NavigationStack {
+                if let invitation = pendingCoachInvitation {
+                    CoachInvitationView(
+                        invitation: invitation,
+                        onAccept: {
+                            showCoachInvitationPopup = false
+                            pendingCoachInvitation = nil
+                            // Refresh coach status & navigate to coach tab
+                            Task {
+                                await checkForActiveCoach()
+                            }
+                            NotificationCenter.default.post(name: NSNotification.Name("CoachStatusChanged"), object: nil)
+                        },
+                        onDecline: {
+                            showCoachInvitationPopup = false
+                            pendingCoachInvitation = nil
+                        }
+                    )
+                    .navigationTitle("Coach-inbjudan")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button {
+                                showCoachInvitationPopup = false
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } else {
+                    // If no invitation data, close popup immediately
+                    Color.clear
+                        .onAppear {
+                            showCoachInvitationPopup = false
+                        }
+                }
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .onReceive(SessionManager.shared.$hasActiveSession) { newValue in
             hasActiveSession = newValue
@@ -332,6 +396,11 @@ struct MainTabView: View {
                 
                 // Reset failure counter and refresh auth session when app becomes active
                 AuthSessionManager.shared.resetFailureCounter()
+                
+                // Check for pending coach invitations when returning to app
+                Task {
+                    await checkForPendingInvitations()
+                }
                 
                 Task {
                     do {
@@ -396,7 +465,7 @@ struct MainTabView: View {
             // Native TabView with built-in Liquid Glass effect
             TabView(selection: $selectedTab) {
                 Tab("Hem", systemImage: "house", value: 0) {
-                    SocialView()
+                    SocialContainerView()
                 }
                 
                 Tab("Kalorier", systemImage: "fork.knife", value: 1) {
@@ -409,7 +478,7 @@ struct MainTabView: View {
                     }
                     
                     Tab("Belöningar", systemImage: "gift", value: 3) {
-                        RewardsView()
+                        RewardsContainerView()
                     }
                     
                     Tab("Profil", systemImage: "person", value: 4) {
@@ -417,7 +486,7 @@ struct MainTabView: View {
                     }
                 } else {
                     Tab("Belöningar", systemImage: "gift", value: 2) {
-                        RewardsView()
+                        RewardsContainerView()
                     }
                     
                     Tab("Profil", systemImage: "person", value: 3) {
@@ -437,7 +506,7 @@ struct MainTabView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView {
+                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
                         floatingAddButton
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -476,25 +545,26 @@ struct MainTabView: View {
                 
                 VStack(spacing: 12) {
                     HStack(spacing: 12) {
-                        addMealOption(icon: "dumbbell.fill", title: "Starta pass") {
+                        addMealOption(icon: "dumbbell.fill", title: "Starta gympass") {
                             showAddMealSheet = false
                             startActivityType = .walking
                             showStartSession = true
                         }
                         .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         
-                        addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
+                        addMealOption(icon: "figure.run", title: "Starta löppass") {
                             showAddMealSheet = false
-                            initialScannerMode = .barcode
-                            showFoodScanner = true
+                            startActivityType = .running
+                            showStartSession = true
                         }
                         .scaleEffect(showAddMealSheet ? 1 : 0.8)
                     }
                     
                     HStack(spacing: 12) {
-                        addMealOption(icon: "pencil.line", title: "Regga manuellt") {
+                        addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
                             showAddMealSheet = false
-                            showManualEntry = true
+                            initialScannerMode = .barcode
+                            showFoodScanner = true
                         }
                         .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         
@@ -524,15 +594,19 @@ struct MainTabView: View {
             generator.impactOccurred()
             action()
         }) {
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
                     .foregroundColor(.primary)
                 
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
             }
+            .padding(.horizontal, 8)
             .frame(width: 150, height: 120)
             .background(mealOptionBackground)
         }
@@ -556,9 +630,12 @@ struct MainTabView: View {
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
-                Text("Ta bild med AI")
-                    .font(.system(size: 14, weight: .medium))
+                Text("Tracka kalorier med AI")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
             }
             .frame(width: 150, height: 120)
             .background(mealOptionBackground)
@@ -615,9 +692,12 @@ struct MainTabView: View {
                         .offset(x: 20, y: -8)
                 }
                 
-                Text("Ta bild med AI")
-                    .font(.system(size: 14, weight: .medium))
+                Text("Tracka kalorier med AI")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.gray.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 
                 Text("0 kvar")
                     .font(.system(size: 11, weight: .medium))
@@ -636,13 +716,13 @@ struct MainTabView: View {
                 if hasActiveCoach {
                     switch selectedTab {
                     case 0:
-                        SocialView()
+                        SocialContainerView()
                     case 1:
                         HomeContainerView()
                     case 2:
                         CoachTabView()
                     case 3:
-                        RewardsView()
+                        RewardsContainerView()
                     case 4:
                         ProfileContainerView()
                     default:
@@ -651,11 +731,11 @@ struct MainTabView: View {
                 } else {
                     switch selectedTab {
                     case 0:
-                        SocialView()
+                        SocialContainerView()
                     case 1:
                         HomeContainerView()
                     case 2:
-                        RewardsView()
+                        RewardsContainerView()
                     case 3:
                         ProfileContainerView()
                     default:
@@ -676,7 +756,7 @@ struct MainTabView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView {
+                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
                         floatingAddButton
                             .transition(.scale.combined(with: .opacity))
                     }
@@ -820,6 +900,30 @@ struct MainTabView: View {
             }
         } catch {
             print("❌ Failed to check for active coach: \(error)")
+        }
+    }
+    
+    private func checkForPendingInvitations() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        // Don't show if already showing an invitation or already have a coach
+        guard !showCoachInvitationPopup else { return }
+        
+        do {
+            let invitations = try await CoachService.shared.fetchPendingInvitations(for: userId)
+            if let firstInvitation = invitations.first {
+                await MainActor.run {
+                    pendingCoachInvitation = firstInvitation
+                    // Only show popup after data is fully loaded
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        // Double-check invitation is still set before showing
+                        if pendingCoachInvitation != nil {
+                            showCoachInvitationPopup = true
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("❌ Failed to check pending invitations: \(error)")
         }
     }
     

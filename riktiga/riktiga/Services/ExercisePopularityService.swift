@@ -109,6 +109,85 @@ class ExercisePopularityService {
         return result
     }
     
+    // MARK: - Trending Exercises
+    
+    /// Get trending exercises (recently popular, weighted by recency)
+    func getTrendingExercises(bodyPart: String? = nil, days: Int = 30, limit: Int = 30) async -> [PopularExercise] {
+        let cacheKey = "trending_\(bodyPart ?? "all")"
+        if let cached = getCachedPopularity(for: cacheKey) {
+            return cached
+        }
+        
+        do {
+            let exercises: [TrendingExerciseResponse] = try await supabase
+                .rpc("get_trending_exercises", params: [
+                    "p_body_part": AnyJSON.string(bodyPart ?? "all"),
+                    "p_days": AnyJSON.integer(days),
+                    "p_limit": AnyJSON.integer(limit)
+                ])
+                .execute()
+                .value
+            
+            let result = exercises.map { response in
+                PopularExercise(
+                    exerciseId: response.exercise_id,
+                    exerciseName: response.exercise_name,
+                    bodyPart: response.body_part,
+                    usageCount: response.usage_count
+                )
+            }
+            
+            updateCache(for: cacheKey, with: result)
+            return result
+        } catch {
+            print("❌ Failed to fetch trending exercises: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - Smart Ranking (combines global popularity + trending)
+    
+    /// Get a smart ranking that combines global popularity and trending data.
+    /// Returns exerciseId -> rank (lower = should appear first).
+    func getSmartRanking(bodyPart: String?, userRecentIds: [String], userId: String?) async -> [String: Int] {
+        // Fetch global popularity and trending in parallel
+        async let globalTask = getPopularExercises(bodyPart: bodyPart, limit: 100)
+        async let trendingTask = getTrendingExercises(bodyPart: bodyPart, days: 30, limit: 50)
+        
+        let globalExercises = await globalTask
+        let trendingExercises = await trendingTask
+        
+        // Build score map: lower score = more popular
+        var scores: [String: Double] = [:]
+        
+        // Global popularity contributes 60% weight
+        for (index, exercise) in globalExercises.enumerated() {
+            let normalizedRank = Double(index) / max(Double(globalExercises.count), 1.0)
+            scores[exercise.exerciseId, default: 1.0] = normalizedRank * 0.6
+        }
+        
+        // Trending contributes 40% weight
+        for (index, exercise) in trendingExercises.enumerated() {
+            let normalizedRank = Double(index) / max(Double(trendingExercises.count), 1.0)
+            let trendingScore = normalizedRank * 0.4
+            if let existing = scores[exercise.exerciseId] {
+                scores[exercise.exerciseId] = existing + trendingScore
+            } else {
+                // Trending but not globally popular yet – still give it a decent score
+                scores[exercise.exerciseId] = 0.5 + trendingScore
+            }
+        }
+        
+        // Sort by combined score and convert to rank
+        let sorted = scores.sorted { $0.value < $1.value }
+        var result: [String: Int] = [:]
+        for (rank, entry) in sorted.enumerated() {
+            result[entry.key] = rank
+        }
+        
+        return result
+    }
+    
     // MARK: - Cache Management
     
     private func getCachedPopularity(for key: String) -> [PopularExercise]? {
@@ -146,5 +225,13 @@ struct PopularExerciseResponse: Codable {
     let exercise_name: String
     let body_part: String
     let usage_count: Int
+}
+
+struct TrendingExerciseResponse: Codable {
+    let exercise_id: String
+    let exercise_name: String
+    let body_part: String
+    let usage_count: Int
+    let trend_score: Double
 }
 

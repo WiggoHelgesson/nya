@@ -95,6 +95,9 @@ struct ProgramRoutine: Identifiable, Codable {
         if let exercisesArray = try? container.decode([ProgramExercise].self, forKey: .exercises) {
             exercises = exercisesArray
             print("   📋 Routine '\(name)': Decoded \(exercisesArray.count) exercises")
+            for ex in exercisesArray {
+                print("      💪 Exercise: '\(ex.name)' (id: \(ex.id), exerciseId: \(ex.exerciseId ?? "nil"), muscle: \(ex.muscleGroup ?? "nil"))")
+            }
         } else {
             exercises = []
             print("   ⚠️ Routine '\(name)': No exercises found or failed to decode")
@@ -132,13 +135,16 @@ struct ProgramExercise: Identifiable, Codable {
     let notes: String?
     let setsData: [ExerciseSetData]? // Lovables format med array av set-objekt
     
+    // Use dynamic key decoding to handle both camelCase and snake_case
+    private struct DynamicCodingKey: CodingKey {
+        var stringValue: String
+        init?(stringValue: String) { self.stringValue = stringValue }
+        var intValue: Int? { nil }
+        init?(intValue: Int) { return nil }
+    }
+    
     private enum CodingKeys: String, CodingKey {
         case id
-        case exerciseId = "exercise_id"
-        case exerciseName = "exercise_name"
-        case name
-        case exerciseImage = "exercise_image"
-        case muscleGroup = "muscle_group"
         case sets
         case reps
         case notes
@@ -147,18 +153,54 @@ struct ProgramExercise: Identifiable, Codable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
-        exerciseId = try container.decodeIfPresent(String.self, forKey: .exerciseId)
+        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
         
-        // Hantera både "name" och "exercise_name" från Lovable
-        if let exerciseName = try container.decodeIfPresent(String.self, forKey: .exerciseName) {
-            name = exerciseName
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        
+        // exerciseId: check exercise_id (snake) and exerciseId (camel)
+        if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: "exercise_id")!) {
+            exerciseId = val
+        } else if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: "exerciseId")!) {
+            exerciseId = val
         } else {
-            name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Övning"
+            exerciseId = nil
         }
         
-        exerciseImage = try container.decodeIfPresent(String.self, forKey: .exerciseImage)
-        muscleGroup = try container.decodeIfPresent(String.self, forKey: .muscleGroup)
+        // Name: check exerciseName (camel), exercise_name (snake), name, title, exercise_title
+        let nameKeys = ["exerciseName", "exercise_name", "name", "title", "exercise_title"]
+        var foundName: String? = nil
+        for key in nameKeys {
+            if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: key)!), !val.isEmpty {
+                foundName = val
+                break
+            }
+        }
+        if let foundName {
+            name = foundName
+        } else {
+            print("⚠️ ProgramExercise: No name found! id=\(id), exerciseId=\(exerciseId ?? "nil")")
+            name = "Övning"
+        }
+        
+        // exerciseImage: check exercise_image (snake) and exerciseImage (camel)
+        if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: "exercise_image")!) {
+            exerciseImage = val
+        } else if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: "exerciseImage")!) {
+            exerciseImage = val
+        } else {
+            exerciseImage = nil
+        }
+        
+        // muscleGroup: check muscle_group, muscleGroup, target_muscle, targetMuscle, target, body_part, bodyPart
+        let muscleKeys = ["muscle_group", "muscleGroup", "target_muscle", "targetMuscle", "target", "body_part", "bodyPart"]
+        var foundMuscle: String? = nil
+        for key in muscleKeys {
+            if let val = try? dynamicContainer.decodeIfPresent(String.self, forKey: DynamicCodingKey(stringValue: key)!), !val.isEmpty {
+                foundMuscle = val
+                break
+            }
+        }
+        muscleGroup = foundMuscle
         
         // Hantera notes/note
         if let noteValue = try container.decodeIfPresent(String.self, forKey: .note) {
@@ -195,15 +237,15 @@ struct ProgramExercise: Identifiable, Codable {
     }
     
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(exerciseId, forKey: .exerciseId)
-        try container.encode(name, forKey: .name)
-        try container.encodeIfPresent(exerciseImage, forKey: .exerciseImage)
-        try container.encodeIfPresent(muscleGroup, forKey: .muscleGroup)
-        try container.encode(sets, forKey: .sets)
-        try container.encode(reps, forKey: .reps)
-        try container.encodeIfPresent(notes, forKey: .notes)
+        var container = encoder.container(keyedBy: DynamicCodingKey.self)
+        try container.encode(id, forKey: DynamicCodingKey(stringValue: "id")!)
+        try container.encodeIfPresent(exerciseId, forKey: DynamicCodingKey(stringValue: "exercise_id")!)
+        try container.encode(name, forKey: DynamicCodingKey(stringValue: "name")!)
+        try container.encodeIfPresent(exerciseImage, forKey: DynamicCodingKey(stringValue: "exercise_image")!)
+        try container.encodeIfPresent(muscleGroup, forKey: DynamicCodingKey(stringValue: "muscle_group")!)
+        try container.encode(sets, forKey: DynamicCodingKey(stringValue: "sets")!)
+        try container.encode(reps, forKey: DynamicCodingKey(stringValue: "reps")!)
+        try container.encodeIfPresent(notes, forKey: DynamicCodingKey(stringValue: "notes")!)
     }
 }
 
@@ -315,6 +357,7 @@ final class CoachService {
                     duration_type,
                     duration_weeks,
                     program_data,
+                    daily_tips,
                     created_at
                 ),
                 coach:profiles!coach_id (

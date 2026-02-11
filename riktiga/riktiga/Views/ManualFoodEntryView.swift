@@ -119,27 +119,6 @@ struct ManualFoodEntryView: View {
                     Spacer()
                     
                     HStack(spacing: 12) {
-                        // AI Button
-                        Button {
-                            showAISheet = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 16))
-                                Text("Regga med AI")
-                                    .font(.system(size: 15, weight: .semibold))
-                            }
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.white)
-                            .cornerRadius(14)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(Color.black, lineWidth: 1.5)
-                            )
-                        }
-                        
                         // Add Button
                         Button {
                             saveFood()

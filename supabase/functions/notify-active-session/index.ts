@@ -173,16 +173,26 @@ serve(async (req) => {
     // Get first name
     const firstName = userName.split(" ")[0] || userName;
 
-    // Activity text
-    const activityText = activityType === "gym" || activityType === "walking" 
-      ? "gympass" 
-      : activityType === "running" 
-        ? "löppass" 
-        : activityType === "golf"
-          ? "golfrunda"
-          : "träningspass";
+    // Activity text - handle both raw values from app and legacy values
+    const activityLower = activityType.toLowerCase();
+    let activityText = "träningspass";
+    let articleWord = "ett";
+    
+    if (activityLower === "gym" || activityLower === "walking" || activityLower === "gympass") {
+      activityText = "gympass";
+    } else if (activityLower === "running" || activityLower === "löppass") {
+      activityText = "löppass";
+    } else if (activityLower === "golf" || activityLower === "golfrunda") {
+      activityText = "golfrunda";
+      articleWord = "en";
+    } else if (activityLower === "bestiga berg" || activityLower === "hiking") {
+      activityText = "promenad";
+      articleWord = "en";
+    } else if (activityLower === "skidåkning" || activityLower === "skiing") {
+      activityText = "skidpass";
+    }
 
-    const title = `${firstName} startade ett ${activityText}`;
+    const title = `${firstName} startade ${articleWord} ${activityText}`;
     const body = "Gå in och pusha på!! 💪";
 
     // Send push notifications to all followers
