@@ -297,6 +297,10 @@ struct WorkoutPostCard: View {
                     userId: post.userId,
                     postDate: ISO8601DateFormatter().date(from: post.createdAt)
                 )
+            } else if post.imageUrl == nil && post.userImageUrl == nil,
+                      let routeData = post.routeData, !routeData.isEmpty {
+                // Map image upload failed but GPS data exists - regenerate map
+                RouteMapFallbackView(routeData: routeData, activityType: post.activityType)
             } else {
                 // Swipeable images (route and user image)
                 SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)

@@ -45,7 +45,7 @@ struct WorkoutLibraryPopup: View {
                                 .foregroundColor(.primary)
                             
                             if viewModel.savedWorkouts.isEmpty {
-                                Text("Du har inga sparade pass ännu.")
+                                Text("Du har inga gym rutiner ännu.")
                                     .font(.system(size: 15))
                                     .foregroundColor(.secondary)
                                     .padding(.vertical, 8)

@@ -108,7 +108,7 @@ struct TrainerOnboardingView: View {
                             .foregroundColor(.white)
                     }
                     .padding(24)
-                    .background(.ultraThinMaterial)
+                    .background(Color(.systemGray6))
                     .cornerRadius(16)
                 }
             }

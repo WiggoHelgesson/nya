@@ -58,6 +58,7 @@ struct LocalAsyncImage: View {
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
+                    .aspectRatio(contentMode: .fill)
             } else if isLoading {
                 Rectangle()
                     .fill(Color(.systemGray4))

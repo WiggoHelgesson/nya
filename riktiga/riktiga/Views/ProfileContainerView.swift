@@ -7,51 +7,40 @@ enum ProfileTab: String, CaseIterable {
 
 struct ProfileContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    let popToRootTrigger: Int
     @State private var selectedTab: ProfileTab = .statistik
     @State private var showSettings = false
     @State private var navigationPath = NavigationPath()
-    @State private var showSkeleton = true
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                // Skeleton view - shows immediately
-                if showSkeleton {
-                    ProfileSkeletonView()
-                        .transition(.opacity)
-                }
+            VStack(spacing: 0) {
+                // MARK: - Combined Header with Tabs (Strava-style)
+                ProfileHeaderWithTabs(selectedTab: $selectedTab, onSettingsTapped: {
+                    showSettings = true
+                })
+                    .environmentObject(authViewModel)
+                    .zIndex(2)
                 
-                VStack(spacing: 0) {
-                    // MARK: - Combined Header with Tabs (Strava-style)
-                    ProfileHeaderWithTabs(selectedTab: $selectedTab, onSettingsTapped: {
-                        showSettings = true
-                    })
+                // Swipeable content
+                TabView(selection: $selectedTab) {
+                    StatisticsView()
                         .environmentObject(authViewModel)
-                        .zIndex(2)
+                        .tag(ProfileTab.statistik)
                     
-                    // Swipeable content
-                    TabView(selection: $selectedTab) {
-                        StatisticsView()
-                            .environmentObject(authViewModel)
-                            .tag(ProfileTab.statistik)
-                        
-                        ProfileActivitiesView()
-                            .environmentObject(authViewModel)
-                            .tag(ProfileTab.aktiviteter)
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                    ProfileActivitiesView()
+                        .environmentObject(authViewModel)
+                        .tag(ProfileTab.aktiviteter)
                 }
-                .opacity(showSkeleton ? 0 : 1)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
             }
             .navigationBarHidden(true)
-            .onAppear {
-                // Show content instantly for fast navigation
-                showSkeleton = false
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootProfil"))) { _ in
+            .onChange(of: popToRootTrigger) { _, _ in
                 navigationPath = NavigationPath()
                 showSettings = false
+                // Notify inner ProfileView
+                NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -353,7 +342,7 @@ private struct ProBannerView: View {
 }
 
 #Preview {
-    ProfileContainerView()
+    ProfileContainerView(popToRootTrigger: 0)
         .environmentObject(AuthViewModel())
 }
 

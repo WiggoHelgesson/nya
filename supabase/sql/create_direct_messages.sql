@@ -6,6 +6,9 @@
 -- STEP 0: Clean up any previous partial install
 DROP VIEW IF EXISTS public.direct_conversations_with_info CASCADE;
 DROP FUNCTION IF EXISTS public.update_direct_conversation_last_message() CASCADE;
+DROP FUNCTION IF EXISTS public.get_my_direct_conversation_ids() CASCADE;
+DROP FUNCTION IF EXISTS public.find_direct_conversation(UUID, UUID) CASCADE;
+DROP TABLE IF EXISTS public.gym_invite_responses CASCADE;
 DROP TABLE IF EXISTS public.direct_messages CASCADE;
 DROP TABLE IF EXISTS public.direct_conversation_participants CASCADE;
 DROP TABLE IF EXISTS public.direct_conversations CASCADE;
@@ -18,7 +21,10 @@ CREATE TABLE public.direct_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ DEFAULT now(),
     last_message_at TIMESTAMPTZ DEFAULT now(),
-    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    is_group BOOLEAN DEFAULT false,
+    group_name TEXT,
+    group_image_url TEXT
 );
 
 CREATE TABLE public.direct_conversation_participants (
@@ -26,6 +32,8 @@ CREATE TABLE public.direct_conversation_participants (
     conversation_id UUID NOT NULL REFERENCES public.direct_conversations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     is_muted BOOLEAN DEFAULT false,
+    is_typing BOOLEAN DEFAULT false,
+    typing_updated_at TIMESTAMPTZ,
     joined_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(conversation_id, user_id)
 );
@@ -35,8 +43,19 @@ CREATE TABLE public.direct_messages (
     conversation_id UUID NOT NULL REFERENCES public.direct_conversations(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
+    message_type TEXT DEFAULT 'text',
+    image_url TEXT,
     is_read BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE public.gym_invite_responses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id UUID NOT NULL REFERENCES public.direct_messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    response TEXT NOT NULL CHECK (response IN ('accepted', 'declined')),
+    responded_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(message_id, user_id)
 );
 
 -- ============================================
@@ -49,6 +68,9 @@ CREATE INDEX idx_direct_conversations_last_msg ON public.direct_conversations(la
 CREATE INDEX idx_direct_messages_conv ON public.direct_messages(conversation_id, created_at ASC);
 CREATE INDEX idx_direct_messages_sender ON public.direct_messages(sender_id);
 CREATE INDEX idx_direct_messages_unread ON public.direct_messages(conversation_id, is_read) WHERE is_read = false;
+CREATE INDEX idx_direct_messages_type ON public.direct_messages(message_type) WHERE message_type != 'text';
+CREATE INDEX idx_gym_invite_responses_msg ON public.gym_invite_responses(message_id);
+CREATE INDEX idx_gym_invite_responses_user ON public.gym_invite_responses(user_id);
 
 -- ============================================
 -- STEP 3: Enable RLS
@@ -57,17 +79,27 @@ CREATE INDEX idx_direct_messages_unread ON public.direct_messages(conversation_i
 ALTER TABLE public.direct_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.direct_conversation_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.direct_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.gym_invite_responses ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
--- STEP 4: RLS Policies for direct_conversations
+-- STEP 4: Helper function to get user's conversation IDs (bypasses RLS)
+-- ============================================
+
+CREATE OR REPLACE FUNCTION public.get_my_direct_conversation_ids()
+RETURNS SETOF UUID AS $$
+    SELECT conversation_id
+    FROM public.direct_conversation_participants
+    WHERE user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================
+-- STEP 5: RLS Policies for direct_conversations
 -- ============================================
 
 CREATE POLICY "Users can view own conversations" ON public.direct_conversations
     FOR SELECT USING (
-        id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        created_by = auth.uid() OR
+        id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 CREATE POLICY "Authenticated users can create conversations" ON public.direct_conversations
@@ -75,30 +107,26 @@ CREATE POLICY "Authenticated users can create conversations" ON public.direct_co
 
 CREATE POLICY "Participants can update conversations" ON public.direct_conversations
     FOR UPDATE USING (
-        id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 CREATE POLICY "Participants can delete conversations" ON public.direct_conversations
     FOR DELETE USING (
-        id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 -- ============================================
--- STEP 5: RLS Policies for direct_conversation_participants
+-- STEP 6: RLS Policies for direct_conversation_participants
 -- ============================================
 
-CREATE POLICY "Users can view participants of own conversations" ON public.direct_conversation_participants
+-- SELECT: you can see your own rows directly (no self-referencing sub-query)
+CREATE POLICY "Users can view own participation" ON public.direct_conversation_participants
+    FOR SELECT USING (user_id = auth.uid());
+
+-- SELECT: you can also see other participants in your conversations
+CREATE POLICY "Users can view co-participants" ON public.direct_conversation_participants
     FOR SELECT USING (
-        conversation_id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        conversation_id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 CREATE POLICY "Authenticated users can add participants" ON public.direct_conversation_participants
@@ -111,42 +139,65 @@ CREATE POLICY "Users can remove own participation" ON public.direct_conversation
     FOR DELETE USING (user_id = auth.uid());
 
 -- ============================================
--- STEP 6: RLS Policies for direct_messages
+-- STEP 7: RLS Policies for direct_messages
 -- ============================================
 
 CREATE POLICY "Participants can view messages" ON public.direct_messages
     FOR SELECT USING (
-        conversation_id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        conversation_id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 CREATE POLICY "Participants can send messages" ON public.direct_messages
     FOR INSERT WITH CHECK (
         auth.uid() = sender_id AND
-        conversation_id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        conversation_id IN (SELECT public.get_my_direct_conversation_ids())
     );
 
 CREATE POLICY "Participants can mark messages read" ON public.direct_messages
     FOR UPDATE USING (
-        conversation_id IN (
-            SELECT conversation_id FROM public.direct_conversation_participants
-            WHERE user_id = auth.uid()
-        )
+        conversation_id IN (SELECT public.get_my_direct_conversation_ids())
+    );
+
+CREATE POLICY "Users can delete own messages" ON public.direct_messages
+    FOR DELETE USING (
+        auth.uid() = sender_id
     );
 
 -- ============================================
--- STEP 7: Enable Realtime
+-- STEP 8: RLS Policies for gym_invite_responses
+-- ============================================
+
+-- Participants can view responses for invites in their conversations
+CREATE POLICY "Participants can view gym invite responses" ON public.gym_invite_responses
+    FOR SELECT USING (
+        message_id IN (
+            SELECT m.id FROM public.direct_messages m
+            WHERE m.conversation_id IN (SELECT public.get_my_direct_conversation_ids())
+        )
+    );
+
+-- Authenticated users can respond to gym invites in their conversations
+CREATE POLICY "Participants can respond to gym invites" ON public.gym_invite_responses
+    FOR INSERT WITH CHECK (
+        auth.uid() = user_id AND
+        message_id IN (
+            SELECT m.id FROM public.direct_messages m
+            WHERE m.conversation_id IN (SELECT public.get_my_direct_conversation_ids())
+        )
+    );
+
+-- Users can update their own responses
+CREATE POLICY "Users can update own gym invite response" ON public.gym_invite_responses
+    FOR UPDATE USING (user_id = auth.uid());
+
+-- ============================================
+-- STEP 9: Enable Realtime
 -- ============================================
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.direct_messages;
 
 -- ============================================
--- STEP 8: Trigger to auto-update last_message_at
+-- STEP 10: Trigger to auto-update last_message_at
 -- ============================================
 
 CREATE OR REPLACE FUNCTION public.update_direct_conversation_last_message()
@@ -165,7 +216,7 @@ CREATE TRIGGER on_new_direct_message
     EXECUTE FUNCTION public.update_direct_conversation_last_message();
 
 -- ============================================
--- STEP 9: Convenience view with metadata
+-- STEP 11: Convenience view with metadata
 -- ============================================
 
 CREATE OR REPLACE VIEW public.direct_conversations_with_info AS
@@ -174,10 +225,39 @@ SELECT
     c.created_at,
     c.last_message_at,
     c.created_by,
-    -- Other participant info
-    other_p.user_id AS other_user_id,
-    other_profile.username AS other_username,
-    other_profile.avatar_url AS other_avatar_url,
+    c.is_group,
+    c.group_name,
+    c.group_image_url,
+    -- For 1-on-1: other participant info (picks first non-self participant)
+    (
+        SELECT op.user_id FROM public.direct_conversation_participants op
+        WHERE op.conversation_id = c.id AND op.user_id != auth.uid()
+        LIMIT 1
+    ) AS other_user_id,
+    (
+        SELECT p.username FROM public.direct_conversation_participants op
+        JOIN public.profiles p ON p.id = op.user_id
+        WHERE op.conversation_id = c.id AND op.user_id != auth.uid()
+        LIMIT 1
+    ) AS other_username,
+    (
+        SELECT p.avatar_url FROM public.direct_conversation_participants op
+        JOIN public.profiles p ON p.id = op.user_id
+        WHERE op.conversation_id = c.id AND op.user_id != auth.uid()
+        LIMIT 1
+    ) AS other_avatar_url,
+    -- For groups: comma-separated participant names (excluding self)
+    (
+        SELECT string_agg(p.username, ', ' ORDER BY p.username)
+        FROM public.direct_conversation_participants op
+        JOIN public.profiles p ON p.id = op.user_id
+        WHERE op.conversation_id = c.id AND op.user_id != auth.uid()
+    ) AS group_participant_names,
+    -- Group member count
+    (
+        SELECT COUNT(*) FROM public.direct_conversation_participants op
+        WHERE op.conversation_id = c.id
+    )::int AS member_count,
     -- Current user's mute status
     my_p.is_muted,
     -- Last message
@@ -192,6 +272,13 @@ SELECT
         WHERE m.conversation_id = c.id
         ORDER BY m.created_at DESC LIMIT 1
     ) AS last_message_sender_id,
+    -- Last message sender name (for groups)
+    (
+        SELECT p.username FROM public.direct_messages m
+        JOIN public.profiles p ON p.id = m.sender_id
+        WHERE m.conversation_id = c.id
+        ORDER BY m.created_at DESC LIMIT 1
+    ) AS last_message_sender_name,
     -- Unread count
     (
         SELECT COUNT(*) FROM public.direct_messages m
@@ -201,14 +288,10 @@ SELECT
     )::int AS unread_count
 FROM public.direct_conversations c
 JOIN public.direct_conversation_participants my_p
-    ON my_p.conversation_id = c.id AND my_p.user_id = auth.uid()
-JOIN public.direct_conversation_participants other_p
-    ON other_p.conversation_id = c.id AND other_p.user_id != auth.uid()
-JOIN public.profiles other_profile
-    ON other_profile.id = other_p.user_id;
+    ON my_p.conversation_id = c.id AND my_p.user_id = auth.uid();
 
 -- ============================================
--- STEP 10: Function to find existing conversation between two users
+-- STEP 12: Function to find existing conversation between two users
 -- ============================================
 
 CREATE OR REPLACE FUNCTION public.find_direct_conversation(p_user1 UUID, p_user2 UUID)

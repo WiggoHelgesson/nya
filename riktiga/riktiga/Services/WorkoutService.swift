@@ -235,13 +235,21 @@ class WorkoutService {
         
         // Upload images in parallel for faster saving
         await withTaskGroup(of: Void.self) { group in
-            // Upload route image if provided
+            // Upload route image if provided (with retry)
             if let routeImage = routeImage {
                 group.addTask {
                     do {
                         uploadedRouteImageUrl = try await self.uploadWorkoutImage(routeImage, postId: post.id)
                     } catch {
-                        print("⚠️ Route image upload failed: \(error)")
+                        print("⚠️ Route image upload failed, retrying once: \(error)")
+                        // Retry once after a short delay
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        do {
+                            uploadedRouteImageUrl = try await self.uploadWorkoutImage(routeImage, postId: post.id)
+                            print("✅ Route image upload succeeded on retry")
+                        } catch {
+                            print("❌ Route image upload failed after retry: \(error)")
+                        }
                     }
                 }
             }

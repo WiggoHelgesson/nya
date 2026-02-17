@@ -14,9 +14,104 @@ struct NewMessageView: View {
     @State private var showGuidelines = false
     @State private var selectedUser: UserSearchResult? = nil
     
+    // Group mode
+    @State private var isGroupMode = false
+    @State private var selectedGroupUsers: Set<String> = []
+    @State private var selectedGroupUsersList: [UserSearchResult] = []
+    @State private var groupName = ""
+    @State private var showGroupGuidelines = false
+    @State private var isCreatingGroup = false
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Group / Direct toggle
+                if !isGroupMode {
+                    // "Skapa grupp" button
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isGroupMode = true
+                            selectedUserId = nil
+                            selectedUser = nil
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(.systemGray6))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "person.3.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Text("Skapa grupp")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Divider()
+                }
+                
+                // Group name field (group mode only)
+                if isGroupMode {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray)
+                            
+                            TextField("Gruppnamn", text: $groupName)
+                                .font(.system(size: 16))
+                        }
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 6)
+                        
+                        // Selected members chips
+                        if !selectedGroupUsersList.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(selectedGroupUsersList) { user in
+                                        HStack(spacing: 6) {
+                                            ProfileImage(url: user.avatarUrl, size: 24)
+                                            Text(user.name)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(.primary)
+                                            Button {
+                                                toggleGroupUser(user)
+                                            } label: {
+                                                Image(systemName: "xmark")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(16)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 6)
+                            }
+                        }
+                    }
+                }
+                
                 // Search bar
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -43,7 +138,7 @@ struct NewMessageView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(10)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, isGroupMode ? 6 : 12)
                 
                 Divider()
                 
@@ -68,8 +163,12 @@ struct NewMessageView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(filteredFollowers) { user in
                                 Button {
-                                    selectedUserId = selectedUserId == user.id ? nil : user.id
-                                    selectedUser = selectedUserId == user.id ? user : nil
+                                    if isGroupMode {
+                                        toggleGroupUser(user)
+                                    } else {
+                                        selectedUserId = selectedUserId == user.id ? nil : user.id
+                                        selectedUser = selectedUserId == user.id ? user : nil
+                                    }
                                 } label: {
                                     HStack(spacing: 12) {
                                         ProfileImage(url: user.avatarUrl, size: 44)
@@ -84,11 +183,13 @@ struct NewMessageView: View {
                                         
                                         // Checkbox
                                         ZStack {
+                                            let isSelected = isGroupMode ? selectedGroupUsers.contains(user.id) : selectedUserId == user.id
+                                            
                                             RoundedRectangle(cornerRadius: 4)
-                                                .stroke(selectedUserId == user.id ? Color.black : Color(.systemGray4), lineWidth: 1.5)
+                                                .stroke(isSelected ? Color.black : Color(.systemGray4), lineWidth: 1.5)
                                                 .frame(width: 22, height: 22)
                                             
-                                            if selectedUserId == user.id {
+                                            if isSelected {
                                                 RoundedRectangle(cornerRadius: 4)
                                                     .fill(Color.black)
                                                     .frame(width: 22, height: 22)
@@ -112,25 +213,38 @@ struct NewMessageView: View {
                     }
                 }
             }
-            .navigationTitle("Nytt meddelande")
+            .navigationTitle(isGroupMode ? "Skapa grupp" : "Nytt meddelande")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Stäng") {
-                        dismiss()
+                    Button(isGroupMode ? "Tillbaka" : "Stäng") {
+                        if isGroupMode {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isGroupMode = false
+                                selectedGroupUsers.removeAll()
+                                selectedGroupUsersList.removeAll()
+                                groupName = ""
+                            }
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundColor(.primary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Skapa") {
-                        if selectedUser != nil {
+                        if isGroupMode {
+                            if selectedGroupUsers.count >= 2 {
+                                showGroupGuidelines = true
+                            }
+                        } else if selectedUser != nil {
                             showGuidelines = true
                         }
                     }
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(selectedUserId != nil ? .primary : .gray)
-                    .disabled(selectedUserId == nil)
+                    .foregroundColor(createButtonEnabled ? .primary : .gray)
+                    .disabled(!createButtonEnabled)
                 }
             }
             .task {
@@ -141,14 +255,36 @@ struct NewMessageView: View {
             if showGuidelines, let user = selectedUser {
                 guidelinesOverlay(for: user)
             }
+            
+            if showGroupGuidelines {
+                groupGuidelinesOverlay
+            }
         }
     }
     
-    // MARK: - Guidelines Overlay
+    private var createButtonEnabled: Bool {
+        if isGroupMode {
+            return selectedGroupUsers.count >= 2 && !groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return selectedUserId != nil
+    }
+    
+    // MARK: - Group User Toggle
+    
+    private func toggleGroupUser(_ user: UserSearchResult) {
+        if selectedGroupUsers.contains(user.id) {
+            selectedGroupUsers.remove(user.id)
+            selectedGroupUsersList.removeAll { $0.id == user.id }
+        } else {
+            selectedGroupUsers.insert(user.id)
+            selectedGroupUsersList.append(user)
+        }
+    }
+    
+    // MARK: - Guidelines Overlay (1-on-1)
     
     private func guidelinesOverlay(for user: UserSearchResult) -> some View {
         ZStack {
-            // Background dim
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
@@ -157,12 +293,10 @@ struct NewMessageView: View {
                     }
                 }
             
-            // Card
             VStack(spacing: 0) {
                 Spacer()
                 
                 VStack(spacing: 20) {
-                    // Profile pictures with chat icon
                     HStack(spacing: 16) {
                         ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 52)
                         
@@ -185,7 +319,6 @@ struct NewMessageView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                     
-                    // OK button
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             showGuidelines = false
@@ -211,6 +344,94 @@ struct NewMessageView: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showGuidelines)
+    }
+    
+    // MARK: - Group Guidelines Overlay
+    
+    private var groupGuidelinesOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showGroupGuidelines = false
+                    }
+                }
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                VStack(spacing: 20) {
+                    // Overlapping group avatars
+                    HStack(spacing: -12) {
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 44)
+                            .zIndex(3)
+                        
+                        ForEach(Array(selectedGroupUsersList.prefix(3).enumerated()), id: \.element.id) { index, user in
+                            ProfileImage(url: user.avatarUrl, size: 44)
+                                .zIndex(Double(2 - index))
+                        }
+                        
+                        if selectedGroupUsersList.count > 3 {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(.systemGray5))
+                                    .frame(width: 44, height: 44)
+                                Text("+\(selectedGroupUsersList.count - 3)")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                    }
+                    .padding(.top, 8)
+                    
+                    Text("Skapa grupp \"\(groupName.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("\(selectedGroupUsers.count + 1) medlemmar")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Följ våra **riktlinjer** och var respektfull i gruppkonversationer. Låt oss hålla Up&Down positivt!")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            showGroupGuidelines = false
+                        }
+                        createGroupConversation()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isCreatingGroup {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text("Skapa grupp")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(28)
+                    }
+                    .disabled(isCreatingGroup)
+                }
+                .padding(24)
+                .background(Color(.systemBackground))
+                .cornerRadius(20)
+                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: -5)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showGroupGuidelines)
     }
     
     // MARK: - Helpers
@@ -253,6 +474,30 @@ struct NewMessageView: View {
                 }
             } catch {
                 print("❌ Failed to create conversation: \(error)")
+            }
+        }
+    }
+    
+    private func createGroupConversation() {
+        let name = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, selectedGroupUsers.count >= 2 else { return }
+        
+        isCreatingGroup = true
+        
+        Task {
+            do {
+                let conversationId = try await DirectMessageService.shared.createGroupConversation(
+                    withUserIds: Array(selectedGroupUsers),
+                    groupName: name
+                )
+                await MainActor.run {
+                    isCreatingGroup = false
+                    let participantNames = selectedGroupUsersList.map { $0.name }.joined(separator: ", ")
+                    onConversationCreated(conversationId, "", name, nil)
+                }
+            } catch {
+                print("❌ Failed to create group: \(error)")
+                await MainActor.run { isCreatingGroup = false }
             }
         }
     }

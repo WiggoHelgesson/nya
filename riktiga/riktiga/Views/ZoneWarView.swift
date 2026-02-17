@@ -166,7 +166,7 @@ struct ZoneWarView: View {
                     ProgressView()
                         .scaleEffect(1.5)
                         .padding()
-                        .background(.ultraThinMaterial)
+                        .background(Color(.systemBackground))
                         .cornerRadius(10)
                 }
                 

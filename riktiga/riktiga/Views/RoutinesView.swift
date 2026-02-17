@@ -43,7 +43,7 @@ struct RoutinesView: View {
                 workoutsList
             }
         }
-        .navigationTitle("Sparade pass")
+        .navigationTitle("Gym rutiner")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -90,7 +90,7 @@ struct RoutinesView: View {
                 }
             }
         } message: {
-            Text("Är du säker på att du vill ta bort detta sparade pass?")
+            Text("Är du säker på att du vill ta bort denna gym rutin?")
         }
         .task {
             await loadSavedWorkouts()
@@ -107,7 +107,7 @@ struct RoutinesView: View {
                 .cornerRadius(16)
             
             VStack(spacing: 8) {
-                Text("Inga sparade pass")
+                Text("Inga gym rutiner")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
                 
@@ -199,7 +199,7 @@ struct RoutinesView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta sparade pass"
+                self.errorMessage = "Kunde inte hämta gym rutiner"
                 self.isLoading = false
             }
         }
@@ -451,7 +451,7 @@ struct SavedWorkoutDetailView: View {
                 dismiss()
             }
         } message: {
-            Text("Är du säker på att du vill ta bort detta sparade pass?")
+            Text("Är du säker på att du vill ta bort denna gym rutin?")
         }
     }
     
@@ -507,8 +507,14 @@ struct CreateRoutineView: View {
     
     @State private var routineName = ""
     @State private var selectedExercises: [GymExercisePost] = []
-    @State private var showExerciseSearch = false
+    @State private var showExercisePicker = false
     @State private var isSaving = false
+    
+    // For adding exercise with sets selection
+    @State private var pendingExercise: ExerciseTemplate?
+    @State private var showSetsSelector = false
+    @State private var selectedSets = 3
+    @State private var selectedReps = 10
     
     var body: some View {
         ScrollView {
@@ -522,8 +528,32 @@ struct CreateRoutineView: View {
         .navigationTitle("Skapa ny rutin")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .sheet(isPresented: $showExerciseSearch) {
-            exerciseSearchSheet
+        .navigationDestination(isPresented: $showExercisePicker) {
+            ExercisePickerView { exercise in
+                // Store the pending exercise, hide picker, and show sets selector
+                pendingExercise = exercise
+                showExercisePicker = false
+                // Small delay to allow picker to dismiss before showing sheet
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showSetsSelector = true
+                }
+            }
+        }
+        .sheet(isPresented: $showSetsSelector) {
+            if let exercise = pendingExercise {
+                SetsSelectorSheet(
+                    exerciseName: exercise.name,
+                    selectedSets: $selectedSets,
+                    selectedReps: $selectedReps,
+                    onConfirm: {
+                        addExerciseWithSets(exercise: exercise, sets: selectedSets, reps: selectedReps)
+                        showSetsSelector = false
+                        pendingExercise = nil
+                    }
+                )
+                .presentationDetents([.height(450)])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
     
@@ -575,7 +605,7 @@ struct CreateRoutineView: View {
             
             Spacer()
             
-            Button(action: { showExerciseSearch = true }) {
+            Button(action: { showExercisePicker = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
                     Text("Lägg till")
@@ -597,7 +627,7 @@ struct CreateRoutineView: View {
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
             
-            Button(action: { showExerciseSearch = true }) {
+            Button(action: { showExercisePicker = true }) {
                 Text("Sök övningar")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
@@ -625,6 +655,9 @@ struct CreateRoutineView: View {
                         withAnimation {
                             _ = self.selectedExercises.remove(at: index)
                         }
+                    },
+                    onChangeSets: { [index] newSets, newReps in
+                        updateExerciseSets(at: index, newSets: newSets, newReps: newReps)
                     }
                 )
             }
@@ -634,8 +667,29 @@ struct CreateRoutineView: View {
         .padding(.horizontal, 16)
     }
     
+    private func updateExerciseSets(at index: Int, newSets: Int, newReps: Int) {
+        guard index < selectedExercises.count else { return }
+        var updatedExercise = selectedExercises[index]
+        
+        // Adjust reps and kg arrays to match new sets count
+        let reps = Array(repeating: newReps, count: newSets)
+        let kg = Array(repeating: 0.0, count: newSets)
+        
+        updatedExercise = GymExercisePost(
+            id: updatedExercise.id,
+            name: updatedExercise.name,
+            category: updatedExercise.category,
+            sets: newSets,
+            reps: reps,
+            kg: kg,
+            notes: updatedExercise.notes
+        )
+        
+        selectedExercises[index] = updatedExercise
+    }
+    
     private var addMoreButton: some View {
-        Button(action: { showExerciseSearch = true }) {
+        Button(action: { showExercisePicker = true }) {
             HStack(spacing: 8) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 18))
@@ -669,23 +723,18 @@ struct CreateRoutineView: View {
         }
     }
     
-    // MARK: - Exercise Search Sheet
-    private var exerciseSearchSheet: some View {
-        NavigationStack {
-            ExerciseSearchView(onSelect: { exercise in
-                addExercise(exercise)
-            })
-        }
-    }
-    
-    private func addExercise(_ exercise: ExerciseDBExercise) {
+    // MARK: - Add Exercise with Sets
+    private func addExerciseWithSets(exercise: ExerciseTemplate, sets: Int, reps: Int) {
+        let repsArray = Array(repeating: reps, count: sets)
+        let kg = Array(repeating: 0.0, count: sets)
+        
         let gymExercise = GymExercisePost(
             id: exercise.id,
-            name: exercise.name.capitalized,
-            category: exercise.bodyPart.capitalized,
-            sets: 3,
-            reps: [10, 10, 10],
-            kg: [0, 0, 0],
+            name: exercise.name,
+            category: exercise.category,
+            sets: sets,
+            reps: repsArray,
+            kg: kg,
             notes: nil
         )
         selectedExercises.append(gymExercise)
@@ -722,6 +771,22 @@ private struct CreateRoutineExerciseRow: View {
     let exercise: GymExercisePost
     let isLast: Bool
     let onRemove: () -> Void
+    let onChangeSets: (Int, Int) -> Void // (sets, reps)
+    
+    @State private var showSetsSelector = false
+    @State private var selectedSets: Int
+    @State private var selectedReps: Int
+    
+    init(index: Int, exercise: GymExercisePost, isLast: Bool, onRemove: @escaping () -> Void, onChangeSets: @escaping (Int, Int) -> Void) {
+        self.index = index
+        self.exercise = exercise
+        self.isLast = isLast
+        self.onRemove = onRemove
+        self.onChangeSets = onChangeSets
+        self._selectedSets = State(initialValue: exercise.sets)
+        // Use first rep count as default, or 10 if empty
+        self._selectedReps = State(initialValue: exercise.reps.first ?? 10)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -729,7 +794,7 @@ private struct CreateRoutineExerciseRow: View {
                 exerciseImage
                 exerciseInfo
                 Spacer()
-                setsLabel
+                setsButton
                 removeButton
             }
             .padding(12)
@@ -738,6 +803,19 @@ private struct CreateRoutineExerciseRow: View {
                 Divider()
                     .padding(.leading, 68)
             }
+        }
+        .sheet(isPresented: $showSetsSelector) {
+            SetsSelectorSheet(
+                exerciseName: exercise.name,
+                selectedSets: $selectedSets,
+                selectedReps: $selectedReps,
+                onConfirm: {
+                    onChangeSets(selectedSets, selectedReps)
+                    showSetsSelector = false
+                }
+            )
+            .presentationDetents([.height(450)])
+            .presentationDragIndicator(.visible)
         }
     }
     
@@ -772,10 +850,35 @@ private struct CreateRoutineExerciseRow: View {
         }
     }
     
-    private var setsLabel: some View {
-        Text("\(exercise.sets) set")
-            .font(.system(size: 13))
-            .foregroundColor(.secondary)
+    private var setsButton: some View {
+        Button(action: {
+            selectedSets = exercise.sets
+            selectedReps = exercise.reps.first ?? 10
+            showSetsSelector = true
+        }) {
+            VStack(spacing: 2) {
+                HStack(spacing: 3) {
+                    Text("\(exercise.sets)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text("set")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                HStack(spacing: 3) {
+                    Text("\(exercise.reps.first ?? 10)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text("reps")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
     }
     
     private var removeButton: some View {
@@ -787,285 +890,131 @@ private struct CreateRoutineExerciseRow: View {
     }
 }
 
-// MARK: - Exercise Search View
-struct ExerciseSearchView: View {
+// MARK: - Sets Selector Sheet
+struct SetsSelectorSheet: View {
+    let exerciseName: String
+    @Binding var selectedSets: Int
+    @Binding var selectedReps: Int
+    let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
-    let onSelect: (ExerciseDBExercise) -> Void
-    
-    @State private var searchText = ""
-    @State private var exercises: [ExerciseDBExercise] = []
-    @State private var allExercises: [ExerciseDBExercise] = []
-    @State private var isLoading = false
-    @State private var hasSearched = false
-    @State private var popularityRanking: [String: Int] = [:]
-    @State private var dynamicPopularSearches: [String] = []
-    
-    // Fallback popular exercises (used when no database data exists)
-    private let fallbackPopularExercises = [
-        "bench press", "squat", "deadlift", "shoulder press",
-        "lat pulldown", "bicep curl", "tricep", "leg press",
-        "row", "chest fly", "lunges", "plank"
-    ]
-    
-    private var popularExercises: [String] {
-        dynamicPopularSearches.isEmpty ? fallbackPopularExercises : dynamicPopularSearches
-    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Search bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16))
-                    .foregroundColor(.gray)
-                
-                TextField("Sök övning på engelska...", text: $searchText)
-                    .font(.system(size: 16))
-                    .submitLabel(.search)
-                    .onSubmit {
-                        searchExercises()
-                    }
-                
-                if !searchText.isEmpty {
-                    Button(action: { 
-                        searchText = ""
-                        exercises = []
-                        hasSearched = false
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .padding(12)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+        VStack(spacing: 20) {
+            // Handle bar
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(.systemGray4))
+                .frame(width: 40, height: 5)
+                .padding(.top, 8)
             
-            if isLoading {
-                Spacer()
-                ProgressView()
-                Spacer()
-            } else if !hasSearched {
-                // Show suggestions
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Populära sökningar")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
-                        
-                        FlowLayoutRoutine(items: popularExercises, spacing: 8) { term in
+            VStack(spacing: 8) {
+                Text("Konfigurera övning")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(exerciseName)
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            // Sets section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Antal set")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(1...6, id: \.self) { sets in
                             Button(action: {
-                                searchText = term
-                                searchExercises()
+                                selectedSets = sets
+                                let haptic = UIImpactFeedbackGenerator(style: .light)
+                                haptic.impactOccurred()
                             }) {
-                                Text(term.capitalized)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Color(.secondarySystemBackground))
-                                    .cornerRadius(8)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    .padding(.top, 8)
-                }
-            } else if exercises.isEmpty {
-                Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray)
-                    Text("Inga övningar hittades")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Text("Prova ett annat sökord på engelska")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                }
-                Spacer()
-            } else {
-                // Results list
-                List(exercises) { exercise in
-                    Button(action: {
-                        onSelect(exercise)
-                        dismiss()
-                    }) {
-                        HStack(spacing: 12) {
-                            // Exercise image
-                            ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl)
-                                .frame(width: 50, height: 50)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(exercise.name.capitalized)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                    .lineLimit(2)
-                                
-                                HStack(spacing: 6) {
-                                    Text(exercise.bodyPart.capitalized)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
+                                VStack(spacing: 4) {
+                                    Text("\(sets)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(selectedSets == sets ? .white : .primary)
                                     
-                                    Text("•")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(.secondary.opacity(0.5))
-                                    Text(exercise.equipment.capitalized)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
+                                    Text("set")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(selectedSets == sets ? .white.opacity(0.8) : .secondary)
                                 }
+                                .frame(width: 60, height: 60)
+                                .background(selectedSets == sets ? Color.black : Color(.systemGray6))
+                                .cornerRadius(12)
                             }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.black)
                         }
-                        .padding(.vertical, 4)
                     }
-                }
-                .listStyle(.plain)
-            }
-        }
-        .navigationTitle("Sök övning")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
-                    dismiss()
+                    .padding(.horizontal, 16)
                 }
             }
-        }
-        .task {
-            await loadPopularSearchSuggestions()
-        }
-    }
-    
-    private func searchExercises() {
-        guard !searchText.isEmpty else { return }
-        isLoading = true
-        hasSearched = true
-        
-        Task {
-            do {
-                // Load all exercises if not already loaded
-                if allExercises.isEmpty {
-                    allExercises = try await ExerciseDBService.shared.fetchAllExercises()
-                }
+            
+            // Reps section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Repetitioner per set")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 16)
                 
-                // Load popularity ranking if not loaded yet
-                if popularityRanking.isEmpty {
-                    popularityRanking = await ExercisePopularityService.shared.getSmartRanking(
-                        bodyPart: nil,
-                        userRecentIds: [],
-                        userId: AuthViewModel.shared.currentUser?.id
-                    )
-                }
-                
-                // Filter locally by search text
-                let query = searchText.lowercased()
-                let results = allExercises.filter { exercise in
-                    exercise.name.lowercased().contains(query) ||
-                    exercise.bodyPart.lowercased().contains(query) ||
-                    exercise.target.lowercased().contains(query) ||
-                    exercise.equipment.lowercased().contains(query)
-                }
-                
-                // Sort by popularity (most used first)
-                let ranking = self.popularityRanking
-                let sorted = results.sorted { a, b in
-                    let aRank = ranking[a.id] ?? Int.max
-                    let bRank = ranking[b.id] ?? Int.max
-                    if aRank != bRank { return aRank < bRank }
-                    return a.name < b.name
-                }
-                
-                await MainActor.run {
-                    self.exercises = Array(sorted.prefix(50)) // Limit to 50 results
-                    self.isLoading = false
-                }
-            } catch {
-                print("Search error: \(error)")
-                await MainActor.run {
-                    self.exercises = []
-                    self.isLoading = false
-                }
-            }
-        }
-    }
-    
-    private func loadPopularSearchSuggestions() async {
-        let popular = await ExercisePopularityService.shared.getPopularExercises(limit: 12)
-        if !popular.isEmpty {
-            await MainActor.run {
-                dynamicPopularSearches = popular.map { $0.exerciseName.lowercased() }
-            }
-        }
-    }
-}
-
-// MARK: - Flow Layout for Routine
-struct FlowLayoutRoutine<Item: Hashable, Content: View>: View {
-    let items: [Item]
-    let spacing: CGFloat
-    let content: (Item) -> Content
-    
-    @State private var totalHeight: CGFloat = .zero
-    
-    var body: some View {
-        GeometryReader { geometry in
-            self.generateContent(in: geometry)
-        }
-        .frame(height: totalHeight)
-    }
-    
-    private func generateContent(in geometry: GeometryProxy) -> some View {
-        var width = CGFloat.zero
-        var height = CGFloat.zero
-        
-        return ZStack(alignment: .topLeading) {
-            ForEach(items, id: \.self) { item in
-                content(item)
-                    .padding(.trailing, spacing)
-                    .padding(.bottom, spacing)
-                    .alignmentGuide(.leading) { d in
-                        if abs(width - d.width) > geometry.size.width {
-                            width = 0
-                            height -= d.height
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(3...20, id: \.self) { reps in
+                            Button(action: {
+                                selectedReps = reps
+                                let haptic = UIImpactFeedbackGenerator(style: .light)
+                                haptic.impactOccurred()
+                            }) {
+                                VStack(spacing: 4) {
+                                    Text("\(reps)")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(selectedReps == reps ? .white : .primary)
+                                    
+                                    Text("reps")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(selectedReps == reps ? .white.opacity(0.8) : .secondary)
+                                }
+                                .frame(width: 60, height: 60)
+                                .background(selectedReps == reps ? Color.black : Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
                         }
-                        let result = width
-                        if item == items.last {
-                            width = 0
-                        } else {
-                            width -= d.width
-                        }
-                        return result
                     }
-                    .alignmentGuide(.top) { d in
-                        let result = height
-                        if item == items.last {
-                            height = 0
-                        }
-                        return result
-                    }
+                    .padding(.horizontal, 16)
+                }
             }
-        }
-        .background(viewHeightReader($totalHeight))
-    }
-    
-    private func viewHeightReader(_ binding: Binding<CGFloat>) -> some View {
-        GeometryReader { geometry -> Color in
-            DispatchQueue.main.async {
-                binding.wrappedValue = geometry.size.height
+            
+            // Summary
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                Text("\(selectedSets) set × \(selectedReps) reps")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
             }
-            return Color.clear
+            .padding(.top, 4)
+            
+            // Confirm button
+            Button(action: {
+                onConfirm()
+                dismiss()
+            }) {
+                Text("Bekräfta")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            
+            Spacer()
         }
+        .background(Color(.systemBackground))
     }
 }
 

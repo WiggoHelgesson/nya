@@ -7,12 +7,13 @@ struct StravaStyleHeaderView: View {
     var onSettingsTapped: (() -> Void)? = nil
     
     @State private var unreadNotifications = 0
+    @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var showMonthlyPrize = false
     @State private var showNonProAlert = false
     @State private var showPaywall = false
-    @State private var showFindFriends = false
     @State private var showPublicProfile = false
+    @StateObject private var dmService = DirectMessageService.shared
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -44,17 +45,44 @@ struct StravaStyleHeaderView: View {
             
             // MARK: - Left and Right sides
             HStack {
-                // MARK: - Left side: Profile Picture
-                Button {
-                    showPublicProfile = true
-                } label: {
-                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.black.opacity(0.1), lineWidth: 1)
-                        )
+                // MARK: - Left side: Profile Picture + Search
+                if isProfilePage {
+                    HStack(spacing: 10) {
+                        Button {
+                            showPublicProfile = true
+                        } label: {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        Button {
+                            showPublicProfile = true
+                        } label: {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Search / Find friends
+                        NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(.primary)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
                 
                 Spacer()
                 
@@ -72,21 +100,33 @@ struct StravaStyleHeaderView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    // Find Friends + Notifications for other pages
+                    // Messages + Notifications for other pages
                     HStack(spacing: 12) {
-                        // Find friends
-                        Button {
-                            showFindFriends = true
-                        } label: {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 22, weight: .regular))
-                                .foregroundColor(.primary)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
+                        // Direct messages
+                        NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundColor(.primary)
+                                
+                                if unreadMessages > 0 {
+                                    Circle()
+                                        .fill(Color.black)
+                                        .frame(width: 18, height: 18)
+                                        .overlay(
+                                            Text("\(min(unreadMessages, 99))")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                        .offset(x: 8, y: -6)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         
-                        // Notification bell - NavigationLink to separate page
+                        // Notification bell
                         NavigationLink(destination: NotificationsView(onDismiss: {
                             Task { await refreshUnreadCount() }
                         }).environmentObject(authViewModel)) {
@@ -95,7 +135,6 @@ struct StravaStyleHeaderView: View {
                                     .font(.system(size: 22, weight: .regular))
                                     .foregroundColor(.primary)
                                 
-                                // Notification badge
                                 if unreadNotifications > 0 {
                                     Circle()
                                         .fill(Color.black)
@@ -122,10 +161,6 @@ struct StravaStyleHeaderView: View {
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
-                .environmentObject(authViewModel)
-        }
-        .navigationDestination(isPresented: $showFindFriends) {
-            FindFriendsView()
                 .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showPublicProfile) {
@@ -156,9 +191,16 @@ struct StravaStyleHeaderView: View {
         }
         .task {
             await refreshUnreadCount()
+            await refreshUnreadMessages()
         }
         .onAppear {
-            Task { await refreshUnreadCount() }
+            Task {
+                await refreshUnreadCount()
+                await refreshUnreadMessages()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
+            Task { await refreshUnreadMessages() }
         }
     }
     
@@ -178,6 +220,13 @@ struct StravaStyleHeaderView: View {
             print("⚠️ Failed to fetch unread notifications: \(error)")
         }
         isFetchingUnread = false
+    }
+    
+    private func refreshUnreadMessages() async {
+        await dmService.fetchTotalUnreadCount()
+        await MainActor.run {
+            unreadMessages = dmService.totalUnreadCount
+        }
     }
 }
 

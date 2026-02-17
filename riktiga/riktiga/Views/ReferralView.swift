@@ -26,6 +26,14 @@ struct ReferralView: View {
     @State private var isSettingUpStripe = false
     @State private var estimatedUsers: Double = 10
     
+    // Supporting code states
+    @State private var supportingCodeInfo: SupportingCodeInfo?
+    @State private var showChangeSupportCodeSheet = false
+    @State private var newSupportCode: String = ""
+    @State private var isChangingSupportCode = false
+    @State private var changeSupportCodeError: String?
+    @State private var showSupportCodeChangeSuccess = false
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -34,6 +42,14 @@ struct ReferralView: View {
                 
                 // Promo code section
                 promoCodeSection
+                
+                // Supporting code section (if user is supporting someone)
+                if let supportingInfo = supportingCodeInfo {
+                    supportingCodeSection(info: supportingInfo)
+                } else if !isLoading {
+                    // Show option to add a support code if they don't have one
+                    addSupportCodeSection
+                }
                 
                 // Share button
                 shareButton
@@ -119,8 +135,18 @@ struct ReferralView: View {
         } message: {
             Text("Din referenskod har ändrats till \(referralCode)")
         }
+        .alert("Kod uppdaterad!", isPresented: $showSupportCodeChangeSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let info = supportingCodeInfo {
+                Text("Du stödjer nu \(info.ownerUsername) med kod \(info.code)")
+            }
+        }
         .sheet(isPresented: $showEditCodeSheet) {
             editCodeSheet
+        }
+        .sheet(isPresented: $showChangeSupportCodeSheet) {
+            changeSupportCodeSheet
         }
     }
     
@@ -724,6 +750,256 @@ struct ReferralView: View {
         }
     }
     
+    // MARK: - Supporting Code Sections
+    
+    private func supportingCodeSection(info: SupportingCodeInfo) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Du stödjer")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    
+                    HStack(spacing: 8) {
+                        Text(info.ownerUsername)
+                            .font(.system(size: 20, weight: .bold))
+                        
+                        Text(info.code)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.green)
+                            .cornerRadius(8)
+                    }
+                }
+                
+                Spacer()
+                
+                Button {
+                    newSupportCode = ""
+                    showChangeSupportCodeSheet = true
+                } label: {
+                    Text("Byt")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray5))
+                        .cornerRadius(20)
+                }
+            }
+            
+            Text("Genom att stödja \(info.ownerUsername) hjälper du dem att tjäna 40% provision på alla dina köp i appen.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.green.opacity(0.3), lineWidth: 1.5)
+        )
+    }
+    
+    private var addSupportCodeSection: some View {
+        Button {
+            newSupportCode = ""
+            showChangeSupportCodeSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.badge.plus")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Stöd någon")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Ange en referenskod för att stödja någon")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            .padding(16)
+            .background(Color.white)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - Change Support Code Sheet
+    
+    private var changeSupportCodeSheet: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.green)
+                    
+                    Text(supportingCodeInfo == nil ? "Stöd någon" : "Byt vem du stödjer")
+                        .font(.system(size: 24, weight: .bold))
+                    
+                    if let currentInfo = supportingCodeInfo {
+                        Text("Du stödjer just nu \(currentInfo.ownerUsername)")
+                            .font(.system(size: 15))
+                            .foregroundColor(.gray)
+                    } else {
+                        Text("Ange en referenskod för att stödja någon")
+                            .font(.system(size: 15))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.top, 20)
+                
+                // Input field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Referenskod")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                    
+                    TextField("T.ex. WIGGO123", text: $newSupportCode)
+                        .font(.system(size: 20, weight: .semibold))
+                        .textCase(.uppercase)
+                        .autocorrectionDisabled()
+                        .padding(16)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .onChange(of: newSupportCode) { _, newValue in
+                            // Filter to only alphanumeric
+                            let filtered = newValue.uppercased().filter { $0.isLetter || $0.isNumber }
+                            if filtered.count <= 12 {
+                                newSupportCode = filtered
+                            } else {
+                                newSupportCode = String(filtered.prefix(12))
+                            }
+                        }
+                }
+                .padding(.horizontal, 20)
+                
+                // Error message
+                if let error = changeSupportCodeError {
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 20)
+                }
+                
+                // Info text
+                VStack(spacing: 8) {
+                    Text("Genom att stödja någon hjälper du dem att tjäna 40% provision på alla dina köp.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                    
+                    if supportingCodeInfo != nil {
+                        Text("Du kan byta när som helst.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Save button
+                Button {
+                    changeSupportCode()
+                } label: {
+                    HStack {
+                        if isChangingSupportCode {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("Spara")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(newSupportCode.count >= 3 ? Color.green : Color.gray)
+                    .cornerRadius(14)
+                }
+                .disabled(newSupportCode.count < 3 || isChangingSupportCode)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 30)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showChangeSupportCodeSheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .frame(width: 36, height: 36)
+                            .background(Color(.systemGray5))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+    
+    private func changeSupportCode() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        let normalizedCode = newSupportCode.uppercased().trimmingCharacters(in: .whitespaces)
+        guard normalizedCode.count >= 3 else {
+            changeSupportCodeError = "Koden måste vara minst 3 tecken"
+            return
+        }
+        
+        isChangingSupportCode = true
+        changeSupportCodeError = nil
+        
+        Task {
+            do {
+                let success = try await ReferralService.shared.changeSupportingCode(userId: userId, newCode: normalizedCode)
+                
+                await MainActor.run {
+                    isChangingSupportCode = false
+                    
+                    if success {
+                        showChangeSupportCodeSheet = false
+                        showSupportCodeChangeSuccess = true
+                        
+                        // Reload supporting code info
+                        Task {
+                            await loadSupportingCodeInfo()
+                        }
+                    } else {
+                        changeSupportCodeError = "Koden hittades inte eller är ogiltig"
+                    }
+                }
+            } catch {
+                print("❌ Error changing support code: \(error)")
+                await MainActor.run {
+                    isChangingSupportCode = false
+                    changeSupportCodeError = "Kunde inte ändra kod. Försök igen."
+                }
+            }
+        }
+    }
+    
     // MARK: - Actions
     private func loadData() async {
         guard let userId = authViewModel.currentUser?.id else { return }
@@ -744,6 +1020,9 @@ struct ReferralView: View {
                 accountStatus = try? await ReferralService.shared.checkStripeAccountStatus()
             }
             
+            // Get supporting code info
+            await loadSupportingCodeInfo()
+            
             await MainActor.run {
                 self.referralCode = code
                 self.canEditCode = canEdit
@@ -756,6 +1035,22 @@ struct ReferralView: View {
             print("❌ Error loading referral data: \(error)")
             await MainActor.run {
                 self.isLoading = false
+            }
+        }
+    }
+    
+    private func loadSupportingCodeInfo() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        
+        do {
+            let info = try await ReferralService.shared.getCurrentSupportingCode(userId: userId)
+            await MainActor.run {
+                self.supportingCodeInfo = info
+            }
+        } catch {
+            print("❌ Error loading supporting code info: \(error)")
+            await MainActor.run {
+                self.supportingCodeInfo = nil
             }
         }
     }

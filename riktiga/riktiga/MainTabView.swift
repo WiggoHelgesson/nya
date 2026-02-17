@@ -59,6 +59,7 @@ struct MainTabView: View {
     @ObservedObject private var notificationNav = NotificationNavigationManager.shared
     @ObservedObject private var sessionManager = SessionManager.shared
     @ObservedObject private var scanLimitManager = AIScanLimitManager.shared
+    @ObservedObject private var barcodeScanLimitManager = BarcodeScanLimitManager.shared
     @ObservedObject private var revenueCatManager = RevenueCatManager.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var hasActiveSession = SessionManager.shared.hasActiveSession
@@ -82,16 +83,9 @@ struct MainTabView: View {
     @State private var showCoachInvitationPopup = false
     @State private var hasCheckedInvitations = false
     @State private var hideFloatingButton = false
+    @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0]
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
-    
-    // Check if iOS 26+ for Liquid Glass
-    private var supportsLiquidGlass: Bool {
-        if #available(iOS 26.0, *) {
-            return true
-        }
-        return false
-    }
     
     // Tab items data - dynamiskt baserat på om användaren har coach
     private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
@@ -119,413 +113,119 @@ struct MainTabView: View {
     private var coachTabIndex: Int { 2 } // Endast om hasActiveCoach
     
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                // iOS 26+ : Native Liquid Glass TabView
-                liquidGlassTabView
-            } else {
-                // iOS 25 and earlier: Custom Tab Bar
-                legacyTabView
+        customTabView
+            .modifier(FullScreenCoversModifier(
+                showStartSession: $showStartSession,
+                showResumeSession: $showResumeSession,
+                showFoodScanner: $showFoodScanner,
+                showManualEntry: $showManualEntry,
+                showProWelcome: $showProWelcome,
+                startActivityType: startActivityType,
+                coachWorkoutToStart: coachWorkoutToStart,
+                initialScannerMode: initialScannerMode,
+                authViewModel: authViewModel
+            ))
+            .modifier(NavigationReceiversModifier(
+                selectedTab: $selectedTab,
+                showStartSession: $showStartSession,
+                showResumeSession: $showResumeSession,
+                startActivityType: $startActivityType,
+                coachWorkoutToStart: $coachWorkoutToStart,
+                initialScannerMode: $initialScannerMode,
+                showFoodScanner: $showFoodScanner,
+                hideFloatingButton: $hideFloatingButton,
+                hasActiveCoach: hasActiveCoach,
+                rewardsTabIndex: rewardsTabIndex,
+                profileTabIndex: profileTabIndex,
+                coachTabIndex: coachTabIndex
+            ))
+            .modifier(StateObserversModifier(
+                selectedTab: $selectedTab,
+                hasActiveSession: $hasActiveSession,
+                autoPresentedActiveSession: $autoPresentedActiveSession,
+                showStartSession: $showStartSession,
+                showResumeSession: $showResumeSession,
+                showProWelcome: $showProWelcome,
+                showSessionAutoEndedAlert: $showSessionAutoEndedAlert,
+                previousTab: $previousTab,
+                hasActiveCoach: hasActiveCoach,
+                notificationNav: notificationNav,
+                coachTabIndex: coachTabIndex
+            ))
+            .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
+                UsernameRequiredView().environmentObject(authViewModel)
             }
-        }
-        .fullScreenCover(isPresented: $showStartSession) {
-            StartSessionView(initialActivity: startActivityType ?? .running, coachWorkout: coachWorkoutToStart)
-                .id(startActivityType ?? .running)
-                .ignoresSafeArea()
-        }
-        .fullScreenCover(isPresented: $showResumeSession) {
-            StartSessionView()
-                .ignoresSafeArea()
-        }
-        .onChange(of: showStartSession) { _, isShowing in
-            // Clear coach workout when session closes
-            if !isShowing {
-                coachWorkoutToStart = nil
+            .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
+                PaywallAfterSignupView().environmentObject(authViewModel)
             }
-        }
-        .fullScreenCover(isPresented: $showFoodScanner) {
-            FoodScannerView(initialMode: initialScannerMode)
-        }
-        .fullScreenCover(isPresented: $showManualEntry) {
-            ManualFoodEntryView()
-                .environmentObject(authViewModel)
-        }
-        .fullScreenCover(isPresented: $showProWelcome) {
-            ProWelcomeView(onDismiss: {
-                showProWelcome = false
-            })
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .userBecamePro)) { _ in
-            // Small delay to let the paywall dismiss first
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                showProWelcome = true
+            .sheet(isPresented: $showCoachInvitationPopup) {
+                coachInvitationSheet
             }
-        }
-        .onAppear {
-            if hasActiveSession && !showStartSession && !showResumeSession {
-                autoPresentedActiveSession = true
-                showResumeSession = true
-            }
-            hapticGenerator.prepare()
-        }
-        .task {
-            await checkForActiveCoach()
-            await checkForPendingInvitations()
-        }
-        .onChange(of: showStartSession) { _, newValue in
-            if newValue {
-                showResumeSession = false
-            }
-        }
-        .onChange(of: showResumeSession) { _, newValue in
-            if newValue {
-                showStartSession = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 0  // Navigate to Hem tab (which has Social + Find Trainers)
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchActivity"))) { note in
-            // Check userInfo first, then object for backwards compatibility
-            if let userInfo = note.userInfo,
-               let name = userInfo["activity"] as? String,
-               let activity = ActivityType(rawValue: name) {
-                startActivityType = activity
-            } else if let name = note.object as? String, let activity = ActivityType(rawValue: name) {
-                startActivityType = activity
-            } else {
-                startActivityType = .running
-            }
-            showResumeSession = false
-            showStartSession = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartCoachWorkout"))) { note in
-            // Start gym session with pre-loaded coach workout
-            if let workout = note.object as? SavedGymWorkout {
-                print("🏋️ Starting coach workout: \(workout.name)")
-                coachWorkoutToStart = workout
-                startActivityType = .walking // Gym session
-                showResumeSession = false
-                showStartSession = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseStartSession"))) { _ in
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
-            selectedTab = rewardsTabIndex
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToKalorier"))) { _ in
-            selectedTab = 1  // Kalorier tab
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
-            selectedTab = 0  // Hem tab (which has Social + Find Trainers)
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
-            selectedTab = profileTabIndex
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
-            selectedTab = profileTabIndex
-            showStartSession = false
-            showResumeSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToCoach"))) { _ in
-            if hasActiveCoach {
-                selectedTab = coachTabIndex
-                showStartSession = false
-                showResumeSession = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CoachStatusChanged"))) { _ in
-            // Refresh coach status when invitation is accepted/declined
-            Task {
-                await checkForActiveCoach()
-            }
-        }
-        .onChange(of: notificationNav.shouldNavigateToNews) { _, shouldNavigate in
-            if shouldNavigate {
-                selectedTab = 0  // Switch to Hem tab
-                // Post notification to SocialView to switch to News tab
-                NotificationCenter.default.post(name: NSNotification.Name("NavigateToNewsTab"), object: nil)
-                notificationNav.resetNavigation()
-            }
-        }
-        .onChange(of: notificationNav.shouldNavigateToPost) { _, postId in
-            if let postId = postId {
-                selectedTab = 0  // Switch to Hem tab
-                // Post notification to SocialView to open the specific post
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("NavigateToPost"),
-                    object: nil,
-                    userInfo: ["postId": postId]
-                )
-                notificationNav.resetNavigation()
-            }
-        }
-        .onChange(of: notificationNav.shouldNavigateToCoachChat) { _, shouldNavigate in
-            if shouldNavigate && hasActiveCoach {
-                selectedTab = coachTabIndex
-                // OpenCoachChat is posted by the NavigationManager with delay
-                notificationNav.shouldNavigateToCoachChat = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
-            showStartSession = false
-            showResumeSession = false
-            autoPresentedActiveSession = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAIFoodScanner"))) { _ in
-            // Open the AI food scanner (for adding story from story circle)
-            initialScannerMode = .ai
-            showFoodScanner = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideFloatingButton"))) { _ in
-            withAnimation {
-                hideFloatingButton = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFloatingButton"))) { _ in
-            withAnimation {
-                hideFloatingButton = false
-            }
-        }
-        .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
-            UsernameRequiredView().environmentObject(authViewModel)
-        }
-        .sheet(isPresented: $authViewModel.showPaywallAfterSignup) {
-            PaywallAfterSignupView().environmentObject(authViewModel)
-        }
-        .sheet(isPresented: $showCoachInvitationPopup) {
-            NavigationStack {
-                if let invitation = pendingCoachInvitation {
-                    CoachInvitationView(
-                        invitation: invitation,
-                        onAccept: {
-                            showCoachInvitationPopup = false
-                            pendingCoachInvitation = nil
-                            // Refresh coach status & navigate to coach tab
-                            Task {
-                                await checkForActiveCoach()
-                            }
-                            NotificationCenter.default.post(name: NSNotification.Name("CoachStatusChanged"), object: nil)
-                        },
-                        onDecline: {
-                            showCoachInvitationPopup = false
-                            pendingCoachInvitation = nil
-                        }
-                    )
-                    .navigationTitle("Coach-inbjudan")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button {
-                                showCoachInvitationPopup = false
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                } else {
-                    // If no invitation data, close popup immediately
-                    Color.clear
-                        .onAppear {
-                            showCoachInvitationPopup = false
-                        }
-                }
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .onReceive(SessionManager.shared.$hasActiveSession) { newValue in
-            hasActiveSession = newValue
-        }
-        .onChange(of: hasActiveSession) { _, newValue in
-            if newValue {
-                if !autoPresentedActiveSession && !showStartSession && !showResumeSession {
+            .onAppear {
+                if hasActiveSession && !showStartSession && !showResumeSession {
                     autoPresentedActiveSession = true
                     showResumeSession = true
                 }
-            } else {
-                autoPresentedActiveSession = false
+                hapticGenerator.prepare()
             }
-        }
-        .onChange(of: selectedTab) { oldTab, newTab in
-            // Haptic feedback when switching tabs
-            if oldTab != newTab {
-                triggerTabSwitchHaptic()
+            .task {
+                await checkForActiveCoach()
+                await checkForPendingInvitations()
             }
-            
-            // Reset to root view when switching tabs
-            navigationTracker.resetToRoot()
-            
-            // Smart memory cleanup based on which tabs are involved
-            Task.detached(priority: .utility) {
-                // Light cleanup when leaving map-heavy views
-                if oldTab == 0 { // Leaving Home/ZoneWar
-                    await MainActor.run {
-                        ImageCacheManager.shared.trimCache()
-                    }
-                }
-                
-                if oldTab == 1 { // Leaving Social
-                    await MainActor.run {
-                        SocialViewModel.invalidateCache()
-                    }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CoachStatusChanged"))) { _ in
+                Task { await checkForActiveCoach() }
+            }
+            .onChange(of: scenePhase) {
+                handleScenePhaseChange()
+            }
+            .onReceive(Timer.publish(every: 600, on: .main, in: .common).autoconnect()) { _ in
+                if scenePhase == .active {
+                    Task { try? await AuthSessionManager.shared.ensureValidSession() }
                 }
             }
-            
-            // Store previous tab
-            previousTab = oldTab
-        }
-        .onChange(of: scenePhase) {
-            if scenePhase == .active {
-                // Check if any active session has exceeded 10 hours and auto-end it
-                SessionManager.shared.checkAndAutoEndExpiredSession()
-                
-                // Reset failure counter and refresh auth session when app becomes active
-                AuthSessionManager.shared.resetFailureCounter()
-                
-                // Check for pending coach invitations when returning to app
-                Task {
-                    await checkForPendingInvitations()
-                }
-                
-                Task {
-                    do {
-                        try await AuthSessionManager.shared.ensureValidSession()
-                        print("✅ Auth session verified on app activation")
-                    } catch let authError as AuthError {
-                        // NEVER logout if there's an active workout session!
-                        if SessionManager.shared.hasActiveSession {
-                            print("⚠️ Auth error but ACTIVE SESSION exists - NOT logging out to protect workout")
-                            return
-                        }
-                        
-                        // Only logout on true auth errors (session missing), not network issues
-                        if case .sessionMissing = authError {
-                            print("❌ Session truly missing - logging out")
-                            authViewModel.logout()
-                        } else {
-                            print("⚠️ Auth error but not logging out: \(authError)")
-                        }
-                    } catch {
-                        // Network/other errors - don't logout, just log
-                        print("⚠️ Session check failed (network?): \(error) - NOT logging out")
-                    }
-                }
+            .alert("Passet avslutades", isPresented: $showSessionAutoEndedAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Ditt gympass avslutades automatiskt eftersom det varit aktivt i mer än 10 timmar.")
             }
-        }
-        .onReceive(Timer.publish(every: 600, on: .main, in: .common).autoconnect()) { _ in
-            // Periodic session refresh every 10 minutes while app is active
-            if scenePhase == .active {
-                Task {
-                    do {
-                        try await AuthSessionManager.shared.ensureValidSession()
-                        print("✅ Periodic session refresh successful")
-                    } catch {
-                        print("⚠️ Periodic session refresh failed: \(error)")
-                    }
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
-            // System is low on memory - clear caches aggressively
-            print("⚠️ Memory warning received - clearing caches")
-            ImageCacheManager.shared.clearCache()
-            TerritoryStore.shared.invalidateCache()
-            SocialViewModel.invalidateCache()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionAutoEnded"))) { _ in
-            // Show alert that session was auto-ended
-            showSessionAutoEndedAlert = true
-        }
-        .alert("Passet avslutades", isPresented: $showSessionAutoEndedAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Ditt gympass avslutades automatiskt eftersom det varit aktivt i mer än 10 timmar.")
-        }
     }
     
-    // MARK: - iOS 26+ Liquid Glass Tab View
-    @available(iOS 26.0, *)
-    private var liquidGlassTabView: some View {
-        ZStack(alignment: .bottom) {
-            // Native TabView with built-in Liquid Glass effect
-            TabView(selection: $selectedTab) {
-                Tab("Hem", systemImage: "house", value: 0) {
-                    SocialContainerView()
-                }
-                
-                Tab("Kalorier", systemImage: "fork.knife", value: 1) {
-                    HomeContainerView()
-                }
-                
-                if hasActiveCoach {
-                    Tab("Coach", systemImage: "person.badge.shield.checkmark", value: 2) {
-                        CoachTabView()
+    // MARK: - Coach Invitation Sheet
+    private var coachInvitationSheet: some View {
+        NavigationStack {
+            if let invitation = pendingCoachInvitation {
+                CoachInvitationView(
+                    invitation: invitation,
+                    onAccept: {
+                        showCoachInvitationPopup = false
+                        pendingCoachInvitation = nil
+                        Task { await checkForActiveCoach() }
+                        NotificationCenter.default.post(name: NSNotification.Name("CoachStatusChanged"), object: nil)
+                    },
+                    onDecline: {
+                        showCoachInvitationPopup = false
+                        pendingCoachInvitation = nil
                     }
-                    
-                    Tab("Belöningar", systemImage: "gift", value: 3) {
-                        RewardsContainerView()
-                    }
-                    
-                    Tab("Profil", systemImage: "person", value: 4) {
-                        ProfileContainerView()
-                    }
-                } else {
-                    Tab("Belöningar", systemImage: "gift", value: 2) {
-                        RewardsContainerView()
-                    }
-                    
-                    Tab("Profil", systemImage: "person", value: 3) {
-                        ProfileContainerView()
+                )
+                .navigationTitle("Coach-inbjudan")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showCoachInvitationPopup = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
-            }
-            .allowsHitTesting(!showAddMealSheet)
-            
-            // Add Meal Overlay - always rendered but hidden for smooth transitions
-            addMealOverlay
-                .opacity(showAddMealSheet ? 1 : 0)
-                .allowsHitTesting(showAddMealSheet)
-            
-            // Floating + button container - hide when navigating to sub-pages
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
-                        floatingAddButton
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 90) // Above the tab bar
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
-            
-            // Floating active session banner
-            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
-                activeSessionBanner
-                    .padding(.bottom, 100)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                Color.clear
+                    .onAppear { showCoachInvitationPopup = false }
             }
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
-        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
     
     // MARK: - Add Meal Overlay
@@ -561,12 +261,18 @@ struct MainTabView: View {
                     }
                     
                     HStack(spacing: 12) {
-                        addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
-                            showAddMealSheet = false
-                            initialScannerMode = .barcode
-                            showFoodScanner = true
+                        // Barcode Scan - check if limit reached for non-pro users
+                        if !revenueCatManager.isProMember && barcodeScanLimitManager.isAtLimit() {
+                            barcodeScanLimitedOption()
+                                .scaleEffect(showAddMealSheet ? 1 : 0.8)
+                        } else {
+                            addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
+                                showAddMealSheet = false
+                                initialScannerMode = .barcode
+                                showFoodScanner = true
+                            }
+                            .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         }
-                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         
                         // AI Scan - check if limit reached for non-pro users
                         if !revenueCatManager.isProMember && scanLimitManager.isAtLimit() {
@@ -615,7 +321,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var mealOptionBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(.regularMaterial)
+            .fill(Color(.systemBackground))
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
     
@@ -659,7 +365,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var disabledMealOptionBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(.regularMaterial)
+            .fill(Color(.systemBackground))
             .opacity(0.7)
             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
@@ -708,85 +414,119 @@ struct MainTabView: View {
         }
     }
     
-    // MARK: - Legacy Tab View (iOS 25 and earlier)
-    private var legacyTabView: some View {
-        ZStack(alignment: .bottom) {
-            // Content views based on selected tab - instant switching
-            Group {
+    // Barcode Scan limited option (shows paywall when tapped)
+    private func barcodeScanLimitedOption() -> some View {
+        Button {
+            withAnimation { showAddMealSheet = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                SuperwallService.shared.showPaywall()
+            }
+        } label: {
+            VStack(spacing: 12) {
+                ZStack {
+                    Image(systemName: "barcode.viewfinder")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray.opacity(0.4))
+                    
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(5)
+                        .background(Color.gray)
+                        .clipShape(Circle())
+                        .offset(x: 20, y: -8)
+                }
+                
+                Text("Scanna streckkod")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                
+                Text("PRO")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.orange)
+            }
+            .frame(width: 150, height: 120)
+            .background(disabledMealOptionBackground)
+        }
+    }
+    
+    // MARK: - Custom Tab View (all iOS versions)
+    private var customTabView: some View {
+        VStack(spacing: 0) {
+            // Content views based on selected tab
+            ZStack {
+                SocialContainerView(popToRootTrigger: popToRootTrigger[0] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == 0 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 0 && !showAddMealSheet)
+                
+                HomeContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == 1 ? 1 : 0)
+                    .allowsHitTesting(selectedTab == 1 && !showAddMealSheet)
+                
                 if hasActiveCoach {
-                    switch selectedTab {
-                    case 0:
-                        SocialContainerView()
-                    case 1:
-                        HomeContainerView()
-                    case 2:
-                        CoachTabView()
-                    case 3:
-                        RewardsContainerView()
-                    case 4:
-                        ProfileContainerView()
-                    default:
-                        Color.clear
-                    }
-                } else {
-                    switch selectedTab {
-                    case 0:
-                        SocialContainerView()
-                    case 1:
-                        HomeContainerView()
-                    case 2:
-                        RewardsContainerView()
-                    case 3:
-                        ProfileContainerView()
-                    default:
-                        Color.clear
-                    }
+                    CoachTabView(popToRootTrigger: popToRootTrigger[2] ?? 0)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .opacity(selectedTab == 2 ? 1 : 0)
+                        .allowsHitTesting(selectedTab == 2 && !showAddMealSheet)
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(!showAddMealSheet)
-            
-            // Add Meal Overlay - always rendered but hidden for smooth transitions
-            addMealOverlay
-                .opacity(showAddMealSheet ? 1 : 0)
-                .allowsHitTesting(showAddMealSheet)
-            
-            // Floating + button container - hide when navigating to sub-pages
-            VStack {
-                Spacer()
-                HStack {
+                
+                RewardsContainerView(popToRootTrigger: popToRootTrigger[rewardsTabIndex] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == rewardsTabIndex ? 1 : 0)
+                    .allowsHitTesting(selectedTab == rewardsTabIndex && !showAddMealSheet)
+                
+                ProfileContainerView(popToRootTrigger: popToRootTrigger[profileTabIndex] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == profileTabIndex ? 1 : 0)
+                    .allowsHitTesting(selectedTab == profileTabIndex && !showAddMealSheet)
+                
+                // Add Meal Overlay
+                addMealOverlay
+                    .opacity(showAddMealSheet ? 1 : 0)
+                    .allowsHitTesting(showAddMealSheet)
+                
+                // Floating + button
+                VStack {
                     Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
-                        floatingAddButton
-                            .transition(.scale.combined(with: .opacity))
+                    HStack {
+                        Spacer()
+                        if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
+                            floatingAddButton
+                                .transition(.scale.combined(with: .opacity))
+                        }
                     }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 12)
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, 90) // Above the tab bar
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
-            
-            // Floating active session banner
-            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
-                activeSessionBanner
-                    .padding(.bottom, 100) // Above tab bar
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
+                
+                // Floating active session banner
+                if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+                    VStack {
+                        Spacer()
+                        activeSessionBanner
+                            .padding(.bottom, 8)
+                    }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             
-            // Custom Tab Bar with + button - hide + when navigating
-            if !showAddMealSheet {
-                legacyCustomTabBar
-            }
+            // Custom Tab Bar - always at bottom, never overlaps content
+            customTabBar
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
     }
     
-    // MARK: - Legacy Tab Bar Background
+    // MARK: - Tab Bar Background
     @ViewBuilder
-    private var legacyTabBarBackground: some View {
-        // Solid white background - no rounded corners, no floating effect
+    private var tabBarBackground: some View {
         Color(.systemBackground)
     }
     
@@ -818,8 +558,8 @@ struct MainTabView: View {
             .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
     }
     
-    // MARK: - Legacy Custom Tab Bar
-    private var legacyCustomTabBar: some View {
+    // MARK: - Custom Tab Bar
+    private var customTabBar: some View {
         VStack(spacing: 0) {
             // Top border line
             Rectangle()
@@ -829,27 +569,15 @@ struct MainTabView: View {
             // Tab bar content
             HStack(spacing: 0) {
                 ForEach(0..<tabItems.count, id: \.self) { index in
-                    LegacyTabBarItem(
+                    CustomTabBarItem(
                         icon: tabItems[index].icon,
                         selectedIcon: tabItems[index].selectedIcon,
                         title: tabItems[index].title,
                         isSelected: selectedTab == index,
                         action: {
                             if selectedTab == index {
-                                let notificationName: String
-                                switch index {
-                                case 0: notificationName = "PopToRootHem"
-                                case 1: notificationName = "PopToRootSocialt"
-                                case rewardsTabIndex: notificationName = "PopToRootBeloningar"
-                                case profileTabIndex: notificationName = "PopToRootProfil"
-                                default: notificationName = ""
-                                }
-                                
-                                if hasActiveCoach && index == coachTabIndex {
-                                    NotificationCenter.default.post(name: NSNotification.Name("PopToRootCoach"), object: nil)
-                                } else if !notificationName.isEmpty {
-                                    NotificationCenter.default.post(name: NSNotification.Name(notificationName), object: nil)
-                                }
+                                // Increment trigger to pop to root
+                                popToRootTrigger[index, default: 0] += 1
                             } else {
                                 switchToTab(index)
                             }
@@ -858,8 +586,8 @@ struct MainTabView: View {
                 }
             }
             .padding(.top, 8)
+            .padding(.bottom, 2)
         }
-        .background(Color(.systemBackground))
         .background(
             Color(.systemBackground)
                 .ignoresSafeArea(edges: .bottom)
@@ -927,14 +655,41 @@ struct MainTabView: View {
         }
     }
     
+    private func handleScenePhaseChange() {
+        if scenePhase == .active {
+            SessionManager.shared.checkAndAutoEndExpiredSession()
+            AuthSessionManager.shared.resetFailureCounter()
+            Task { await checkForPendingInvitations() }
+            Task {
+                do {
+                    try await AuthSessionManager.shared.ensureValidSession()
+                    print("✅ Auth session verified on app activation")
+                } catch let authError as AuthError {
+                    if SessionManager.shared.hasActiveSession {
+                        print("⚠️ Auth error but ACTIVE SESSION exists - NOT logging out to protect workout")
+                        return
+                    }
+                    if case .sessionMissing = authError {
+                        print("❌ Session truly missing - logging out")
+                        authViewModel.logout()
+                    } else {
+                        print("⚠️ Auth error but not logging out: \(authError)")
+                    }
+                } catch {
+                    print("⚠️ Session check failed (network?): \(error) - NOT logging out")
+                }
+            }
+        }
+    }
+    
     @ViewBuilder
     private var activeSessionBannerBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(.regularMaterial)
+            .fill(Color(.systemBackground))
             .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 4)
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
             )
     }
     
@@ -999,8 +754,218 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Legacy Tab Bar Item Component
-private struct LegacyTabBarItem: View {
+// MARK: - Full Screen Covers Modifier
+private struct FullScreenCoversModifier: ViewModifier {
+    @Binding var showStartSession: Bool
+    @Binding var showResumeSession: Bool
+    @Binding var showFoodScanner: Bool
+    @Binding var showManualEntry: Bool
+    @Binding var showProWelcome: Bool
+    let startActivityType: ActivityType?
+    let coachWorkoutToStart: SavedGymWorkout?
+    let initialScannerMode: FoodScanMode
+    let authViewModel: AuthViewModel
+    
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(isPresented: $showStartSession) {
+                StartSessionView(initialActivity: startActivityType ?? .running, coachWorkout: coachWorkoutToStart)
+                    .id(startActivityType ?? .running)
+                    .ignoresSafeArea()
+            }
+            .fullScreenCover(isPresented: $showResumeSession) {
+                StartSessionView()
+                    .ignoresSafeArea()
+            }
+            .fullScreenCover(isPresented: $showFoodScanner) {
+                FoodScannerView(initialMode: initialScannerMode)
+            }
+            .fullScreenCover(isPresented: $showManualEntry) {
+                ManualFoodEntryView()
+                    .environmentObject(authViewModel)
+            }
+            .fullScreenCover(isPresented: $showProWelcome) {
+                ProWelcomeView(onDismiss: {
+                    showProWelcome = false
+                })
+            }
+    }
+}
+
+// MARK: - Navigation Receivers Modifier
+private struct NavigationReceiversModifier: ViewModifier {
+    @Binding var selectedTab: Int
+    @Binding var showStartSession: Bool
+    @Binding var showResumeSession: Bool
+    @Binding var startActivityType: ActivityType?
+    @Binding var coachWorkoutToStart: SavedGymWorkout?
+    @Binding var initialScannerMode: FoodScanMode
+    @Binding var showFoodScanner: Bool
+    @Binding var hideFloatingButton: Bool
+    let hasActiveCoach: Bool
+    let rewardsTabIndex: Int
+    let profileTabIndex: Int
+    let coachTabIndex: Int
+    
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: showStartSession) { _, isShowing in
+                if !isShowing { coachWorkoutToStart = nil }
+                if isShowing { showResumeSession = false }
+            }
+            .onChange(of: showResumeSession) { _, newValue in
+                if newValue { showStartSession = false }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToSocial"))) { _ in
+                selectedTab = 0
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchActivity"))) { note in
+                if let userInfo = note.userInfo,
+                   let name = userInfo["activity"] as? String,
+                   let activity = ActivityType(rawValue: name) {
+                    startActivityType = activity
+                } else if let name = note.object as? String, let activity = ActivityType(rawValue: name) {
+                    startActivityType = activity
+                } else {
+                    startActivityType = .running
+                }
+                showResumeSession = false
+                showStartSession = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartCoachWorkout"))) { note in
+                if let workout = note.object as? SavedGymWorkout {
+                    coachWorkoutToStart = workout
+                    startActivityType = .walking
+                    showResumeSession = false
+                    showStartSession = true
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseStartSession"))) { _ in
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
+                selectedTab = rewardsTabIndex
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToKalorier"))) { _ in
+                selectedTab = 1
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
+                selectedTab = profileTabIndex
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
+                selectedTab = profileTabIndex
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToCoach"))) { _ in
+                if hasActiveCoach {
+                    selectedTab = coachTabIndex
+                    showStartSession = false
+                    showResumeSession = false
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionFinalized"))) { _ in
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAIFoodScanner"))) { _ in
+                initialScannerMode = .ai
+                showFoodScanner = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("HideFloatingButton"))) { _ in
+                withAnimation { hideFloatingButton = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFloatingButton"))) { _ in
+                withAnimation { hideFloatingButton = false }
+            }
+    }
+}
+
+// MARK: - State Observers Modifier
+private struct StateObserversModifier: ViewModifier {
+    @Binding var selectedTab: Int
+    @Binding var hasActiveSession: Bool
+    @Binding var autoPresentedActiveSession: Bool
+    @Binding var showStartSession: Bool
+    @Binding var showResumeSession: Bool
+    @Binding var showProWelcome: Bool
+    @Binding var showSessionAutoEndedAlert: Bool
+    @Binding var previousTab: Int
+    let hasActiveCoach: Bool
+    let notificationNav: NotificationNavigationManager
+    let coachTabIndex: Int
+    
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .userBecamePro)) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showProWelcome = true
+                }
+            }
+            .onReceive(SessionManager.shared.$hasActiveSession) { newValue in
+                hasActiveSession = newValue
+            }
+            .onChange(of: hasActiveSession) { _, newValue in
+                if newValue {
+                    if !autoPresentedActiveSession && !showStartSession && !showResumeSession {
+                        autoPresentedActiveSession = true
+                        showResumeSession = true
+                    }
+                } else {
+                    autoPresentedActiveSession = false
+                }
+            }
+            .onChange(of: notificationNav.shouldNavigateToNews) { _, shouldNavigate in
+                if shouldNavigate {
+                    selectedTab = 0
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToNewsTab"), object: nil)
+                    notificationNav.resetNavigation()
+                }
+            }
+            .onChange(of: notificationNav.shouldNavigateToPost) { _, postId in
+                if let postId = postId {
+                    selectedTab = 0
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToPost"), object: nil, userInfo: ["postId": postId])
+                    notificationNav.resetNavigation()
+                }
+            }
+            .onChange(of: notificationNav.shouldNavigateToCoachChat) { _, shouldNavigate in
+                if shouldNavigate && hasActiveCoach {
+                    selectedTab = coachTabIndex
+                    notificationNav.shouldNavigateToCoachChat = false
+                }
+            }
+            .onChange(of: selectedTab) { oldTab, newTab in
+                if oldTab != newTab {
+                    let tabHaptic = UIImpactFeedbackGenerator(style: .medium)
+                    tabHaptic.prepare()
+                    tabHaptic.impactOccurred(intensity: 0.7)
+                }
+                NavigationDepthTracker.shared.resetToRoot()
+                previousTab = oldTab
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+                ImageCacheManager.shared.clearCache()
+                TerritoryStore.shared.invalidateCache()
+                SocialViewModel.invalidateCache()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionAutoEnded"))) { _ in
+                showSessionAutoEndedAlert = true
+            }
+    }
+}
+
+// MARK: - Custom Tab Bar Item Component
+private struct CustomTabBarItem: View {
     let icon: String
     let selectedIcon: String
     let title: String

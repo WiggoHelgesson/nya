@@ -320,6 +320,26 @@ class SocialService {
         }
     }
     
+    /// Invalidate the top likers cache for a specific post (used by real-time updates)
+    func invalidateTopLikersCache(forPostId postId: String) {
+        topLikersCache.removeValue(forKey: postId)
+    }
+    
+    /// Lightweight check: returns the actual like count and whether the given user has liked
+    func getPostLikeStatus(postId: String, userId: String) async throws -> (count: Int, isLiked: Bool) {
+        struct LikeUserId: Decodable {
+            let user_id: String
+        }
+        try await AuthSessionManager.shared.ensureValidSession()
+        let likes: [LikeUserId] = try await supabase
+            .from("workout_post_likes")
+            .select("user_id")
+            .eq("workout_post_id", value: postId)
+            .execute()
+            .value
+        return (count: likes.count, isLiked: likes.contains { $0.user_id == userId })
+    }
+    
     func getPostLikes(postId: String) async throws -> [PostLike] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
@@ -983,6 +1003,7 @@ class SocialService {
                     device_name,
                     location,
                     trained_with,
+                    route_data,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1063,6 +1084,7 @@ class SocialService {
                     device_name,
                     location,
                     trained_with,
+                    route_data,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1113,6 +1135,7 @@ class SocialService {
                     device_name,
                     location,
                     trained_with,
+                    route_data,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1369,6 +1392,7 @@ class SocialService {
                     device_name,
                     location,
                     trained_with,
+                    route_data,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)

@@ -77,6 +77,12 @@ struct ReferralStats {
     let canWithdraw: Bool
 }
 
+struct SupportingCodeInfo {
+    let code: String
+    let ownerUsername: String
+    let ownerId: String
+}
+
 // MARK: - Referral Service
 class ReferralService: ObservableObject {
     static let shared = ReferralService()
@@ -262,69 +268,34 @@ class ReferralService: ObservableObject {
             return false
         }
         
-        // Check if new code already exists (used by someone else)
-        struct CodeCheck: Decodable {
-            let id: String
-            let user_id: String
+        // Use RPC function to update the code (bypasses RLS issues)
+        let params: [String: String] = [
+            "p_user_id": userId,
+            "p_new_code": normalizedCode
+        ]
+        
+        struct RPCResult: Decodable, Sendable {
+            let success: Bool
+            let error: String?
+            let code: String?
         }
         
-        let existingCodes: [CodeCheck] = try await supabase
-            .from("referral_codes")
-            .select("id, user_id")
-            .ilike("code", pattern: normalizedCode) // Case-insensitive check
-            .limit(1)
+        let result: RPCResult = try await supabase.database
+            .rpc("update_referral_code", params: params)
             .execute()
             .value
         
-        if let existing = existingCodes.first, existing.user_id != userId {
-            print("❌ Code already taken by another user")
+        if result.success, let updatedCode = result.code {
+            print("✅ Code successfully updated to \(updatedCode) via RPC")
+            await MainActor.run {
+                self.myReferralCode = updatedCode
+            }
+            return true
+        } else {
+            let errorMsg = result.error ?? "Unknown error"
+            print("❌ RPC update failed: \(errorMsg)")
             return false
         }
-        
-        // Update the code
-        struct CodeUpdate: Encodable {
-            let code: String
-            let last_code_edited_at: String
-        }
-        
-        let update = CodeUpdate(
-            code: normalizedCode,
-            last_code_edited_at: ISO8601DateFormatter().string(from: Date())
-        )
-        
-        try await supabase
-            .from("referral_codes")
-            .update(update)
-            .eq("user_id", value: userId)
-            .execute()
-        
-        // Verify the update actually worked by fetching the code back
-        struct VerifyCode: Decodable {
-            let code: String
-        }
-        
-        let verifyResult: [VerifyCode] = try await supabase
-            .from("referral_codes")
-            .select("code")
-            .eq("user_id", value: userId)
-            .limit(1)
-            .execute()
-            .value
-        
-        guard let verified = verifyResult.first, 
-              verified.code.uppercased() == normalizedCode else {
-            print("❌ Code update verification failed - database still has old code")
-            return false
-        }
-        
-        print("✅ Code successfully updated to \(normalizedCode)")
-        
-        await MainActor.run {
-            self.myReferralCode = normalizedCode
-        }
-        
-        print("✅ Updated and verified referral code to: \(normalizedCode)")
-        return true
     }
     
     // MARK: - Validate and Use Referral Code
@@ -701,6 +672,105 @@ class ReferralService: ObservableObject {
             return !codes.isEmpty
         } catch {
             print("❌ Error checking code: \(error)")
+            return false
+        }
+    }
+    
+    // MARK: - Get Current Supporting Code
+    
+    /// Get information about which referral code the user is currently supporting (if any)
+    func getCurrentSupportingCode(userId: String) async throws -> SupportingCodeInfo? {
+        // Check if user has used a referral code
+        struct UsageWithCodeInfo: Decodable {
+            let referral_code_id: String
+        }
+        
+        let usages: [UsageWithCodeInfo] = try await supabase
+            .from("referral_usages")
+            .select("referral_code_id")
+            .eq("referred_user_id", value: userId)
+            .limit(1)
+            .execute()
+            .value
+        
+        guard let usage = usages.first else {
+            return nil // User hasn't used any referral code
+        }
+        
+        // Get the referral code details
+        struct CodeWithOwner: Decodable {
+            let code: String
+            let user_id: String
+        }
+        
+        let codes: [CodeWithOwner] = try await supabase
+            .from("referral_codes")
+            .select("code, user_id")
+            .eq("id", value: usage.referral_code_id)
+            .limit(1)
+            .execute()
+            .value
+        
+        guard let codeInfo = codes.first else {
+            return nil
+        }
+        
+        // Get the owner's username
+        struct ProfileInfo: Decodable {
+            let username: String?
+        }
+        
+        let profiles: [ProfileInfo] = try await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", value: codeInfo.user_id)
+            .limit(1)
+            .execute()
+            .value
+        
+        let ownerUsername = profiles.first?.username ?? "Okänd användare"
+        
+        return SupportingCodeInfo(
+            code: codeInfo.code,
+            ownerUsername: ownerUsername,
+            ownerId: codeInfo.user_id
+        )
+    }
+    
+    // MARK: - Change Supporting Code
+    
+    /// Change which referral code the user is supporting
+    /// Uses an RPC function (SECURITY DEFINER) to bypass RLS restrictions on referral_usages
+    func changeSupportingCode(userId: String, newCode: String) async throws -> Bool {
+        let normalizedCode = newCode.uppercased().trimmingCharacters(in: .whitespaces)
+        
+        guard normalizedCode.count >= 3, normalizedCode.count <= 12 else {
+            print("❌ Invalid code format")
+            return false
+        }
+        
+        let params: [String: String] = [
+            "p_user_id": userId,
+            "p_new_code": normalizedCode
+        ]
+        
+        struct RPCResult: Decodable, Sendable {
+            let success: Bool
+            let error: String?
+            let message: String?
+        }
+        
+        let result: RPCResult = try await supabase.database
+            .rpc("change_support_code", params: params)
+            .execute()
+            .value
+        
+        if result.success {
+            print("✅ Changed supporting code to: \(normalizedCode)")
+            return true
+        } else {
+            let errorMsg = result.error ?? "Unknown error"
+            print("❌ Change support code failed: \(errorMsg)")
             return false
         }
     }

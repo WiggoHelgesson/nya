@@ -3,6 +3,7 @@ import Combine
 import PhotosUI
 import Supabase
 import MapKit
+import ConfettiSwiftUI
 
 // MARK: - Social Tab Selection
 enum SocialTab: String, CaseIterable {
@@ -14,6 +15,7 @@ enum SocialTab: String, CaseIterable {
 struct SocialView: View {
     @StateObject private var socialViewModel = SocialViewModel()
     @StateObject private var newsViewModel = NewsViewModel()
+    @StateObject private var celebrationManager = CelebrationManager.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
@@ -46,10 +48,10 @@ struct SocialView: View {
     @State private var lastWeekTime: TimeInterval = 0
     @State private var lastWeekWeight: Double = 0
     
-    // Animation states
-    @State private var showHeader = false
-    @State private var showCarousel = false
-    @State private var showPosts = false
+    // Animation states - default true for instant navigation
+    @State private var showHeader = true
+    @State private var showCarousel = true
+    @State private var showPosts = true
     
     // Stories state
     @State private var friendsStories: [UserStories] = []
@@ -215,6 +217,16 @@ struct SocialView: View {
             .onChange(of: scenePhase) { oldPhase, newPhase in
                 handleScenePhaseChange(newPhase)
             }
+            .confettiCannon(
+                counter: $celebrationManager.confettiCounter,
+                num: celebrationManager.confettiCount,
+                colors: celebrationManager.confettiColors,
+                confettiSize: celebrationManager.confettiSize,
+                rainHeight: celebrationManager.rainHeight,
+                radius: celebrationManager.radius,
+                repetitions: celebrationManager.repetitions,
+                repetitionInterval: celebrationManager.repetitionInterval
+            )
         }
     }
     
@@ -260,16 +272,10 @@ struct SocialView: View {
                                 
                                 // Always show feed content
                                 feedContent
-                                    .opacity(showPosts ? 1 : 0)
-                                    .offset(y: showPosts ? 0 : 30)
                             }
-                            .transition(.opacity.combined(with: .offset(y: 20)))
                         }
                     }
                     .padding(.top, -30) // Adjust for the overlapping section
-                    .pageEntrance(delay: 0.1)
-                    .animation(.easeOut(duration: 0.35), value: hasInitiallyLoaded)
-                    .animation(.easeOut(duration: 0.35), value: socialViewModel.posts.isEmpty)
                 }
             }
             .scrollClipDisabled()
@@ -2200,13 +2206,22 @@ struct SocialPostCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .task(id: post.id) {
-            // Only fetch if we have likes and haven't loaded yet
+            // Always verify actual like count from server (catches stale cache / wrong counts)
+            await verifyLikeCount()
+            
+            // Fetch top likers if we have likes
             if likeCount > 0 && topLikers.isEmpty {
                 await loadTopLikers()
             }
         }
         .onChange(of: post.likeCount) { newValue in
-            likeCount = newValue ?? likeCount
+            let newCount = newValue ?? likeCount
+            let countChanged = newCount != likeCount
+            likeCount = newCount
+            // Re-fetch top likers when count changes from real-time (not from own like action)
+            if countChanged && !likeInProgress {
+                Task { await loadTopLikers() }
+            }
         }
         .onChange(of: post.commentCount) { newValue in
             commentCount = newValue ?? commentCount
@@ -2233,7 +2248,7 @@ struct SocialPostCard: View {
         .alert("Rutin sparad!", isPresented: $routineSavedSuccess) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Gympasset har sparats som en rutin. Du hittar den under \"Sparade pass\" när du startar ett nytt gympass.")
+            Text("Gympasset har sparats som en rutin. Du hittar den under \"Gym rutiner\" när du startar ett nytt gympass.")
         }
         .alert("Ta bort inlägg", isPresented: $showDeleteAlert) {
             Button("Avbryt", role: .cancel) {}
@@ -2374,6 +2389,12 @@ struct SocialPostCard: View {
                     onOpenDetail(post)
                 }
             )
+        } else if shouldShowCleanCard, let routeData = post.routeData, !routeData.isEmpty {
+            // Post has GPS data but map image upload failed - regenerate map from stored coordinates
+            RouteMapFallbackView(routeData: routeData, activityType: post.activityType)
+                .onTapGesture {
+                    onOpenDetail(post)
+                }
         } else if post.isExternalPost || shouldShowCleanCard {
             // External posts or posts without images - show clean Strava-style card
             ExternalActivityCard(post: post)
@@ -2713,6 +2734,9 @@ struct SocialPostCard: View {
                 showLikeParticles = false
             }
             
+            // Confetti celebration (same as adding an exercise)
+            CelebrationManager.shared.celebrateExerciseAdded()
+            
             if let currentUser = authViewModel.currentUser {
                 let liker = UserSearchResult(id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl)
                 if !topLikers.contains(where: { $0.id == liker.id }) {
@@ -2932,6 +2956,27 @@ struct SocialPostCard: View {
         }
     }
 
+    /// Verify the like count and liked status from the server to catch stale cache
+    private func verifyLikeCount() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        // Skip verification while the user's own like action is in progress
+        guard !likeInProgress else { return }
+        do {
+            let status = try await SocialService.shared.getPostLikeStatus(postId: post.id, userId: userId)
+            await MainActor.run {
+                if status.count != likeCount {
+                    likeCount = status.count
+                    onLikeChanged(post.id, isLiked, likeCount)
+                }
+                if status.isLiked != isLiked {
+                    isLiked = status.isLiked
+                }
+            }
+        } catch {
+            // Keep current values if verification fails (e.g. cancelled request)
+        }
+    }
+    
     private func loadTopLikers() async {
         guard likeCount > 0 else {
             await MainActor.run {
@@ -2940,9 +2985,14 @@ struct SocialPostCard: View {
             return
         }
         do {
+            // Invalidate cache first to ensure fresh data
+            SocialService.shared.invalidateTopLikersCache(forPostId: post.id)
             let likers = try await SocialService.shared.getTopPostLikers(postId: post.id, limit: 3)
+            // Deduplicate by ID to prevent rendering issues
+            var seen = Set<String>()
+            let uniqueLikers = likers.filter { seen.insert($0.id).inserted }
             await MainActor.run {
-                self.topLikers = likers
+                self.topLikers = uniqueLikers
             }
         } catch {
             print("⚠️ Could not fetch top likers: \(error)")
@@ -2957,9 +3007,12 @@ private extension SocialPostCard {
                 Button(action: { showLikesList = true }) {
                     HStack(spacing: 12) {
                         OverlappingAvatarStack(users: Array(topLikers.prefix(3)))
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: topLikers.map(\.id))
                         Text(likeCountText)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.primary)
+                            .contentTransition(.numericText())
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: likeCount)
                     }
                     .padding(.vertical, 4)
                 }
@@ -2982,6 +3035,8 @@ private extension SocialPostCard {
                 Text("\(commentCount) kommentarer")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: commentCount)
             }
             .buttonStyle(.plain)
         }
@@ -2998,26 +3053,55 @@ private extension SocialPostCard {
 private struct OverlappingAvatarStack: View {
     let users: [UserSearchResult]
     
+    // Deduplicate users by ID to prevent rendering issues
+    private var uniqueUsers: [UserSearchResult] {
+        var seen = Set<String>()
+        return users.filter { seen.insert($0.id).inserted }
+    }
+    
     var body: some View {
+        let displayUsers = Array(uniqueUsers.prefix(3))
+        let avatarSize: CGFloat = 36
+        let overlap: CGFloat = 20
+        let totalWidth = displayUsers.isEmpty
+            ? avatarSize
+            : avatarSize + CGFloat(displayUsers.count - 1) * overlap
+        
         ZStack(alignment: .leading) {
-            if users.isEmpty {
+            if displayUsers.isEmpty {
                 Circle()
                     .fill(Color(.systemGray5))
-                    .frame(width: 36, height: 36)
+                    .frame(width: avatarSize, height: avatarSize)
                     .overlay(
                         Image(systemName: "person.fill")
                             .foregroundColor(.gray)
                             .font(.system(size: 14))
                     )
             } else {
-                ForEach(Array(users.enumerated()), id: \.element.id) { index, liker in
-                    ProfileImage(url: liker.avatarUrl, size: 36)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                        .offset(x: CGFloat(index) * 20)
+                ForEach(Array(displayUsers.enumerated()), id: \.offset) { index, liker in
+                    Group {
+                        if let url = liker.avatarUrl, !url.isEmpty {
+                            ProfileImage(url: url, size: avatarSize)
+                        } else {
+                            // Bulletproof fallback for missing avatar
+                            Circle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: avatarSize, height: avatarSize)
+                                .overlay(
+                                    Text(String(liker.name.prefix(1)).uppercased())
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.white)
+                                )
+                        }
+                    }
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                    .offset(x: CGFloat(index) * overlap)
+                    .zIndex(Double(displayUsers.count - index))
                 }
             }
         }
-        .frame(width: CGFloat(max(users.count, 1)) * 20 + 20, height: 40, alignment: .leading)
+        .frame(width: totalWidth + 4, height: avatarSize + 4, alignment: .leading)
+        .clipped()
     }
 }
 
@@ -3042,10 +3126,10 @@ struct CommentsView: View {
     @Namespace private var bottomID
     @FocusState private var isCommentFieldFocused: Bool
     
-    // Animation states
-    @State private var headerAppeared = false
-    @State private var commentsAppeared = false
-    @State private var inputAppeared = false
+    // Animation states - default true for instant navigation
+    @State private var headerAppeared = true
+    @State private var commentsAppeared = true
+    @State private var inputAppeared = true
     
     private var isGymWorkout: Bool {
         post.activityType.lowercased() == "gym"
@@ -3160,29 +3244,19 @@ struct CommentsView: View {
             await reloadComments()
             await loadTopLikers()
         }
+        .onReceive(RealtimeSocialService.shared.$postLikeUpdated.compactMap { $0 }) { update in
+            // Re-fetch top likers when a like event fires for this post
+            if update.postId == post.id {
+                SocialService.shared.invalidateTopLikersCache(forPostId: post.id)
+                Task { await loadTopLikers() }
+            }
+        }
         .onAppear {
             // Track navigation depth to hide tab bar
             NavigationDepthTracker.shared.setAtRoot(false)
             
-            // Setup real-time listeners for comment likes
+            // Setup real-time listeners for comment likes and new/deleted comments
             commentsViewModel.setupRealtimeListeners(currentUserId: authViewModel.currentUser?.id)
-            
-            // Elegant staggered entrance animation
-            withAnimation(.easeOut(duration: 0.4)) {
-                headerAppeared = true
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeOut(duration: 0.4)) {
-                    commentsAppeared = true
-                }
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    inputAppeared = true
-                }
-            }
         }
         .onDisappear {
             NavigationDepthTracker.shared.setAtRoot(true)
@@ -3923,6 +3997,9 @@ class SocialViewModel: ObservableObject {
     private func handlePostLikeUpdate(postId: String, delta: Int, userId: String) {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         
+        // Invalidate top likers cache so fresh data is fetched
+        SocialService.shared.invalidateTopLikersCache(forPostId: postId)
+        
         let oldPost = posts[index]
         let newCount = max(0, (oldPost.likeCount ?? 0) + delta)
         let newIsLiked = userId == currentUserId ? (delta > 0) : oldPost.isLikedByCurrentUser
@@ -3965,7 +4042,7 @@ class SocialViewModel: ObservableObject {
             knownGoodCounts[postId] = (likeCount: newCount, commentCount: updatedPost.commentCount ?? 0)
         }
         
-        print("✅ Updated post \(postId) likes: \(newCount)")
+        print("✅ Real-time: Updated post \(postId) likes: \(newCount)")
     }
     
     private func handleCommentAdded(postId: String, comment: PostComment) {
@@ -4594,6 +4671,9 @@ class CommentsViewModel: ObservableObject {
     }
     
     func setupRealtimeListeners(currentUserId: String?) {
+        // Clear previous subscriptions to avoid duplicates
+        cancellables.removeAll()
+        
         // Listen for comment like updates
         realtimeService.$commentLikeUpdated
             .compactMap { $0 }
@@ -4601,6 +4681,40 @@ class CommentsViewModel: ObservableObject {
                 self?.handleCommentLikeUpdate(commentId: update.commentId, delta: update.delta, userId: update.userId, currentUserId: currentUserId)
             }
             .store(in: &cancellables)
+        
+        // Listen for new comments in real-time
+        realtimeService.$commentAdded
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleRealtimeCommentAdded(postId: update.postId, comment: update.comment, currentUserId: currentUserId)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for deleted comments in real-time
+        realtimeService.$commentDeleted
+            .compactMap { $0 }
+            .sink { [weak self] update in
+                self?.handleRealtimeCommentDeleted(postId: update.postId, commentId: update.commentId)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleRealtimeCommentAdded(postId: String, comment: PostComment, currentUserId: String?) {
+        // Only handle comments for the current post
+        guard postId == self.postId else { return }
+        // Avoid duplicates - check if we already have this comment (e.g. from optimistic insert)
+        if findComment(by: comment.id) != nil { return }
+        
+        appendComment(comment)
+        print("✅ Real-time: Added comment to thread for post \(postId)")
+    }
+    
+    private func handleRealtimeCommentDeleted(postId: String, commentId: String) {
+        // Only handle comments for the current post
+        guard postId == self.postId else { return }
+        
+        removeComment(withId: commentId)
+        print("✅ Real-time: Removed comment \(commentId) from thread")
     }
     
     private func handleCommentLikeUpdate(commentId: String, delta: Int, userId: String, currentUserId: String?) {
@@ -5079,33 +5193,12 @@ struct FullFrameAsyncImage: View {
     var body: some View {
         Group {
             if let image = image {
-                GeometryReader { geometry in
-                    let imageSize = image.size
-                    let frameWidth = geometry.size.width
-                    let frameHeight = height
-                    
-                    // Calculate scale to fill the frame
-                    let widthRatio = frameWidth / imageSize.width
-                    let heightRatio = frameHeight / imageSize.height
-                    let scale = max(widthRatio, heightRatio)
-                    
-                    let scaledWidth = imageSize.width * scale
-                    let scaledHeight = imageSize.height * scale
-                    
-                    // For live photos, ensure left side (with selfie) is fully visible
-                    // Use larger offset to show more of the selfie overlay within the frame
-                    let xOffset: CGFloat = isLivePhoto ? 80 : (frameWidth - scaledWidth) / 2
-                    let yOffset: CGFloat = (frameHeight - scaledHeight) / 2
-                    
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: scaledWidth, height: scaledHeight)
-                        .offset(x: xOffset, y: yOffset)
-                        .frame(width: frameWidth, height: frameHeight)
-                        .clipped()
-                }
-                .frame(height: height)
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: height)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black)
             } else if isLoading {
                 Rectangle()
                     .fill(Color(.systemGray5))
@@ -5348,6 +5441,80 @@ struct InviteFriendsSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Route Map Fallback View
+// Generates a map snapshot from stored route_data when the original image upload failed
+struct RouteMapFallbackView: View {
+    let routeData: String
+    let activityType: String
+    
+    @State private var mapImage: UIImage? = nil
+    @State private var isLoading = true
+    
+    var body: some View {
+        Group {
+            if let mapImage = mapImage {
+                Image(uiImage: mapImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 300)
+                    .clipped()
+            } else if isLoading {
+                RoundedRectangle(cornerRadius: 0)
+                    .fill(Color(.systemGray6))
+                    .frame(height: 300)
+                    .overlay(
+                        ProgressView()
+                            .scaleEffect(1.2)
+                    )
+            } else {
+                // Could not generate map - show nothing
+                EmptyView()
+            }
+        }
+        .task {
+            await generateMap()
+        }
+    }
+    
+    private func generateMap() async {
+        guard let coordinates = parseRouteData(routeData), coordinates.count > 1 else {
+            await MainActor.run { isLoading = false }
+            return
+        }
+        
+        let activity = ActivityType(rawValue: activityType)
+        
+        await withCheckedContinuation { continuation in
+            MapSnapshotService.shared.generateRouteSnapshot(
+                routeCoordinates: coordinates,
+                userLocation: coordinates.first,
+                activity: activity
+            ) { image in
+                DispatchQueue.main.async {
+                    self.mapImage = image
+                    self.isLoading = false
+                }
+                continuation.resume()
+            }
+        }
+    }
+    
+    private func parseRouteData(_ json: String) -> [CLLocationCoordinate2D]? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        
+        guard let coordsArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Double]] else {
+            return nil
+        }
+        
+        let coordinates = coordsArray.compactMap { dict -> CLLocationCoordinate2D? in
+            guard let lat = dict["lat"], let lon = dict["lon"] else { return nil }
+            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+        
+        return coordinates.count > 1 ? coordinates : nil
     }
 }
 

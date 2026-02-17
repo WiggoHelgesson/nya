@@ -22,6 +22,7 @@ struct SocialWorkoutPostRaw: Codable {
     let deviceName: String?
     let location: String?
     let trainedWith: [TrainedWithPerson]?
+    let routeData: String?
     
     // JOIN data
     let profiles: ProfileData?
@@ -49,6 +50,7 @@ struct SocialWorkoutPostRaw: Codable {
         case deviceName = "device_name"
         case location
         case trainedWith = "trained_with"
+        case routeData = "route_data"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -118,6 +120,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let source: String?
     let deviceName: String?
     
+    // Route data (GPS coordinates JSON) for fallback map generation
+    let routeData: String?
+    
     // Computed property to check if it's an external post
     var isExternalPost: Bool {
         source != nil && source != "app"
@@ -161,6 +166,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case streakCount = "streak_count"
         case source
         case deviceName = "device_name"
+        case routeData = "route_data"
     }
     
     // Custom decoder to handle JOIN results
@@ -206,6 +212,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         // Map external tracking data
         source = raw.source
         deviceName = raw.deviceName
+        routeData = raw.routeData
     }
     
     init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil, streakCount: Int? = nil, trainedWith: [TrainedWithPerson]? = nil) {
@@ -236,6 +243,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.streakCount = streakCount ?? post.streakCount
         self.source = source ?? post.source
         self.deviceName = deviceName ?? post.deviceName
+        self.routeData = post.routeData
     }
 
     // Memberwise convenience initializer to allow updating selective fields
@@ -266,7 +274,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         pbValue: String? = nil,
         streakCount: Int? = nil,
         source: String? = nil,
-        deviceName: String? = nil
+        deviceName: String? = nil,
+        routeData: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -295,6 +304,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.streakCount = streakCount
         self.source = source
         self.deviceName = deviceName
+        self.routeData = routeData
     }
 }
 

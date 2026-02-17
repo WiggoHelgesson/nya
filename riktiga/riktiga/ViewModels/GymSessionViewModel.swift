@@ -177,6 +177,8 @@ class GymSessionViewModel: ObservableObject {
     }
 
     func startTimer(startTime: Date? = nil) {
+        let isFirstStart = self.startTime == nil && startTime == nil
+        
         if let startTime = startTime {
             self.startTime = startTime
         } else if self.startTime == nil {
@@ -204,6 +206,11 @@ class GymSessionViewModel: ObservableObject {
             if self.elapsedSeconds % 10 == 0 {
                 self.updateLiveActivity()
             }
+        }
+        
+        // Trigga konfetti när pass startas första gången
+        if isFirstStart {
+            CelebrationManager.shared.celebrateSessionStarted()
         }
     }
     
@@ -328,6 +335,9 @@ class GymSessionViewModel: ObservableObject {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             exercises.append(newExercise)
         }
+        
+        // Trigga konfetti celebration
+        CelebrationManager.shared.celebrateExerciseAdded()
         
         // Sync to real-time database
         syncExerciseIfNeeded(newExercise, at: exercises.count - 1)

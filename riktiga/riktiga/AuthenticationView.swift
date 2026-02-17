@@ -2371,9 +2371,10 @@ struct AuthenticationView: View {
                     }
                 }
                 
-                // Set current user for AI scan limit manager
+                // Set current user for scan limit managers
                 await MainActor.run {
                     AIScanLimitManager.shared.setCurrentUser(userId: userId)
+                    BarcodeScanLimitManager.shared.setCurrentUser(userId: userId)
                     
                     // Mark onboarding data as ready and show soft paywall
                     onboardingDataReady = true

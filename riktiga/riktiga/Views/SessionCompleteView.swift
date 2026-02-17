@@ -2,9 +2,11 @@ import SwiftUI
 import PhotosUI
 import MapKit
 import CoreLocation
+import ConfettiSwiftUI
 
 struct SessionCompleteView: View {
     @StateObject private var stravaService = StravaService.shared
+    @StateObject private var celebrationManager = CelebrationManager.shared
     let activity: ActivityType
     let distance: Double
     let duration: Int
@@ -167,6 +169,16 @@ struct SessionCompleteView: View {
                 }
             }
         }
+        .confettiCannon(
+            counter: $celebrationManager.confettiCounter,
+            num: celebrationManager.confettiCount,
+            colors: celebrationManager.confettiColors,
+            confettiSize: celebrationManager.confettiSize,
+            rainHeight: celebrationManager.rainHeight,
+            radius: celebrationManager.radius,
+            repetitions: celebrationManager.repetitions,
+            repetitionInterval: celebrationManager.repetitionInterval
+        )
     }
     
     // MARK: - Header Section
@@ -1034,6 +1046,9 @@ struct SessionCompleteView: View {
         pbExerciseName = exercise.name
         pbValue = "\(String(format: "%.1f", weight)) kg x \(reps) reps"
         showPBSheet = false
+        
+        // Trigga milestone konfetti för nytt PB! 🎉
+        celebrationManager.celebrateMilestone()
     }
     
     // MARK: - Title Section
@@ -1588,10 +1603,26 @@ struct SessionCompleteView: View {
         let search = MKLocalSearch(request: request)
         do {
             let response = try await search.start()
+            
+            // Sort by distance to find the actually closest gym
+            let sortedByDistance = response.mapItems.sorted { item1, item2 in
+                let loc1 = CLLocation(latitude: item1.placemark.coordinate.latitude,
+                                     longitude: item1.placemark.coordinate.longitude)
+                let loc2 = CLLocation(latitude: item2.placemark.coordinate.latitude,
+                                     longitude: item2.placemark.coordinate.longitude)
+                return currentLocation.distance(from: loc1) < currentLocation.distance(from: loc2)
+            }
+            
             await MainActor.run {
                 isSearchingGyms = false
-                if let closest = response.mapItems.first {
+                gymSearchResults = sortedByDistance // Pre-populate for manual picker too
+                if let closest = sortedByDistance.first {
                     selectGym(closest)
+                    let dist = currentLocation.distance(from: CLLocation(
+                        latitude: closest.placemark.coordinate.latitude,
+                        longitude: closest.placemark.coordinate.longitude
+                    ))
+                    print("📍 Auto-selected closest gym: \(closest.name ?? "Unknown") (\(Int(dist))m away)")
                 } else {
                     detectedGymName = GymLocationManager.shared.getCurrentGymName()
                 }

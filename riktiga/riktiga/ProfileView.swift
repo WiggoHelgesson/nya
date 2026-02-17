@@ -215,11 +215,11 @@ struct ProfileActivitiesView: View {
                             )
                         }
                         
-                        // Row 2: Sparade pass & Dela pass med vänner
+                        // Row 2: Gym rutiner & Dela pass med vänner
                         HStack(spacing: 10) {
                             ProfileCardButton(
                                 icon: "figure.strengthtraining.traditional",
-                                label: "Sparade pass",
+                                label: "Gym rutiner",
                                 action: { showRoutines = true }
                             )
                             
@@ -267,7 +267,7 @@ struct ProfileActivitiesView: View {
                                     .foregroundColor(.gray)
                                 Text("Inga aktiviteter än")
                                     .font(.headline)
-                                Text("Dina sparade pass kommer visas här.")
+                                Text("Dina gym rutiner kommer visas här.")
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }

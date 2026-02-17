@@ -48,10 +48,13 @@ struct SwipeableImageView: View {
                 )
         } else if images.count == 1 {
             // Single image - no swipe needed
-            LocalAsyncImage(path: images[0])
-                .frame(height: imageHeight)
-                .clipped()
-                .overlay(
+            ZStack {
+                Color(.systemGray6)
+                LocalAsyncImage(path: images[0])
+            }
+            .frame(height: imageHeight)
+            .clipped()
+            .overlay(
                     // Tap only center area
                     Color.clear
                         .contentShape(Rectangle())
@@ -69,9 +72,12 @@ struct SwipeableImageView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: gapWidth) {
                             ForEach(Array(images.enumerated()), id: \.offset) { index, imagePath in
-                                LocalAsyncImage(path: imagePath)
-                                    .frame(width: pageWidth, height: imageHeight)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                ZStack {
+                                    Color(.systemGray6)
+                                    LocalAsyncImage(path: imagePath)
+                                }
+                                .frame(width: pageWidth, height: imageHeight)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
                                     .overlay(
                                         // Tap only center area
                                         Color.clear

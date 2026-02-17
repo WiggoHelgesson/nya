@@ -144,8 +144,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.isLoggedIn = true
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
-                        // Set current user for AI scan limit manager
+                        // Set current user for scan limit managers
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
+                        BarcodeScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         
                         // Set current user for streak manager (per-user streaks)
                         StreakManager.shared.setUser(userId: profile.id)
@@ -229,8 +230,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.isLoading = false
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
-                        // Set current user for AI scan limit manager
+                        // Set current user for scan limit managers
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
+                        BarcodeScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         
                         // Set current user for streak manager (per-user streaks)
                         StreakManager.shared.setUser(userId: profile.id)
@@ -357,8 +359,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     // Clear local state and caches regardless
                     AppCacheManager.shared.clearAllCache()
                     
-                    // Clear AI scan limit manager user
+                    // Clear scan limit managers
                     AIScanLimitManager.shared.setCurrentUser(userId: nil)
+                    BarcodeScanLimitManager.shared.setCurrentUser(userId: nil)
                     
                     // Clear streak manager user
                     StreakManager.shared.clearUser()
@@ -378,8 +381,9 @@ class AuthViewModel: NSObject, ObservableObject {
                     // Even if network signOut fails, force local logout so user isn't stuck
                     AppCacheManager.shared.clearAllCache()
                     
-                    // Clear AI scan limit manager user
+                    // Clear scan limit managers
                     AIScanLimitManager.shared.setCurrentUser(userId: nil)
+                    BarcodeScanLimitManager.shared.setCurrentUser(userId: nil)
                     
                     // Clear streak manager user
                     StreakManager.shared.clearUser()
@@ -715,8 +719,9 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         self.isLoading = false
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
-                        // Set current user for AI scan limit manager
+                        // Set current user for scan limit managers
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
+                        BarcodeScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         
                         // Set current user for streak manager (per-user streaks)
                         StreakManager.shared.setUser(userId: profile.id)

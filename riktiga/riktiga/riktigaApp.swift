@@ -157,8 +157,8 @@ struct UpAndDownApp: App {
                     // Request push notification permission when logged in
                     PushNotificationService.shared.requestPermissionAndRegister()
                     
-                    // Schedule daily meal reminders (12:00 lunch, 17:30 dinner)
-                    NotificationManager.shared.scheduleMealReminders()
+                    // Cancel any previously scheduled meal reminders (disabled)
+                    NotificationManager.shared.cancelMealReminders()
                     
                     // Sync streak to widgets on app launch
                     WidgetSyncService.shared.syncStreakData()

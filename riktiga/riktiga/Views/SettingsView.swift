@@ -201,7 +201,7 @@ struct SettingsView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.primary)
                         
-                        Text("Tjäna 30% på alla köp din vän gör")
+                        Text("Tjäna 40% på alla köp din vän gör")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }

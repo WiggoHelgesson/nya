@@ -358,31 +358,41 @@ final class PushNotificationService: NSObject {
         print("📱 [PUSH] Calling Edge Function for user: \(userId)")
         print("📱 [PUSH] Title: \(title), Body: \(body)")
         
-        do {
-            struct PushPayload: Encodable {
-                let user_id: String
-                let title: String
-                let body: String
-                let data: [String: String]?
+        for attempt in 1...2 {
+            do {
+                struct PushPayload: Encodable {
+                    let user_id: String
+                    let title: String
+                    let body: String
+                    let data: [String: String]?
+                }
+                
+                let payload = PushPayload(
+                    user_id: userId,
+                    title: title,
+                    body: body,
+                    data: data
+                )
+                
+                try await SupabaseConfig.supabase.functions.invoke(
+                    "send-push-notification",
+                    options: FunctionInvokeOptions(body: payload)
+                )
+                
+                print("✅ [PUSH] Real push notification sent to user: \(userId)")
+                return
+            } catch let FunctionsError.httpError(code, data) {
+                let body = String(data: data, encoding: .utf8) ?? "no body"
+                print("⚠️ [PUSH] HTTP \(code) from edge function (attempt \(attempt)): \(body)")
+                if attempt < 2 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            } catch {
+                print("⚠️ [PUSH] Failed to send push to \(userId) (attempt \(attempt)): \(error)")
+                if attempt < 2 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
             }
-            
-            let payload = PushPayload(
-                user_id: userId,
-                title: title,
-                body: body,
-                data: data
-            )
-            
-            // Call the Edge Function to send real iOS push
-            try await SupabaseConfig.supabase.functions.invoke(
-                "send-push-notification",
-                options: FunctionInvokeOptions(body: payload)
-            )
-            
-            print("✅ [PUSH] Real push notification sent to user: \(userId)")
-        } catch {
-            print("⚠️ [PUSH] Failed to send real push notification to \(userId): \(error)")
-            // Don't throw - push failures shouldn't block the main flow
         }
     }
     
@@ -548,6 +558,7 @@ class NotificationNavigationManager: ObservableObject {
     @Published var shouldNavigateToSharedWorkouts = false
     @Published var shouldNavigateToNotifications = false
     @Published var shouldNavigateToCoachChat = false
+    @Published var shouldNavigateToDirectMessage: String? = nil  // conversation_id
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -616,6 +627,17 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToDirectMessage(conversationId: String) {
+        DispatchQueue.main.async {
+            // Navigate to Hem tab first
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+            // Then open the specific conversation after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.shouldNavigateToDirectMessage = conversationId
+            }
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
@@ -623,6 +645,7 @@ class NotificationNavigationManager: ObservableObject {
         shouldNavigateToSharedWorkouts = false
         shouldNavigateToNotifications = false
         shouldNavigateToCoachChat = false
+        shouldNavigateToDirectMessage = nil
     }
 }
 
@@ -732,6 +755,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case "coach_schedule_updated":
                 // Navigate to coach tab to see updated schedule
                 NotificationNavigationManager.shared.navigateToCoachTab()
+            case "direct_message", "gym_invite":
+                // Navigate to the specific DM conversation
+                if let conversationId = userInfo["conversation_id"] as? String {
+                    NotificationNavigationManager.shared.navigateToDirectMessage(conversationId: conversationId)
+                }
             default:
                 break
             }

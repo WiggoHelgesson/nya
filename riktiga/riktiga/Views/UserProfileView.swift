@@ -33,6 +33,10 @@ struct UserProfileView: View {
     @State private var showFollowersList: Bool = false
     @State private var showFollowingList: Bool = false
     
+    // Message states
+    @State private var isCreatingConversation: Bool = false
+    @State private var navigateToConversation: UUID? = nil
+    
     // Filter posts with Up&Down Live photos
     private var livePhotoPosts: [SocialWorkoutPost] {
         profilePostsViewModel.posts.filter { post in
@@ -178,25 +182,48 @@ struct UserProfileView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
                         
-                        // Follow button on its own row
+                        // Follow + Message buttons on their own row
                         if let currentUser = authViewModel.currentUser, currentUser.id != userId {
-                            Button(action: toggleFollow) {
-                                HStack(spacing: 6) {
-                                    if followToggleInProgress {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                            .tint(.white)
+                            HStack(spacing: 8) {
+                                Button(action: toggleFollow) {
+                                    HStack(spacing: 6) {
+                                        if followToggleInProgress {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                                .tint(.white)
+                                        }
+                                        Text(isFollowingUser ? "Följer" : "Följ")
+                                            .font(.system(size: 14, weight: .semibold))
                                     }
-                                    Text(isFollowingUser ? "Följer" : "Följ")
-                                        .font(.system(size: 14, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 40)
+                                    .background(isFollowingUser ? Color(.systemGray5) : Color.black)
+                                    .foregroundColor(isFollowingUser ? .black : .white)
+                                    .cornerRadius(10)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40)
-                                .background(isFollowingUser ? Color(.systemGray5) : Color.black)
-                                .foregroundColor(isFollowingUser ? .black : .white)
-                                .cornerRadius(10)
+                                .disabled(followToggleInProgress)
+                                
+                                Button(action: openConversation) {
+                                    HStack(spacing: 6) {
+                                        if isCreatingConversation {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                                .tint(.primary)
+                                        } else {
+                                            Image(systemName: "paperplane.fill")
+                                                .font(.system(size: 13))
+                                        }
+                                        Text("Meddelande")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 40)
+                                    .background(Color(.systemGray5))
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(10)
+                                }
+                                .disabled(isCreatingConversation)
                             }
-                            .disabled(followToggleInProgress)
                             .padding(.horizontal, 16)
                             .opacity(showStats ? 1 : 0)
                             .offset(y: showStats ? 0 : 10)
@@ -306,6 +333,15 @@ struct UserProfileView: View {
         }
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
+        }
+        .navigationDestination(item: $navigateToConversation) { conversationId in
+            DirectMessageView(
+                conversationId: conversationId,
+                otherUserId: userId,
+                otherUsername: username.isEmpty ? "Användare" : username,
+                otherAvatarUrl: avatarUrl
+            )
+            .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showPersonalRecords) {
             PersonalRecordsView(userId: userId, username: username)
@@ -468,6 +504,26 @@ struct UserProfileView: View {
             }
             await MainActor.run {
                 self.followToggleInProgress = false
+            }
+        }
+    }
+    
+    private func openConversation() {
+        guard !isCreatingConversation else { return }
+        isCreatingConversation = true
+        
+        Task {
+            do {
+                let conversationId = try await DirectMessageService.shared.getOrCreateConversation(withUserId: userId)
+                await MainActor.run {
+                    isCreatingConversation = false
+                    navigateToConversation = conversationId
+                }
+            } catch {
+                print("❌ Failed to open conversation: \(error)")
+                await MainActor.run {
+                    isCreatingConversation = false
+                }
             }
         }
     }

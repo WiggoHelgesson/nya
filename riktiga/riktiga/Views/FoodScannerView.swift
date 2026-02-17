@@ -4,6 +4,7 @@ import Vision
 import PhotosUI
 import Combine
 import Supabase
+import SuperwallKit
 
 // MARK: - Scan Mode
 enum FoodScanMode: String, CaseIterable {
@@ -41,6 +42,11 @@ struct FoodScannerView: View {
     @State private var amountValue: String = "100"
     @State private var selectedUnit: FoodUnitType = .gram
     @State private var showUnitPicker = false
+    
+    // Health analysis flow
+    @State private var showHealthLoading = false
+    @State private var healthAnalysis: ProductHealthAnalysis?
+    @State private var scannedBarcode: String?
     
     init(initialMode: FoodScanMode = .ai) {
         _selectedMode = State(initialValue: initialMode)
@@ -118,6 +124,54 @@ struct FoodScannerView: View {
             }
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItem, matching: .images)
+        .fullScreenCover(isPresented: $showHealthLoading) {
+            ProductAnalysisLoadingView(
+                onAnalysisComplete: { analysis in
+                    healthAnalysis = analysis
+                    viewModel.saveHealthAnalysisToLog(analysis)
+                },
+                onScanAnother: {
+                    showHealthLoading = false
+                    healthAnalysis = nil
+                    scannedBarcode = nil
+                    viewModel.clearResult()
+                },
+                onDismissScanner: {
+                    showHealthLoading = false
+                    dismiss()
+                },
+                barcode: scannedBarcode ?? ""
+            )
+        }
+        .onChange(of: viewModel.detectedBarcode) { _, newBarcode in
+            if let barcode = newBarcode {
+                viewModel.detectedBarcode = nil
+                
+                let isPro = RevenueCatManager.shared.isProMember
+                let limitManager = BarcodeScanLimitManager.shared
+                
+                if isPro || limitManager.canScanForFree {
+                    // Haptic feedback - strong notification to confirm scan
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                    
+                    // Count the scan for non-pro users
+                    if !isPro {
+                        limitManager.useScan()
+                    }
+                    
+                    scannedBarcode = barcode
+                    showHealthLoading = true
+                } else {
+                    // Haptic feedback - error to indicate blocked
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.error)
+                    
+                    // Show paywall
+                    SuperwallService.shared.showPaywall()
+                }
+            }
+        }
     }
     
     // MARK: - Top Bar
@@ -821,6 +875,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     @Published var scanResult: FoodScanResult?
     @Published var scanMode: FoodScanMode = .ai
     @Published var isCameraReady = false
+    @Published var detectedBarcode: String?
     
     let session = AVCaptureSession()
     private var photoOutput = AVCapturePhotoOutput()
@@ -1098,24 +1153,62 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - Barcode Lookup
+    // MARK: - Barcode Lookup (now triggers health analysis flow)
     private func lookupBarcode(_ barcode: String) {
-        isAnalyzing = true
-        analysisStatus = "Söker produkt: \(barcode)..."
-        
+        // Trigger health analysis flow via published property
+        DispatchQueue.main.async {
+            self.detectedBarcode = barcode
+        }
+    }
+    
+    // MARK: - Save Health Analysis to Food Log
+    func saveHealthAnalysisToLog(_ analysis: ProductHealthAnalysis) {
         Task {
-            // Try Open Food Facts first
-            if let product = await searchOpenFoodFacts(barcode: barcode) {
-                await MainActor.run {
-                    scanResult = product
-                    isAnalyzing = false
+            do {
+                guard let userId = try? await SupabaseConfig.supabase.auth.session.user.id.uuidString else {
+                    print("❌ No user logged in")
+                    return
                 }
-                return
-            }
-            
-            await MainActor.run {
-                analysisStatus = "Produkten hittades inte"
-                isAnalyzing = false
+                
+                // Download product image if available
+                var imageUrl: String? = nil
+                if let imageUrlStr = analysis.imageUrl, let url = URL(string: imageUrlStr) {
+                    do {
+                        let (imageData, _) = try await URLSession.shared.data(from: url)
+                        if let image = UIImage(data: imageData) {
+                            imageUrl = await uploadFoodImage(image: image, userId: userId)
+                        }
+                    } catch {
+                        print("⚠️ Could not download product image: \(error)")
+                    }
+                }
+                
+                let entry = FoodLogInsert(
+                    id: UUID().uuidString,
+                    userId: userId,
+                    name: analysis.productName,
+                    calories: analysis.calories,
+                    protein: analysis.protein,
+                    carbs: analysis.carbs,
+                    fat: analysis.fat,
+                    mealType: "snack",
+                    loggedAt: ISO8601DateFormatter().string(from: Date()),
+                    imageUrl: imageUrl,
+                    barcode: analysis.barcode
+                )
+                
+                try await SupabaseConfig.supabase
+                    .from("food_logs")
+                    .insert(entry)
+                    .execute()
+                
+                print("✅ Saved health analysis to log: \(analysis.productName)")
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshFoodLogs"), object: nil)
+                }
+            } catch {
+                print("❌ Error saving health analysis to log: \(error)")
             }
         }
     }
@@ -1429,7 +1522,8 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                     fat: result.fat,
                     mealType: "snack",
                     loggedAt: ISO8601DateFormatter().string(from: Date()),
-                    imageUrl: imageUrl
+                    imageUrl: imageUrl,
+                    barcode: result.barcode
                 )
                 
                 print("📷 Saving to database with imageUrl: \(imageUrl ?? "nil")")
@@ -1497,9 +1591,10 @@ struct FoodLogInsert: Codable {
     let mealType: String
     let loggedAt: String
     let imageUrl: String?
+    let barcode: String?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, calories, protein, carbs, fat
+        case id, name, calories, protein, carbs, fat, barcode
         case userId = "user_id"
         case mealType = "meal_type"
         case loggedAt = "logged_at"

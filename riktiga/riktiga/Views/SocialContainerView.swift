@@ -7,6 +7,8 @@ enum HomeTab: String, CaseIterable {
 
 struct SocialContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @ObservedObject private var notificationNav = NotificationNavigationManager.shared
+    let popToRootTrigger: Int
     @State private var selectedTab: HomeTab = .hem
     @State private var showMonthlyPrize = false
     @State private var showNonProAlert = false
@@ -15,14 +17,18 @@ struct SocialContainerView: View {
     @State private var unreadNotifications = 0
     @State private var isFetchingUnread = false
     @State private var unreadMessages = 0
+    @State private var dmNavigationPath = NavigationPath()
+    @State private var lastUnreadFetch: Date = .distantPast
     @StateObject private var dmService = DirectMessageService.shared
+    
+    private let fetchThrottleInterval: TimeInterval = 30
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $dmNavigationPath) {
             VStack(spacing: 0) {
                 // MARK: - Header (samma som Rewards)
                 VStack(spacing: 0) {
@@ -178,6 +184,10 @@ struct SocialContainerView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .navigationBarHidden(true)
+            .navigationDestination(for: String.self) { conversationId in
+                DMNavigationWrapper(conversationId: conversationId)
+                    .environmentObject(authViewModel)
+            }
         }
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
@@ -210,15 +220,32 @@ struct SocialContainerView: View {
             Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
         .task {
-            await refreshUnreadCount()
-            await refreshUnreadMessages()
+            await throttledRefresh()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootHem"))) { _ in
+        .onChange(of: popToRootTrigger) { _, _ in
+            dmNavigationPath = NavigationPath()
             selectedTab = .hem
+            NotificationCenter.default.post(name: NSNotification.Name("PopToRootHem"), object: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
             Task { await refreshUnreadMessages() }
         }
+        .onChange(of: notificationNav.shouldNavigateToDirectMessage) { _, conversationId in
+            if let conversationId = conversationId {
+                dmNavigationPath = NavigationPath()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    dmNavigationPath.append(conversationId)
+                }
+                notificationNav.shouldNavigateToDirectMessage = nil
+            }
+        }
+    }
+    
+    private func throttledRefresh() async {
+        guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
+        lastUnreadFetch = Date()
+        await refreshUnreadCount()
+        await refreshUnreadMessages()
     }
     
     private func refreshUnreadCount() async {
@@ -247,7 +274,87 @@ struct SocialContainerView: View {
     }
 }
 
+// MARK: - DM Navigation Wrapper (loads conversation data from ID)
+struct DMNavigationWrapper: View {
+    let conversationId: String
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var conversation: DirectConversation? = nil
+    @State private var isLoading = true
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let conv = conversation {
+                DirectMessageView(
+                    conversationId: conv.id,
+                    otherUserId: conv.otherUserId ?? "",
+                    otherUsername: conv.displayName,
+                    otherAvatarUrl: conv.otherAvatarUrl,
+                    isGroup: conv.isGroup ?? false,
+                    memberCount: conv.memberCount ?? 2
+                )
+                .environmentObject(authViewModel)
+            } else {
+                // Fallback: open with just the ID
+                if let uuid = UUID(uuidString: conversationId) {
+                    DirectMessageView(
+                        conversationId: uuid,
+                        otherUserId: "",
+                        otherUsername: "Chatt",
+                        otherAvatarUrl: nil
+                    )
+                    .environmentObject(authViewModel)
+                } else {
+                    Text("Kunde inte öppna konversationen")
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .task {
+            await loadConversation()
+        }
+    }
+    
+    private func loadConversation() async {
+        guard let uuid = UUID(uuidString: conversationId) else {
+            isLoading = false
+            return
+        }
+        
+        let service = DirectMessageService.shared
+        
+        // First try from already-loaded conversations
+        if let existing = service.conversations.first(where: { $0.id == uuid }) {
+            await MainActor.run {
+                conversation = existing
+                isLoading = false
+            }
+            return
+        }
+        
+        // Otherwise fetch fresh conversations
+        do {
+            let conversations = try await service.fetchConversations()
+            if let found = conversations.first(where: { $0.id == uuid }) {
+                await MainActor.run {
+                    conversation = found
+                    isLoading = false
+                }
+                return
+            }
+        } catch {
+            print("⚠️ Failed to fetch conversations for navigation: \(error)")
+        }
+        
+        await MainActor.run {
+            isLoading = false
+        }
+    }
+}
+
 #Preview {
-    SocialContainerView()
+    SocialContainerView(popToRootTrigger: 0)
         .environmentObject(AuthViewModel())
 }

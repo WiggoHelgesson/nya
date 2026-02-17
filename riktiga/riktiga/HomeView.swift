@@ -30,9 +30,10 @@ struct FoodLogEntry: Identifiable, Codable {
     let imageUrl: String?
     let nutriScore: String?
     let ingredients: [FoodLogIngredient]?
+    let barcode: String?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, calories, protein, carbs, fat, ingredients
+        case id, name, calories, protein, carbs, fat, ingredients, barcode
         case userId = "user_id"
         case mealType = "meal_type"
         case loggedAt = "logged_at"
@@ -132,14 +133,18 @@ struct HomeView: View {
     @StateObject private var viewModel = CalorieTrackerViewModel()
     @ObservedObject private var analyzingManager = AnalyzingFoodManager.shared
     
-    // Animation states
-    @State private var showCalendar = false
-    @State private var showCards = false
-    @State private var showWater = false
-    @State private var showRecent = false
+    // Animation states - default true for instant navigation
+    @State private var showCalendar = true
+    @State private var showCards = true
+    @State private var showWater = true
+    @State private var showRecent = true
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
     @State private var showNutritionDetail = false
+    @State private var showHealthResult = false
+    @State private var healthAnalysisForResult: ProductHealthAnalysis?
+    @State private var isLoadingHealthAnalysis = false
+    @State private var loadingBarcodeEntryId: String?
     
     // Data transition animation
     @State private var isTransitioning = false
@@ -414,6 +419,16 @@ struct HomeView: View {
         }
         .fullScreenCover(item: $selectedFoodLog) { foodLog in
             FoodLogDetailView(entry: foodLog)
+        }
+        .fullScreenCover(isPresented: $showHealthResult) {
+            ProductHealthResultView(
+                analysis: healthAnalysisForResult ?? ProductHealthResultView.placeholder,
+                onScanAnother: nil,
+                onDismiss: {
+                    showHealthResult = false
+                    healthAnalysisForResult = nil
+                }
+            )
         }
         .fullScreenCover(isPresented: $showManualFoodEntry) {
             ManualFoodEntryView()
@@ -1103,8 +1118,41 @@ struct HomeView: View {
                     switch log {
                     case .food(let entry):
                         FoodLogCardView(entry: entry)
+                            .overlay {
+                                if isLoadingHealthAnalysis && loadingBarcodeEntryId == entry.id {
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .fill(Color.black.opacity(0.3))
+                                        .overlay {
+                                            ProgressView()
+                                                .tint(.white)
+                                                .scaleEffect(1.2)
+                                        }
+                                }
+                            }
                             .onTapGesture {
-                                selectedFoodLog = entry
+                                if let barcode = entry.barcode, !barcode.isEmpty {
+                                    isLoadingHealthAnalysis = true
+                                    loadingBarcodeEntryId = entry.id
+                                    Task {
+                                        do {
+                                            let analysis = try await ProductHealthService.shared.analyzeBarcode(barcode)
+                                            await MainActor.run {
+                                                isLoadingHealthAnalysis = false
+                                                loadingBarcodeEntryId = nil
+                                                healthAnalysisForResult = analysis
+                                                showHealthResult = true
+                                            }
+                                        } catch {
+                                            await MainActor.run {
+                                                isLoadingHealthAnalysis = false
+                                                loadingBarcodeEntryId = nil
+                                                selectedFoodLog = entry
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    selectedFoodLog = entry
+                                }
                             }
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),

@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import CoreLocation
 import Supabase
+import ConfettiSwiftUI
 
 enum GymSessionInputField: Hashable {
     case kg(exerciseId: String, setIndex: Int)
@@ -14,6 +15,7 @@ struct GymSessionView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var activeSession: SessionManager.ActiveSession? = SessionManager.shared.activeSession
     @StateObject private var viewModel = GymSessionViewModel()
+    @StateObject private var celebrationManager = CelebrationManager.shared
     @State private var showCompleteSession = false
     @State private var showCancelConfirmation = false
     @State private var didLoadSavedWorkouts = false
@@ -128,7 +130,7 @@ struct GymSessionView: View {
         }
     }
     
-    // Bottom buttons for empty state (Sparade pass)
+    // Bottom buttons for empty state (Gym rutiner)
     private var emptyStateBottomButtons: some View {
         VStack(spacing: 12) {
             // Saved workouts button
@@ -140,7 +142,7 @@ struct GymSessionView: View {
                 HStack {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Sparade pass")
+                    Text("Gym rutiner")
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(.primary)
@@ -527,6 +529,16 @@ struct GymSessionView: View {
                 activeSession = newValue
             }
         }
+        .confettiCannon(
+            counter: $celebrationManager.confettiCounter,
+            num: celebrationManager.confettiCount,
+            colors: celebrationManager.confettiColors,
+            confettiSize: celebrationManager.confettiSize,
+            rainHeight: celebrationManager.rainHeight,
+            radius: celebrationManager.radius,
+            repetitions: celebrationManager.repetitions,
+            repetitionInterval: celebrationManager.repetitionInterval
+        )
     }
     
     private func saveWorkoutTapped() {
@@ -557,6 +569,9 @@ struct GymSessionView: View {
         
         // Update streak
         StreakManager.shared.registerActivityCompletion()
+        
+        // Trigga BIG konfetti celebration för avslutat pass!
+        celebrationManager.celebrateSessionCompleted()
         
         // Go directly to session complete
         showCompleteSession = true
@@ -907,6 +922,8 @@ extension GymSessionView {
                                 // Show celebration animation if 3rd uppy
                                 if receivedUppys.count == 3 {
                                     print("🎉 Reached 3 Uppys! Bonus unlocked!")
+                                    // Trigga milestone konfetti!
+                                    celebrationManager.celebrateMilestone()
                                 }
                             }
                         }
@@ -2401,7 +2418,7 @@ struct SavedWorkoutsSheet: View {
                         Image(systemName: "folder")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Du har inga sparade pass ännu")
+                        Text("Du har inga gym rutiner ännu")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                         Text("Spara ditt nästa pass som mall för att använda det igen")
@@ -2456,7 +2473,7 @@ struct SavedWorkoutsSheet: View {
                     .listStyle(.insetGrouped)
                 }
             }
-            .navigationTitle("Sparade pass")
+            .navigationTitle("Gym rutiner")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

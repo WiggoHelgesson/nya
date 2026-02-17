@@ -37,19 +37,19 @@ struct StatisticsView: View {
     @State private var isLoadingPredictions = false
     @State private var predictionError: String? = nil
     
-    // Animation states
-    @State private var showFilter = false
-    @State private var showWeekStats = false
-    @State private var showChart = false
-    @State private var showMonthly = false
-    @State private var showCalendar = false
-    @State private var showProgressive = false
-    @State private var show1RMPredictions = false
-    @State private var showMuscleBalance = false
-    @State private var showTopExercises = false
-    @State private var showSkeleton = true
-    @State private var showProgressPhotos = false
-    @State private var showTrophyCase = false
+    // Animation states - default true for instant navigation
+    @State private var showFilter = true
+    @State private var showWeekStats = true
+    @State private var showChart = true
+    @State private var showMonthly = true
+    @State private var showCalendar = true
+    @State private var showProgressive = true
+    @State private var show1RMPredictions = true
+    @State private var showMuscleBalance = true
+    @State private var showTopExercises = true
+    @State private var showSkeleton = false
+    @State private var showProgressPhotos = true
+    @State private var showTrophyCase = true
     @State private var showTrophyDetail = false
 
     // Chart animation states

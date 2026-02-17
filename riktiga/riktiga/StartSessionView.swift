@@ -137,6 +137,16 @@ enum ActivityType: String, CaseIterable, Identifiable {
         }
     }
     
+    var shortName: String {
+        switch self {
+        case .running: return "Löpning"
+        case .golf: return "Golf"
+        case .walking: return "Gym"
+        case .hiking: return "Klättring"
+        case .skiing: return "Skidor"
+        }
+    }
+    
     var buttonText: String {
         switch self {
         case .running: return "Starta löppass"
@@ -645,7 +655,6 @@ struct SessionMapView: View {
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var isPremium = RevenueCatManager.shared.isProMember
     @ObservedObject private var sessionManager = SessionManager.shared
-    @ObservedObject private var territoryStore = TerritoryStore.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 59.3293, longitude: 18.0686),
@@ -657,12 +666,7 @@ struct SessionMapView: View {
     @State private var sessionStartTime: Date?
     @State private var currentPace: String = "0:00"
     @State private var timer: Timer?
-    @State private var showTerritoryAnimation = false
-    @State private var territoryAnimationCoordinates: [CLLocationCoordinate2D] = []
     @State private var showSessionComplete = false
-    @State private var showTakeoverSummary = false
-    @State private var takeoverUsers: [TileTakeoverRow] = []
-    @State private var isLoadingTakeovers = false
     @State private var isSessionEnding = false  // Flag to prevent saves during session end
     @State private var earnedPoints: Int = 0
     @State private var routeImage: UIImage?
@@ -671,12 +675,9 @@ struct SessionMapView: View {
     @State private var routeCoordinatesSnapshot: [CLLocationCoordinate2D] = []
     @State private var lastPointsUpdate: Date = Date()
     @State private var lastSnapshotSourceCount: Int = 0
-    @State private var liveTerritoryArea: Double = 0 // New state for live area
     private let maxRouteSnapshotPoints = 400 // Balance between detail and performance
     @State private var lastRouteUpdateTime: Date = .distantPast
     private let routeUpdateInterval: TimeInterval = 0.2 // Update route every 0.2s for smooth real-time
-    @State private var lastAreaUpdateTime: Date = .distantPast
-    private let areaUpdateInterval: TimeInterval = 1.0 // Update area every 1s
     
     // Speed detection for anti-cheat
     @State private var highSpeedStartTime: Date? = nil
@@ -695,16 +696,25 @@ struct SessionMapView: View {
     // Expandable stats panel
     @State private var isStatsExpanded = false
     
-    // Territory closure warning
-    @State private var showTerritoryWarning = false
-    @State private var pendingEndSession = false
-    private let maxDistanceFromStartForTerritory: Double = 500.0 // meters (increased for GPS accuracy on real devices)
+    // Fullscreen stats mode (Strava-style)
+    @State private var showFullScreenStats = false
+    
+    // Activity picker (Strava-style)
+    @State private var selectedActivity: ActivityType? = nil
+    @State private var showActivityPicker = false
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
+            // MARK: - Fullscreen Stats (Strava-style)
+            if showFullScreenStats && isRunning && !isPaused {
+                fullScreenStatsOverlay
+                    .transition(.move(edge: .bottom))
+                    .zIndex(100)
+            }
+            
             // MARK: - Map Background with route
             Map(coordinateRegion: $region, showsUserLocation: true)
                 .ignoresSafeArea()
@@ -718,21 +728,17 @@ struct SessionMapView: View {
                     if newCount == 0 {
                         routeCoordinatesSnapshot = []
                         lastSnapshotSourceCount = 0
-                        liveTerritoryArea = 0
                     } else {
                         // Force immediate update for first points to show route instantly
-                        // Also serves as backup if snapshot was somehow empty
                         if newCount <= 20 || routeCoordinatesSnapshot.isEmpty {
                             routeCoordinatesSnapshot = locationManager.routeCoordinates
                             lastSnapshotSourceCount = newCount
                             print("📍 Snapshot updated directly: \(routeCoordinatesSnapshot.count) points")
                         } else {
-                            // After initial points, use throttled updates
                             refreshRouteSnapshotIfNeeded(force: newCount % 5 == 0)
                         }
-                        updateLiveTerritoryArea()
                         
-                        // Save session every 10 coordinate updates for bulletproof persistence
+                        // Save session every 10 coordinate updates
                         if newCount % 10 == 0 {
                             saveSessionState()
                         }
@@ -742,9 +748,6 @@ struct SessionMapView: View {
                     // Request location permission but DON'T start tracking yet
                     locationManager.requestLocationPermission()
                     centerMapOnUser(animated: false)
-                    if !resumeSession {
-                        territoryStore.resetSession()
-                    }
                     
                     // Auto-start if coming from activity switch (e.g., from gym session)
                     if autoStart && !resumeSession && !isRunning {
@@ -754,6 +757,7 @@ struct SessionMapView: View {
                                 locationManager.startNewTracking(activityType: activity.rawValue)
                                 startTimer()
                                 isRunning = true
+                                showFullScreenStats = true
                                 print("🏃 Auto-started \(activity.rawValue) session")
                                 
                                 // Notify followers about session start
@@ -862,387 +866,384 @@ struct SessionMapView: View {
                     guard isRunning && !trackingStoppedDueToSpeed else { return }
                     checkSpeedForCheating(currentSpeed: speed)
                 }
-                .overlay(alignment: .bottom) {
-                    // Only show territory capture overlay for running and golf (not skiing)
-                    if isRunning && (activity == .running || activity == .golf) {
-                        VStack {
-                            Text("Live Territory Capture")
-                                .font(.caption)
-                                .foregroundColor(.white)
-                            Text(String(format: "%.0f m²", liveTerritoryArea))
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.green.opacity(0.8))
-                        .cornerRadius(10)
-                        .offset(y: -200) // Position above controls
-                    }
-                }
+                // Clean map - route line only
 
             // Back button removed
 
             // MARK: - Bottom Stats and Controls
             VStack {
                 Spacer()
-
-                VStack(spacing: 16) {
-                    // Only show detailed stats when session is running or paused
+                
+                VStack(spacing: 0) {
                     if isRunning || isPaused {
-                        // GPS Status - Always visible when running
-                        HStack(spacing: 8) {
-                            Image(systemName: locationManager.userLocation != nil ? "location.fill" : "location.slash")
-                                .font(.system(size: 14))
-                                .foregroundColor(locationManager.authorizationStatus == .authorizedAlways ? .black : .red)
-                            Text(locationManager.userLocation != nil ? "GPS" : (locationManager.authorizationStatus == .authorizedAlways ? "GPS" : "GPS Ej tillgänglig"))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(locationManager.userLocation != nil ? .black : (locationManager.authorizationStatus == .authorizedAlways ? .black : .red))
-                        }
-                        
-                        // Location Error Display
-                        if let error = locationManager.locationError {
-                            VStack(spacing: 12) {
-                                Text(error)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.red)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 16)
-                                
-                                Button(action: {
-                                    locationManager.openSettings()
-                                }) {
-                                    Text("Öppna Inställningar")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 8)
-                                        .background(AppColors.brandBlue)
-                                        .cornerRadius(8)
+                        // --- Active session bottom card ---
+                        VStack(spacing: 16) {
+                            // Activity label + expand button
+                            HStack {
+                                Text((selectedActivity ?? activity).rawValue)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if isRunning {
+                                    Button(action: {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                            showFullScreenStats = true
+                                        }
+                                    }) {
+                                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                    }
                                 }
                             }
-                        }
-
-                        // Main Distance Display - Always visible when running
-                        VStack(spacing: 4) {
-                            Text(String(format: "%.2f", locationManager.distance))
-                                .font(.system(size: 36, weight: .black))
-                                .foregroundColor(.primary)
-                            Text("km")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.primary)
-                        }
-                        
-                        // EXPANDABLE SECTION - Hidden by default when running
-                        if isStatsExpanded || isPaused {
-                            // Status Text
-                            Text("Inspelning pågår")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-
-                            // Three Column Stats
-                            HStack(spacing: 20) {
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+                            
+                            // Three column stats
+                            HStack(spacing: 0) {
                                 VStack(spacing: 4) {
-                                    Text("\(earnedPoints)")
-                                        .font(.system(size: 20, weight: .black))
+                                    Text(formattedTime(sessionDuration))
+                                        .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Poäng")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.gray)
+                                    Text("Tid")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
                                 .frame(maxWidth: .infinity)
                                 
                                 VStack(spacing: 4) {
-                                    Text(formattedTime(sessionDuration))
-                                        .font(.system(size: 20, weight: .black))
+                                    Text(String(format: "%.1f", locationManager.currentSpeedKmh).replacingOccurrences(of: ".", with: ","))
+                                        .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Tid")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.gray)
+                                    Text("Snitthast. (km/h)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
                                 .frame(maxWidth: .infinity)
-                            
-                                // Show elevation for skiing, pace for others
-                                if activity == .skiing || activity == .hiking {
-                                    VStack(spacing: 4) {
-                                        Text(String(format: "%.0f m", locationManager.elevationGain))
-                                            .font(.system(size: 20, weight: .black))
-                                            .foregroundColor(.primary)
-                                        Text("Höjdmeter")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                } else {
-                                    VStack(spacing: 4) {
-                                        Text(currentPace)
-                                            .font(.system(size: 20, weight: .black))
-                                            .foregroundColor(.primary)
-                                        Text("Tempo")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(maxWidth: .infinity)
+                                
+                                VStack(spacing: 4) {
+                                    Text(String(format: "%.2f", locationManager.distance).replacingOccurrences(of: ".", with: ","))
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.primary)
+                                    Text("Distans (km)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
-                            
-                                if activity == .skiing {
-                                    VStack(spacing: 4) {
-                                        Text(formatTopSpeed(locationManager.maxSpeed))
-                                            .font(.system(size: 20, weight: .black))
-                                            .foregroundColor(.primary)
-                                        Text("Topphastighet")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
+                                .frame(maxWidth: .infinity)
                             }
                             .padding(.horizontal, 16)
                             
-                            // Show area capture card (only for running and golf, not skiing)
-                            if locationManager.distance > 0.01 && (activity == .running || activity == .golf) {
-                                VStack(spacing: 2) {
-                                    Image(systemName: "wifi")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.red)
-                                    Text(formatArea(estimatePolygonArea(routeCoordinatesSnapshot)))
-                                        .font(.system(size: 28, weight: .black))
-                                        .foregroundColor(.primary)
-                                    Text("Ditt område")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.gray)
-                                }
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color(.secondarySystemBackground))
-                                        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
-                                )
-                                .padding(.bottom, 8)
-                            }
-                        }
-                        
-                        // Expand/Collapse handle - Only show when running (not paused)
-                        if isRunning && !isPaused {
-                            Button(action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    isStatsExpanded.toggle()
-                                }
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: isStatsExpanded ? "chevron.down" : "chevron.up")
-                                        .font(.system(size: 12, weight: .bold))
-                                    Text(isStatsExpanded ? "Dölj statistik" : "Visa statistik")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(.gray)
-                                .padding(.vertical, 8)
-                            }
-                        }
-                    } // End of isRunning || isPaused condition for stats
-
-                    // Start/Pause/Continue/End Buttons
-                    if isPaused {
-                        // Paused state - show Continue and End buttons
-                        VStack(spacing: 12) {
-                            Button(action: {
-                                let generator = UIImpactFeedbackGenerator(style: .heavy)
-                                generator.prepare()
-                                generator.impactOccurred(intensity: 1.0)
-                                Task {
-                                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                                    await MainActor.run {
-                                        isSessionEnding = false
-                                        print("✅ Resuming session - isSessionEnding = false")
-                                        sessionManager.beginSession()
-                                        locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
-                                        startTimer()
-                                        isPaused = false
-                                        isRunning = true
-                                    }
-                                }
-                            }) {
-                                Text("Fortsätt")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(14)
-                                    .background(Color.black)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            
-                            HoldToConfirmButton(
-                                title: "Avsluta",
-                                duration: 1.5,
-                                onComplete: {
-                                    checkAndEndSession()
-                                }
-                            )
-                        }
-                        .padding(.horizontal, 16)
-                    } else {
-                        // Running state - Show Start/Pause button
-                        Button(action: {
-                            if isRunning {
-                                stopTimer()
-                                locationManager.stopTracking()
-                                isRunning = false
-                                isPaused = true
-                            } else {
-                                let generator = UIImpactFeedbackGenerator(style: .heavy)
-                                generator.prepare()
-                                generator.impactOccurred(intensity: 1.0)
-                                Task {
-                                    await TrackingPermissionManager.shared.requestPermissionIfNeeded()
-                                    await MainActor.run {
-                                        if !isRunning {
-                                            isSessionEnding = false
-                                            print("✅ Starting new session - isSessionEnding = false")
-                                            sessionManager.beginSession()
-                                            sessionDuration = 0
-                                            sessionStartTime = nil
-                                            currentPace = "0:00"
-                                            completedSplits = []
-                                            earnedPoints = 0
-                                            isPaused = false
-                                            locationManager.distance = 0
-                                            locationManager.elevationGain = 0
-                                            locationManager.maxSpeed = 0
-                                            locationManager.routeCoordinates = []
-                                            locationManager.startNewTracking(activityType: activity.rawValue)
-                                            forceNewSession = true
-                                            startTimer()
-                                            isRunning = true
-                                            
-                                            // Notify followers about session start
-                                            if let userId = authViewModel.currentUser?.id {
-                                                let userName = authViewModel.currentUser?.name ?? "Användare"
-                                                Task {
-                                                    let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
-                                                    try? await ActiveSessionService.shared.startSession(
-                                                        userId: userId,
-                                                        activityType: activity.rawValue,
-                                                        location: currentLocation,
-                                                        userName: userName
-                                                    )
-                                                    await ActiveSessionService.shared.notifyFollowers(
-                                                        userId: userId,
-                                                        userName: userName,
-                                                        activityType: activity.rawValue
-                                                    )
+                            // Buttons
+                            if isPaused {
+                                HStack(spacing: 12) {
+                                    Button(action: {
+                                        let generator = UIImpactFeedbackGenerator(style: .heavy)
+                                        generator.prepare()
+                                        generator.impactOccurred(intensity: 1.0)
+                                        Task {
+                                            await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                                            await MainActor.run {
+                                                isSessionEnding = false
+                                                sessionManager.beginSession()
+                                                locationManager.startTracking(preserveData: true, activityType: activity.rawValue)
+                                                startTimer()
+                                                isPaused = false
+                                                isRunning = true
+                                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                                    showFullScreenStats = true
                                                 }
                                             }
                                         }
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "play.fill")
+                                                .font(.system(size: 16, weight: .bold))
+                                            Text("Fortsätt")
+                                                .font(.system(size: 16, weight: .bold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(16)
+                                        .background(Color.black)
+                                        .foregroundColor(.white)
+                                        .cornerRadius(28)
+                                    }
+                                    
+                                    Button(action: { checkAndEndSession() }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "flag.checkered")
+                                                .font(.system(size: 16, weight: .bold))
+                                            Text("Avsluta")
+                                                .font(.system(size: 16, weight: .bold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(16)
+                                        .background(Color(.systemGray5))
+                                        .foregroundColor(.black)
+                                        .cornerRadius(28)
                                     }
                                 }
-                            }
-                        }) {
-                            Text(isRunning ? "Pausa" : activity.buttonText)
-                                .font(.system(size: 16, weight: .black))
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(.black)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-                        .padding(.horizontal, 16)
-                        
-                        // Live photo button - only show when running
-                        if isRunning {
-                            Button(action: {
-                                if !livePhotoTaken {
-                                    showLivePhotoCapture = true
+                                .padding(.horizontal, 20)
+                            } else {
+                                // Pause button (map view, running)
+                                Button(action: {
+                                    stopTimer()
+                                    locationManager.stopTracking()
+                                    isRunning = false
+                                    isPaused = true
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                        showFullScreenStats = false
+                                    }
+                                }) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "pause.fill")
+                                            .font(.system(size: 16, weight: .bold))
+                                        Text("Pausa")
+                                            .font(.system(size: 16, weight: .bold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(16)
+                                    .background(Color.black)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(28)
                                 }
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: livePhotoTaken ? "checkmark.circle.fill" : "camera.fill")
-                                        .font(.system(size: 14, weight: .semibold))
-                                    Text(livePhotoTaken ? "Bild tagen ✓" : "Ta en live bild")
-                                        .font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 20)
+                            }
+                        }
+                        .padding(.bottom, 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: -4)
+                        )
+                        .transition(.move(edge: .bottom))
+                    } else {
+                        // --- Pre-start bottom card (Strava style) ---
+                        VStack(spacing: 0) {
+                            // Drag indicator
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(Color(.systemGray4))
+                                .frame(width: 36, height: 5)
+                                .padding(.top, 10)
+                                .padding(.bottom, 16)
+                            
+                            // Activity label with expand icon
+                            HStack {
+                                Spacer()
+                                Text((selectedActivity ?? activity).rawValue)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 20)
+                            
+                            // Initial stats row (like Strava)
+                            HStack(spacing: 0) {
+                                VStack(spacing: 4) {
+                                    Text("00:00")
+                                        .font(.system(size: 26, weight: .bold, design: .default))
+                                        .foregroundColor(.primary)
+                                    Text("Tid")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
                                 .frame(maxWidth: .infinity)
-                                .padding(12)
-                                .background(livePhotoTaken ? Color.green : Color.white)
-                                .foregroundColor(livePhotoTaken ? .white : .black)
-                                .cornerRadius(10)
-                            }
-                            .disabled(livePhotoTaken)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                        }
-                        
-                        // Other activities section - only show when not running
-                        if !isRunning {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Välj annan aktivitet")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.gray)
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 8)
                                 
-                                HStack(spacing: 12) {
-                                    OtherActivityButton(
-                                        icon: "figure.walk",
-                                        title: "Promenad",
-                                        action: {
-                                            NotificationCenter.default.post(
-                                                name: NSNotification.Name("SwitchActivity"),
-                                                object: nil,
-                                                userInfo: ["activity": ActivityType.hiking.rawValue]
-                                            )
-                                        }
-                                    )
-                                    
-                                    OtherActivityButton(
-                                        icon: "figure.golf",
-                                        title: "Golf",
-                                        action: {
-                                            NotificationCenter.default.post(
-                                                name: NSNotification.Name("SwitchActivity"),
-                                                object: nil,
-                                                userInfo: ["activity": ActivityType.golf.rawValue]
-                                            )
-                                        }
-                                    )
-                                    
-                                    OtherActivityButton(
-                                        icon: "snowflake",
-                                        title: "Skidor",
-                                        action: {
-                                            NotificationCenter.default.post(
-                                                name: NSNotification.Name("SwitchActivity"),
-                                                object: nil,
-                                                userInfo: ["activity": ActivityType.skiing.rawValue]
-                                            )
-                                        }
-                                    )
+                                VStack(spacing: 4) {
+                                    Text("0,0")
+                                        .font(.system(size: 30, weight: .bold, design: .default))
+                                        .foregroundColor(.primary)
+                                    Text("Snitthast. (km/h)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
-                                .padding(.horizontal, 16)
+                                .frame(maxWidth: .infinity)
+                                
+                                VStack(spacing: 4) {
+                                    Text("0,00")
+                                        .font(.system(size: 26, weight: .bold, design: .default))
+                                        .foregroundColor(.primary)
+                                    Text("Distans (km)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            
+                            Divider()
+                                .padding(.top, 16)
+                            
+                            // Bottom bar: Activity picker + Start button
+                            HStack(alignment: .center) {
+                                // Activity picker button
+                                Button(action: {
+                                    let impact = UIImpactFeedbackGenerator(style: .light)
+                                    impact.impactOccurred()
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showActivityPicker.toggle()
+                                    }
+                                }) {
+                                    VStack(spacing: 4) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color(.systemGray6))
+                                                .frame(width: 52, height: 52)
+                                            Image(systemName: (selectedActivity ?? activity).icon)
+                                                .font(.system(size: 22, weight: .semibold))
+                                                .foregroundColor(.primary)
+                                        }
+                                        Text((selectedActivity ?? activity).shortName)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.primary)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                
+                                // Start button (large circle)
+                                VStack(spacing: 4) {
+                                    Button(action: {
+                                        let generator = UIImpactFeedbackGenerator(style: .heavy)
+                                        generator.prepare()
+                                        generator.impactOccurred(intensity: 1.0)
+                                        Task {
+                                            await TrackingPermissionManager.shared.requestPermissionIfNeeded()
+                                            await MainActor.run {
+                                                let activeActivity = selectedActivity ?? activity
+                                                isSessionEnding = false
+                                                sessionManager.beginSession()
+                                                sessionDuration = 0
+                                                sessionStartTime = nil
+                                                currentPace = "0:00"
+                                                completedSplits = []
+                                                earnedPoints = 0
+                                                isPaused = false
+                                                locationManager.distance = 0
+                                                locationManager.elevationGain = 0
+                                                locationManager.maxSpeed = 0
+                                                locationManager.routeCoordinates = []
+                                                locationManager.startNewTracking(activityType: activeActivity.rawValue)
+                                                forceNewSession = true
+                                                startTimer()
+                                                isRunning = true
+                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                                    showFullScreenStats = true
+                                                }
+                                                
+                                                if let userId = authViewModel.currentUser?.id {
+                                                    let userName = authViewModel.currentUser?.name ?? "Användare"
+                                                    Task {
+                                                        let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
+                                                        try? await ActiveSessionService.shared.startSession(
+                                                            userId: userId,
+                                                            activityType: activeActivity.rawValue,
+                                                            location: currentLocation,
+                                                            userName: userName
+                                                        )
+                                                        await ActiveSessionService.shared.notifyFollowers(
+                                                            userId: userId,
+                                                            userName: userName,
+                                                            activityType: activeActivity.rawValue
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.black)
+                                                .frame(width: 72, height: 72)
+                                            Image(systemName: "play.fill")
+                                                .font(.system(size: 28, weight: .bold))
+                                                .foregroundColor(.white)
+                                                .offset(x: 2)
+                                        }
+                                    }
+                                    Text("Starta")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                
+                                // Placeholder for symmetry
+                                VStack(spacing: 4) {
+                                    Circle()
+                                        .fill(Color.clear)
+                                        .frame(width: 52, height: 52)
+                                    Text(" ")
+                                        .font(.system(size: 11))
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                            .padding(.bottom, 30)
                         }
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: -4)
+                        )
+                        .transition(.move(edge: .bottom))
                     }
                 }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color(.secondarySystemBackground).opacity(0.98))
-                        .shadow(radius: 10)
-                )
-                .padding(16)
             }
             
-            // X button to cancel before starting (only show when not running and not paused)
-            if !isRunning && !isPaused && !resumeSession {
+            // Activity picker overlay (positioned above bottom card)
+            if showActivityPicker && !isRunning && !isPaused {
+                Color.black.opacity(0.001) // invisible tap catcher
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            showActivityPicker = false
+                        }
+                    }
+                    .zIndex(49)
+                
+                VStack {
+                    Spacer()
+                    activityPickerOverlay
+                }
+                .padding(.bottom, 220)
+                .transition(.move(edge: .bottom))
+                .zIndex(50)
+            }
+            
+            // Top-left button: close (pre-start) or minimize (active session)
+            if !showFullScreenStats || !isRunning || isPaused {
                 VStack {
                     HStack {
-                        Button {
-                            NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundStyle(.black, Color(.systemGray5))
+                        if isRunning || isPaused {
+                            // Minimize button during active session
+                            Button {
+                                saveSessionState(force: true)
+                                NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
+                                dismiss()
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .frame(width: 40, height: 40)
+                                    .background(Circle().fill(Color(.systemBackground)))
+                                    .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                            }
+                        } else if !resumeSession {
+                            // Close button before starting
+                            Button {
+                                NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
+                                dismiss()
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .frame(width: 40, height: 40)
+                                    .background(Circle().fill(Color(.systemBackground)))
+                                    .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                            }
                         }
                         Spacer()
                     }
@@ -1252,6 +1253,10 @@ struct SessionMapView: View {
                 .padding(.top, 60)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.88), value: isRunning)
+        .animation(.spring(response: 0.4, dampingFraction: 0.88), value: isPaused)
+        .animation(.spring(response: 0.4, dampingFraction: 0.88), value: showFullScreenStats)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showActivityPicker)
         .navigationBarHidden(true)
         .alert("Platsåtkomst i bakgrunden krävs", isPresented: $locationManager.showLocationDeniedAlert) {
             Button("Avbryt", role: .cancel) {}
@@ -1270,18 +1275,6 @@ struct SessionMapView: View {
         } message: {
             Text("Tracking pausas. Du verkar färdas med ett fordon. Passet sparas och du kan fortsätta när du saktar ner.")
         }
-        .alert("Området kan inte sparas", isPresented: $showTerritoryWarning) {
-            Button("Avbryt", role: .cancel) {
-                showTerritoryWarning = false
-                pendingEndSession = false
-            }
-            Button("Spara ändå") {
-                showTerritoryWarning = false
-                endSession(skipTerritoryCapture: true)
-            }
-        } message: {
-            Text("Du är mer än 500 meter från startpunkten. Området kommer inte att sparas på Zonkriget, men du kan spara passet ändå.")
-        }
         .onDisappear {
             // Save session state when view disappears, but DON'T stop timer
             // Timer continues in background
@@ -1291,56 +1284,29 @@ struct SessionMapView: View {
         .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
             isPremium = newValue
         }
-        .fullScreenCover(isPresented: $showTerritoryAnimation) {
-            TerritoryCaptureAnimationView(
-                routeCoordinates: territoryAnimationCoordinates,
-                activityType: activity.rawValue,
-                earnedXP: earnedPoints,
-                onComplete: {
-                    showTerritoryAnimation = false
-                    showSessionComplete = true
-                }
-            )
-        }
         .sheet(isPresented: $showSessionComplete) {
             SessionCompleteView(
-                activity: activity,
+                activity: selectedActivity ?? activity,
                 distance: locationManager.distance,
                 duration: sessionDuration,
                 earnedPoints: earnedPoints,
                 routeImage: routeImage,
-                routeCoordinates: territoryAnimationCoordinates.isEmpty ? locationManager.routeCoordinates : territoryAnimationCoordinates,  // Use preserved coordinates
-                elevationGain: activity == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
-                maxSpeed: activity == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
+                routeCoordinates: locationManager.routeCoordinates,
+                elevationGain: (selectedActivity ?? activity) == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
+                maxSpeed: (selectedActivity ?? activity) == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
                 completedSplits: completedSplits,
-                gymExercises: nil,  // No gym exercises for regular workouts
-                sessionLivePhoto: sessionLivePhoto,  // Pass the live photo taken during session
+                gymExercises: nil,
+                sessionLivePhoto: sessionLivePhoto,
                 isPresented: $showSessionComplete,
                 onComplete: {
                     print("💾 Workout saved - finalizing session now")
-                    // Finalize session once saving is complete
                     sessionManager.finalizeSession()
-                    // Navigate to Social tab after saving
                     NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
                 },
                 onDelete: {
                     print("🗑️ Workout deleted - finalizing session now")
-                    // Finalize session when deleting
                     sessionManager.finalizeSession()
-                    // Ask MainTabView to close the StartSession sheet
                     NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
-                }
-            )
-        }
-        .sheet(isPresented: $showTakeoverSummary) {
-            TakeoverSummaryView(
-                users: takeoverUsers,
-                isLoading: isLoadingTakeovers,
-                onCreatePost: {
-                    showTakeoverSummary = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        showSessionComplete = true
-                    }
                 }
             )
         }
@@ -1455,11 +1421,12 @@ struct SessionMapView: View {
     // MARK: - Speed Detection for Anti-Cheat
     
     private func checkSpeedForCheating(currentSpeed: Double) {
+        let currentActivity = selectedActivity ?? activity
         // Only check for running and golf (not skiing or other activities)
-        guard activity == .running || activity == .golf else { return }
+        guard currentActivity == .running || currentActivity == .golf else { return }
         
         // Get the appropriate speed limit for the activity
-        let maxSpeed = activity == .running ? maxSpeedRunning : maxSpeedGolf
+        let maxSpeed = currentActivity == .running ? maxSpeedRunning : maxSpeedGolf
         
         if currentSpeed > maxSpeed {
             // Speed is above threshold
@@ -1535,34 +1502,6 @@ struct SessionMapView: View {
         }
     }
 
-    private func updateLiveTerritoryArea() {
-        let now = Date()
-        
-        // Throttle area calculations - expensive operation
-        guard now.timeIntervalSince(lastAreaUpdateTime) >= areaUpdateInterval else { return }
-        
-        guard locationManager.routeCoordinates.count > 2 else {
-            liveTerritoryArea = 0
-            return
-        }
-        
-        lastAreaUpdateTime = now
-        
-        // Calculate area in background to avoid blocking UI
-        let coords = locationManager.routeCoordinates
-        Task.detached(priority: .utility) {
-            var closedCoords = coords
-            if let first = closedCoords.first {
-                closedCoords.append(first) // Close the loop
-            }
-            
-            let area = TerritoryStore.shared.calculateArea(coordinates: closedCoords)
-            await MainActor.run {
-                self.liveTerritoryArea = area
-            }
-        }
-    }
-    
     private func refreshRouteSnapshot(force: Bool) {
         let coordinates = locationManager.routeCoordinates
         
@@ -1663,7 +1602,7 @@ struct SessionMapView: View {
         
         // Save to SessionManager
         sessionManager.saveActiveSession(
-            activityType: activity.rawValue,
+            activityType: (selectedActivity ?? activity).rawValue,
             startTime: startTime,
             isPaused: isPaused,
             duration: sessionDuration,
@@ -1686,8 +1625,6 @@ struct SessionMapView: View {
         locationManager.elevationGain = 0
         locationManager.maxSpeed = 0
         showSessionComplete = false
-        showTerritoryAnimation = false
-        territoryAnimationCoordinates = []
         forceNewSession = true
     }
 
@@ -1697,49 +1634,19 @@ struct SessionMapView: View {
         timer = nil
     }
     
-    /// Check if user is close enough to start point before ending session
     func checkAndEndSession() {
-        // Only check for running and golf (territory-capturing activities)
-        guard activity == .running || activity == .golf else {
-            endSession(skipTerritoryCapture: false)
-            return
-        }
-        
-        // Check if we have enough route coordinates and a start point
-        guard let startCoord = locationManager.routeCoordinates.first,
-              let currentLocation = locationManager.userLocation else {
-            // No start point or current location - just end session normally
-            endSession(skipTerritoryCapture: false)
-            return
-        }
-        
-        // Calculate distance from current location to start point
-        let startLocation = CLLocation(latitude: startCoord.latitude, longitude: startCoord.longitude)
-        let currentLoc = CLLocation(latitude: currentLocation.latitude, longitude: currentLocation.longitude)
-        let distanceFromStart = currentLoc.distance(from: startLocation)
-        
-        print("📏 Distance from start: \(distanceFromStart)m (max: \(maxDistanceFromStartForTerritory)m)")
-        
-        if distanceFromStart > maxDistanceFromStartForTerritory {
-            // Too far from start - show warning
-            showTerritoryWarning = true
-            pendingEndSession = true
-        } else {
-            // Close enough - end session normally with territory capture
-            endSession(skipTerritoryCapture: false)
-        }
+        endSession()
     }
     
-    func endSession(skipTerritoryCapture: Bool = false) {
-        print("🏁 Ending session... (skipTerritoryCapture: \(skipTerritoryCapture))")
+    func endSession() {
+        print("🏁 Ending session...")
         print("📍 BEFORE STOP - routeCoordinates.count: \(locationManager.routeCoordinates.count)")
         
         // Cancel any active session reminder notifications
         NotificationManager.shared.cancelActiveSessionReminders()
         
-        // Get user ID early to ensure we can save territory
         guard let userId = authViewModel.currentUser?.id else {
-            print("⚠️ No user ID found in endSession, cannot claim territory")
+            print("⚠️ No user ID found in endSession")
             return
         }
         
@@ -1747,47 +1654,34 @@ struct SessionMapView: View {
         Task {
             try? await ActiveSessionService.shared.endSession(userId: userId)
         }
-        print("✅ User ID found: \(userId)")
         
-        // IMPORTANT: Capture coordinates BEFORE stopping tracking
+        // Capture coordinates BEFORE stopping tracking
         let finalRouteCoordinates = locationManager.routeCoordinates
         let finalUserLocation = locationManager.userLocation
         print("📍 CAPTURED finalRouteCoordinates.count: \(finalRouteCoordinates.count)")
         
-        // NOW stop timer and tracking
+        // Stop timer and tracking
         isSessionEnding = true
         stopTimer()
         locationManager.stopTracking()
-        print("🛑 Timer stopped, isSessionEnding = true")
         
-        // Save session data before showing completion
         print("💾 Distance: \(locationManager.distance) km")
         print("💾 Duration: \(sessionDuration) seconds")
-        print("💾 Route points (final): \(finalRouteCoordinates.count)")
+        print("💾 Route points: \(finalRouteCoordinates.count)")
         
         // Generate route snapshot
         MapSnapshotService.shared.generateRouteSnapshot(
             routeCoordinates: finalRouteCoordinates,
             userLocation: finalUserLocation,
-            activity: activity
+            activity: selectedActivity ?? activity
         ) { snapshotImage in
-            print("🗺️ Route snapshot generation completed")
-            if let snapshotImage = snapshotImage {
-                print("✅ Route snapshot generated successfully")
-                DispatchQueue.main.async {
-                    self.routeImage = snapshotImage
-                }
-            } else {
-                print("⚠️ Could not generate route snapshot - using nil")
-                DispatchQueue.main.async {
-                    self.routeImage = nil
-                }
+            DispatchQueue.main.async {
+                self.routeImage = snapshotImage
             }
         }
         
         let basePoints = Int((locationManager.distance * distancePointMultiplier()).rounded())
         
-        // PRO-medlemmar får 1.5x poäng
         if isPremium {
             earnedPoints = Int(Double(basePoints) * 1.5)
         } else {
@@ -1797,58 +1691,11 @@ struct SessionMapView: View {
         // Update streak
         StreakManager.shared.registerActivityCompletion()
         
-        // Capture territory - only if not skipped
-        if !skipTerritoryCapture {
-            // Only running and golf can take over tiles
-            if activity == .running || activity == .golf {
-                isLoadingTakeovers = true
-                Task { @MainActor in
-                    let store = TerritoryStore.shared
-                    
-                    let takeovers = await store.finalizeTerritoryCaptureAndReturnTakeovers(
-                        activity: activity,
-                        routeCoordinates: finalRouteCoordinates,
-                        userId: userId,
-                        sessionDistance: locationManager.distance,
-                        sessionDuration: sessionDuration,
-                        sessionPace: currentPace
-                    )
-                    
-                    if !takeovers.isEmpty {
-                        print("🎯 Captured territory with \(takeovers.count) takeovers")
-                    } else {
-                        print("🎯 Captured territory (no takeovers)")
-                    }
-                    
-                    // Wait briefly before showing session complete
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    self.isLoadingTakeovers = false
-                    
-                    // Show session complete
-                    self.updateEarnedPoints()
-                    print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
-                    self.showSessionComplete = true
-                }
-                
-                // Preserve coordinates for animation or post saving
-                self.territoryAnimationCoordinates = finalRouteCoordinates
-                
-            } else {
-                // For other activities (biking, etc.), just show session complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    self.updateEarnedPoints()
-                    print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
-                    self.showSessionComplete = true
-                }
-            }
-        } else {
-            print("⏭️ Skipping territory capture (user chose to save without territory)")
-            self.territoryAnimationCoordinates = [] // No animation if skipped
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                self.updateEarnedPoints()
-                print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
-                self.showSessionComplete = true
-            }
+        // Show session complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.updateEarnedPoints()
+            print("🎉 Earned points: \(self.earnedPoints), Distance: \(self.locationManager.distance)")
+            self.showSessionComplete = true
         }
     }
     
@@ -1891,6 +1738,183 @@ struct SessionMapView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, secs)
         } else {
             return String(format: "%02d:%02d", minutes, secs)
+        }
+    }
+    
+    func formattedTimeWithHours(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+    }
+
+    // MARK: - Activity Picker Overlay (Strava-style)
+    /// Outdoor activities only (no gym)
+    private static let outdoorActivities: [ActivityType] = [.running, .golf, .hiking, .skiing]
+    
+    private var activityPickerOverlay: some View {
+        VStack(spacing: 0) {
+            ForEach(Self.outdoorActivities) { activityOption in
+                Button(action: {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        selectedActivity = activityOption
+                        showActivityPicker = false
+                    }
+                }) {
+                    HStack(spacing: 14) {
+                        Image(systemName: activityOption.icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor((selectedActivity ?? activity) == activityOption ? .white : .primary)
+                            .frame(width: 42, height: 42)
+                            .background(
+                                Circle()
+                                    .fill((selectedActivity ?? activity) == activityOption ? Color.black : Color(.systemGray6))
+                            )
+                        
+                        Text(activityOption.shortName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        if (selectedActivity ?? activity) == activityOption {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                }
+                
+                if activityOption != Self.outdoorActivities.last {
+                    Divider()
+                        .padding(.leading, 76)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.12), radius: 16, x: 0, y: -4)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+    
+    // MARK: - Fullscreen Stats Overlay (Strava-style)
+    private var fullScreenStatsOverlay: some View {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Top bar with minimize, activity name, and map button
+                HStack(spacing: 12) {
+                    // Minimize button
+                    Button(action: {
+                        saveSessionState(force: true)
+                        NotificationCenter.default.post(name: NSNotification.Name("CloseStartSession"), object: nil)
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .frame(width: 40, height: 40)
+                            .background(Circle().fill(Color(.systemGray6)))
+                    }
+                    
+                    Text((selectedActivity ?? activity).rawValue)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    // Map toggle button
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            showFullScreenStats = false
+                        }
+                    }) {
+                        Image(systemName: "map")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .frame(width: 40, height: 40)
+                            .background(Circle().fill(Color(.systemGray6)))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 60)
+                
+                // Time at top
+                VStack(spacing: 4) {
+                    Text(formattedTimeWithHours(sessionDuration))
+                        .font(.system(size: 52, weight: .bold, design: .default))
+                        .foregroundColor(.primary)
+                    Text("Tid")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 24)
+                
+                Spacer()
+                
+                // Speed (main focus)
+                VStack(spacing: 8) {
+                    Text(String(format: "%.1f", locationManager.currentSpeedKmh).replacingOccurrences(of: ".", with: ","))
+                        .font(.system(size: 120, weight: .bold, design: .default))
+                        .foregroundColor(.primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    Text("Hastighet (km/h)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Distance
+                VStack(spacing: 8) {
+                    Text(String(format: "%.2f", locationManager.distance).replacingOccurrences(of: ".", with: ","))
+                        .font(.system(size: 120, weight: .bold, design: .default))
+                        .foregroundColor(.primary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    Text("Distans (km)")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Pause button - black
+                Button(action: {
+                    stopTimer()
+                    locationManager.stopTracking()
+                    isRunning = false
+                    isPaused = true
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                        showFullScreenStats = false
+                    }
+                }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        Text("Pausa")
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(Color.black)
+                    .cornerRadius(28)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
+            }
         }
     }
 
@@ -1963,305 +1987,26 @@ struct SessionMapView: View {
         let currentSnapshot = routeCoordinatesSnapshot
         let localRoutePoints = currentSnapshot.map { convertToMapPoint($0, in: size) }
         
-        // 1. Previously captured active territories
-        for territory in territoryStore.activeSessionTerritories {
-            for polygon in territory.polygons {
-                guard polygon.count > 2 else { continue }
-                let points = polygon.map { convertToMapPoint($0, in: size) }
-                var path = Path()
-                if let first = points.first {
-                    path.move(to: first)
-                    for point in points.dropFirst() {
-                        path.addLine(to: point)
-                    }
-                    path.closeSubpath()
-                }
-                context.fill(path, with: .color(territory.color.opacity(0.4)))
-                context.stroke(path, with: .color(territory.color), lineWidth: 2)
-            }
-        }
-        
-        // 2. Live territory fill (running/golf only)
-        if localRoutePoints.count >= 2 && (activity == .running || activity == .golf) {
-            var fillPath = Path()
-            if let first = localRoutePoints.first {
-                fillPath.move(to: first)
-                for point in localRoutePoints.dropFirst() {
-                    fillPath.addLine(to: point)
-                }
-                fillPath.closeSubpath()
-            }
-            context.fill(fillPath, with: .color(.green.opacity(0.3)))
-            
-            // Dashed closing line
-            if let first = localRoutePoints.first, let last = localRoutePoints.last {
-                var dashPath = Path()
-                dashPath.move(to: last)
-                dashPath.addLine(to: first)
-                context.stroke(dashPath, with: .color(.black), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-            }
-        }
-        
-        // 3. Route line
+        // Route line (black, clean)
         if localRoutePoints.count > 1 {
             var routePath = Path()
             routePath.move(to: localRoutePoints[0])
             for point in localRoutePoints.dropFirst() {
                 routePath.addLine(to: point)
             }
-            context.stroke(routePath, with: .color(.black), lineWidth: 4)
+            // White border for contrast
+            context.stroke(routePath, with: .color(.white), lineWidth: 6)
+            // Black route line
+            context.stroke(routePath, with: .color(.black), lineWidth: 3.5)
         }
         
-        // 4. Start marker
+        // Start marker (black dot with white border)
         if let first = localRoutePoints.first {
-            let markerSize: CGFloat = 14
+            let markerSize: CGFloat = 12
             let markerRect = CGRect(x: first.x - markerSize/2, y: first.y - markerSize/2, width: markerSize, height: markerSize)
-            context.fill(Circle().path(in: markerRect), with: .color(.green))
-            context.stroke(Circle().path(in: markerRect), with: .color(.white), lineWidth: 2)
+            context.fill(Circle().path(in: markerRect), with: .color(.black))
+            context.stroke(Circle().path(in: markerRect), with: .color(.white), lineWidth: 2.5)
         }
-    }
-}
-
-// MARK: - Takeover Summary View
-struct TakeoverSummaryView: View {
-    let users: [TileTakeoverRow]
-    let isLoading: Bool
-    let onCreatePost: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    
-    private var peopleCountText: String {
-        users.count == 1 ? "1 person" : "\(users.count) personer"
-    }
-    
-    private var titleText: String {
-        users.count == 1 ? "Du tog över \(peopleCountText)s område" : "Du tog över \(peopleCountText)s områden"
-    }
-    
-    private var totalTilesTaken: Int {
-        users.reduce(0) { $0 + $1.tilesTaken }
-    }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Hero
-                    VStack(spacing: 12) {
-                        HStack(alignment: .top, spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                                    )
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.yellow)
-                            }
-                            .frame(width: 46, height: 46)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(titleText)
-                                    .font(.system(size: 24, weight: .black))
-                                    .foregroundColor(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                
-                                Text("Bra jobbat! Här är alla du tog över ifrån.")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        
-                        // Stats chips
-                        HStack(spacing: 10) {
-                            statChip(title: "Personer", value: "\(users.count)")
-                            statChip(title: "Rutor", value: "\(totalTilesTaken)")
-                            Spacer()
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    
-                    // List card
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Övertagna spelare")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if isLoading {
-                                ProgressView().tint(.secondary)
-                            }
-                        }
-                        
-                        if isLoading {
-                            VStack(spacing: 12) {
-                                ProgressView()
-                                    .tint(.primary)
-                                Text("Räknar övertaganden…")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                        } else if users.isEmpty {
-                            Text("Inga övertaganden den här rundan.")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 8)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                                    HStack(spacing: 12) {
-                                        OptimizedAsyncImage(
-                                            url: user.avatarUrl,
-                                            width: 46,
-                                            height: 46,
-                                            cornerRadius: 23
-                                        )
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(user.username ?? "Användare")
-                                                .font(.system(size: 16, weight: .bold))
-                                                .foregroundColor(.primary)
-                                            Text("\(user.tilesTaken) rutor")
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(.secondary)
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Text("\(user.tilesTaken)")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.primary)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 6)
-                                            .background(Color.primary.opacity(0.06))
-                                            .clipShape(Capsule())
-                                    }
-                                    .padding(.vertical, 10)
-                                    
-                                    if index != users.count - 1 {
-                                        Divider()
-                                            .opacity(0.5)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color(.systemBackground))
-                            )
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-                    
-                    // Extra filler card so screen doesn't feel empty for 1 person
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Tips")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text("Skapa ett inlägg och visa upp ditt övertagande så dina vänner kan supporta.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 90) // space for sticky button
-                }
-                .padding(.top, 8)
-            }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.gray, Color(.systemGray5))
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
-                    Divider().opacity(0.3)
-                    Button {
-                        onCreatePost()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text("Skapa inlägg")
-                                .font(.system(size: 16, weight: .black))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.black)
-                        .cornerRadius(16)
-                    }
-                    .disabled(isLoading || users.isEmpty)
-                    .opacity((isLoading || users.isEmpty) ? 0.6 : 1.0)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 12)
-                    .background(.ultraThinMaterial)
-                }
-            }
-        }
-    }
-    
-    private func statChip(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.system(size: 18, weight: .black))
-                .foregroundColor(.primary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        )
     }
 }
 

@@ -5,6 +5,7 @@ import Realtime
 
 struct CoachTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    let popToRootTrigger: Int
     @State private var coachRelation: CoachClientRelation?
     @State private var assignments: [CoachProgramAssignment] = []
     @State private var isLoading = true
@@ -12,6 +13,7 @@ struct CoachTabView: View {
     @State private var selectedRoutineWrapper: SelectedRoutineWrapper?
     @State private var coachTrainerProfile: GolfTrainer?
     @State private var realtimeChannel: RealtimeChannelV2?
+    @State private var navigationPath = NavigationPath()
     
     // Day selection
     @State private var selectedDate: Date = Date()
@@ -88,7 +90,7 @@ struct CoachTabView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 // MARK: - Top Navigation (samma som Belöningar-sidan)
                 CoachHeaderView(showChat: $showChat, hasCoach: coachRelation != nil)
@@ -249,6 +251,10 @@ struct CoachTabView: View {
         }
         .refreshable {
             await loadData()
+        }
+        .onChange(of: popToRootTrigger) { _, _ in
+            navigationPath = NavigationPath()
+            showChat = false
         }
         .onDisappear {
             // Clean up realtime channel when view disappears
@@ -995,6 +1001,6 @@ struct CoachChatPlaceholderView: View {
 }
 
 #Preview {
-    CoachTabView()
+    CoachTabView(popToRootTrigger: 0)
         .environmentObject(AuthViewModel())
 }

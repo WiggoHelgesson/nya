@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    let popToRootTrigger: Int
     @State private var showAddMealView = false
     @State private var navigationPath = NavigationPath()
     
@@ -17,10 +18,10 @@ struct HomeContainerView: View {
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAddMealView"))) { _ in
                     showAddMealView = true
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootKalorier"))) { _ in
-                    navigationPath = NavigationPath()
-                    showAddMealView = false
-                }
+        }
+        .onChange(of: popToRootTrigger) { _, _ in
+            navigationPath = NavigationPath()
+            showAddMealView = false
         }
     }
 }
@@ -30,12 +31,17 @@ struct SimpleAppHeader: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     
     @State private var unreadNotifications = 0
+    @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var showMonthlyPrize = false
     @State private var showNonProAlert = false
     @State private var showPaywall = false
     @State private var showFindFriends = false
     @State private var showPublicProfile = false
+    @State private var lastUnreadFetch: Date = .distantPast
+    @StateObject private var dmService = DirectMessageService.shared
+    
+    private let fetchThrottleInterval: TimeInterval = 30
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -69,23 +75,59 @@ struct SimpleAppHeader: View {
                 
                 // Left and Right sides
                 HStack {
-                    // Profile picture
-                    Button {
-                        showPublicProfile = true
-                    } label: {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
-                            )
+                    // Left: Profile picture + Search
+                    HStack(spacing: 10) {
+                        Button {
+                            showPublicProfile = true
+                        } label: {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Search / Find friends
+                        NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(.primary)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     
                     Spacer()
                     
-                    // Right side actions
+                    // Right: Messages + Notifications
                     HStack(spacing: 12) {
-                        // Notifications - NavigationLink to separate page
+                        // Direct messages
+                        NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bubble.left.and.bubble.right")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundColor(.primary)
+                                
+                                if unreadMessages > 0 {
+                                    Circle()
+                                        .fill(Color.black)
+                                        .frame(width: 18, height: 18)
+                                        .overlay(
+                                            Text("\(min(unreadMessages, 99))")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                        .offset(x: 8, y: -6)
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Notification bell
                         NavigationLink(destination: NotificationsView(onDismiss: {
                             Task { await refreshUnreadCount() }
                         }).environmentObject(authViewModel)) {
@@ -110,18 +152,6 @@ struct SimpleAppHeader: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        
-                        // Find friends last (rightmost)
-                        Button {
-                            showFindFriends = true
-                        } label: {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 22, weight: .regular))
-                                .foregroundColor(.primary)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -133,10 +163,6 @@ struct SimpleAppHeader: View {
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showMonthlyPrize) {
             MonthlyPrizeView()
-                .environmentObject(authViewModel)
-        }
-        .navigationDestination(isPresented: $showFindFriends) {
-            FindFriendsView()
                 .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showPublicProfile) {
@@ -166,11 +192,21 @@ struct SimpleAppHeader: View {
             Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
         .task {
-            await refreshUnreadCount()
+            await throttledRefresh()
         }
         .onAppear {
-            Task { await refreshUnreadCount() }
+            Task { await throttledRefresh() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
+            Task { await refreshUnreadMessages() }
+        }
+    }
+    
+    private func throttledRefresh() async {
+        guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
+        lastUnreadFetch = Date()
+        await refreshUnreadCount()
+        await refreshUnreadMessages()
     }
     
     private func refreshUnreadCount() async {
@@ -190,6 +226,13 @@ struct SimpleAppHeader: View {
         }
         isFetchingUnread = false
     }
+    
+    private func refreshUnreadMessages() async {
+        await dmService.fetchTotalUnreadCount()
+        await MainActor.run {
+            unreadMessages = dmService.totalUnreadCount
+        }
+    }
 }
 
 // MARK: - Combined Header with Tabs (Strava-style)
@@ -198,15 +241,19 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
     @Binding var selectedTab: Tab
     
     @State private var unreadNotifications = 0
+    @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var showMonthlyPrize = false
     @State private var showNonProAlert = false
     @State private var showPaywall = false
-    @State private var showFindFriends = false
     @State private var showPublicProfile = false
+    @State private var lastUnreadFetch: Date = .distantPast
+    @StateObject private var dmService = DirectMessageService.shared
     
     var isProfilePage: Bool = false
     var onSettingsTapped: (() -> Void)? = nil
+    
+    private let fetchThrottleInterval: TimeInterval = 30
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -240,17 +287,42 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                 
                 // Left and Right sides
                 HStack {
-                    // Profile picture
-                    Button {
-                        showPublicProfile = true
-                    } label: {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
-                            )
+                    // Left: Profile picture + Search
+                    if isProfilePage {
+                        Button {
+                            showPublicProfile = true
+                        } label: {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 10) {
+                            Button {
+                                showPublicProfile = true
+                            } label: {
+                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            
+                            // Search / Find friends
+                            NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundColor(.primary)
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
                     
                     Spacer()
                     
@@ -267,8 +339,33 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                         }
                         .buttonStyle(.plain)
                     } else {
+                        // Messages + Notifications
                         HStack(spacing: 12) {
-                            // Notifications - NavigationLink to separate page
+                            // Direct messages
+                            NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 20, weight: .regular))
+                                        .foregroundColor(.primary)
+                                    
+                                    if unreadMessages > 0 {
+                                        Circle()
+                                            .fill(Color.black)
+                                            .frame(width: 18, height: 18)
+                                            .overlay(
+                                                Text("\(min(unreadMessages, 99))")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            )
+                                            .offset(x: 8, y: -6)
+                                    }
+                                }
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            
+                            // Notification bell
                             NavigationLink(destination: NotificationsView(onDismiss: {
                                 Task { await refreshUnreadCount() }
                             }).environmentObject(authViewModel)) {
@@ -291,18 +388,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                                 }
                                 .frame(width: 36, height: 36)
                                 .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Find friends last (rightmost)
-                            Button {
-                                showFindFriends = true
-                            } label: {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 22, weight: .regular))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -347,10 +432,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
             MonthlyPrizeView()
                 .environmentObject(authViewModel)
         }
-        .navigationDestination(isPresented: $showFindFriends) {
-            FindFriendsView()
-                .environmentObject(authViewModel)
-        }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
                 NavigationStack {
@@ -378,11 +459,21 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
             Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
         .task {
-            await refreshUnreadCount()
+            await throttledRefresh()
         }
         .onAppear {
-            Task { await refreshUnreadCount() }
+            Task { await throttledRefresh() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
+            Task { await refreshUnreadMessages() }
+        }
+    }
+    
+    private func throttledRefresh() async {
+        guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
+        lastUnreadFetch = Date()
+        await refreshUnreadCount()
+        await refreshUnreadMessages()
     }
     
     private func refreshUnreadCount() async {
@@ -402,9 +493,16 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         }
         isFetchingUnread = false
     }
+    
+    private func refreshUnreadMessages() async {
+        await dmService.fetchTotalUnreadCount()
+        await MainActor.run {
+            unreadMessages = dmService.totalUnreadCount
+        }
+    }
 }
 
 #Preview {
-    HomeContainerView()
+    HomeContainerView(popToRootTrigger: 0)
         .environmentObject(AuthViewModel())
 }
