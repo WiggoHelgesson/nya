@@ -664,19 +664,15 @@ struct MainTabView: View {
                 do {
                     try await AuthSessionManager.shared.ensureValidSession()
                     print("✅ Auth session verified on app activation")
-                } catch let authError as AuthError {
-                    if SessionManager.shared.hasActiveSession {
-                        print("⚠️ Auth error but ACTIVE SESSION exists - NOT logging out to protect workout")
-                        return
-                    }
-                    if case .sessionMissing = authError {
-                        print("❌ Session truly missing - logging out")
-                        authViewModel.logout()
-                    } else {
-                        print("⚠️ Auth error but not logging out: \(authError)")
-                    }
                 } catch {
-                    print("⚠️ Session check failed (network?): \(error) - NOT logging out")
+                    // NEVER log out from here. Session refresh failures can be caused by
+                    // network issues, temporary server problems, etc.
+                    // If the session is truly revoked server-side, the auth state listener
+                    // (onAuthStateChange → .signedOut) will handle it.
+                    print("⚠️ Session check failed on activation: \(error) — NOT logging out")
+                    
+                    // Try to recover in the background for next time
+                    try? await AuthSessionManager.shared.forceRefresh()
                 }
             }
         }
@@ -907,6 +903,9 @@ private struct StateObserversModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .userBecamePro)) { _ in
+                let key = "hasSeenProWelcome"
+                guard !UserDefaults.standard.bool(forKey: key) else { return }
+                UserDefaults.standard.set(true, forKey: key)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     showProWelcome = true
                 }

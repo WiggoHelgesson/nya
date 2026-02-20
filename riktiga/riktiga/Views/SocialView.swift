@@ -13,9 +13,11 @@ enum SocialTab: String, CaseIterable {
 }
 
 struct SocialView: View {
-    @StateObject private var socialViewModel = SocialViewModel()
+    @StateObject private var socialViewModel = SocialViewModel.shared
     @StateObject private var newsViewModel = NewsViewModel()
     @StateObject private var celebrationManager = CelebrationManager.shared
+    @ObservedObject private var uploadManager = PostUploadManager.shared
+    @ObservedObject private var adService = AdService.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
@@ -266,6 +268,11 @@ struct SocialView: View {
                                 // MARK: - Friends at gym section
                                 friendsAtGymSection
                                 
+                                // MARK: - Upload progress indicator
+                                if uploadManager.uploadingPost != nil {
+                                    uploadProgressCard
+                                }
+                                
                                 // Separator line between friends section and posts
                                 Divider()
                                     .background(Color(.systemGray5))
@@ -297,6 +304,7 @@ struct SocialView: View {
             .onAppear {
                 animateContentIn()
                 loadStats()
+                Task { await adService.fetchFeedAds() }
             }
         }
     }
@@ -1456,6 +1464,63 @@ struct SocialView: View {
         }
     }
     
+    // MARK: - Upload Progress Card
+    private var uploadProgressCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 44, height: 44)
+                
+                if uploadManager.uploadFailed {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.red)
+                } else {
+                    ProgressView()
+                        .scaleEffect(0.9)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 3) {
+                Text(uploadManager.uploadingPost?.title ?? "Träningspass")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                
+                if uploadManager.uploadFailed {
+                    Text("Uppladdning misslyckades")
+                        .font(.system(size: 13))
+                        .foregroundColor(.red)
+                } else {
+                    Text("Laddar upp...")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            if uploadManager.uploadFailed {
+                Button {
+                    uploadManager.dismissFailure()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color(.systemBackground))
+        .transition(.asymmetric(
+            insertion: .move(edge: .top).combined(with: .opacity),
+            removal: .opacity
+        ))
+        .animation(.easeInOut(duration: 0.3), value: uploadManager.uploadingPost?.id)
+    }
+    
     // MARK: - Feed Content
     private var feedContent: some View {
         LazyVStack(spacing: 0, pinnedViews: []) {
@@ -1522,12 +1587,19 @@ struct SocialView: View {
                         .background(Color(.systemGray5))
                 }
                 
-                // Sponsored post from Up&DownCoach after 4th post
+                // Dynamic ad or fallback sponsored post after 4th post
                 if index == 3 {
-                    SponsoredPostCard()
-                        .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 15)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    if let feedAd = adService.feedAds.first {
+                        FeedAdCard(ad: feedAd)
+                            .opacity(showPosts ? 1 : 0)
+                            .offset(y: showPosts ? 0 : 15)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    } else {
+                        SponsoredPostCard()
+                            .opacity(showPosts ? 1 : 0)
+                            .offset(y: showPosts ? 0 : 15)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                    }
                     Divider()
                         .background(Color(.systemGray5))
                 }
@@ -2323,34 +2395,6 @@ struct SocialPostCard: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     }
-                    
-                    // Trained with friends
-                    if let trainedWith = post.trainedWith, !trainedWith.isEmpty {
-                        HStack(spacing: -8) { // Overlap avatars
-                            ForEach(Array(trainedWith.prefix(3).enumerated()), id: \.element.id) { index, friend in
-                                ProfileImage(url: friend.avatarUrl, size: 20)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color(.systemBackground), lineWidth: 2)
-                                    )
-                                    .zIndex(Double(trainedWith.count - index))
-                            }
-                            if trainedWith.count > 3 {
-                                Text("+\(trainedWith.count - 3)")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color(.systemGray5)))
-                                    .offset(x: 2)
-                            }
-                            Text("Tränade med")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                                .padding(.leading, trainedWith.count > 3 ? 6 : 10)
-                        }
-                    }
                 }
             }
             
@@ -2421,8 +2465,37 @@ struct SocialPostCard: View {
         post.isExternalPost || shouldShowCleanCard
     }
     
+    private var hasTrainedWith: Bool {
+        if let tw = post.trainedWith, !tw.isEmpty { return true }
+        return false
+    }
+    
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Trained with friends — above the title
+            if let trainedWith = post.trainedWith, !trainedWith.isEmpty {
+                HStack(spacing: 6) {
+                    Text("Tränade med")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    HStack(spacing: -6) {
+                        ForEach(Array(trainedWith.enumerated()), id: \.element.id) { index, friend in
+                            NavigationLink(destination: UserProfileView(userId: friend.id)) {
+                                ProfileImage(url: friend.avatarUrl, size: 26)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color(.systemBackground), lineWidth: 1.5)
+                                    )
+                            }
+                            .zIndex(Double(trainedWith.count - index))
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+            
             HStack(spacing: 8) {
                 Text(post.title)
                     .font(.system(size: 20, weight: .bold))
@@ -2438,7 +2511,7 @@ struct SocialPostCard: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.top, hasTrainedWith ? 4 : 12)
             
             if let description = trimmedDescription {
                 Text(description)
@@ -2447,14 +2520,12 @@ struct SocialPostCard: View {
                     .padding(.horizontal, 16)
             }
             
-            // Gym Achievement Banner - show motivational message for gym posts
+            // Gym Achievement Banner
             if isGymPost {
                 GymAchievementBanner(post: post)
                     .padding(.horizontal, 16)
             }
             
-            // Always show stats for gym posts, only check showsCleanCard for other posts
-            // ExternalActivityCard handles stats for clean/external posts (non-gym)
             if isGymPost || !showsCleanCard {
                 HStack(alignment: .top, spacing: 20) {
                     if isGymPost {
@@ -2470,7 +2541,6 @@ struct SocialPostCard: View {
                             statColumn(title: "Tid", value: formatDuration(duration))
                         }
                         
-                        // Prestationer (Achievements) section
                         if let achievements = getAchievementCount(), achievements > 0 {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Prestationer")
@@ -2490,7 +2560,6 @@ struct SocialPostCard: View {
                         }
                     } else {
                         if let distance = post.distance {
-                            // Show meters for swimming, km for others
                             if post.isSwimmingPost {
                                 let meters = Int(distance * 1000)
                                 statColumn(title: "Distans", value: "\(meters) m")
@@ -2504,7 +2573,6 @@ struct SocialPostCard: View {
                         }
                         
                         if let pace = averagePaceText {
-                            // Show pace per 100m for swimming
                             if post.isSwimmingPost {
                                 statColumn(title: "Tempo/100m", value: pace)
                             } else {
@@ -3925,6 +3993,13 @@ class SocialViewModel: ObservableObject {
         shared.lastSuccessfulFetch = nil
     }
     
+    func insertPostAtTop(_ post: SocialWorkoutPost) {
+        guard !posts.contains(where: { $0.id == post.id }) else { return }
+        withAnimation(.easeOut(duration: 0.3)) {
+            posts.insert(post, at: 0)
+        }
+    }
+    
     private struct AuthorMetadata {
         let name: String?
         let avatarUrl: String?
@@ -4032,7 +4107,8 @@ class SocialViewModel: ObservableObject {
             pbValue: oldPost.pbValue,
             streakCount: oldPost.streakCount,
             source: oldPost.source,
-            deviceName: oldPost.deviceName
+            deviceName: oldPost.deviceName,
+            routeData: oldPost.routeData
         )
         
         posts[index] = updatedPost
@@ -4079,7 +4155,8 @@ class SocialViewModel: ObservableObject {
             pbValue: oldPost.pbValue,
             streakCount: oldPost.streakCount,
             source: oldPost.source,
-            deviceName: oldPost.deviceName
+            deviceName: oldPost.deviceName,
+            routeData: oldPost.routeData
         )
         
         posts[index] = updatedPost
@@ -4124,7 +4201,8 @@ class SocialViewModel: ObservableObject {
             pbValue: oldPost.pbValue,
             streakCount: oldPost.streakCount,
             source: oldPost.source,
-            deviceName: oldPost.deviceName
+            deviceName: oldPost.deviceName,
+            routeData: oldPost.routeData
         )
         
         posts[index] = updatedPost
@@ -4335,11 +4413,13 @@ class SocialViewModel: ObservableObject {
                     isLikedByCurrentUser: post.isLikedByCurrentUser,
                     splits: post.splits,
                     exercises: post.exercises,
+                    trainedWith: post.trainedWith,
                     pbExerciseName: post.pbExerciseName,
                     pbValue: post.pbValue,
                     streakCount: post.streakCount,
                     source: post.source,
-                    deviceName: post.deviceName
+                    deviceName: post.deviceName,
+                    routeData: post.routeData
                 )
             }
             return post
@@ -4521,11 +4601,13 @@ class SocialViewModel: ObservableObject {
                 isLikedByCurrentUser: post.isLikedByCurrentUser,
                 splits: post.splits,
                 exercises: post.exercises,
+                trainedWith: post.trainedWith,
                 pbExerciseName: post.pbExerciseName,
                 pbValue: post.pbValue,
                 streakCount: post.streakCount,
                 source: post.source,
-                deviceName: post.deviceName
+                deviceName: post.deviceName,
+                routeData: post.routeData
             )
         }
         
@@ -5195,10 +5277,10 @@ struct FullFrameAsyncImage: View {
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, alignment: isLivePhoto ? .leading : .center)
                     .frame(height: height)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.black)
+                    .clipped()
             } else if isLoading {
                 Rectangle()
                     .fill(Color(.systemGray5))
@@ -5687,6 +5769,110 @@ struct ExternalActivityCard: View {
             return String(format: "%dm %02ds", minutes, secs)
         } else {
             return String(format: "%ds", secs)
+        }
+    }
+}
+
+// MARK: - Dynamic Feed Ad Card
+private struct FeedAdCard: View {
+    let ad: AdCampaign
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                if let imageURL = ad.imageURL {
+                    AsyncImage(url: imageURL) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.gray.opacity(0.3)
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 40, height: 40)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(ad.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Text("Sponsrad")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.gray))
+                    }
+                    
+                    Text("Annons")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            if let imageURL = ad.imageURL {
+                Button(action: openAd) {
+                    AsyncImage(url: imageURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.15))
+                            .overlay(ProgressView())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 400)
+                    .clipped()
+                }
+                .buttonStyle(.plain)
+            }
+            
+            if let description = ad.description, !description.isEmpty {
+                Text(description)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+            }
+            
+            Button(action: openAd) {
+                HStack {
+                    Text(ad.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    Text(ad.ctaLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(Color.primary)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(Color(.systemBackground))
+    }
+    
+    private func openAd() {
+        AdService.shared.trackClick(campaignId: ad.id)
+        if let url = ad.ctaURL {
+            UIApplication.shared.open(url)
         }
     }
 }

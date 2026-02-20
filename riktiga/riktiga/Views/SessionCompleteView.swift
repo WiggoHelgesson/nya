@@ -1705,18 +1705,15 @@ struct SessionCompleteView: View {
     }
     
     func saveWorkout() {
-        // Guard against double-taps - check both flags
         guard !isSaving else {
             print("⚠️ Save already in progress, ignoring duplicate tap")
             return
         }
         
-        // Set both flags immediately to block any further interaction
         isSaving = true
         saveButtonTapped = true
         
         Task(priority: .userInitiated) {
-            
             let splits = computeSplits()
             let trimmedTemplateName = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
             
@@ -1740,54 +1737,39 @@ struct SessionCompleteView: View {
                 pointsToAward = min(pointsToAward, remaining)
             }
             
-            // Use the title (which has default value set)
             let finalTitle = title.isEmpty ? defaultTitle : title
             
-            // Convert route coordinates to JSON string for database storage
             var routeDataJson: String? = nil
             if !routeCoordinates.isEmpty {
                 let coordsArray = routeCoordinates.map { ["lat": $0.latitude, "lon": $0.longitude] }
                 if let jsonData = try? JSONSerialization.data(withJSONObject: coordsArray),
                    let jsonString = String(data: jsonData, encoding: .utf8) {
                     routeDataJson = jsonString
-                    print("📍 Route data prepared: \(routeCoordinates.count) coordinates")
                 }
             }
             
-            // Get current streak for achievement banner
             let currentStreak = StreakManager.shared.currentStreak
             
-            // Get location - gym name for gym sessions, city for running sessions
             var workoutLocation: String? = nil
             if activity.rawValue == "Gympass" {
-                // For gym sessions, use detected gym name
                 workoutLocation = detectedGymName ?? GymLocationManager.shared.getCurrentGymName()
             } else if !routeCoordinates.isEmpty {
-                // For running/outdoor activities, reverse geocode first coordinate to get city
                 let firstCoord = routeCoordinates[0]
                 let location = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
-                
-                do {
-                    let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
-                    if let placemark = placemarks.first {
-                        // Get city and county/state
-                        let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
-                        let county = placemark.administrativeArea ?? ""
-                        
-                        if !city.isEmpty && !county.isEmpty {
-                            workoutLocation = "\(city), \(county)"
-                        } else if !city.isEmpty {
-                            workoutLocation = city
-                        } else if !county.isEmpty {
-                            workoutLocation = county
-                        }
+                if let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location),
+                   let placemark = placemarks.first {
+                    let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+                    let county = placemark.administrativeArea ?? ""
+                    if !city.isEmpty && !county.isEmpty {
+                        workoutLocation = "\(city), \(county)"
+                    } else if !city.isEmpty {
+                        workoutLocation = city
+                    } else if !county.isEmpty {
+                        workoutLocation = county
                     }
-                } catch {
-                    print("⚠️ Reverse geocoding failed: \(error)")
                 }
             }
             
-            // Map trained with friends to WorkoutPost format (only if user wants to include them)
             let trainedWithData: [WorkoutPost.TrainedWithPerson]? = (activity.rawValue == "Gympass" && includeTrainedWith && !trainedWithFriends.isEmpty) ? trainedWithFriends.map { friend in
                 WorkoutPost.TrainedWithPerson(
                     id: friend.id,
@@ -1817,128 +1799,65 @@ struct SessionCompleteView: View {
                 trainedWith: trainedWithData
             )
             
-            do {
-                if shouldSaveTemplate,
-                   let exercisesData = exercisesData,
-                   !exercisesData.isEmpty,
-                   let userId = authViewModel.currentUser?.id,
-                   !trimmedTemplateName.isEmpty {
-                    do {
-                        let savedTemplate = try await SavedWorkoutService.shared.saveWorkoutTemplate(userId: userId, name: trimmedTemplateName, exercises: exercisesData)
-                        NotificationCenter.default.post(name: .savedGymWorkoutCreated, object: savedTemplate)
-                    } catch {
-                        print("⚠️ Failed to save workout template: \(error)")
-                    }
+            // Save template (fast, non-blocking)
+            if shouldSaveTemplate,
+               let exercisesData = exercisesData,
+               !exercisesData.isEmpty,
+               let userId = authViewModel.currentUser?.id,
+               !trimmedTemplateName.isEmpty {
+                do {
+                    let savedTemplate = try await SavedWorkoutService.shared.saveWorkoutTemplate(userId: userId, name: trimmedTemplateName, exercises: exercisesData)
+                    NotificationCenter.default.post(name: .savedGymWorkoutCreated, object: savedTemplate)
+                } catch {
+                    print("⚠️ Failed to save workout template: \(error)")
                 }
+            }
+            
+            // Build context and hand off the slow work (image upload + DB insert) to PostUploadManager
+            let uploadContext = PostUploadManager.UploadContext(
+                post: post,
+                routeImage: routeImage,
+                userImage: sessionImage,
+                earnedPoints: pointsToAward,
+                isLivePhoto: isLivePhoto,
+                activityType: activity.rawValue,
+                exercisesData: exercisesData,
+                userId: authViewModel.currentUser?.id,
+                userName: authViewModel.currentUser?.name,
+                userAvatarUrl: authViewModel.currentUser?.avatarUrl,
+                hasPB: hasPB,
+                pbExerciseName: pbExerciseName,
+                pbValue: pbValue,
+                stravaConnected: stravaService.isConnected,
+                stravaTitle: finalTitle,
+                stravaDescription: description,
+                stravaDuration: duration,
+                stravaDistance: distance,
+                stravaRouteCoordinates: routeCoordinates
+            )
+            
+            let sharePost = SocialWorkoutPost(
+                from: post,
+                userName: authViewModel.currentUser?.name,
+                userAvatarUrl: authViewModel.currentUser?.avatarUrl,
+                userIsPro: RevenueCatManager.shared.isProMember
+            )
+            
+            await MainActor.run {
+                // Fire off background upload
+                PostUploadManager.shared.startUpload(context: uploadContext)
                 
-                try await WorkoutService.shared.saveWorkoutPost(post, routeImage: routeImage, userImage: sessionImage, earnedPoints: pointsToAward, isLivePhoto: isLivePhoto)
+                isSaving = false
+                shouldSaveTemplate = false
+                templateName = ""
+                pendingSharePost = sharePost
+                triggerSaveSuccessAnimation()
                 
-                let sharePost = SocialWorkoutPost(
-                    from: post,
-                    userName: authViewModel.currentUser?.name,
-                    userAvatarUrl: authViewModel.currentUser?.avatarUrl,
-                    userIsPro: RevenueCatManager.shared.isProMember
-                )
-                
-                if activity.rawValue == "Gympass" && pointsToAward > 0 {
-                    let key = gymPointsKey(for: Date())
-                    let existing = UserDefaults.standard.integer(forKey: key)
-                    UserDefaults.standard.set(existing + pointsToAward, forKey: key)
-                }
-                
-                if let userId = authViewModel.currentUser?.id {
-                    if let updatedProfile = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
-                        await MainActor.run {
-                            authViewModel.currentUser = updatedProfile
-                        }
-                    }
-                }
-                
-                NotificationCenter.default.post(name: NSNotification.Name("WorkoutSaved"), object: nil)
-                
-                // Notify recovery zone to refresh if it was a gym workout
-                if activity.rawValue == "Gympass", let exercisesData = exercisesData {
-                    // Save gym location for smart reminders (only when workout is saved)
-                    GymLocationManager.shared.gymSessionSaved()
-                    
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("GymWorkoutCompleted"),
-                        object: nil,
-                        userInfo: ["exercises": exercisesData]
-                    )
-                    
-                    // Process XP gains for strength progression
-                    if let userId = authViewModel.currentUser?.id {
-                        let xpGains = MuscleProgressionService.shared.processGymSession(
-                            userId: userId,
-                            exercises: exercisesData
-                        )
-                        
-                        // Log XP gains
-                        for gain in xpGains {
-                            print("💪 Strength XP: +\(gain.xpGained) for \(gain.muscleGroups.joined(separator: ", "))")
-                            if !gain.bonuses.isEmpty {
-                                print("   Bonuses: \(gain.bonuses.joined(separator: ", "))")
-                            }
-                        }
-                    }
-                }
-                
-                // Send PB notification to followers if user set a new PB
-                if hasPB, let userId = authViewModel.currentUser?.id {
-                    Task {
-                        await PushNotificationService.shared.notifyFollowersAboutPB(
-                            userId: userId,
-                            userName: authViewModel.currentUser?.name ?? "En användare",
-                            userAvatar: authViewModel.currentUser?.avatarUrl,
-                            exerciseName: pbExerciseName,
-                            pbValue: pbValue,
-                            postId: post.id
-                        )
-                    }
-                }
-                
-                // Upload to Strava if connected
-                if stravaService.isConnected {
-                    Task {
-                        let stravaSuccess = await stravaService.uploadActivity(
-                            title: finalTitle,
-                            description: description,
-                            activityType: activity.rawValue,
-                            startDate: Date().addingTimeInterval(TimeInterval(-duration)),
-                            duration: duration,
-                            distance: distance > 0 ? distance : nil,
-                            routeCoordinates: routeCoordinates.isEmpty ? nil : routeCoordinates
-                        )
-                        print(stravaSuccess ? "✅ Strava upload successful" : "⚠️ Strava upload failed")
-                    }
-                }
-                
-                await MainActor.run {
-                    isSaving = false
-                    shouldSaveTemplate = false
-                    templateName = ""
-                    pendingSharePost = sharePost
-                    triggerSaveSuccessAnimation()
-                    
-                    // Register activity for streak
-                    StreakManager.shared.registerActivityCompletion()
-                    
-                    // Check workout achievements
-                    AchievementManager.shared.unlock("first_workout")
-                    
-                    // Registrera avslutat pass och visa review-popup om villkoren är uppfyllda
-                    ReviewManager.shared.recordWorkoutCompleted()
-                    ReviewManager.shared.requestReviewAfterWorkoutIfEligible()
-                    
-                    // Schedule motivational notification 1 minute after workout
-                    NotificationManager.shared.scheduleWorkoutCompleteNotification(userName: authViewModel.currentUser?.name)
-                }
-            } catch {
-                print("❌ Error saving workout: \(error)")
-                await MainActor.run {
-                    isSaving = false
-                }
+                StreakManager.shared.registerActivityCompletion()
+                AchievementManager.shared.unlock("first_workout")
+                ReviewManager.shared.recordWorkoutCompleted()
+                ReviewManager.shared.requestReviewAfterWorkoutIfEligible()
+                NotificationManager.shared.scheduleWorkoutCompleteNotification(userName: authViewModel.currentUser?.name)
             }
         }
     }

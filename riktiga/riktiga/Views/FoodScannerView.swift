@@ -47,6 +47,7 @@ struct FoodScannerView: View {
     @State private var showHealthLoading = false
     @State private var healthAnalysis: ProductHealthAnalysis?
     @State private var scannedBarcode: String?
+    @State private var showBarcodeChoice = false
     
     init(initialMode: FoodScanMode = .ai) {
         _selectedMode = State(initialValue: initialMode)
@@ -151,27 +152,103 @@ struct FoodScannerView: View {
                 let limitManager = BarcodeScanLimitManager.shared
                 
                 if isPro || limitManager.canScanForFree {
-                    // Haptic feedback - strong notification to confirm scan
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.success)
                     
-                    // Count the scan for non-pro users
                     if !isPro {
                         limitManager.useScan()
                     }
                     
                     scannedBarcode = barcode
-                    showHealthLoading = true
+                    showBarcodeChoice = true
                 } else {
-                    // Haptic feedback - error to indicate blocked
                     let generator = UINotificationFeedbackGenerator()
                     generator.notificationOccurred(.error)
-                    
-                    // Show paywall
                     SuperwallService.shared.showPaywall()
                 }
             }
         }
+        .sheet(isPresented: $showBarcodeChoice) {
+            barcodeChoiceSheet
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.visible)
+        }
+    }
+    
+    // MARK: - Barcode Choice Sheet
+    private var barcodeChoiceSheet: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 4) {
+                Text("Produkt skannad")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text("Vad vill du göra?")
+                    .font(.system(size: 15))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 8)
+            
+            VStack(spacing: 10) {
+                Button {
+                    showBarcodeChoice = false
+                    if let barcode = scannedBarcode {
+                        viewModel.lookupBarcodeForAddProduct(barcode)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Lägg till produkt")
+                                .font(.system(size: 17, weight: .semibold))
+                            Text("Spara till din matdagbok")
+                                .font(.system(size: 13))
+                                .opacity(0.8)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .opacity(0.6)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .cornerRadius(16)
+                }
+                
+                Button {
+                    showBarcodeChoice = false
+                    showHealthLoading = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "heart.text.clipboard")
+                            .font(.system(size: 22))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Få en hälsoanalys")
+                                .font(.system(size: 17, weight: .semibold))
+                            Text("AI-driven djupanalys av produkten")
+                                .font(.system(size: 13))
+                                .opacity(0.7)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .opacity(0.5)
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(16)
+                }
+            }
+            .padding(.horizontal, 20)
+            
+            Spacer()
+        }
+        .padding(.top, 16)
     }
     
     // MARK: - Top Bar
@@ -1155,9 +1232,29 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     
     // MARK: - Barcode Lookup (now triggers health analysis flow)
     private func lookupBarcode(_ barcode: String) {
-        // Trigger health analysis flow via published property
         DispatchQueue.main.async {
             self.detectedBarcode = barcode
+        }
+    }
+    
+    // MARK: - Barcode Lookup for Add Product (no GPT, just Open Food Facts)
+    func lookupBarcodeForAddProduct(_ barcode: String) {
+        Task {
+            await MainActor.run {
+                isAnalyzing = true
+                analysisStatus = "Söker produkt..."
+            }
+            if let result = await searchOpenFoodFacts(barcode: barcode) {
+                await MainActor.run {
+                    scanResult = result
+                    isAnalyzing = false
+                }
+            } else {
+                await MainActor.run {
+                    isAnalyzing = false
+                    analysisStatus = "Produkten hittades inte"
+                }
+            }
         }
     }
     

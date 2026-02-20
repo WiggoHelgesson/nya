@@ -119,17 +119,15 @@ class ProfileService {
                     return profile
                 } else {
                     print("❌ No profile found for userId: \(userId)")
+                    return nil
                 }
             } catch {
-                print("⚠️ Decode error: \(error)")
-                print("Error details: \(error.localizedDescription)")
+                print("⚠️ Decode/query error: \(error)")
+                throw error
             }
-            
-            return nil
         } catch {
-            print("❌ Error fetching profile: \(error)")
-            print("Error details: \(error.localizedDescription)")
-            return nil
+            print("❌ Error fetching profile (session/network): \(error)")
+            throw error
         }
     }
     

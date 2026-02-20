@@ -19,6 +19,8 @@ struct UpAndDownApp: App {
     @StateObject var deepLinkHandler = DeepLinkHandler.shared
     @State private var showSplash = true
     @State private var showOptionalUpdate = false
+    @State private var showAdPopup = false
+    @ObservedObject private var adService = AdService.shared
     
     init() {
         // Configure Stripe
@@ -39,14 +41,19 @@ struct UpAndDownApp: App {
                 if showSplash {
                     SplashScreenView()
                         .onAppear {
-                            // Check version during splash
                             Task {
                                 await versionService.checkVersion()
+                                await adService.fetchPopupAd()
                             }
                             
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                                 withAnimation {
                                     showSplash = false
+                                }
+                                if adService.popupAd != nil {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        showAdPopup = true
+                                    }
                                 }
                             }
                         }
@@ -144,6 +151,14 @@ struct UpAndDownApp: App {
             .sheet(isPresented: $deepLinkHandler.showResetPassword) {
                 ResetPasswordView()
             }
+            .fullScreenCover(isPresented: $showAdPopup) {
+                if let ad = adService.popupAd {
+                    PopupAdView(ad: ad) {
+                        adService.markPopupShown()
+                        showAdPopup = false
+                    }
+                }
+            }
         }
     }
     
@@ -152,20 +167,99 @@ struct UpAndDownApp: App {
         if authViewModel.isLoggedIn {
             MainTabView()
                 .environmentObject(authViewModel)
-                .tint(.black) // Global black tint for all navigation
+                .tint(.black)
                 .onAppear {
-                    // Request push notification permission when logged in
                     PushNotificationService.shared.requestPermissionAndRegister()
-                    
-                    // Cancel any previously scheduled meal reminders (disabled)
                     NotificationManager.shared.cancelMealReminders()
-                    
-                    // Sync streak to widgets on app launch
                     WidgetSyncService.shared.syncStreakData()
                 }
         } else {
             AuthenticationView()
                 .environmentObject(authViewModel)
+        }
+    }
+}
+
+// MARK: - Fullscreen Popup Ad
+struct PopupAdView: View {
+    let ad: AdCampaign
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            if let imageURL = ad.imageURL {
+                AsyncImage(url: imageURL) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color.black
+                }
+                .ignoresSafeArea()
+            }
+            
+            LinearGradient(
+                colors: [.black.opacity(0.7), .clear, .black.opacity(0.6)],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+            .ignoresSafeArea()
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 60)
+                
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Text(ad.title)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    if let desc = ad.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                    }
+                    
+                    Button {
+                        AdService.shared.trackClick(campaignId: ad.id)
+                        if let url = ad.ctaURL {
+                            UIApplication.shared.open(url)
+                        }
+                        onDismiss()
+                    } label: {
+                        Text(ad.ctaLabel)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.white)
+                            .cornerRadius(14)
+                    }
+                    .padding(.top, 8)
+                    
+                    Text("Annons")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 30)
+                .padding(.bottom, 60)
+            }
         }
     }
 }

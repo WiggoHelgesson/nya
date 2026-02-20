@@ -45,9 +45,33 @@ class AuthViewModel: NSObject, ObservableObject {
     }
     
     func setupAuthStateListener() {
-        // Supabase hanterar automatiskt session-persistens
-        // Vi behöver bara kontrollera vid appstart
-        print("ℹ️ Auth state listener setup complete")
+        Task {
+            for await (event, session) in await supabase.auth.authStateChanges {
+                print("🔑 Auth state changed: \(event)")
+                
+                switch event {
+                case .signedOut:
+                    await MainActor.run {
+                        if self.isLoggedIn {
+                            print("🔑 Server-side sign out detected")
+                            self.isLoggedIn = false
+                            self.currentUser = nil
+                        }
+                    }
+                    
+                case .tokenRefreshed:
+                    print("🔑 Token refreshed successfully")
+                    
+                case .signedIn:
+                    if let session {
+                        print("🔑 Signed in event for user: \(session.user.id)")
+                    }
+                    
+                default:
+                    break
+                }
+            }
+        }
     }
     
     func setupProStatusListener() {
@@ -112,57 +136,47 @@ class AuthViewModel: NSObject, ObservableObject {
     func checkAuthStatus() {
         Task {
             do {
-                // Kontrollera om det finns en aktiv session
                 let session = try await supabase.auth.session
                 
                 print("✅ Found existing session for user: \(session.user.id)")
                 
-                // Hämta profil-data från Supabase
-                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
-                    
-                    // Check if onboarding was completed
+                let profile: User?
+                do {
+                    profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString)
+                } catch {
+                    // Network/session error fetching profile -- do NOT sign out.
+                    // The session exists, we just can't reach the DB right now.
+                    print("⚠️ Could not fetch profile (network/transient error): \(error) — keeping user logged in")
+                    return
+                }
+                
+                if let profile {
                     if !profile.onboardingCompleted {
-                        // User has a session + profile but never finished onboarding
                         print("⚠️ User has profile but onboarding not completed, showing onboarding")
                         await MainActor.run {
                             self.currentUser = profile
                             self.needsOnboarding = true
                             self.isLoggedIn = false
                             self.isLoading = false
-                            
-                            // Set current user for recent exercises (personalized)
                             RecentExerciseStore.shared.setUser(userId: profile.id)
                         }
                         await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                         return
                     }
                     
-                    // IMPORTANT: Update database Pro status BEFORE RevenueCat login
-                    // to ensure combined status is correct
                     await MainActor.run {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
-                        // Set current user for scan limit managers
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         BarcodeScanLimitManager.shared.setCurrentUser(userId: profile.id)
-                        
-                        // Set current user for streak manager (per-user streaks)
                         StreakManager.shared.setUser(userId: profile.id)
-                        
-                        // Set current user for gym location tracking
                         GymLocationManager.shared.setUser(userId: profile.id)
-                        
-                        // Set current user for recent exercises (personalized)
                         RecentExerciseStore.shared.setUser(userId: profile.id)
-                        
-                        // Update database Pro status in RevenueCatManager FIRST
                         RevenueCatManager.shared.updateDatabaseProStatus(profile.isProMember)
                         
-                        // Check if user has a valid username (not "Användare" or empty)
                         let hasValidUsername = !profile.name.isEmpty && profile.name != "Användare"
-                        
                         if !hasValidUsername {
                             self.showUsernameRequiredPopup = true
                         }
@@ -171,10 +185,9 @@ class AuthViewModel: NSObject, ObservableObject {
                         print("📊 Database Pro status from profile: \(profile.isProMember)")
                     }
                     
-                    // Now login to RevenueCat (after databasePro is already set)
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
-                    // Ingen profil hittades – behandla som raderat/disabled konto
+                    // fetchUserProfile returned nil (query succeeded, zero rows) — profile truly missing
                     try? await supabase.auth.signOut()
                     await MainActor.run {
                         self.isLoggedIn = false
@@ -183,10 +196,21 @@ class AuthViewModel: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("ℹ️ No existing session found: \(error)")
-                DispatchQueue.main.async {
-                    self.isLoggedIn = false
-                    self.currentUser = nil
+                // supabase.auth.session threw — try refreshing before giving up
+                print("⚠️ Session access failed: \(error) — attempting refresh")
+                do {
+                    try await AuthSessionManager.shared.forceRefresh()
+                    let session = try await supabase.auth.session
+                    print("✅ Session recovered after refresh for user: \(session.user.id)")
+                } catch {
+                    // If user was already logged in, do NOT log them out on transient errors.
+                    // The auth state listener will handle true server-side sign-outs.
+                    let wasLoggedIn = await MainActor.run { self.isLoggedIn }
+                    if wasLoggedIn {
+                        print("⚠️ Session refresh failed but user was logged in — keeping session alive")
+                    } else {
+                        print("ℹ️ No session found on initial launch")
+                    }
                 }
             }
         }
@@ -222,30 +246,34 @@ class AuthViewModel: NSObject, ObservableObject {
             do {
                 let session = try await supabase.auth.signIn(email: email, password: password)
                 
-                // Hämta profil-data från Supabase
-                if let profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString) {
+                let profile: User?
+                do {
+                    profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString)
+                } catch {
+                    // Network error fetching profile after successful auth — don't sign out
+                    await MainActor.run {
+                        self.errorMessage = "Kunde inte hämta profilen just nu. Försök igen."
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                if let profile {
                     DispatchQueue.main.async {
                         self.currentUser = profile
                         self.isLoggedIn = true
                         self.isLoading = false
                         self.prefetchAvatar(url: profile.avatarUrl)
                         
-                        // Set current user for scan limit managers
                         AIScanLimitManager.shared.setCurrentUser(userId: profile.id)
                         BarcodeScanLimitManager.shared.setCurrentUser(userId: profile.id)
-                        
-                        // Set current user for streak manager (per-user streaks)
                         StreakManager.shared.setUser(userId: profile.id)
-                        
-                        // Set current user for gym location tracking
                         GymLocationManager.shared.setUser(userId: profile.id)
-                        
-                        // Set current user for recent exercises (personalized)
                         RecentExerciseStore.shared.setUser(userId: profile.id)
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
                 } else {
-                    // Ingen profil hittades – behandla som raderat/disabled konto
+                    // Profile truly missing (query succeeded, zero rows)
                     try? await supabase.auth.signOut()
                     await MainActor.run {
                         self.isLoggedIn = false

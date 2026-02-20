@@ -237,6 +237,7 @@ struct RewardsView: View {
     @State private var showMyPurchases = false
     @State private var favoritedRewards: Set<Int> = []
     @State private var navigationPath = NavigationPath()
+    @ObservedObject private var adService = AdService.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     
@@ -379,6 +380,70 @@ struct RewardsView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .frame(height: 200)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+    }
+    
+    private var bannerAdSection: some View {
+        TabView {
+            ForEach(adService.bannerAds) { ad in
+                Button {
+                    AdService.shared.trackClick(campaignId: ad.id)
+                    if let url = ad.ctaURL {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    ZStack(alignment: .bottomLeading) {
+                        if let imageURL = ad.imageURL {
+                            AsyncImage(url: imageURL) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Rectangle().fill(Color.gray.opacity(0.15))
+                            }
+                        } else {
+                            Rectangle().fill(Color.gray.opacity(0.15))
+                        }
+                        
+                        LinearGradient(
+                            colors: [.black.opacity(0.6), .clear],
+                            startPoint: .bottom,
+                            endPoint: .center
+                        )
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(ad.title)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                            if let desc = ad.description, !desc.isEmpty {
+                                Text(desc)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(16)
+                        
+                        HStack {
+                            Spacer()
+                            Text("Annons")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(4)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    }
+                    .frame(height: 200)
+                    .cornerRadius(16)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: adService.bannerAds.count > 1 ? .automatic : .never))
         .frame(height: 200)
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
@@ -560,12 +625,13 @@ struct RewardsView: View {
                         .pageEntrance()
                         
                         LazyVStack(spacing: 12) {
-                            // Hero banner ads hidden
-                            // heroBannerSection
-                            //     .background(sectionBackgroundColor)
-                            //     .opacity(showHeroBanner ? 1 : 0)
-                            //     .offset(y: showHeroBanner ? 0 : 20)
-                            //     .scaleEffect(showHeroBanner ? 1 : 0.95)
+                            if !adService.bannerAds.isEmpty {
+                                bannerAdSection
+                                    .background(sectionBackgroundColor)
+                                    .opacity(showHeroBanner ? 1 : 0)
+                                    .offset(y: showHeroBanner ? 0 : 20)
+                                    .scaleEffect(showHeroBanner ? 1 : 0.95)
+                            }
                             
                             categoriesSection
                                 .padding(.vertical, 16)
@@ -620,6 +686,7 @@ struct RewardsView: View {
             }
             .onAppear {
                 animateRewardsContent()
+                Task { await adService.fetchBannerAds() }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootBeloningar"))) { _ in
                 navigationPath = NavigationPath()

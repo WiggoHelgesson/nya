@@ -270,35 +270,71 @@ final class ProductHealthService {
             "response_format": ["type": "json_object"]
         ]
         
-        var urlRequest = URLRequest(url: baseURL)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        urlRequest.timeoutInterval = 30
+        let bodyData = try JSONSerialization.data(withJSONObject: requestBody)
         
-        let (data, response) = try await session.data(for: urlRequest)
+        var lastError: Error = ProductHealthError.gptRequestFailed
+        let maxAttempts = 2
         
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw ProductHealthError.gptRequestFailed
+        for attempt in 1...maxAttempts {
+            var urlRequest = URLRequest(url: baseURL)
+            urlRequest.httpMethod = "POST"
+            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = bodyData
+            urlRequest.timeoutInterval = 60
+            
+            do {
+                let (data, response) = try await session.data(for: urlRequest)
+                
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    print("⚠️ GPT request failed with status \(statusCode) (attempt \(attempt)/\(maxAttempts))")
+                    lastError = ProductHealthError.gptRequestFailed
+                    if attempt < maxAttempts {
+                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        continue
+                    }
+                    throw ProductHealthError.gptRequestFailed
+                }
+                
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let choices = json["choices"] as? [[String: Any]],
+                      let firstChoice = choices.first,
+                      let message = firstChoice["message"] as? [String: Any],
+                      let content = message["content"] as? String,
+                      let contentData = content.data(using: .utf8) else {
+                    throw ProductHealthError.invalidGPTResponse
+                }
+                
+                let decoder = JSONDecoder()
+                let gptResult = try decoder.decode(GPTHealthResult.self, from: contentData)
+                
+                // Build full analysis by merging GPT result with OFF data — continued below
+                return try buildAnalysis(gptResult: gptResult, offData: offData, barcode: barcode)
+                
+            } catch let urlError as URLError where urlError.code == .timedOut {
+                print("⚠️ GPT request timed out (attempt \(attempt)/\(maxAttempts))")
+                lastError = ProductHealthError.analysisTimedOut
+                if attempt < maxAttempts {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    continue
+                }
+            } catch let error as ProductHealthError {
+                throw error
+            } catch {
+                print("⚠️ GPT request error: \(error) (attempt \(attempt)/\(maxAttempts))")
+                lastError = error
+                if attempt < maxAttempts {
+                    try await Task.sleep(nanoseconds: 2_000_000_000)
+                    continue
+                }
+            }
         }
         
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw ProductHealthError.invalidGPTResponse
-        }
-        
-        guard let contentData = content.data(using: .utf8) else {
-            throw ProductHealthError.invalidGPTResponse
-        }
-        
-        let decoder = JSONDecoder()
-        let gptResult = try decoder.decode(GPTHealthResult.self, from: contentData)
-        
-        // Build full analysis by merging GPT result with OFF data
+        throw lastError as? ProductHealthError ?? ProductHealthError.gptRequestFailed
+    }
+    
+    private func buildAnalysis(gptResult: GPTHealthResult, offData: OpenFoodFactsData, barcode: String) throws -> ProductHealthAnalysis {
         let analysis = ProductHealthAnalysis(
             productName: gptResult.product_name,
             brand: gptResult.brand ?? offData.brand,
@@ -366,6 +402,7 @@ enum ProductHealthError: LocalizedError {
     case missingAPIKey
     case gptRequestFailed
     case invalidGPTResponse
+    case analysisTimedOut
     
     var errorDescription: String? {
         switch self {
@@ -374,6 +411,7 @@ enum ProductHealthError: LocalizedError {
         case .missingAPIKey: return "API-nyckel saknas"
         case .gptRequestFailed: return "Analysen misslyckades"
         case .invalidGPTResponse: return "Kunde inte tolka analysresultatet"
+        case .analysisTimedOut: return "Analysen tog för lång tid. Försök igen senare."
         }
     }
 }
