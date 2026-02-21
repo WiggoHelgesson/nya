@@ -51,6 +51,7 @@ struct SessionCompleteView: View {
     @State private var showLiveCapture = false
     @State private var difficultyRating: Double = 0.5  // 0 = Lätt, 1 = Svårt
     @State private var isLivePhoto = false  // Track if image was taken with Up&Down Live
+    @State private var postToSocialFeed = true
     
     // PB (Personal Best) tracking
     @State private var showPBSheet = false
@@ -63,7 +64,7 @@ struct SessionCompleteView: View {
     
     // Trained with friends detection
     @State private var trainedWithFriends: [ActiveSessionService.TrainedWithFriend] = []
-    @State private var includeTrainedWith = true // Pre-selected by default
+    @State private var selectedTrainedWith: Set<String> = []
     @State private var isLoadingTrainedWith = false
     @State private var sessionStartTime: Date?
     @State private var sessionLocation: CLLocationCoordinate2D?
@@ -272,6 +273,7 @@ struct SessionCompleteView: View {
                 difficultySliderSection
                 descriptionSection
                 photoOptionsSection
+                socialFeedToggle
                 saveButton
             }
         }
@@ -294,6 +296,8 @@ struct SessionCompleteView: View {
             
             // Details section
             gymDetailsSection
+            
+            socialFeedToggle
             
             // Save button
             gymSaveButton
@@ -497,47 +501,83 @@ struct SessionCompleteView: View {
     
     // MARK: - Trained With Section
     private var trainedWithSection: some View {
-        Button(action: {
-            includeTrainedWith.toggle()
-        }) {
-            HStack(spacing: 12) {
-                // Checkbox
-                Image(systemName: includeTrainedWith ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 22))
-                    .foregroundColor(includeTrainedWith ? .green : .gray)
-                
-                // Text
-                VStack(alignment: .leading, spacing: 2) {
-                    if trainedWithFriends.count == 1 {
-                        Text("Tränade du med \(trainedWithFriends[0].username)?")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.primary)
+        VStack(spacing: 0) {
+            if trainedWithFriends.count == 1 {
+                let friend = trainedWithFriends[0]
+                let isSelected = selectedTrainedWith.contains(friend.id)
+                Button(action: {
+                    if isSelected {
+                        selectedTrainedWith.remove(friend.id)
                     } else {
-                        Text("Tränade med \(trainedWithFriends.count) vänner")
+                        selectedTrainedWith.insert(friend.id)
+                    }
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 22))
+                            .foregroundColor(isSelected ? .green : .gray)
+                        
+                        Text("Tränade du med \(friend.username)?")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.primary)
-                    }
-                }
-                
-                Spacer()
-                
-                // Profile pictures (max 3)
-                HStack(spacing: -8) {
-                    ForEach(Array(trainedWithFriends.prefix(3).enumerated()), id: \.element.id) { index, friend in
+                        
+                        Spacer()
+                        
                         ProfileImage(url: friend.avatarUrl, size: 32)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color(.systemBackground), lineWidth: 2)
-                            )
-                            .zIndex(Double(3 - index))
                     }
+                    .padding(14)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
                 }
+                .buttonStyle(.plain)
+            } else {
+                VStack(spacing: 0) {
+                    Text("Tränade du med dessa vänner?")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
+                    
+                    ForEach(trainedWithFriends) { friend in
+                        let isSelected = selectedTrainedWith.contains(friend.id)
+                        Button(action: {
+                            if isSelected {
+                                selectedTrainedWith.remove(friend.id)
+                            } else {
+                                selectedTrainedWith.insert(friend.id)
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(isSelected ? .green : .gray)
+                                
+                                ProfileImage(url: friend.avatarUrl, size: 30)
+                                
+                                Text(friend.username)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                Text("\(friend.overlapMinutes) min")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    Spacer().frame(height: 10)
+                }
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
             }
-            .padding(14)
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
         }
-        .buttonStyle(.plain)
         .padding(.top, 8)
     }
     
@@ -1346,6 +1386,23 @@ struct SessionCompleteView: View {
         }
     }
     
+    // MARK: - Social Feed Toggle
+    private var socialFeedToggle: some View {
+        Toggle(isOn: $postToSocialFeed) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 15))
+                    .foregroundColor(.primary)
+                Text("Lägg upp inlägget till det sociala flödet")
+                    .font(.system(size: 15))
+                    .foregroundColor(.primary)
+            }
+        }
+        .tint(.black)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 4)
+    }
+    
     // MARK: - Save Button
     private var saveButton: some View {
         Button(action: {
@@ -1521,6 +1578,7 @@ struct SessionCompleteView: View {
             
             await MainActor.run {
                 trainedWithFriends = friends
+                selectedTrainedWith = Set(friends.map { $0.id })
                 isLoadingTrainedWith = false
                 print("✅ Found \(friends.count) friends who trained with user")
             }
@@ -1770,7 +1828,8 @@ struct SessionCompleteView: View {
                 }
             }
             
-            let trainedWithData: [WorkoutPost.TrainedWithPerson]? = (activity.rawValue == "Gympass" && includeTrainedWith && !trainedWithFriends.isEmpty) ? trainedWithFriends.map { friend in
+            let selectedFriends = trainedWithFriends.filter { selectedTrainedWith.contains($0.id) }
+            let trainedWithData: [WorkoutPost.TrainedWithPerson]? = (activity.rawValue == "Gympass" && !selectedFriends.isEmpty) ? selectedFriends.map { friend in
                 WorkoutPost.TrainedWithPerson(
                     id: friend.id,
                     username: friend.username,
@@ -1796,7 +1855,8 @@ struct SessionCompleteView: View {
                 pbValue: hasPB ? pbValue : nil,
                 streakCount: currentStreak > 0 ? currentStreak : nil,
                 location: workoutLocation,
-                trainedWith: trainedWithData
+                trainedWith: trainedWithData,
+                isPublic: postToSocialFeed
             )
             
             // Save template (fast, non-blocking)
@@ -1833,7 +1893,8 @@ struct SessionCompleteView: View {
                 stravaDescription: description,
                 stravaDuration: duration,
                 stravaDistance: distance,
-                stravaRouteCoordinates: routeCoordinates
+                stravaRouteCoordinates: routeCoordinates,
+                isPublic: postToSocialFeed
             )
             
             let sharePost = SocialWorkoutPost(

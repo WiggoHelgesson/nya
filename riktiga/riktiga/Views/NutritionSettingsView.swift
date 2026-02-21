@@ -154,7 +154,8 @@ struct NutritionSettingsView: View {
                     weight_kg: nil,
                     gender: nil,
                     fitness_goal: nil,
-                    workouts_per_week: nil
+                    workouts_per_week: nil,
+                    birth_date: nil
                 )
                 
                 do {

@@ -9,6 +9,7 @@ import Supabase
 class NavigationDepthTracker: ObservableObject {
     static let shared = NavigationDepthTracker()
     @Published var isAtRootView = true
+    @Published var hideTabBar = false
     private var navigationDepth = 0
     
     func pushView() {
@@ -516,12 +517,14 @@ struct MainTabView: View {
                 }
             }
             
-            // Custom Tab Bar - always at bottom, never overlaps content
-            customTabBar
+            if !navigationTracker.hideTabBar {
+                customTabBar
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
+        .animation(.easeInOut(duration: 0.25), value: navigationTracker.hideTabBar)
     }
     
     // MARK: - Tab Bar Background
@@ -934,6 +937,13 @@ private struct StateObserversModifier: ViewModifier {
                 if let postId = postId {
                     selectedTab = 0
                     NotificationCenter.default.post(name: NSNotification.Name("NavigateToPost"), object: nil, userInfo: ["postId": postId])
+                    notificationNav.resetNavigation()
+                }
+            }
+            .onChange(of: notificationNav.shouldOpenCommentsForPost) { _, postId in
+                if let postId = postId {
+                    selectedTab = 0
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenCommentsForPost"), object: nil, userInfo: ["postId": postId])
                     notificationNav.resetNavigation()
                 }
             }

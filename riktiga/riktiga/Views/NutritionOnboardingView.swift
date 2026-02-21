@@ -822,6 +822,10 @@ struct NutritionOnboardingView: View {
             if let userId = authViewModel.currentUser?.id {
                 // Save to Supabase using encodable struct
                 do {
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    let birthDateString = dateFormatter.string(from: onboardingData.birthDate)
+                    
                     let updateData = NutritionProfileUpdate(
                         daily_calories_goal: onboardingData.dailyCalories,
                         daily_protein_goal: onboardingData.dailyProtein,
@@ -832,7 +836,8 @@ struct NutritionOnboardingView: View {
                         weight_kg: onboardingData.weightKg,
                         gender: onboardingData.gender,
                         fitness_goal: onboardingData.goal,
-                        workouts_per_week: onboardingData.workoutsPerWeek
+                        workouts_per_week: onboardingData.workoutsPerWeek,
+                        birth_date: birthDateString
                     )
                     
                     try await SupabaseConfig.supabase
@@ -880,6 +885,7 @@ struct NutritionProfileUpdate: Encodable {
     let gender: String?
     let fitness_goal: String?
     let workouts_per_week: String?
+    let birth_date: String?
 }
 
 // Note: MacroResultCard is now defined in AuthenticationView.swift

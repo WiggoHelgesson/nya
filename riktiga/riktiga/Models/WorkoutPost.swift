@@ -23,6 +23,7 @@ struct WorkoutPost: Codable, Identifiable {
     let deviceName: String?  // "Garmin Forerunner 265", etc.
     let location: String?  // Gym name or location (e.g., "Nordic Wellness Lund")
     let trainedWith: [TrainedWithPerson]?  // Friends who trained together
+    let isPublic: Bool
     
     struct TrainedWithPerson: Codable, Identifiable, Hashable {
         let id: String
@@ -59,6 +60,7 @@ struct WorkoutPost: Codable, Identifiable {
         case deviceName = "device_name"
         case location
         case trainedWith = "trained_with"
+        case isPublic = "is_public"
     }
     
     init(from decoder: Decoder) throws {
@@ -85,6 +87,7 @@ struct WorkoutPost: Codable, Identifiable {
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
         location = try container.decodeIfPresent(String.self, forKey: .location)
         trainedWith = try container.decodeIfPresent([TrainedWithPerson].self, forKey: .trainedWith)
+        isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic) ?? true
     }
     
     init(id: String = UUID().uuidString,
@@ -107,7 +110,8 @@ struct WorkoutPost: Codable, Identifiable {
          source: String? = "app",
          deviceName: String? = nil,
          location: String? = nil,
-         trainedWith: [TrainedWithPerson]? = nil) {
+         trainedWith: [TrainedWithPerson]? = nil,
+         isPublic: Bool = true) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -130,6 +134,7 @@ struct WorkoutPost: Codable, Identifiable {
         self.deviceName = deviceName
         self.location = location
         self.trainedWith = trainedWith
+        self.isPublic = isPublic
     }
     
     func encode(to encoder: Encoder) throws {
@@ -156,6 +161,7 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(deviceName, forKey: .deviceName)
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(trainedWith, forKey: .trainedWith)
+        try container.encode(isPublic, forKey: .isPublic)
     }
 }
 

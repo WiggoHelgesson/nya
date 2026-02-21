@@ -554,11 +554,13 @@ class NotificationNavigationManager: ObservableObject {
     
     @Published var shouldNavigateToNews = false
     @Published var shouldNavigateToPost: String? = nil
+    @Published var shouldOpenCommentsForPost: String? = nil
     @Published var shouldNavigateToActiveFriends = false
     @Published var shouldNavigateToSharedWorkouts = false
     @Published var shouldNavigateToNotifications = false
     @Published var shouldNavigateToCoachChat = false
     @Published var shouldNavigateToDirectMessage: String? = nil  // conversation_id
+    @Published var shouldNavigateToMonthlyReport = false
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -569,6 +571,12 @@ class NotificationNavigationManager: ObservableObject {
     func navigateToPost(postId: String) {
         DispatchQueue.main.async {
             self.shouldNavigateToPost = postId
+        }
+    }
+    
+    func openCommentsForPost(postId: String) {
+        DispatchQueue.main.async {
+            self.shouldOpenCommentsForPost = postId
         }
     }
     
@@ -638,14 +646,26 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToMonthlyReport() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToProfile"), object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToStatistics"), object: nil)
+            }
+            self.shouldNavigateToMonthlyReport = true
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
+        shouldOpenCommentsForPost = nil
         shouldNavigateToActiveFriends = false
         shouldNavigateToSharedWorkouts = false
         shouldNavigateToNotifications = false
         shouldNavigateToCoachChat = false
         shouldNavigateToDirectMessage = nil
+        shouldNavigateToMonthlyReport = false
     }
 }
 
@@ -733,9 +753,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             switch type {
             case "news":
                 NotificationNavigationManager.shared.navigateToNews()
-            case "new_workout", "like", "comment":
+            case "new_workout", "like":
                 if let postId = userInfo["post_id"] as? String {
                     NotificationNavigationManager.shared.navigateToPost(postId: postId)
+                }
+            case "comment", "reply":
+                if let postId = userInfo["post_id"] as? String {
+                    NotificationNavigationManager.shared.openCommentsForPost(postId: postId)
                 }
             case "active_session":
                 // Navigate to active friends map
@@ -760,6 +784,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 if let conversationId = userInfo["conversation_id"] as? String {
                     NotificationNavigationManager.shared.navigateToDirectMessage(conversationId: conversationId)
                 }
+            case "monthly_report":
+                NotificationNavigationManager.shared.navigateToMonthlyReport()
             default:
                 break
             }

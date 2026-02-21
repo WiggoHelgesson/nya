@@ -34,6 +34,7 @@ class PostUploadManager: ObservableObject {
         let stravaDuration: Int
         let stravaDistance: Double
         let stravaRouteCoordinates: [CLLocationCoordinate2D]
+        let isPublic: Bool
     }
     
     func startUpload(context: UploadContext) {
@@ -127,7 +128,9 @@ class PostUploadManager: ObservableObject {
                 )
                 
                 await MainActor.run {
-                    SocialViewModel.shared.insertPostAtTop(completedPost)
+                    if context.isPublic {
+                        SocialViewModel.shared.insertPostAtTop(completedPost)
+                    }
                     SocialViewModel.invalidateCache()
                     withAnimation(.easeOut(duration: 0.3)) {
                         self.isUploading = false

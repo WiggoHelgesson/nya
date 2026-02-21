@@ -1008,7 +1008,21 @@ struct PersonalDetailsView: View {
     }
     
     private func saveBirthDate() {
-        // Save birth date logic
+        guard let userId = authViewModel.currentUser?.id else { return }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: birthDate)
+        Task {
+            do {
+                try await SupabaseConfig.supabase
+                    .from("profiles")
+                    .update(["birth_date": dateString])
+                    .eq("id", value: userId)
+                    .execute()
+            } catch {
+                print("❌ Error saving birth date: \(error)")
+            }
+        }
     }
     
     private func saveGender() {

@@ -12,12 +12,14 @@ CREATE TABLE IF NOT EXISTS public.ad_campaigns (
   title TEXT NOT NULL,
   description TEXT,
   image_url TEXT,
+  profile_image_url TEXT,
   cta_text TEXT DEFAULT 'Läs mer',
   cta_url TEXT NOT NULL,
   start_date TIMESTAMPTZ DEFAULT now(),
   end_date TIMESTAMPTZ,
   views_count INTEGER DEFAULT 0,
   clicks_count INTEGER DEFAULT 0,
+  daily_bid NUMERIC(10,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

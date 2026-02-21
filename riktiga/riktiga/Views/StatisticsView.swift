@@ -2611,8 +2611,10 @@ struct MonthlyReportView: View {
     @State private var showHeader = false
     @State private var showYearChart = false
     @State private var showTotals = false
+    @State private var showLivePhotos = false
     @State private var showCalendar = false
     @State private var showSports = false
+    @State private var showTopExercises = false
     @State private var showLongest = false
     @State private var showKudos = false
     
@@ -2697,7 +2699,12 @@ struct MonthlyReportView: View {
     }
     
     private var longestActivity: WorkoutPost? {
-        monthPosts.max(by: { ($0.distance ?? 0) < ($1.distance ?? 0) })
+        let distanceActivityTypes = ["run", "löpning", "running", "walk", "promenad", "walking", "ski", "skidåkning", "skiing", "cross-country skiing", "längdskidåkning"]
+        let eligiblePosts = monthPosts.filter { post in
+            let type = post.activityType.lowercased()
+            return distanceActivityTypes.contains(where: { type.contains($0) }) && (post.distance ?? 0) > 0
+        }
+        return eligiblePosts.max(by: { ($0.distance ?? 0) < ($1.distance ?? 0) })
     }
     
     private var highlightedDays: Set<Int> {
@@ -2726,53 +2733,84 @@ struct MonthlyReportView: View {
         sportBreakdown.first?.type ?? "Träning"
     }
     
+    private var top5Exercises: [(name: String, count: Int)] {
+        var exerciseCounts: [String: Int] = [:]
+        for post in monthPosts {
+            guard let exercises = post.exercises else { continue }
+            for exercise in exercises {
+                let name = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { continue }
+                exerciseCounts[name, default: 0] += 1
+            }
+        }
+        return exerciseCounts
+            .sorted { $0.value > $1.value }
+            .prefix(5)
+            .map { (name: $0.key, count: $0.value) }
+    }
+    
+    private var livePhotoPosts: [WorkoutPost] {
+        monthPosts.filter { post in
+            if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
+                return userImageUrl.contains("live_")
+            }
+            return false
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(spacing: 0) {
                     if isLoading {
-                        loadingView
-                            .frame(width: geometry.size.width, height: geometry.size.height)
+                        skeletonView(geometry: geometry)
                     } else if let errorMessage {
                         errorView(errorMessage)
                             .frame(width: geometry.size.width, height: geometry.size.height)
                     } else {
-                        // Black header section - elegant fade and scale
                         headerSection(geometry: geometry)
                             .opacity(showHeader ? 1 : 0)
                             .scaleEffect(showHeader ? 1 : 0.97)
                         
-                        // Year chart - slide up with fade
                         yearChartSection(geometry: geometry)
                             .opacity(showYearChart ? 1 : 0)
                             .offset(y: showYearChart ? 0 : 25)
                             .scaleEffect(showYearChart ? 1 : 0.98)
                         
-                        // Month totals - elegant reveal
                         monthTotalsSection(geometry: geometry)
                             .opacity(showTotals ? 1 : 0)
                             .offset(y: showTotals ? 0 : 25)
                             .scaleEffect(showTotals ? 1 : 0.98)
                         
-                        // Calendar - smooth appearance
+                        if !livePhotoPosts.isEmpty {
+                            livePhotosSliderSection(geometry: geometry)
+                                .opacity(showLivePhotos ? 1 : 0)
+                                .offset(y: showLivePhotos ? 0 : 25)
+                                .scaleEffect(showLivePhotos ? 1 : 0.98)
+                        }
+                        
                         calendarSection(geometry: geometry)
                             .opacity(showCalendar ? 1 : 0)
                             .offset(y: showCalendar ? 0 : 25)
                             .scaleEffect(showCalendar ? 1 : 0.98)
                         
-                        // Top Sports - refined animation
                         topSportsSection(geometry: geometry)
                             .opacity(showSports ? 1 : 0)
                             .offset(y: showSports ? 0 : 25)
                             .scaleEffect(showSports ? 1 : 0.98)
                         
-                        // Longest Activity - gentle reveal
+                        if !top5Exercises.isEmpty {
+                            topExercisesSection(geometry: geometry)
+                                .opacity(showTopExercises ? 1 : 0)
+                                .offset(y: showTopExercises ? 0 : 25)
+                                .scaleEffect(showTopExercises ? 1 : 0.98)
+                        }
+                        
                         longestActivitySection(geometry: geometry)
                             .opacity(showLongest ? 1 : 0)
                             .offset(y: showLongest ? 0 : 25)
                             .scaleEffect(showLongest ? 1 : 0.98)
                         
-                        // Kudos section - final elegant touch
                         kudosSection(geometry: geometry)
                             .opacity(showKudos ? 1 : 0)
                             .offset(y: showKudos ? 0 : 25)
@@ -2782,7 +2820,7 @@ struct MonthlyReportView: View {
             }
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Månadsrecap")
+        .navigationTitle("Månadsrapport")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if !hasLoaded {
@@ -2792,50 +2830,40 @@ struct MonthlyReportView: View {
             }
         }
         .onAppear {
+            NavigationDepthTracker.shared.setAtRoot(false)
+            NavigationDepthTracker.shared.hideTabBar = true
             if hasLoaded {
                 animateMonthlyContent()
             }
         }
+        .onDisappear {
+            NavigationDepthTracker.shared.setAtRoot(true)
+            NavigationDepthTracker.shared.hideTabBar = false
+        }
     }
     
     private func animateMonthlyContent() {
-        // Reset states first
         showHeader = false
         showYearChart = false
         showTotals = false
+        showLivePhotos = false
         showCalendar = false
         showSports = false
+        showTopExercises = false
         showLongest = false
         showKudos = false
         
-        // Elegant staggered animations with smooth spring curves
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-            showHeader = true
-        }
+        let spring = Animation.spring(response: 0.6, dampingFraction: 0.85)
         
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.12)) {
-            showYearChart = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.22)) {
-            showTotals = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.32)) {
-            showCalendar = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.42)) {
-            showSports = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.52)) {
-            showLongest = true
-        }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.62)) {
-            showKudos = true
-        }
+        withAnimation(spring) { showHeader = true }
+        withAnimation(spring.delay(0.12)) { showYearChart = true }
+        withAnimation(spring.delay(0.22)) { showTotals = true }
+        withAnimation(spring.delay(0.30)) { showLivePhotos = true }
+        withAnimation(spring.delay(0.38)) { showCalendar = true }
+        withAnimation(spring.delay(0.46)) { showSports = true }
+        withAnimation(spring.delay(0.54)) { showTopExercises = true }
+        withAnimation(spring.delay(0.62)) { showLongest = true }
+        withAnimation(spring.delay(0.70)) { showKudos = true }
     }
     
     // MARK: - Header Section
@@ -2891,7 +2919,7 @@ struct MonthlyReportView: View {
                                 Circle()
                                     .fill(Color.orange)
                                     .frame(width: 6, height: 6)
-                                Text("\(Int(data.hours)) HRS")
+                                Text("\(Int(data.hours)) TIM")
                                     .font(.system(size: 8, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -3017,7 +3045,90 @@ struct MonthlyReportView: View {
         .background(Color(.systemBackground))
     }
     
-    // Helper to format large KG numbers
+    // MARK: - Live Photos Slider Section
+    private func livePhotosSliderSection(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .cornerRadius(4)
+                Text("UP&DOWN LIVE")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.primary)
+                    .tracking(1)
+            }
+            .padding(.horizontal, 20)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(livePhotoPosts, id: \.id) { post in
+                        if let userImageUrl = post.userImageUrl {
+                            MonthlyReportLiveImage(path: userImageUrl)
+                                .frame(width: geometry.size.width * 0.75)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Top 5 Exercises Section
+    private func topExercisesSection(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("TOPP 5 ÖVNINGAR")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.primary)
+                .tracking(1)
+            
+            VStack(spacing: 0) {
+                ForEach(Array(top5Exercises.enumerated()), id: \.offset) { index, exercise in
+                    HStack(spacing: 14) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 28, weight: .thin))
+                            .foregroundColor(.gray)
+                            .frame(width: 30, alignment: .center)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(exercise.name)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            Text("\(exercise.count) \(exercise.count == 1 ? "gång" : "gånger")")
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Spacer()
+                        
+                        if index == 0 {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    
+                    if index < top5Exercises.count - 1 {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(height: 1)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 30)
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+    }
+    
     private func formatKg(_ kg: Double) -> String {
         if kg >= 1000 {
             return String(format: "%.1fk", kg / 1000)
@@ -3028,7 +3139,7 @@ struct MonthlyReportView: View {
     
     // MARK: - Calendar Section
     private func calendarSection(geometry: GeometryProxy) -> some View {
-        let weekdaySymbols = ["M", "T", "W", "T", "F", "S", "S"]
+        let weekdaySymbols = ["M", "T", "O", "T", "F", "L", "S"]
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: lastMonthDate))!
         let daysInMonth = calendar.range(of: .day, in: .month, for: startOfMonth)?.count ?? 30
         let rawWeekday = calendar.component(.weekday, from: startOfMonth)
@@ -3181,11 +3292,11 @@ struct MonthlyReportView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "location")
                                 .font(.system(size: 12))
-                            if let distance = post.distance {
+                            if let distance = post.distance, distance > 0 {
                                 Text("\(String(format: "%.1f", distance / 1000)) km")
                                     .font(.system(size: 13, weight: .medium))
                             }
-                            if let elevation = post.elevationGain {
+                            if let elevation = post.elevationGain, elevation > 0 {
                                 Text("\(String(format: "%.0f", elevation)) m")
                                     .font(.system(size: 13, weight: .medium))
                             }
@@ -3267,15 +3378,85 @@ struct MonthlyReportView: View {
         }
     }
     
-    // MARK: - Loading & Error Views
-    private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Hämtar din månadsrecap…")
-                .font(.callout)
-                .foregroundColor(.secondary)
+    // MARK: - Skeleton Loading View
+    private func skeletonView(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            // Header skeleton
+            VStack(alignment: .leading, spacing: 12) {
+                SkeletonRect(width: 120, height: 14)
+                Spacer()
+                VStack(alignment: .leading, spacing: -10) {
+                    SkeletonRect(width: geometry.size.width * 0.6, height: 50)
+                    SkeletonRect(width: geometry.size.width * 0.4, height: 50)
+                        .padding(.top, 16)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity, minHeight: geometry.size.height * 0.7, alignment: .leading)
+            .background(Color.black)
+            
+            // Chart skeleton
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(0..<12, id: \.self) { i in
+                    VStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.white.opacity(0.15))
+                            .frame(height: CGFloat.random(in: 20...100))
+                        SkeletonRect(width: 20, height: 8, light: false)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity, minHeight: 220)
+            .background(Color.black)
+            
+            // Summary skeleton
+            VStack(alignment: .leading, spacing: 20) {
+                SkeletonRect(width: 140, height: 11)
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonRect(width: 60, height: 9)
+                        SkeletonRect(width: 80, height: 60)
+                    }
+                    .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            SkeletonRect(width: .infinity, height: 24)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 30)
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemBackground))
+            
+            // Calendar skeleton
+            VStack(spacing: 16) {
+                HStack {
+                    ForEach(0..<7, id: \.self) { _ in
+                        SkeletonRect(width: 14, height: 11)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 16) {
+                    ForEach(0..<30, id: \.self) { _ in
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .frame(width: 5, height: 5)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 30)
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemBackground))
         }
-        .frame(maxWidth: .infinity, minHeight: 400)
     }
     
     private func errorView(_ message: String) -> some View {
@@ -3381,7 +3562,7 @@ struct MonthlyReportView: View {
     private func formatActivityDate(_ isoString: String) -> String {
         let date = parseDate(isoString) ?? Date()
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM d, yyyy"
+        formatter.dateFormat = "d MMMM yyyy"
         formatter.locale = Locale(identifier: "sv_SE")
         return formatter.string(from: date)
     }
@@ -3395,7 +3576,7 @@ struct MonthlyReportView: View {
     }
     
     private func monthAbbreviation(_ month: Int) -> String {
-        let abbreviations = ["", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        let abbreviations = ["", "JAN", "FEB", "MAR", "APR", "MAJ", "JUN", "JUL", "AUG", "SEP", "OKT", "NOV", "DEC"]
         return abbreviations[month]
     }
     
@@ -3408,6 +3589,75 @@ struct MonthlyReportView: View {
         case "golf": return "figure.golf"
         default: return "figure.walk"
         }
+    }
+}
+
+private struct MonthlyReportLiveImage: View {
+    let path: String
+    @State private var image: UIImage?
+    @State private var isLoading = true
+    
+    var body: some View {
+        ZStack {
+            Color.black
+            
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .frame(height: 300)
+            }
+        }
+        .task {
+            if let cached = ImageCacheManager.shared.getImage(for: path) {
+                self.image = cached
+                self.isLoading = false
+                return
+            }
+            guard let url = URL(string: path) else {
+                isLoading = false
+                return
+            }
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let loadedImage = UIImage(data: data) {
+                    ImageCacheManager.shared.setImage(loadedImage, for: path)
+                    await MainActor.run {
+                        self.image = loadedImage
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run { self.isLoading = false }
+            }
+        }
+    }
+}
+
+private struct SkeletonRect: View {
+    let width: CGFloat
+    let height: CGFloat
+    var light: Bool = true
+    
+    @State private var shimmer = false
+    
+    init(width: CGFloat, height: CGFloat, light: Bool = true) {
+        self.width = width
+        self.height = height
+        self.light = light
+    }
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(light ? Color(.systemGray5) : Color.white.opacity(0.1))
+            .frame(width: width == .infinity ? nil : width, height: height)
+            .frame(maxWidth: width == .infinity ? .infinity : nil)
+            .opacity(shimmer ? 0.4 : 1.0)
+            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: shimmer)
+            .onAppear { shimmer = true }
     }
 }
 

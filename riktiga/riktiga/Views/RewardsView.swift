@@ -401,15 +401,20 @@ struct RewardsView: View {
                             } placeholder: {
                                 Rectangle().fill(Color.gray.opacity(0.15))
                             }
+                            .frame(height: 200)
+                            .clipped()
                         } else {
                             Rectangle().fill(Color.gray.opacity(0.15))
+                                .frame(height: 200)
                         }
                         
                         LinearGradient(
-                            colors: [.black.opacity(0.6), .clear],
+                            colors: [.black.opacity(0.85), .black.opacity(0.4), .clear],
                             startPoint: .bottom,
-                            endPoint: .center
+                            endPoint: .top
                         )
+                        .frame(height: 120)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text(ad.title)
@@ -418,7 +423,7 @@ struct RewardsView: View {
                             if let desc = ad.description, !desc.isEmpty {
                                 Text(desc)
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.85))
+                                    .foregroundColor(.white.opacity(0.9))
                                     .lineLimit(1)
                             }
                         }
@@ -428,17 +433,17 @@ struct RewardsView: View {
                             Spacer()
                             Text("Annons")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(.white.opacity(0.8))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.black.opacity(0.4))
+                                .background(Color.black.opacity(0.5))
                                 .cornerRadius(4)
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     }
                     .frame(height: 200)
-                    .cornerRadius(16)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
                 .buttonStyle(.plain)
             }

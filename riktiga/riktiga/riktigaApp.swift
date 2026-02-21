@@ -171,6 +171,7 @@ struct UpAndDownApp: App {
                 .onAppear {
                     PushNotificationService.shared.requestPermissionAndRegister()
                     NotificationManager.shared.cancelMealReminders()
+                    NotificationManager.shared.scheduleMonthlyReportNotifications(avatarUrl: authViewModel.currentUser?.avatarUrl)
                     WidgetSyncService.shared.syncStreakData()
                 }
         } else {

@@ -2295,6 +2295,10 @@ struct AuthenticationView: View {
                 
                 // Step 2: Update nutrition/profile data (separate from username)
                 do {
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    let birthDateString = dateFormatter.string(from: data.birthDate)
+                    
                     let updateData = NutritionProfileUpdate(
                         daily_calories_goal: data.dailyCalories,
                         daily_protein_goal: data.dailyProtein,
@@ -2305,7 +2309,8 @@ struct AuthenticationView: View {
                         weight_kg: data.weightKg,
                         gender: data.gender,
                         fitness_goal: data.goal,
-                        workouts_per_week: data.workoutsPerWeek
+                        workouts_per_week: data.workoutsPerWeek,
+                        birth_date: birthDateString
                     )
                     
                     try await SupabaseConfig.supabase

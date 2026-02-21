@@ -28,11 +28,12 @@ Deno.serve(async (req) => {
 
     const { data: ads, error } = await supabase
       .from('ad_campaigns')
-      .select('id, format, title, description, image_url, cta_text, cta_url')
+      .select('id, format, title, description, image_url, profile_image_url, cta_text, cta_url, daily_bid')
       .eq('format', format)
       .eq('status', 'active')
       .lte('start_date', now)
-      .or(`end_date.is.null,end_date.gt.${now}`);
+      .or(`end_date.is.null,end_date.gt.${now}`)
+      .order('daily_bid', { ascending: false });
 
     if (error) {
       throw new Error(error.message);

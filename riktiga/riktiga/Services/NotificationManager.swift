@@ -2,6 +2,22 @@ import Foundation
 import UserNotifications
 import UIKit
 
+private extension UNNotificationAttachment {
+    func copy(index: Int) throws -> UNNotificationAttachment {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dest = tempDir.appendingPathComponent("monthly-avatar-\(index).jpg")
+        if FileManager.default.fileExists(atPath: dest.path) {
+            try FileManager.default.removeItem(at: dest)
+        }
+        try FileManager.default.copyItem(at: url, to: dest)
+        return try UNNotificationAttachment(
+            identifier: "avatar-\(index)",
+            url: dest,
+            options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"]
+        )
+    }
+}
+
 final class NotificationManager {
     static let shared = NotificationManager()
     private init() {}
@@ -266,6 +282,93 @@ final class NotificationManager {
             "active-session-reminder-5h"
         ])
         print("🔕 Active session reminders cancelled")
+    }
+    
+    // MARK: - Monthly Report Notification
+    
+    /// Schedule notifications for the 1st of each of the next 12 months at 10:00.
+    /// Each notification references the previous month's name in Swedish.
+    func scheduleMonthlyReportNotifications(avatarUrl: String?) {
+        let center = UNUserNotificationCenter.current()
+        
+        let existingIds = (0..<12).map { "monthly-report-\($0)" }
+        center.removePendingNotificationRequests(withIdentifiers: existingIds)
+        
+        let swedishMonths = [
+            "januari", "februari", "mars", "april", "maj", "juni",
+            "juli", "augusti", "september", "oktober", "november", "december"
+        ]
+        
+        let calendar = Calendar.current
+        let now = Date()
+        
+        Task {
+            var attachment: UNNotificationAttachment? = nil
+            if let avatarUrl = avatarUrl, let url = URL(string: avatarUrl) {
+                attachment = await downloadAttachment(from: url)
+            }
+            
+            for i in 0..<12 {
+                guard let targetDate = calendar.date(byAdding: .month, value: i + 1, to: now) else { continue }
+                
+                let comps = calendar.dateComponents([.year, .month], from: targetDate)
+                guard let month = comps.month else { continue }
+                
+                let previousMonthIndex = (month - 2 + 12) % 12
+                let previousMonthName = swedishMonths[previousMonthIndex]
+                
+                let content = UNMutableNotificationContent()
+                content.title = "Din månadsrapport är tillgänglig!"
+                content.body = "Månadsrapporten för \(previousMonthName) är nu klar."
+                content.sound = .default
+                content.userInfo = ["type": "monthly_report"]
+                
+                if let attachment = attachment {
+                    do {
+                        let copy = try attachment.copy(index: i)
+                        content.attachments = [copy]
+                    } catch {
+                        print("⚠️ Failed to copy attachment for month \(i): \(error)")
+                    }
+                }
+                
+                var dateComponents = DateComponents()
+                dateComponents.year = comps.year
+                dateComponents.month = comps.month
+                dateComponents.day = 1
+                dateComponents.hour = 10
+                dateComponents.minute = 0
+                
+                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+                let request = UNNotificationRequest(identifier: "monthly-report-\(i)", content: content, trigger: trigger)
+                
+                center.add(request) { error in
+                    if let error = error {
+                        print("❌ Failed to schedule monthly report for \(previousMonthName): \(error)")
+                    } else {
+                        print("✅ Monthly report notification scheduled for \(comps.year ?? 0)-\(String(format: "%02d", comps.month ?? 0))-01 10:00 (\(previousMonthName))")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func downloadAttachment(from url: URL) async -> UNNotificationAttachment? {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let tempDir = FileManager.default.temporaryDirectory
+            let fileUrl = tempDir.appendingPathComponent("monthly-report-avatar.jpg")
+            try data.write(to: fileUrl)
+            let attachment = try UNNotificationAttachment(
+                identifier: "avatar",
+                url: fileUrl,
+                options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"]
+            )
+            return attachment
+        } catch {
+            print("⚠️ Failed to download avatar for notification: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Friend Started Workout Notification

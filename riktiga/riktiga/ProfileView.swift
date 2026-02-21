@@ -54,7 +54,8 @@ struct ProfileActivitiesView: View {
             
             VStack(spacing: 0) {
                 ScrollView {
-                    LazyVStack(spacing: 16) {
+                    VStack(spacing: 16) {
+                    VStack(spacing: 16) {
                     VStack(spacing: 16) {
                         HStack(spacing: 16) {
                             // Profilbild - Shows story ring if active, opens story or image picker
@@ -243,13 +244,15 @@ struct ProfileActivitiesView: View {
                     Divider()
                         .background(Color(.systemGray4))
                         .padding(.top, 24)
+                    }
+                    .padding(.horizontal, 16)
                     
                     // MARK: - My Posts Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Mina aktiviteter")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.primary)
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, 20)
                         
                         if myPostsViewModel.isLoading && myPostsViewModel.posts.isEmpty {
                             VStack(spacing: 12) {
@@ -299,7 +302,7 @@ struct ProfileActivitiesView: View {
                     
                     Spacer()
                     }
-                .padding(16)
+                .padding(.top, 16)
                 }
             }
         } // ZStack

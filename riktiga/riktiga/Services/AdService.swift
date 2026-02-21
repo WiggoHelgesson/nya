@@ -9,17 +9,27 @@ struct AdCampaign: Identifiable, Codable {
     let title: String
     let description: String?
     let image_url: String?
+    let profile_image_url: String?
     let cta_text: String?
     let cta_url: String?
+    let daily_bid: Double?
     
     var imageURL: URL? {
         guard let urlString = image_url else { return nil }
         return URL(string: urlString)
     }
     
-    var ctaURL: URL? {
-        guard let urlString = cta_url else { return nil }
+    var profileImageURL: URL? {
+        guard let urlString = profile_image_url else { return nil }
         return URL(string: urlString)
+    }
+    
+    var ctaURL: URL? {
+        guard let urlString = cta_url, !urlString.isEmpty else { return nil }
+        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
+            return URL(string: urlString)
+        }
+        return URL(string: "https://\(urlString)")
     }
     
     var ctaLabel: String {

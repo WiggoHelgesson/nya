@@ -337,8 +337,8 @@ class DualCameraManager: NSObject, ObservableObject {
         let selfieWidth: CGFloat = 220
         let selfieHeight: CGFloat = 290
         let selfieRect = CGRect(
-            x: 50,   // Margin from left edge
-            y: 180,  // More margin from top so it stays inside visible area
+            x: 130,  // Inward enough to clear rounded-corner clipping in the feed
+            y: 180,
             width: selfieWidth,
             height: selfieHeight
         )

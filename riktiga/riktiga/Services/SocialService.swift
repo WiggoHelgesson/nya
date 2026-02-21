@@ -103,31 +103,17 @@ class SocialService {
     
     /// Get all users that the current user follows
     func getFollowing(userId: String) async throws -> [String] {
-        do {
-            try await AuthSessionManager.shared.ensureValidSession()
-            let follows: [Follow] = try await supabase
-                .from("user_follows")
-                .select()
-                .eq("follower_id", value: userId)
-                .execute()
-                .value
-            
-            let followingIds = follows.map { $0.followingId }
-            print("🔍 getFollowing for user \(userId): found \(followingIds.count) following relationships")
-            print("🔍 Following IDs: \(followingIds)")
-            return followingIds
-        } catch {
-            // Don't log cancelled requests as errors
-            if let urlError = error as? URLError, urlError.code == .cancelled {
-                if !hasLoggedFollowingCancelled {
-                    print("⚠️ Following request was cancelled")
-                    hasLoggedFollowingCancelled = true
-                }
-                return []
-            }
-            print("❌ Error fetching following: \(error)")
-            return []
-        }
+        try await AuthSessionManager.shared.ensureValidSession()
+        let follows: [Follow] = try await supabase
+            .from("user_follows")
+            .select()
+            .eq("follower_id", value: userId)
+            .execute()
+            .value
+        
+        let followingIds = follows.map { $0.followingId }
+        print("🔍 getFollowing for user \(userId): found \(followingIds.count) following relationships")
+        return followingIds
     }
     
     /// Get detailed user information for users that the current user follows
@@ -955,11 +941,13 @@ class SocialService {
             try await AuthSessionManager.shared.ensureValidSession()
             // Always include the provided userId (avoid auth.user() cancellation problems)
             var userIdsToFetch: [String] = [userId]
+            var followingFetchSucceeded = false
             var followingCount = 0
             
-            // Try to add following users; if request is cancelled, just continue with current user
+            // Try to add following users; if request fails, skip featured fallback
             do {
                 let following = try await getFollowing(userId: userId)
+                followingFetchSucceeded = true
                 followingCount = following.count
                 userIdsToFetch.append(contentsOf: following)
             } catch let urlError as URLError where urlError.code == .cancelled {
@@ -971,8 +959,8 @@ class SocialService {
                 print("⚠️ Could not fetch following list: \(error) - proceeding with current user's posts only")
             }
             
-            // If user doesn't follow anyone, show posts from featured users instead
-            if followingCount == 0 {
+            // Only show featured users when we know for sure the user follows nobody
+            if followingFetchSucceeded && followingCount == 0 {
                 let featuredUserIds = try await getFeaturedUserIds()
                 userIdsToFetch.append(contentsOf: featuredUserIds)
                 print("📱 User follows no one - showing featured users: \(Self.featuredUsernames)")
@@ -1004,6 +992,7 @@ class SocialService {
                     location,
                     trained_with,
                     route_data,
+                    is_public,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1013,14 +1002,16 @@ class SocialService {
                 .execute()
                 .value
             
-            // Cache the counts for later use
-            for post in posts {
+            // Filter out private posts from other users (own posts always visible)
+            let visiblePosts = posts.filter { $0.userId == userId || $0.isPublic }
+            
+            for post in visiblePosts {
                 postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
             }
             
             hasLoggedSocialFeedCancelled = false
-            print("✅ Fetched \(posts.count) social feed posts from \(userIdsToFetch.count) users")
-            let enriched = await markLikedPosts(posts, userId: userId)
+            print("✅ Fetched \(visiblePosts.count) visible social feed posts from \(userIdsToFetch.count) users")
+            let enriched = await markLikedPosts(visiblePosts, userId: userId)
             return enriched
         } catch let urlError as URLError where urlError.code == .cancelled {
             // Don't throw error for cancelled requests
@@ -1085,6 +1076,7 @@ class SocialService {
                     location,
                     trained_with,
                     route_data,
+                    is_public,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1094,11 +1086,13 @@ class SocialService {
                 .execute()
                 .value
             
-            for post in posts {
+            let visiblePosts = (targetUserId == viewerId) ? posts : posts.filter { $0.isPublic }
+            
+            for post in visiblePosts {
                 postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
             }
             
-            return await markLikedPosts(posts, userId: viewerId)
+            return await markLikedPosts(visiblePosts, userId: viewerId)
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch {
@@ -1136,6 +1130,7 @@ class SocialService {
                     location,
                     trained_with,
                     route_data,
+                    is_public,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
@@ -1248,18 +1243,21 @@ class SocialService {
                             userName: profile?.name,
                             userAvatarUrl: profile?.avatarUrl,
                             userIsPro: profile?.isProMember,
-                            location: nil,
+                            location: post.location,
                             strokes: nil,
                             likeCount: counts.likeCount,
                             commentCount: counts.commentCount,
                             isLikedByCurrentUser: false,
                             splits: post.splits,
                             exercises: post.exercises,
+                            trainedWith: post.trainedWith?.map { TrainedWithPerson(id: $0.id, username: $0.username, avatarUrl: $0.avatarUrl) },
                             pbExerciseName: post.pbExerciseName,
                             pbValue: post.pbValue,
                             streakCount: post.streakCount,
                             source: post.source,
-                            deviceName: post.deviceName
+                            deviceName: post.deviceName,
+                            routeData: post.routeData,
+                            isPublic: post.isPublic
                         )
                     }
                     return mapped
@@ -1323,12 +1321,12 @@ class SocialService {
                     pbValue: post.pbValue,
                     streakCount: post.streakCount,
                     source: post.source,
-                    deviceName: post.deviceName
+                    deviceName: post.deviceName,
+                    isPublic: post.isPublic
                 )
             }
         } catch {
             print("❌ Could not mark liked posts: \(error) - returning posts with isLikedByCurrentUser as false")
-            // Return posts with isLikedByCurrentUser explicitly set to false so UI is consistent
             return posts.map { post in
                 SocialWorkoutPost(
                     id: post.id,
@@ -1356,7 +1354,8 @@ class SocialService {
                     pbValue: post.pbValue,
                     streakCount: post.streakCount,
                     source: post.source,
-                    deviceName: post.deviceName
+                    deviceName: post.deviceName,
+                    isPublic: post.isPublic
                 )
             }
         }
@@ -1393,11 +1392,13 @@ class SocialService {
                     location,
                     trained_with,
                     route_data,
+                    is_public,
                     profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
                     workout_post_likes(count),
                     workout_post_comments(count)
                 """)
-                .neq("user_id", value: viewerId) // Exclude own posts
+                .neq("user_id", value: viewerId)
+                .eq("is_public", value: true)
                 .order("created_at", ascending: false)
                 .limit(limit)
                 .execute()

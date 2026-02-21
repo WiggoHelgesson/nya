@@ -61,8 +61,10 @@ struct SocialView: View {
     @State private var isLoadingStories = false
     @State private var selectedUserStories: UserStories? = nil
     
-    // Notification navigation state - scroll to post instead of opening detail
+    // Notification navigation state
     @State private var highlightedPostId: String? = nil
+    @State private var scrollToPostId: String? = nil
+    @State private var commentsPostFromNotification: SocialWorkoutPost? = nil
     
     // Friends at gym state
     @State private var activeFriends: [ActiveFriendSession] = []
@@ -123,6 +125,14 @@ struct SocialView: View {
                 WorkoutDetailView(post: post)
                     .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
                     .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+            }
+            .navigationDestination(item: $commentsPostFromNotification) { post in
+                CommentsView(post: post, onCommentAdded: {
+                    socialViewModel.updatePostCommentCount(postId: post.id, commentCount: (post.commentCount ?? 0) + 1)
+                })
+                .environmentObject(authViewModel)
+                .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
             }
             .task(id: authViewModel.currentUser?.id) {
                 await loadInitialData()
@@ -188,19 +198,27 @@ struct SocialView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPost"))) { notification in
                 if let userInfo = notification.userInfo,
                    let postId = userInfo["postId"] as? String {
-                    // Switch to feed tab first
                     withAnimation {
                         selectedTab = .feed
                     }
-                    // Set highlighted post to scroll to and highlight it
-                    highlightedPostId = postId
+                    scrollToPostId = postId
                     
-                    // If post not in feed, fetch it first
                     if !socialViewModel.posts.contains(where: { $0.id == postId }) {
                         pendingPostNavigation = postId
                         Task {
                             await fetchPostForHighlight(postId: postId)
                         }
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenCommentsForPost"))) { notification in
+                if let userInfo = notification.userInfo,
+                   let postId = userInfo["postId"] as? String {
+                    withAnimation {
+                        selectedTab = .feed
+                    }
+                    Task {
+                        await openCommentsForPost(postId: postId)
                     }
                 }
             }
@@ -732,16 +750,24 @@ struct SocialView: View {
             }
             .onChange(of: highlightedPostId) { _, postId in
                 if let postId = postId {
-                    // Scroll to the highlighted post with animation
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                         scrollProxy.scrollTo(postId, anchor: .center)
                     }
-                    // Remove highlight after 3 seconds
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                         withAnimation(.easeOut(duration: 0.5)) {
                             highlightedPostId = nil
                         }
                     }
+                }
+            }
+            .onChange(of: scrollToPostId) { _, postId in
+                if let postId = postId {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            scrollProxy.scrollTo(postId, anchor: .center)
+                        }
+                    }
+                    scrollToPostId = nil
                 }
             }
         }
@@ -750,6 +776,19 @@ struct SocialView: View {
     // MARK: - Friends at Gym Section
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Button {
+                if let url = URL(string: "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Text("Gillar du Up&Down? Skriv gärna ett omdöme på AppStore!")
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+                    .underline()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text("Vänner som tränar")
                     .font(.system(size: 20, weight: .bold))
@@ -1376,10 +1415,8 @@ struct SocialView: View {
         }
     }
     
-    // Fetch post for highlight (from notification) - doesn't open detail, just scrolls and highlights
     private func fetchPostForHighlight(postId: String) async {
         do {
-            // Try to fetch this specific post
             let post: SocialWorkoutPost = try await SupabaseConfig.supabase
                 .from("workout_posts")
                 .select("""
@@ -1394,18 +1431,45 @@ struct SocialView: View {
                 .value
             
             await MainActor.run {
-                // Add the post to the feed if it's not already there
                 if !socialViewModel.posts.contains(where: { $0.id == postId }) {
-                    // Insert at the beginning of the posts array
                     socialViewModel.posts.insert(post, at: 0)
                 }
                 pendingPostNavigation = nil
-                // The highlightedPostId is already set, ScrollViewReader will scroll to it
+                scrollToPostId = postId
             }
         } catch {
-            print("❌ Failed to fetch post for highlight \(postId): \(error)")
+            print("❌ Failed to fetch post for scroll \(postId): \(error)")
             pendingPostNavigation = nil
-            highlightedPostId = nil
+            scrollToPostId = nil
+        }
+    }
+    
+    private func openCommentsForPost(postId: String) async {
+        if let post = socialViewModel.posts.first(where: { $0.id == postId }) {
+            await MainActor.run {
+                commentsPostFromNotification = post
+            }
+            return
+        }
+        do {
+            let post: SocialWorkoutPost = try await SupabaseConfig.supabase
+                .from("workout_posts")
+                .select("""
+                    *,
+                    profiles!inner(username, avatar_url, is_pro_member),
+                    workout_post_likes(count),
+                    workout_post_comments(count)
+                """)
+                .eq("id", value: postId)
+                .single()
+                .execute()
+                .value
+            
+            await MainActor.run {
+                commentsPostFromNotification = post
+            }
+        } catch {
+            print("❌ Failed to fetch post for comments \(postId): \(error)")
         }
     }
     
@@ -1525,8 +1589,6 @@ struct SocialView: View {
     private var feedContent: some View {
         LazyVStack(spacing: 0, pinnedViews: []) {
             ForEach(Array(postsToDisplay.enumerated()), id: \.element.id) { index, post in
-                let isHighlighted = highlightedPostId == post.id
-                
                 VStack(spacing: 0) {
                     SocialPostCard(
                         post: post,
@@ -1541,20 +1603,7 @@ struct SocialView: View {
                             socialViewModel.removePost(postId: postId)
                         }
                     )
-                    .id(post.id) // Stable identity for better SwiftUI diffing
-                    .overlay(
-                        // Highlight overlay when navigating from notification
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue, lineWidth: isHighlighted ? 3 : 0)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.blue.opacity(isHighlighted ? 0.08 : 0))
-                            )
-                            .padding(4)
-                            .animation(.easeInOut(duration: 0.3), value: isHighlighted)
-                    )
-                    .scaleEffect(isHighlighted ? 1.01 : 1.0)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isHighlighted)
+                    .id(post.id)
                     
                     Divider()
                         .background(Color(.systemGray5))
@@ -2462,7 +2511,10 @@ struct SocialPostCard: View {
     
     // Used in statsSection to avoid duplicate stats
     private var showsCleanCard: Bool {
-        post.isExternalPost || shouldShowCleanCard
+        if let routeData = post.routeData, !routeData.isEmpty {
+            return false
+        }
+        return post.isExternalPost || shouldShowCleanCard
     }
     
     private var hasTrainedWith: Bool {
@@ -4108,7 +4160,8 @@ class SocialViewModel: ObservableObject {
             streakCount: oldPost.streakCount,
             source: oldPost.source,
             deviceName: oldPost.deviceName,
-            routeData: oldPost.routeData
+            routeData: oldPost.routeData,
+            isPublic: oldPost.isPublic
         )
         
         posts[index] = updatedPost
@@ -4156,7 +4209,8 @@ class SocialViewModel: ObservableObject {
             streakCount: oldPost.streakCount,
             source: oldPost.source,
             deviceName: oldPost.deviceName,
-            routeData: oldPost.routeData
+            routeData: oldPost.routeData,
+            isPublic: oldPost.isPublic
         )
         
         posts[index] = updatedPost
@@ -4202,7 +4256,8 @@ class SocialViewModel: ObservableObject {
             streakCount: oldPost.streakCount,
             source: oldPost.source,
             deviceName: oldPost.deviceName,
-            routeData: oldPost.routeData
+            routeData: oldPost.routeData,
+            isPublic: oldPost.isPublic
         )
         
         posts[index] = updatedPost
@@ -4419,7 +4474,8 @@ class SocialViewModel: ObservableObject {
                     streakCount: post.streakCount,
                     source: post.source,
                     deviceName: post.deviceName,
-                    routeData: post.routeData
+                    routeData: post.routeData,
+                    isPublic: post.isPublic
                 )
             }
             return post
@@ -4607,7 +4663,8 @@ class SocialViewModel: ObservableObject {
                 streakCount: post.streakCount,
                 source: post.source,
                 deviceName: post.deviceName,
-                routeData: post.routeData
+                routeData: post.routeData,
+                isPublic: post.isPublic
             )
         }
         
@@ -5275,12 +5332,21 @@ struct FullFrameAsyncImage: View {
     var body: some View {
         Group {
             if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, alignment: isLivePhoto ? .leading : .center)
-                    .frame(height: height)
-                    .clipped()
+                if isLivePhoto {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: height)
+                        .background(Color.black)
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: height)
+                        .clipped()
+                }
             } else if isLoading {
                 Rectangle()
                     .fill(Color(.systemGray5))
@@ -5780,8 +5846,8 @@ private struct FeedAdCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                if let imageURL = ad.imageURL {
-                    AsyncImage(url: imageURL) { image in
+                if let profileURL = ad.profileImageURL {
+                    AsyncImage(url: profileURL) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Color.gray.opacity(0.3)

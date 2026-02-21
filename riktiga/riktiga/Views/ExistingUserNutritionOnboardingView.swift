@@ -643,6 +643,10 @@ struct ExistingUserNutritionOnboardingView: View {
     private func saveAndComplete() {
         Task {
             if let userId = authViewModel.currentUser?.id {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                let birthDateString = dateFormatter.string(from: birthDate)
+                
                 let updateData = NutritionProfileUpdate(
                     daily_calories_goal: dailyCalories,
                     daily_protein_goal: dailyProtein,
@@ -653,7 +657,8 @@ struct ExistingUserNutritionOnboardingView: View {
                     weight_kg: weightKg,
                     gender: gender,
                     fitness_goal: goal,
-                    workouts_per_week: workoutsPerWeek
+                    workouts_per_week: workoutsPerWeek,
+                    birth_date: birthDateString
                 )
                 
                 do {

@@ -308,7 +308,8 @@ class WorkoutService {
             pbValue: post.pbValue,
             streakCount: post.streakCount,
             location: post.location,
-            trainedWith: post.trainedWith
+            trainedWith: post.trainedWith,
+            isPublic: post.isPublic
         )
         
         do {
@@ -392,6 +393,8 @@ class WorkoutService {
                 print("👥 Saving post with trained_with: \(trainedWith.count) friends")
             }
             
+            minimalPost["is_public"] = DynamicEncodable(postToSave.isPublic)
+            
             try await supabase
                 .from("workout_posts")
                 .insert(minimalPost)
@@ -404,17 +407,17 @@ class WorkoutService {
             }
             AppCacheManager.shared.clearCacheForUser(userId: post.userId)
             
-            // Notify followers about the new workout
-            Task {
-                // Get user profile for name and avatar
-                if let profile = try? await ProfileService.shared.fetchUserProfile(userId: post.userId) {
-                    await PushNotificationService.shared.notifyFollowersAboutWorkout(
-                        userId: post.userId,
-                        userName: profile.name,
-                        userAvatar: profile.avatarUrl,
-                        activityType: post.activityType,
-                        postId: post.id
-                    )
+            if postToSave.isPublic {
+                Task {
+                    if let profile = try? await ProfileService.shared.fetchUserProfile(userId: post.userId) {
+                        await PushNotificationService.shared.notifyFollowersAboutWorkout(
+                            userId: post.userId,
+                            userName: profile.name,
+                            userAvatar: profile.avatarUrl,
+                            activityType: post.activityType,
+                            postId: post.id
+                        )
+                    }
                 }
             }
             
