@@ -77,7 +77,6 @@ struct MainTabView: View {
     @State private var showAIScanPaywall = false
     @State private var showManualEntry = false
     @State private var showProWelcome = false
-    @State private var showSessionAutoEndedAlert = false
     @State private var hasActiveCoach = false
     @State private var coachWorkoutToStart: SavedGymWorkout? = nil
     @State private var pendingCoachInvitation: CoachInvitation? = nil
@@ -147,7 +146,6 @@ struct MainTabView: View {
                 showStartSession: $showStartSession,
                 showResumeSession: $showResumeSession,
                 showProWelcome: $showProWelcome,
-                showSessionAutoEndedAlert: $showSessionAutoEndedAlert,
                 previousTab: $previousTab,
                 hasActiveCoach: hasActiveCoach,
                 notificationNav: notificationNav,
@@ -183,11 +181,6 @@ struct MainTabView: View {
                 if scenePhase == .active {
                     Task { try? await AuthSessionManager.shared.ensureValidSession() }
                 }
-            }
-            .alert("Passet avslutades", isPresented: $showSessionAutoEndedAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Ditt gympass avslutades automatiskt eftersom det varit aktivt i mer än 10 timmar.")
             }
     }
     
@@ -660,7 +653,6 @@ struct MainTabView: View {
     
     private func handleScenePhaseChange() {
         if scenePhase == .active {
-            SessionManager.shared.checkAndAutoEndExpiredSession()
             AuthSessionManager.shared.resetFailureCounter()
             Task { await checkForPendingInvitations() }
             Task {
@@ -897,7 +889,6 @@ private struct StateObserversModifier: ViewModifier {
     @Binding var showStartSession: Bool
     @Binding var showResumeSession: Bool
     @Binding var showProWelcome: Bool
-    @Binding var showSessionAutoEndedAlert: Bool
     @Binding var previousTab: Int
     let hasActiveCoach: Bool
     let notificationNav: NotificationNavigationManager
@@ -966,9 +957,6 @@ private struct StateObserversModifier: ViewModifier {
                 ImageCacheManager.shared.clearCache()
                 TerritoryStore.shared.invalidateCache()
                 SocialViewModel.invalidateCache()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SessionAutoEnded"))) { _ in
-                showSessionAutoEndedAlert = true
             }
     }
 }

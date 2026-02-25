@@ -1,11 +1,23 @@
 import SwiftUI
+import Foundation
+import MapKit
 
 struct WorkoutDetailView: View {
     let post: SocialWorkoutPost
     @Environment(\.dismiss) private var dismiss
+    @State private var showRouteReplay = false
     
     private var isGymPost: Bool {
         post.activityType == "Gympass"
+    }
+    
+    private var hasRouteData: Bool {
+        guard let json = post.routeData, !json.isEmpty,
+              let data = json.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Double]] else {
+            return false
+        }
+        return arr.count >= 2
     }
     
     var body: some View {
@@ -281,42 +293,58 @@ struct WorkoutDetailView: View {
                 Spacer()
             }
             
-            // Sets table header
-            HStack {
-                Text("SET")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .frame(width: 40, alignment: .leading)
-                
-                Text("VIKT & REPS")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-            }
-            .padding(.top, 4)
-            
-            // Sets
-            ForEach(0..<exercise.sets, id: \.self) { setIndex in
-                let weight = setIndex < exercise.kg.count ? exercise.kg[setIndex] : 0
-                let reps = setIndex < exercise.reps.count ? exercise.reps[setIndex] : 0
-                
-                HStack {
-                    Text("\(setIndex + 1)")
-                        .font(.system(size: 15, weight: .bold))
+            if exercise.isCardio == true, let seconds = exercise.cardioSeconds, seconds > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "timer")
+                        .foregroundColor(.black)
+                        .font(.system(size: 20))
+                    Text(formatCardioTime(seconds))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
                         .foregroundColor(.primary)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+            } else {
+                // Sets table header
+                HStack {
+                    Text("SET")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
                         .frame(width: 40, alignment: .leading)
                     
-                    Text("\(formatWeight(weight))kg x \(reps) reps")
-                        .font(.system(size: 15))
-                        .foregroundColor(.primary)
+                    Text("VIKT & REPS")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
                     
                     Spacer()
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(setIndex % 2 == 1 ? Color.gray.opacity(0.08) : Color.clear)
-                .cornerRadius(6)
+                .padding(.top, 4)
+                
+                // Sets
+                ForEach(0..<exercise.sets, id: \.self) { setIndex in
+                    let weight = setIndex < exercise.kg.count ? exercise.kg[setIndex] : 0
+                    let reps = setIndex < exercise.reps.count ? exercise.reps[setIndex] : 0
+                    
+                    HStack {
+                        Text("\(setIndex + 1)")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.primary)
+                            .frame(width: 40, alignment: .leading)
+                        
+                        Text("\(formatWeight(weight))kg x \(reps) reps")
+                            .font(.system(size: 15))
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(setIndex % 2 == 1 ? Color.gray.opacity(0.08) : Color.clear)
+                    .cornerRadius(6)
+                }
             }
             
             // Notes if any
@@ -330,81 +358,236 @@ struct WorkoutDetailView: View {
         .padding(.bottom, 16)
     }
     
-    // MARK: - Running Detail View (Original)
-    private var runningDetailView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
-                    .frame(maxWidth: .infinity)
-                    .cornerRadius(16)
-                    .shadow(radius: 6)
-                
-                overviewSection
-                splitsSection
-            }
-            .padding(20)
-        }
-        .navigationTitle(post.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    // MARK: - Running Detail View (Strava-style)
+    
+    private var avgPace: String {
+        guard let dist = post.distance, dist > 0, let dur = post.duration, dur > 0 else { return "-" }
+        let paceSeconds = Double(dur) / dist
+        let m = Int(paceSeconds) / 60
+        let s = Int(paceSeconds) % 60
+        return String(format: "%d:%02d /km", m, s)
     }
     
-    private var overviewSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                statBlock(title: "Distans", value: formattedDistance)
-                Divider()
-                statBlock(title: "Tid", value: formattedDuration)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
+    private var movingTime: String {
+        guard let duration = post.duration else { return "-" }
+        let hours = duration / 3600
+        let minutes = (duration % 3600) / 60
+        let seconds = duration % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         }
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
+    private var elevationString: String {
+        if let e = post.elevationGain, e > 0 {
+            return "\(Int(e)) m"
+        }
+        return "-"
+    }
+    
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        guard let json = post.routeData, let data = json.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Double]] else { return [] }
+        return arr.compactMap { dict in
+            guard let lat = dict["lat"], let lon = dict["lon"] else { return nil }
+            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+    }
+    
+    private var runningDetailView: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                
+                // MARK: Live route map with play button
+                ZStack(alignment: .topLeading) {
+                    ZStack(alignment: .bottomTrailing) {
+                        if routeCoordinates.count >= 2 {
+                            WorkoutRouteMapView(coordinates: routeCoordinates)
+                                .frame(height: UIScreen.main.bounds.height * 0.55)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl)
+                                .frame(maxWidth: .infinity)
+                        }
+                        
+                        // Play button
+                        if hasRouteData {
+                            Button {
+                                showRouteReplay = true
+                            } label: {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.black)
+                                    .offset(x: 2)
+                                    .frame(width: 56, height: 56)
+                                    .background(Circle().fill(Color.white))
+                                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 3)
+                            }
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                        }
+                    }
+                    
+                    // Back button overlay
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Color.white))
+                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+                    }
+                    .padding(.leading, 16)
+                    .padding(.top, 56)
+                }
+                
+                // MARK: Header (user + date)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        if let avatarUrl = post.userAvatarUrl, !avatarUrl.isEmpty {
+                            AsyncImage(url: URL(string: avatarUrl)) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle().fill(Color(.systemGray5))
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(Color(.systemGray5))
+                                .frame(width: 40, height: 40)
+                                .overlay(Image(systemName: "person.fill").foregroundColor(.gray).font(.system(size: 16)))
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(post.userName ?? "Användare")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text(formattedDate)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+                    
+                    // MARK: Title + description
+                    if !post.title.isEmpty {
+                        Text(post.title)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 16)
+                    }
+                    
+                    if let desc = post.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                    }
+                    
+                    // MARK: Stats grid
+                    VStack(spacing: 0) {
+                        HStack(spacing: 0) {
+                            runStatCell(label: "Distance", value: formattedDistance)
+                            runStatCell(label: "Avg Pace", value: avgPace)
+                        }
+                        
+                        Divider().padding(.horizontal, 16)
+                        
+                        HStack(spacing: 0) {
+                            runStatCell(label: "Moving Time", value: movingTime)
+                            runStatCell(label: "Elevation Gain", value: elevationString)
+                        }
+                    }
+                    .padding(.top, 20)
+                    
+                    Divider()
+                        .padding(.top, 16)
+                    
+                    // MARK: Splits
+                    splitsSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 40)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar, .tabBar)
+        .background(Color.white.ignoresSafeArea())
+        .fullScreenCover(isPresented: $showRouteReplay) {
+            RouteReplayView(post: post)
+        }
+    }
+    
+    private func runStatCell(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
     
     private var splitsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Kilometersplittar")
+            Text("Splits")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.primary)
             
             if let splits = post.splits, !splits.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: 0) {
+                    // Header row
+                    HStack {
+                        Text("KM")
+                            .frame(width: 40, alignment: .leading)
+                        Spacer()
+                        Text("PACE")
+                            .frame(width: 80, alignment: .trailing)
+                        Text("TID")
+                            .frame(width: 60, alignment: .trailing)
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 8)
+                    
                     ForEach(splits) { split in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("Km \(split.kilometerIndex)")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text(distanceString(for: split))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.gray)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing) {
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("\(split.kilometerIndex)")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .frame(width: 40, alignment: .leading)
+                                Spacer()
                                 Text(paceString(for: split))
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 15))
+                                    .frame(width: 80, alignment: .trailing)
                                 Text(durationString(for: split))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.gray)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 60, alignment: .trailing)
                             }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 4)
+                            
+                            Divider()
                         }
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(10)
-                        .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
                     }
                 }
             } else {
-                Text("Inga splits tillgängliga för detta pass.")
+                Text("Inga splits tillgängliga.")
                     .font(.system(size: 15))
-                    .foregroundColor(.gray)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
             }
         }
     }
@@ -436,6 +619,16 @@ struct WorkoutDetailView: View {
         } else {
             return String(format: "%.1f", weight)
         }
+    }
+    
+    private func formatCardioTime(_ totalSeconds: Int) -> String {
+        let h = totalSeconds / 3600
+        let m = (totalSeconds % 3600) / 60
+        let s = totalSeconds % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%d:%02d", m, s)
     }
     
     private func calculateMuscleSplits(exercises: [GymExercisePost]) -> [String: Int] {
@@ -508,18 +701,6 @@ struct WorkoutDetailView: View {
         return post.createdAt
     }
     
-    private func statBlock(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray)
-            Text(value)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.primary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    
     private var formattedDistance: String {
         if let distance = post.distance {
             return String(format: "%.2f km", distance)
@@ -562,5 +743,96 @@ struct WorkoutDetailView: View {
             return "1.00 km"
         }
         return String(format: "%.2f km", split.distanceKm)
+    }
+    
+}
+
+// MARK: - Interactive Route Map
+
+struct WorkoutRouteMapView: UIViewRepresentable {
+    let coordinates: [CLLocationCoordinate2D]
+    
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.delegate = context.coordinator
+        map.mapType = .standard
+        map.isScrollEnabled = true
+        map.isZoomEnabled = true
+        map.isRotateEnabled = true
+        map.isPitchEnabled = true
+        map.showsCompass = true
+        map.pointOfInterestFilter = .excludingAll
+        
+        if coordinates.count >= 2 {
+            let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+            map.addOverlay(polyline)
+            
+            let startAnnotation = MKPointAnnotation()
+            startAnnotation.coordinate = coordinates.first!
+            startAnnotation.title = "start"
+            map.addAnnotation(startAnnotation)
+            
+            let endAnnotation = MKPointAnnotation()
+            endAnnotation.coordinate = coordinates.last!
+            endAnnotation.title = "end"
+            map.addAnnotation(endAnnotation)
+            
+            let inset: CGFloat = 40
+            map.setVisibleMapRect(
+                polyline.boundingMapRect,
+                edgePadding: UIEdgeInsets(top: inset + 60, left: inset, bottom: inset + 20, right: inset),
+                animated: false
+            )
+        }
+        
+        return map
+    }
+    
+    func updateUIView(_ uiView: MKMapView, context: Context) {}
+    
+    class Coordinator: NSObject, MKMapViewDelegate {
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = UIColor(red: 1.0, green: 0.35, blue: 0.0, alpha: 1.0)
+                renderer.lineWidth = 5
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
+        }
+        
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let point = annotation as? MKPointAnnotation else { return nil }
+            
+            if point.title == "start" {
+                let view = MKAnnotationView(annotation: annotation, reuseIdentifier: "start")
+                let size: CGFloat = 14
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+                view.image = renderer.image { ctx in
+                    UIColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 1.0).setFill()
+                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                }
+                view.centerOffset = .zero
+                return view
+            }
+            
+            if point.title == "end" {
+                let view = MKAnnotationView(annotation: annotation, reuseIdentifier: "end")
+                let size: CGFloat = 14
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+                view.image = renderer.image { ctx in
+                    UIColor.red.setFill()
+                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                }
+                view.centerOffset = .zero
+                return view
+            }
+            
+            return nil
+        }
     }
 }

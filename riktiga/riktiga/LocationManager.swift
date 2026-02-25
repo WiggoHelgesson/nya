@@ -23,6 +23,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var startLocation: CLLocation?
     private var totalDistance: Double = 0.0
     private var lastLocation: CLLocation?
+    private var isResumingFromPause: Bool = false
     
     /// Restore distance when resuming a session (prevents distance from resetting to 0)
     func restoreDistance(_ distanceInKm: Double) {
@@ -42,10 +43,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         routeCoordinates = coordinates
-        // Set lastLocation to last coordinate to continue tracking from there
+        if let firstCoord = coordinates.first {
+            startLocation = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
+        }
         if let lastCoord = coordinates.last {
             lastLocation = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
-            print("📍 [RESTORE] Restored \(coordinates.count) coordinates, lastLocation set")
+            print("📍 [RESTORE] Restored \(coordinates.count) coordinates, startLocation and lastLocation set")
         }
     }
     
@@ -187,6 +190,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         isTracking = true
         
         if preserveData {
+            isResumingFromPause = true
             print("🚀 Resuming location tracking with preserved data...")
         } else {
             print("🚀 Starting location tracking...")
@@ -288,6 +292,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             lastLocation = location
             newRoutePoint = location.coordinate
             print("📍 FIRST route point added: \(location.coordinate)")
+        } else if isResumingFromPause {
+            // First update after pause/resume — reset lastLocation to current position
+            // without calculating distance across the pause gap
+            lastLocation = location
+            isResumingFromPause = false
+            newRoutePoint = location.coordinate
+            print("📍 Resumed from pause — lastLocation reset to \(location.coordinate)")
         } else if let lastLoc = lastLocation {
             // Calculate distance from last location
             let distanceFromLast = location.distance(from: lastLoc)
@@ -381,6 +392,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
                 
                 lastLocation = location
+            } else if timeDiff > 30 {
+                // Large time gap (e.g., missed resume flag) — update lastLocation
+                // to prevent permanent freeze, but don't add distance
+                lastLocation = location
+                newRoutePoint = location.coordinate
+                print("📍 Large time gap (\(String(format: "%.0f", timeDiff))s) — resetting lastLocation")
             }
         }
         
@@ -398,7 +415,15 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             if self.isTracking && abs(self.lastLiveActivityUpdate.timeIntervalSinceNow) > 10 {
                 self.lastLiveActivityUpdate = Date()
                 let elapsed = self.activityStartTime.map { Int(Date().timeIntervalSince($0)) } ?? 0
-                let pace = self.currentSpeedKmh > 0 ? String(format: "%.2f km/h", self.currentSpeedKmh) : "0:00"
+                let pace: String = {
+                    let speed = self.currentSpeedKmh
+                    guard speed > 0.5 else { return "0:00" }
+                    let minutesPerKm = 60.0 / speed
+                    if minutesPerKm > 30 { return "0:00" }
+                    let m = Int(minutesPerKm)
+                    let s = Int((minutesPerKm - Double(m)) * 60)
+                    return String(format: "%d:%02d", m, s)
+                }()
                 
                 let state = WorkoutActivityAttributes.ContentState(
                     distance: self.distance,

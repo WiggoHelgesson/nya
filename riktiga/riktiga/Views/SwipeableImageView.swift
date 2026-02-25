@@ -7,37 +7,35 @@ struct SwipeableImageView: View {
     
     @State private var currentIndex = 0
     @State private var currentId: Int? = 0
-    private let peekWidth: CGFloat = 36
+    private let peekWidth: CGFloat = 8
     private let gapWidth: CGFloat = 8
     private let imageHeight: CGFloat = 300
     
-    // Cached computed property for images array - filters out empty/invalid paths
     private var images: [String] {
         var result: [String] = []
-        if let routeImage = routeImage?.trimmingCharacters(in: .whitespacesAndNewlines), 
-           !routeImage.isEmpty,
-           isValidImagePath(routeImage) {
+        if let routeImage = routeImage?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !routeImage.isEmpty, isValidImagePath(routeImage) {
             result.append(routeImage)
         }
-        if let userImage = userImage?.trimmingCharacters(in: .whitespacesAndNewlines), 
-           !userImage.isEmpty,
-           isValidImagePath(userImage) {
-            result.append(userImage)
+        if let raw = userImage?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !raw.isEmpty {
+            if raw.hasPrefix("["),
+               let data = raw.data(using: .utf8),
+               let urls = try? JSONDecoder().decode([String].self, from: data) {
+                result.append(contentsOf: urls.filter { isValidImagePath($0) })
+            } else if isValidImagePath(raw) {
+                result.append(raw)
+            }
         }
         return result
     }
     
-    // Check if path is a valid image path (URL or file path)
     private func isValidImagePath(_ path: String) -> Bool {
-        // Must be a URL or a file path
-        return path.hasPrefix("http") || 
-               path.hasPrefix("/") || 
-               path.hasPrefix("file://")
+        path.hasPrefix("http") || path.hasPrefix("/") || path.hasPrefix("file://")
     }
     
     var body: some View {
         if images.isEmpty {
-            // No images - show placeholder
             Rectangle()
                 .fill(Color(.systemGray6))
                 .frame(height: imageHeight)
@@ -47,27 +45,24 @@ struct SwipeableImageView: View {
                         .foregroundColor(.gray.opacity(0.5))
                 )
         } else if images.count == 1 {
-            // Single image - no swipe needed
             ZStack {
                 Color(.systemGray6)
                 LocalAsyncImage(path: images[0])
             }
             .frame(height: imageHeight)
-            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 2)
             .overlay(
-                    // Tap only center area
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            onTapImage?()
-                        }
-                        .padding(.horizontal, 50)
-                        .padding(.vertical, 50)
-                )
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTapImage?() }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 50)
+            )
         } else {
-            // Multiple images - smooth paging ScrollView with right peek + dots
             GeometryReader { geo in
-                let pageWidth = max(0, geo.size.width - (peekWidth + gapWidth))
+                let sideInset = peekWidth + gapWidth
+                let pageWidth = max(0, geo.size.width - 2 * sideInset)
                 ZStack {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: gapWidth) {
@@ -78,30 +73,26 @@ struct SwipeableImageView: View {
                                 }
                                 .frame(width: pageWidth, height: imageHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                                    .overlay(
-                                        // Tap only center area
-                                        Color.clear
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                onTapImage?()
-                                            }
-                                            .padding(.horizontal, 50)
-                                            .padding(.vertical, 50)
-                                    )
-                                    .id(index)
+                                .overlay(
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { onTapImage?() }
+                                        .padding(.horizontal, 50)
+                                        .padding(.vertical, 50)
+                                )
+                                .id(index)
                             }
                         }
                         .scrollTargetLayout()
                     }
-                    .scrollTargetBehavior(.paging)
-                    .contentMargins(.trailing, peekWidth)
+                    .scrollTargetBehavior(.viewAligned)
+                    .contentMargins(.horizontal, sideInset)
                     .scrollPosition(id: $currentId)
                     .onAppear { currentId = 0 }
                     .onChange(of: currentId) { _, newValue in
                         if let idx = newValue { currentIndex = min(max(0, idx), images.count - 1) }
                     }
 
-                    // Dots overlay (no label)
                     VStack {
                         Spacer()
                         HStack(spacing: 6) {

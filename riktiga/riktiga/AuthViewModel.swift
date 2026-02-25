@@ -11,6 +11,7 @@ class AuthViewModel: NSObject, ObservableObject {
     static let shared = AuthViewModel()
     
     @Published var isLoggedIn = false
+    @Published var isCheckingAuth = true
     @Published var currentUser: User?
     @Published var errorMessage = ""
     @Published var isLoading = false
@@ -135,6 +136,11 @@ class AuthViewModel: NSObject, ObservableObject {
     
     func checkAuthStatus() {
         Task {
+            defer {
+                Task { @MainActor in
+                    self.isCheckingAuth = false
+                }
+            }
             do {
                 let session = try await supabase.auth.session
                 

@@ -405,7 +405,39 @@ struct ProfileImage: View {
             height: size,
             cornerRadius: size / 2
         )
-        // Use URL as identity to force view recreation when URL changes
+        .id(url ?? "no-url")
+    }
+}
+
+// Pro member profile image with squircle shape and gradient border
+struct ProProfileImage: View {
+    let url: String?
+    let size: CGFloat
+    
+    init(url: String?, size: CGFloat = 50) {
+        self.url = url
+        self.size = size
+    }
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.3)
+                .fill(
+                    LinearGradient(
+                        colors: [.black, Color(.systemGray2), .white, Color(.systemGray2), .black],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size + 5, height: size + 5)
+            
+            OptimizedAsyncImage(
+                url: url,
+                width: size,
+                height: size,
+                cornerRadius: size * 0.28
+            )
+        }
         .id(url ?? "no-url")
     }
 }

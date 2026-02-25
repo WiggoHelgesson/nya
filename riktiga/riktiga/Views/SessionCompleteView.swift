@@ -31,7 +31,9 @@ struct SessionCompleteView: View {
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var sessionImage: UIImage?
+    @State private var sessionImages: [UIImage] = []
     @State private var selectedItem: PhotosPickerItem?
+    @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isSaving = false
     @State private var saveButtonTapped = false
     @State private var showDeleteConfirmation = false
@@ -131,6 +133,9 @@ struct SessionCompleteView: View {
         .onChange(of: selectedItem) { _, newItem in
             handleImageSelection(newItem)
         }
+        .onChange(of: selectedItems) { _, newItems in
+            handleMultipleImageSelection(newItems)
+        }
         .sheet(isPresented: $showSaveTemplateSheet) {
             templateNameSheet
         }
@@ -157,6 +162,7 @@ struct SessionCompleteView: View {
             // If a live photo was taken during the session, use it
             if let livePhoto = sessionLivePhoto {
                 sessionImage = livePhoto
+                sessionImages = [livePhoto]
                 isLivePhoto = true
             }
             
@@ -420,9 +426,9 @@ struct SessionCompleteView: View {
             .cornerRadius(12)
             
             // Photo buttons on their own row
-            if sessionImage == nil {
+            if sessionImages.isEmpty && sessionImage == nil {
                 HStack(spacing: 10) {
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
+                    PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
                         HStack(spacing: 8) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .font(.system(size: 18))
@@ -460,10 +466,11 @@ struct SessionCompleteView: View {
                         )
                     }
                 }
-            } else {
-                // Show selected image with remove button
+            } else if !sessionImages.isEmpty {
+                multipleImagesView
+            } else if let currentImage = sessionImage {
                 ZStack(alignment: .topTrailing) {
-                    Image(uiImage: sessionImage!)
+                    Image(uiImage: currentImage)
                         .resizable()
                         .scaledToFill()
                         .frame(height: 120)
@@ -473,6 +480,7 @@ struct SessionCompleteView: View {
                     
                     Button(action: {
                         sessionImage = nil
+                        sessionImages = []
                         selectedItem = nil
                         isLivePhoto = false
                     }) {
@@ -1266,7 +1274,9 @@ struct SessionCompleteView: View {
     @ViewBuilder
     private var photoOptionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let currentImage = sessionImage {
+            if !sessionImages.isEmpty {
+                multipleImagesView
+            } else if let currentImage = sessionImage {
                 selectedImageView(currentImage)
             } else {
                 photoPickerButtons
@@ -1290,6 +1300,58 @@ struct SessionCompleteView: View {
         .padding(.horizontal, 16)
     }
     
+    // MARK: - Multiple Images View
+    private var multipleImagesView: some View {
+        VStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(sessionImages.enumerated()), id: \.offset) { index, image in
+                        ZStack(alignment: .topTrailing) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: sessionImages.count == 1 ? .infinity : 160, height: 200)
+                                .frame(maxWidth: sessionImages.count == 1 ? .infinity : 160)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            
+                            Button(action: {
+                                sessionImages.remove(at: index)
+                                if sessionImages.isEmpty {
+                                    sessionImage = nil
+                                    isLivePhoto = false
+                                } else {
+                                    sessionImage = sessionImages.first
+                                }
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .shadow(radius: 2)
+                            }
+                            .padding(6)
+                        }
+                    }
+                    
+                    if sessionImages.count < 3 {
+                        PhotosPicker(selection: $selectedItems, maxSelectionCount: 3 - sessionImages.count, matching: .images) {
+                            VStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundColor(.gray)
+                                Text("\(sessionImages.count)/3")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(width: 80, height: 200)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     // MARK: - Selected Image View
     private func selectedImageView(_ image: UIImage) -> some View {
         ZStack(alignment: .topTrailing) {
@@ -1302,8 +1364,9 @@ struct SessionCompleteView: View {
             
             Button(action: {
                 sessionImage = nil
+                sessionImages = []
                 selectedItem = nil
-                isLivePhoto = false  // Reset live photo flag
+                isLivePhoto = false
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 28))
@@ -1317,12 +1380,12 @@ struct SessionCompleteView: View {
     // MARK: - Photo Picker Buttons
     private var photoPickerButtons: some View {
         HStack(spacing: 12) {
-            PhotosPicker(selection: $selectedItem, matching: .images) {
+            PhotosPicker(selection: $selectedItems, maxSelectionCount: 3, matching: .images) {
                 VStack(spacing: 8) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 28))
                         .foregroundColor(.gray)
-                    Text("Lägg till bild")
+                    Text("Lägg till bilder")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
@@ -1533,7 +1596,10 @@ struct SessionCompleteView: View {
         LivePhotoCaptureView(
             capturedImage: $sessionImage,
             onCapture: {
-                isLivePhoto = true  // Mark as Up&Down Live photo
+                isLivePhoto = true
+                if let img = sessionImage {
+                    sessionImages = [img]
+                }
             }
         )
     }
@@ -1546,8 +1612,30 @@ struct SessionCompleteView: View {
                let uiImage = UIImage(data: data) {
                 await MainActor.run {
                     sessionImage = uiImage
-                    isLivePhoto = false  // Regular gallery image, not Up&Down Live
+                    sessionImages = [uiImage]
+                    isLivePhoto = false
                 }
+            }
+        }
+    }
+    
+    private func handleMultipleImageSelection(_ newItems: [PhotosPickerItem]) {
+        guard !newItems.isEmpty else { return }
+        Task(priority: .userInitiated) {
+            var newImages: [UIImage] = []
+            for item in newItems {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    newImages.append(uiImage)
+                }
+            }
+            await MainActor.run {
+                let totalSlots = 3 - sessionImages.count
+                let imagesToAdd = Array(newImages.prefix(totalSlots))
+                sessionImages.append(contentsOf: imagesToAdd)
+                sessionImage = sessionImages.first
+                isLivePhoto = false
+                selectedItems = []
             }
         }
     }
@@ -1780,10 +1868,12 @@ struct SessionCompleteView: View {
                     id: exercise.id,
                     name: exercise.name,
                     category: exercise.category,
-                    sets: exercise.sets.count,
-                    reps: exercise.sets.map { $0.reps },
-                    kg: exercise.sets.map { $0.kg },
-                    notes: exercise.notes
+                    sets: exercise.isCardio ? 0 : exercise.sets.count,
+                    reps: exercise.isCardio ? [] : exercise.sets.map { $0.reps },
+                    kg: exercise.isCardio ? [] : exercise.sets.map { $0.kg },
+                    notes: exercise.notes,
+                    isCardio: exercise.isCardio,
+                    cardioSeconds: exercise.isCardio ? exercise.cardioSeconds : nil
                 )
             }
             
@@ -1810,7 +1900,35 @@ struct SessionCompleteView: View {
             
             var workoutLocation: String? = nil
             if activity.rawValue == "Gympass" {
-                workoutLocation = detectedGymName ?? GymLocationManager.shared.getCurrentGymName()
+                let gymName = detectedGymName ?? GymLocationManager.shared.getCurrentGymName()
+                if let lat = gymSessionLatitude, let lon = gymSessionLongitude {
+                    let loc = CLLocation(latitude: lat, longitude: lon)
+                    if let placemarks = try? await CLGeocoder().reverseGeocodeLocation(loc),
+                       let placemark = placemarks.first {
+                        let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+                        let county = placemark.administrativeArea ?? ""
+                        let geoString: String? = if !city.isEmpty && !county.isEmpty {
+                            "\(city), \(county)"
+                        } else if !city.isEmpty {
+                            city
+                        } else if !county.isEmpty {
+                            county
+                        } else {
+                            nil
+                        }
+                        if let gymName, !gymName.isEmpty, let geo = geoString {
+                            workoutLocation = "\(gymName) · \(geo)"
+                        } else if let gymName, !gymName.isEmpty {
+                            workoutLocation = gymName
+                        } else {
+                            workoutLocation = geoString
+                        }
+                    } else {
+                        workoutLocation = gymName
+                    }
+                } else {
+                    workoutLocation = gymName
+                }
             } else if !routeCoordinates.isEmpty {
                 let firstCoord = routeCoordinates[0]
                 let location = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
@@ -1878,6 +1996,7 @@ struct SessionCompleteView: View {
                 post: post,
                 routeImage: routeImage,
                 userImage: sessionImage,
+                userImages: sessionImages,
                 earnedPoints: pointsToAward,
                 isLivePhoto: isLivePhoto,
                 activityType: activity.rawValue,

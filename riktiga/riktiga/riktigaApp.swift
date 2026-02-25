@@ -18,6 +18,7 @@ struct UpAndDownApp: App {
     @StateObject var versionService = AppVersionService.shared
     @StateObject var deepLinkHandler = DeepLinkHandler.shared
     @State private var showSplash = true
+    @State private var splashMinTimeElapsed = false
     @State private var showOptionalUpdate = false
     @State private var showAdPopup = false
     @ObservedObject private var adService = AdService.shared
@@ -46,16 +47,13 @@ struct UpAndDownApp: App {
                                 await adService.fetchPopupAd()
                             }
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation {
-                                    showSplash = false
-                                }
-                                if adService.popupAd != nil {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                        showAdPopup = true
-                                    }
-                                }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                                splashMinTimeElapsed = true
+                                dismissSplashIfReady()
                             }
+                        }
+                        .onChange(of: authViewModel.isCheckingAuth) { _, _ in
+                            dismissSplashIfReady()
                         }
                 } else {
                     // Check version result
@@ -158,6 +156,18 @@ struct UpAndDownApp: App {
                         showAdPopup = false
                     }
                 }
+            }
+        }
+    }
+    
+    private func dismissSplashIfReady() {
+        guard splashMinTimeElapsed, !authViewModel.isCheckingAuth else { return }
+        withAnimation {
+            showSplash = false
+        }
+        if adService.popupAd != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showAdPopup = true
             }
         }
     }

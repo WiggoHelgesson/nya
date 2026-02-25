@@ -227,13 +227,17 @@ class WorkoutService {
         }
     }
     
-    func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, earnedPoints: Int = 0, isLivePhoto: Bool = false) async throws {
+    func saveWorkoutPost(_ post: WorkoutPost, routeImage: UIImage? = nil, userImage: UIImage? = nil, userImages: [UIImage] = [], earnedPoints: Int = 0, isLivePhoto: Bool = false) async throws {
         try await AuthSessionManager.shared.ensureValidSession()
         var postToSave = post
         var uploadedRouteImageUrl: String? = nil
         var uploadedUserImageUrl: String? = nil
         
+        let imagesToUpload: [UIImage] = userImages.isEmpty ? (userImage.map { [$0] } ?? []) : userImages
+        
         // Upload images in parallel for faster saving
+        var uploadedUserImageUrls: [String] = Array(repeating: "", count: imagesToUpload.count)
+        
         await withTaskGroup(of: Void.self) { group in
             // Upload route image if provided (with retry)
             if let routeImage = routeImage {
@@ -242,8 +246,7 @@ class WorkoutService {
                         uploadedRouteImageUrl = try await self.uploadWorkoutImage(routeImage, postId: post.id)
                     } catch {
                         print("⚠️ Route image upload failed, retrying once: \(error)")
-                        // Retry once after a short delay
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
                         do {
                             uploadedRouteImageUrl = try await self.uploadWorkoutImage(routeImage, postId: post.id)
                             print("✅ Route image upload succeeded on retry")
@@ -254,37 +257,43 @@ class WorkoutService {
                 }
             }
             
-            // Upload user image if provided
-            if let userImage = userImage {
+            for (index, img) in imagesToUpload.enumerated() {
+                let idx = index
                 group.addTask {
                     do {
-                        // Use "live_" prefix for Up&Down Live photos
-                        let prefix = isLivePhoto ? "live_" : ""
-                        let userImageFileName = "\(prefix)\(post.id)_user_\(UUID().uuidString).jpg"
-                        guard let imageData = userImage.jpegData(compressionQuality: 0.7) else {
-                            return
-                        }
+                        let prefix = (idx == 0 && isLivePhoto) ? "live_" : ""
+                        let userImageFileName = "\(prefix)\(post.id)_user_\(idx)_\(UUID().uuidString).jpg"
+                        guard let imageData = img.jpegData(compressionQuality: 0.7) else { return }
                         
                         _ = try await self.supabase.storage
                             .from("workout-images")
                             .upload(userImageFileName, data: imageData, options: FileOptions(upsert: true))
                         
-                        // Get signed URL
                         do {
                             let signedURL = try await self.supabase.storage
                                 .from("workout-images")
                                 .createSignedURL(path: userImageFileName, expiresIn: 31536000)
-                            uploadedUserImageUrl = signedURL.absoluteString
+                            uploadedUserImageUrls[idx] = signedURL.absoluteString
                         } catch {
                             let publicURL = try self.supabase.storage
                                 .from("workout-images")
                                 .getPublicURL(path: userImageFileName)
-                            uploadedUserImageUrl = publicURL.absoluteString
+                            uploadedUserImageUrls[idx] = publicURL.absoluteString
                         }
                     } catch {
-                        print("⚠️ User image upload failed: \(error)")
+                        print("⚠️ User image \(idx) upload failed: \(error)")
                     }
                 }
+            }
+        }
+        
+        let successfulUrls = uploadedUserImageUrls.filter { !$0.isEmpty }
+        if successfulUrls.count == 1 {
+            uploadedUserImageUrl = successfulUrls.first
+        } else if successfulUrls.count > 1 {
+            if let jsonData = try? JSONEncoder().encode(successfulUrls),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                uploadedUserImageUrl = jsonString
             }
         }
         

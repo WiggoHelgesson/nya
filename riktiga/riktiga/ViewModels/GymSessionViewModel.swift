@@ -356,7 +356,9 @@ class GymSessionViewModel: ObservableObject {
                 name: exercisePost.name,
                 category: exercisePost.category,
                 sets: sets,
-                notes: nil
+                notes: nil,
+                isCardio: exercisePost.isCardio ?? false,
+                cardioSeconds: exercisePost.cardioSeconds ?? 0
             )
         }
         
@@ -372,6 +374,19 @@ class GymSessionViewModel: ObservableObject {
     func updateExerciseNotes(exerciseId: String, notes: String) {
         guard let index = exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
         exercises[index].notes = notes.isEmpty ? nil : notes
+    }
+    
+    func toggleExerciseMode(exerciseId: String) {
+        guard let index = exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
+        exercises[index].isCardio.toggle()
+        if !exercises[index].isCardio {
+            exercises[index].cardioSeconds = 0
+        }
+    }
+    
+    func updateCardioSeconds(exerciseId: String, seconds: Int) {
+        guard let index = exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
+        exercises[index].cardioSeconds = seconds
     }
     
     func previousSets(for exerciseName: String) -> [PreviousExerciseSet] {
@@ -547,6 +562,8 @@ struct GymExercise: Identifiable, Codable {
     let category: String?
     var sets: [ExerciseSet]
     var notes: String?
+    var isCardio: Bool = false
+    var cardioSeconds: Int = 0
 }
 
 struct ExerciseSet: Codable {

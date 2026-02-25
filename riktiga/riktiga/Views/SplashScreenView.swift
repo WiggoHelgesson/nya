@@ -25,7 +25,7 @@ struct SplashScreenView: View {
         }
         .onAppear {
             // Vänta en kort stund och sedan gå vidare
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 onComplete?()
             }
         }

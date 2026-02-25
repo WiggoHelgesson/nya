@@ -167,11 +167,31 @@ struct WorkoutPost: Codable, Identifiable {
 
 // MARK: - Gym Exercise Post Model
 struct GymExercisePost: Codable {
-    let id: String?  // Exercise ID from API (for GIF)
+    let id: String?
     let name: String
     let category: String?
     let sets: Int
-    let reps: [Int]  // Array of reps for each set
-    let kg: [Double]  // Array of kg for each set
-    let notes: String?  // Exercise notes
+    let reps: [Int]
+    let kg: [Double]
+    let notes: String?
+    var isCardio: Bool?
+    var cardioSeconds: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, category, sets, reps, kg, notes
+        case isCardio = "is_cardio"
+        case cardioSeconds = "cardio_seconds"
+    }
+    
+    init(id: String?, name: String, category: String?, sets: Int, reps: [Int], kg: [Double], notes: String?, isCardio: Bool? = nil, cardioSeconds: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.sets = sets
+        self.reps = reps
+        self.kg = kg
+        self.notes = notes
+        self.isCardio = isCardio
+        self.cardioSeconds = cardioSeconds
+    }
 }

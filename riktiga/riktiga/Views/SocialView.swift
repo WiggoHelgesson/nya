@@ -494,7 +494,6 @@ struct SocialView: View {
                             .shadow(color: .black.opacity(0.3), radius: 12)
                         
                         ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 105)
-                            .clipShape(Circle())
                     }
                     .padding(.leading, 24)
                     
@@ -777,7 +776,7 @@ struct SocialView: View {
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
-                if let url = URL(string: "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB") {
+                if let url = URL(string: "itms-apps://itunes.apple.com/app/id6749190145?action=write-review") {
                     UIApplication.shared.open(url)
                 }
             } label: {
@@ -1485,15 +1484,13 @@ struct SocialView: View {
         
         visiblePostCount = 5
         
-        // Refresh stories first
-        await loadStories(userId: userId)
-        
-        // Refresh active friends
-        await loadActiveFriendsData()
-        
         await socialViewModel.refreshSocialFeed(userId: userId)
-        await loadRecommendedUsers(for: userId)
-        await newsViewModel.fetchNews()
+        
+        async let _stories: () = loadStories(userId: userId)
+        async let _friends: () = loadActiveFriendsData()
+        async let _recommended: () = loadRecommendedUsers(for: userId)
+        async let _news: () = newsViewModel.fetchNews()
+        _ = await (_stories, _friends, _recommended, _news)
     }
     
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
@@ -1531,34 +1528,29 @@ struct SocialView: View {
     // MARK: - Upload Progress Card
     private var uploadProgressCard: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: 44, height: 44)
-                
-                if uploadManager.uploadFailed {
+            if uploadManager.uploadFailed {
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: 44, height: 44)
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 18))
                         .foregroundColor(.red)
-                } else {
-                    ProgressView()
-                        .scaleEffect(0.9)
                 }
+            } else {
+                ProgressView()
+                    .scaleEffect(0.85)
+                    .frame(width: 28, height: 28)
             }
             
             VStack(alignment: .leading, spacing: 3) {
-                Text(uploadManager.uploadingPost?.title ?? "Träningspass")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                
                 if uploadManager.uploadFailed {
                     Text("Uppladdning misslyckades")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.red)
                 } else {
-                    Text("Laddar upp...")
-                        .font(.system(size: 13))
+                    Text("Ditt inlägg håller på att publiceras...")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
             }
@@ -1576,7 +1568,7 @@ struct SocialView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .transition(.asymmetric(
             insertion: .move(edge: .top).combined(with: .opacity),
@@ -2398,7 +2390,11 @@ struct SocialPostCard: View {
     private var headerSection: some View {
         HStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: post.userId)) {
-                ProfileImage(url: post.userAvatarUrl, size: 40)
+                if post.userIsPro == true {
+                    ProProfileImage(url: post.userAvatarUrl, size: 40)
+                } else {
+                    ProfileImage(url: post.userAvatarUrl, size: 40)
+                }
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -5115,9 +5111,19 @@ struct GymExercisesListView: View {
         self.onTapImage = onTapImage
     }
     
+    private var firstUserImageUrl: String? {
+        guard let raw = userImage, !raw.isEmpty else { return nil }
+        if raw.hasPrefix("["),
+           let data = raw.data(using: .utf8),
+           let urls = try? JSONDecoder().decode([String].self, from: data),
+           let first = urls.first, !first.isEmpty {
+            return first
+        }
+        return raw
+    }
+    
     private var hasUserImage: Bool {
-        if let userImage, !userImage.isEmpty { return true }
-        return false
+        firstUserImageUrl != nil
     }
     
     var body: some View {
@@ -5230,30 +5236,50 @@ struct GymExercisesListView: View {
                         .foregroundColor(.green)
                 }
                 
-                Text("\(exercise.sets) sets")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                
-                // Show all sets in a compact format
-                ForEach(0..<exercise.sets, id: \.self) { setIndex in
-                    if setIndex < exercise.kg.count && setIndex < exercise.reps.count {
-                        HStack(spacing: 4) {
-                            Text("\(setIndex + 1).")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                                .frame(width: 20, alignment: .leading)
-                            
-                            Text("\(Int(exercise.kg[setIndex])) kg")
-                                .font(.system(size: 13, weight: .medium))
+                if exercise.isCardio == true, let seconds = exercise.cardioSeconds, seconds > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "timer")
+                            .foregroundColor(.black)
+                            .font(.system(size: 18))
+                        let h = seconds / 3600
+                        let m = (seconds % 3600) / 60
+                        let s = seconds % 60
+                        if h > 0 {
+                            Text(String(format: "%d:%02d:%02d", h, m, s))
+                                .font(.system(size: 22, weight: .bold, design: .monospaced))
                                 .foregroundColor(.primary)
-                            
-                            Text("×")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                            
-                            Text("\(exercise.reps[setIndex]) reps")
-                                .font(.system(size: 13, weight: .medium))
+                        } else {
+                            Text(String(format: "%d:%02d", m, s))
+                                .font(.system(size: 22, weight: .bold, design: .monospaced))
                                 .foregroundColor(.primary)
+                        }
+                    }
+                    .padding(.top, 4)
+                } else {
+                    Text("\(exercise.sets) sets")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    
+                    ForEach(0..<exercise.sets, id: \.self) { setIndex in
+                        if setIndex < exercise.kg.count && setIndex < exercise.reps.count {
+                            HStack(spacing: 4) {
+                                Text("\(setIndex + 1).")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 20, alignment: .leading)
+                                
+                                Text("\(Int(exercise.kg[setIndex])) kg")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.primary)
+                                
+                                Text("×")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                                
+                                Text("\(exercise.reps[setIndex]) reps")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.primary)
+                            }
                         }
                     }
                 }
@@ -5278,8 +5304,8 @@ struct GymExercisesListView: View {
     @ViewBuilder
     private var userImagePage: some View {
         GeometryReader { geometry in
-            if let userImage {
-                FullFrameAsyncImage(path: userImage, height: geometry.size.height)
+            if let imageUrl = firstUserImageUrl {
+                FullFrameAsyncImage(path: imageUrl, height: geometry.size.height)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(
@@ -5291,7 +5317,7 @@ struct GymExercisesListView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     )
                     .overlay(
-                        Text(userImage.contains("live_") ? "Up&Down Live" : "Din bild")
+                        Text(imageUrl.contains("live_") ? "Up&Down Live" : "Din bild")
                             .font(.system(size: 14, weight: .semibold))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -5301,14 +5327,13 @@ struct GymExercisesListView: View {
                             .padding(16),
                         alignment: .bottomLeading
                     )
-                    // Tap gesture only on the center area of the image
                     .overlay(
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 onTapImage?()
                             }
-                            .padding(.horizontal, 60) // Leave edges untappable for buttons
+                            .padding(.horizontal, 60)
                             .padding(.vertical, 60)
                     )
             }
@@ -5607,10 +5632,11 @@ struct RouteMapFallbackView: View {
                 Image(uiImage: mapImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
                     .frame(height: 300)
-                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
             } else if isLoading {
-                RoundedRectangle(cornerRadius: 0)
+                RoundedRectangle(cornerRadius: 14)
                     .fill(Color(.systemGray6))
                     .frame(height: 300)
                     .overlay(
@@ -5618,10 +5644,10 @@ struct RouteMapFallbackView: View {
                             .scaleEffect(1.2)
                     )
             } else {
-                // Could not generate map - show nothing
                 EmptyView()
             }
         }
+        .padding(.horizontal, 2)
         .task {
             await generateMap()
         }

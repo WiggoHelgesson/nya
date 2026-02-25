@@ -317,6 +317,18 @@ struct SocialWorkoutPost: Codable, Identifiable {
     }
 }
 
+extension SocialWorkoutPost {
+    var userImageUrls: [String] {
+        guard let raw = userImageUrl, !raw.isEmpty else { return [] }
+        if raw.hasPrefix("["),
+           let data = raw.data(using: .utf8),
+           let urls = try? JSONDecoder().decode([String].self, from: data) {
+            return urls.filter { !$0.isEmpty }
+        }
+        return [raw]
+    }
+}
+
 extension SocialWorkoutPost: Hashable {
     static func == (lhs: SocialWorkoutPost, rhs: SocialWorkoutPost) -> Bool {
         lhs.id == rhs.id

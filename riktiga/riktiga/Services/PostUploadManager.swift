@@ -3,6 +3,7 @@ import UIKit
 import CoreLocation
 import Combine
 import SwiftUI
+import Supabase
 
 @MainActor
 class PostUploadManager: ObservableObject {
@@ -18,6 +19,7 @@ class PostUploadManager: ObservableObject {
         let post: WorkoutPost
         let routeImage: UIImage?
         let userImage: UIImage?
+        let userImages: [UIImage]
         let earnedPoints: Int
         let isLivePhoto: Bool
         let activityType: String
@@ -55,6 +57,7 @@ class PostUploadManager: ObservableObject {
                     context.post,
                     routeImage: context.routeImage,
                     userImage: context.userImage,
+                    userImages: context.userImages,
                     earnedPoints: context.earnedPoints,
                     isLivePhoto: context.isLivePhoto
                 )
@@ -120,16 +123,35 @@ class PostUploadManager: ObservableObject {
                     )
                 }
                 
-                let completedPost = SocialWorkoutPost(
-                    from: context.post,
-                    userName: context.userName,
-                    userAvatarUrl: context.userAvatarUrl,
-                    userIsPro: RevenueCatManager.shared.isProMember
-                )
+                // Fetch the real post from DB so it includes uploaded image URLs
+                var completedPost: SocialWorkoutPost?
+                do {
+                    let fetched: SocialWorkoutPost = try await SupabaseConfig.supabase
+                        .from("workout_posts")
+                        .select("""
+                            *,
+                            profiles!inner(username, avatar_url, is_pro_member),
+                            workout_post_likes(count),
+                            workout_post_comments(count)
+                        """)
+                        .eq("id", value: context.post.id)
+                        .single()
+                        .execute()
+                        .value
+                    completedPost = fetched
+                } catch {
+                    print("⚠️ Could not fetch completed post from DB, using local fallback")
+                    completedPost = SocialWorkoutPost(
+                        from: context.post,
+                        userName: context.userName,
+                        userAvatarUrl: context.userAvatarUrl,
+                        userIsPro: RevenueCatManager.shared.isProMember
+                    )
+                }
                 
                 await MainActor.run {
-                    if context.isPublic {
-                        SocialViewModel.shared.insertPostAtTop(completedPost)
+                    if context.isPublic, let post = completedPost {
+                        SocialViewModel.shared.insertPostAtTop(post)
                     }
                     SocialViewModel.invalidateCache()
                     withAnimation(.easeOut(duration: 0.3)) {

@@ -912,10 +912,10 @@ struct SessionMapView: View {
                                 .frame(maxWidth: .infinity)
                                 
                                 VStack(spacing: 4) {
-                                    Text(String(format: "%.1f", locationManager.currentSpeedKmh).replacingOccurrences(of: ".", with: ","))
+                                    Text(currentPaceFromSpeed(locationManager.currentSpeedKmh))
                                         .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Snitthast. (km/h)")
+                                    Text("Tempo (min/km)")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1052,10 +1052,10 @@ struct SessionMapView: View {
                                 .frame(maxWidth: .infinity)
                                 
                                 VStack(spacing: 4) {
-                                    Text("0,0")
+                                    Text("0:00")
                                         .font(.system(size: 30, weight: .bold, design: .default))
                                         .foregroundColor(.primary)
-                                    Text("Snitthast. (km/h)")
+                                    Text("Tempo (min/km)")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1583,16 +1583,6 @@ struct SessionMapView: View {
             print("🛑 Not saving session state - session is ending (isSessionEnding = true)")
             return
         }
-
-        // Auto-cancel sessions that have been running in the background for more than 2 hours
-        if UIApplication.shared.applicationState != .active && !force {
-            let elapsed = Date().timeIntervalSince(startTime)
-            if elapsed >= 2 * 3600 {
-                print("⏰ Session auto-cancelled after 2h in background")
-                cancelBackgroundTimedOutSession()
-                return
-            }
-        }
         
         // Get route coordinates from location manager
         let coords = locationManager.routeCoordinates
@@ -1613,19 +1603,6 @@ struct SessionMapView: View {
             maxSpeed: locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
             force: force
         )
-    }
-
-    private func cancelBackgroundTimedOutSession() {
-        isSessionEnding = true
-        stopTimer()
-        locationManager.stopTracking()
-        sessionManager.finalizeSession()
-        locationManager.routeCoordinates = []
-        locationManager.distance = 0
-        locationManager.elevationGain = 0
-        locationManager.maxSpeed = 0
-        showSessionComplete = false
-        forceNewSession = true
     }
 
     func stopTimer() {
@@ -1710,24 +1687,16 @@ struct SessionMapView: View {
     }
 
     func updatePace() {
-        // Om vi inte har kört tillräckligt långt eller om distans är 0, visa "0:00"
-        if locationManager.distance < 0.05 {
-            currentPace = "0:00"
-            return
-        }
-        
-        // Beräkna tempo (sekunder per km)
-        let paceSeconds = (Double(sessionDuration) / locationManager.distance)
-        
-        // Om tempot är för långsamt (över 25 min/km - står still), visa "0:00"
-        if paceSeconds > 1500 {
-            currentPace = "0:00"
-            return
-        }
-        
-        let minutes = Int(paceSeconds / 60)
-        let seconds = Int(paceSeconds.truncatingRemainder(dividingBy: 60))
-        currentPace = String(format: "%d:%02d", minutes, seconds)
+        currentPace = currentPaceFromSpeed(locationManager.currentSpeedKmh)
+    }
+
+    func currentPaceFromSpeed(_ speedKmh: Double) -> String {
+        guard speedKmh > 0.5 else { return "0:00" }
+        let minutesPerKm = 60.0 / speedKmh
+        if minutesPerKm > 30 { return "0:00" }
+        let minutes = Int(minutesPerKm)
+        let seconds = Int((minutesPerKm - Double(minutes)) * 60)
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     func formattedTime(_ seconds: Int) -> String {
@@ -1862,14 +1831,14 @@ struct SessionMapView: View {
                 
                 Spacer()
                 
-                // Speed (main focus)
+                // Pace (main focus)
                 VStack(spacing: 8) {
-                    Text(String(format: "%.1f", locationManager.currentSpeedKmh).replacingOccurrences(of: ".", with: ","))
+                    Text(currentPaceFromSpeed(locationManager.currentSpeedKmh))
                         .font(.system(size: 120, weight: .bold, design: .default))
                         .foregroundColor(.primary)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
-                    Text("Hastighet (km/h)")
+                    Text("Tempo (min/km)")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.secondary)
                 }

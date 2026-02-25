@@ -66,7 +66,7 @@ class MapSnapshotService {
             let shouldFill: Bool
             if let activity = activity {
                 switch activity {
-                case .running, .golf, .hiking, .skiing:
+                case .golf, .hiking, .skiing:
                     shouldFill = true
                 default:
                     shouldFill = false
@@ -163,7 +163,7 @@ class MapSnapshotService {
             }
             
             // Draw the actual route line (solid black)
-            context.setLineWidth(4)
+            context.setLineWidth(6)
             context.setLineCap(.round)
             context.setLineJoin(.round)
             context.setStrokeColor(UIColor.black.cgColor)

@@ -324,6 +324,14 @@ struct GymSessionView: View {
                     isReorderMode.toggle()
                 }
             },
+            onToggleMode: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    viewModel.toggleExerciseMode(exerciseId: exercise.id)
+                }
+            },
+            onUpdateCardioSeconds: { seconds in
+                viewModel.updateCardioSeconds(exerciseId: exercise.id, seconds: seconds)
+            },
             focusedField: $focusedField
         )
     }
@@ -386,7 +394,10 @@ struct GymSessionView: View {
                                     showNoExercisesAlert = true
                                 } else {
                                     let hasValidData = viewModel.exercises.allSatisfy { exercise in
-                                        exercise.sets.contains { set in
+                                        if exercise.isCardio {
+                                            return exercise.cardioSeconds > 0
+                                        }
+                                        return exercise.sets.contains { set in
                                             set.kg > 0 && set.reps > 0
                                         }
                                     }
@@ -439,7 +450,7 @@ struct GymSessionView: View {
             .alert("Din övning saknar info", isPresented: $showMissingInfoAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Alla övningar behöver ha minst ett set med kg och reps ifyllt.")
+                Text("Alla övningar behöver ha minst ett set med kg och reps ifyllt, eller en avslutad timer för konditionsövningar.")
             }
             .alert("Är du klar?", isPresented: $showFinishConfirmation) {
                 Button("Nej", role: .cancel) { }
@@ -550,9 +561,11 @@ struct GymSessionView: View {
             return
         }
         
-        // Validation: Check if all exercises have at least one set with kg and reps
         let hasValidData = viewModel.exercises.allSatisfy { exercise in
-            exercise.sets.contains { set in
+            if exercise.isCardio {
+                return exercise.cardioSeconds > 0
+            }
+            return exercise.sets.contains { set in
                 set.kg > 0 && set.reps > 0
             }
         }
@@ -1101,6 +1114,132 @@ private struct HoldToSaveButton: View {
     }
 }
 
+// MARK: - Cardio Timer View
+struct CardioTimerView: View {
+    let exerciseId: String
+    let accumulatedSeconds: Int
+    let onUpdateSeconds: (Int) -> Void
+    
+    @State private var isRunning = false
+    @State private var isFinished = false
+    @State private var displaySeconds: Int
+    @State private var timer: Timer?
+    
+    init(exerciseId: String, accumulatedSeconds: Int, onUpdateSeconds: @escaping (Int) -> Void) {
+        self.exerciseId = exerciseId
+        self.accumulatedSeconds = accumulatedSeconds
+        self.onUpdateSeconds = onUpdateSeconds
+        self._displaySeconds = State(initialValue: accumulatedSeconds)
+        self._isFinished = State(initialValue: accumulatedSeconds > 0)
+    }
+    
+    private var timeString: String {
+        let h = displaySeconds / 3600
+        let m = (displaySeconds % 3600) / 60
+        let s = displaySeconds % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%02d:%02d", m, s)
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(timeString)
+                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .foregroundColor(.primary)
+                .padding(.top, 12)
+            
+            if isFinished && !isRunning {
+                HStack(spacing: 12) {
+                    Button {
+                        isFinished = false
+                        displaySeconds = 0
+                        onUpdateSeconds(0)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Återställ")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(12)
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        if isRunning {
+                            pauseTimer()
+                        } else {
+                            startTimer()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isRunning ? "pause.fill" : "play.fill")
+                            Text(isRunning ? "Pausa" : (displaySeconds > 0 ? "Fortsätt" : "Starta"))
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black)
+                        .cornerRadius(12)
+                    }
+                    
+                    if displaySeconds > 0 {
+                        Button {
+                            stopTimer()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "stop.fill")
+                                Text("Avsluta")
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.black)
+                            .cornerRadius(12)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.bottom, 8)
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+    
+    private func startTimer() {
+        isRunning = true
+        isFinished = false
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            displaySeconds += 1
+            onUpdateSeconds(displaySeconds)
+        }
+    }
+    
+    private func pauseTimer() {
+        isRunning = false
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func stopTimer() {
+        isRunning = false
+        isFinished = true
+        timer?.invalidate()
+        timer = nil
+        onUpdateSeconds(displaySeconds)
+    }
+}
+
 // MARK: - Exercise Card
 struct ExerciseCard: View {
     let exercise: GymExercise
@@ -1113,6 +1252,8 @@ struct ExerciseCard: View {
     let onDelete: () -> Void
     let onUpdateNotes: (String) -> Void
     let onToggleReorder: () -> Void
+    let onToggleMode: () -> Void
+    let onUpdateCardioSeconds: (Int) -> Void
     let focusedField: FocusState<GymSessionInputField?>.Binding
     
     @State private var showDeleteConfirmation = false
@@ -1128,6 +1269,8 @@ struct ExerciseCard: View {
          onDelete: @escaping () -> Void,
          onUpdateNotes: @escaping (String) -> Void,
          onToggleReorder: @escaping () -> Void,
+         onToggleMode: @escaping () -> Void,
+         onUpdateCardioSeconds: @escaping (Int) -> Void,
          focusedField: FocusState<GymSessionInputField?>.Binding) {
         self.exercise = exercise
         self.previousSets = previousSets
@@ -1139,6 +1282,8 @@ struct ExerciseCard: View {
         self.onDelete = onDelete
         self.onUpdateNotes = onUpdateNotes
         self.onToggleReorder = onToggleReorder
+        self.onToggleMode = onToggleMode
+        self.onUpdateCardioSeconds = onUpdateCardioSeconds
         self.focusedField = focusedField
         self._notesText = State(initialValue: exercise.notes ?? "")
     }
@@ -1204,69 +1349,91 @@ struct ExerciseCard: View {
                     onUpdateNotes(newValue)
                 }
             
-            // Sets header
-            HStack(spacing: 8) {
-                Text("SET")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 32, alignment: .center)
-                Text("FÖRRA")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 55, alignment: .leading)
-                Text("KG")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 60, alignment: .center)
-                Text("REPS")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 60, alignment: .center)
-                Spacer()
+            // Mode picker: Vikt / Kondition
+            Picker("Typ", selection: Binding<Bool>(
+                get: { exercise.isCardio },
+                set: { _ in onToggleMode() }
+            )) {
+                Text("Vikt").tag(false)
+                Text("Kondition").tag(true)
             }
-            .padding(.horizontal, 24)
-            
-            // Sets
-            ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
-                SetRow(
-                    exerciseId: exercise.id,
-                    setIndex: index,
-                    setNumber: index + 1,
-                    kg: set.kg,
-                    reps: set.reps,
-                    isCompleted: set.isCompleted,
-                    focusedField: focusedField,
-                    previousSet: previousSet(for: index),
-                    onUpdate: { kg, reps in
-                        onUpdateSet(index, kg, reps)
-                    },
-                    onToggleCompletion: {
-                        onToggleSetCompletion(index)
-                    },
-                    onDelete: {
-                        onDeleteSet(index)
-                    }
-                )
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.95).combined(with: .opacity),
-                    removal: .opacity
-                ))
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: exercise.sets.count)
-            
-            // Add set button
-            Button(action: onAddSet) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Lägg till set")
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
+            .pickerStyle(.segmented)
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            
+            if exercise.isCardio {
+                // Cardio timer mode
+                CardioTimerView(
+                    exerciseId: exercise.id,
+                    accumulatedSeconds: exercise.cardioSeconds,
+                    onUpdateSeconds: onUpdateCardioSeconds
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            } else {
+                // Sets header
+                HStack(spacing: 8) {
+                    Text("SET")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, alignment: .center)
+                    Text("FÖRRA")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 55, alignment: .leading)
+                    Text("KG")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .center)
+                    Text("REPS")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .center)
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+                
+                // Sets
+                ForEach(Array(exercise.sets.enumerated()), id: \.offset) { index, set in
+                    SetRow(
+                        exerciseId: exercise.id,
+                        setIndex: index,
+                        setNumber: index + 1,
+                        kg: set.kg,
+                        reps: set.reps,
+                        isCompleted: set.isCompleted,
+                        focusedField: focusedField,
+                        previousSet: previousSet(for: index),
+                        onUpdate: { kg, reps in
+                            onUpdateSet(index, kg, reps)
+                        },
+                        onToggleCompletion: {
+                            onToggleSetCompletion(index)
+                        },
+                        onDelete: {
+                            onDeleteSet(index)
+                        }
+                    )
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.95).combined(with: .opacity),
+                        removal: .opacity
+                    ))
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: exercise.sets.count)
+                
+                // Add set button
+                Button(action: onAddSet) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Lägg till set")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
         }
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
