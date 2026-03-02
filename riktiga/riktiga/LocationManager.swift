@@ -101,16 +101,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // Helper to safely enable background location
     private func enableBackgroundLocationIfAuthorized() {
-        guard authorizationStatus == .authorizedAlways else { 
+        guard authorizationStatus == .authorizedAlways || authorizationStatus == .authorizedWhenInUse else { 
             print("⚠️ Cannot enable background location - not authorized")
             return 
         }
         
-        // Enable background location updates only when we have Always permission
-        if #available(iOS 9.0, *) {
-            locationManager.allowsBackgroundLocationUpdates = true
-            print("✅ Background location updates enabled")
-        }
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.showsBackgroundLocationIndicator = true
+        print("✅ Background location updates enabled (status: \(authorizationStatus == .authorizedAlways ? "Always" : "WhenInUse"))")
     }
     
     private var shouldRequestAlwaysAfterWhenInUse = false
@@ -264,154 +262,137 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
+        guard !locations.isEmpty else { return }
         
-        // Accept location if accuracy is reasonable (more lenient to avoid stopping tracking)
-        guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
-            // Don't update location but keep tracking active
-            return
-        }
+        var latestLocation: CLLocation = locations.last!
+        var batchedRoutePoints: [CLLocationCoordinate2D] = []
+        var latestDistance: Double? = nil
+        var latestMaxSpeed: Double? = nil
+        var latestElevationGain: Double? = nil
+        var latestVehicleDetected: Bool? = nil
+        var latestSpeedKmh: Double? = nil
         
-        // Filter out old cached locations (iOS sometimes returns stale data)
-        let locationAge = abs(location.timestamp.timeIntervalSinceNow)
-        guard locationAge < 10 else {
-            return
-        }
-        
-        // Batch all UI updates into a single async call for performance
-        var newDistance: Double? = nil
-        var newRoutePoint: CLLocationCoordinate2D? = nil
-        var newMaxSpeed: Double? = nil
-        var newElevationGain: Double? = nil
-        var newVehicleDetected: Bool? = nil
-        var newSpeedKmh: Double? = nil
-        
-        if startLocation == nil {
-            // First location - ALWAYS add to route
-            startLocation = location
-            lastLocation = location
-            newRoutePoint = location.coordinate
-            print("📍 FIRST route point added: \(location.coordinate)")
-        } else if isResumingFromPause {
-            // First update after pause/resume — reset lastLocation to current position
-            // without calculating distance across the pause gap
-            lastLocation = location
-            isResumingFromPause = false
-            newRoutePoint = location.coordinate
-            print("📍 Resumed from pause — lastLocation reset to \(location.coordinate)")
-        } else if let lastLoc = lastLocation {
-            // Calculate distance from last location
-            let distanceFromLast = location.distance(from: lastLoc)
-            
-            // Calculate speed (m/s)
-            let timeDiff = location.timestamp.timeIntervalSince(lastLoc.timestamp)
-            let speed = timeDiff > 0 ? distanceFromLast / timeDiff : 0.0
-            
-            newSpeedKmh = speed * 3.6
-            
-            // Track recent speeds for vehicle detection
-            recentSpeeds.append(speed)
-            if recentSpeeds.count > maxRecentSpeeds {
-                recentSpeeds.removeFirst()
+        for location in locations {
+            guard location.horizontalAccuracy > 0 && location.horizontalAccuracy <= 65 else {
+                continue
             }
             
-            // Check if moving in vehicle (only for non-skiing activities)
-            let isInVehicle = detectVehicleMovement(speed)
-            if currentActivityType != "Skidåkning" && isInVehicle {
-                newVehicleDetected = true
+            let locationAge = abs(location.timestamp.timeIntervalSinceNow)
+            guard locationAge < 120 else {
+                continue
+            }
+            
+            latestLocation = location
+            
+            if startLocation == nil {
+                startLocation = location
                 lastLocation = location
-                // Update UI in single batch
-                Task { @MainActor in
-                    self.userLocation = location.coordinate
-                    self.currentSpeedKmh = newSpeedKmh ?? 0
-                    self.vehicleDetected = true
-                }
-                return
-            } else {
-                newVehicleDetected = false
-            }
-            
-            // Filter GPS spikes from distance calculation
-            let maxReasonableDistance = 50.0 * max(timeDiff, 1.0)
-            let isValidDistance = distanceFromLast <= maxReasonableDistance && distanceFromLast < 200
-            
-            if timeDiff > 0 && isValidDistance {
-                totalDistance += distanceFromLast
-                newDistance = totalDistance / 1000.0
+                batchedRoutePoints.append(location.coordinate)
+                print("📍 FIRST route point added: \(location.coordinate)")
+            } else if isResumingFromPause {
+                lastLocation = location
+                isResumingFromPause = false
+                batchedRoutePoints.append(location.coordinate)
+                print("📍 Resumed from pause — lastLocation reset to \(location.coordinate)")
+            } else if let lastLoc = lastLocation {
+                let distanceFromLast = location.distance(from: lastLoc)
                 
-                // Handle skiing-specific metrics
-                if currentActivityType == "Skidåkning" {
-                    updateSpeedHistory(speed)
-                    let avgSpeed = speedHistory.isEmpty ? 0 : speedHistory.reduce(0, +) / Double(speedHistory.count)
-                    let speedVariance = speedHistory.isEmpty ? 0 : speedHistory.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(speedHistory.count)
+                let timeDiff = location.timestamp.timeIntervalSince(lastLoc.timestamp)
+                let speed = timeDiff > 0 ? distanceFromLast / timeDiff : 0.0
+                
+                latestSpeedKmh = speed * 3.6
+                
+                recentSpeeds.append(speed)
+                if recentSpeeds.count > maxRecentSpeeds {
+                    recentSpeeds.removeFirst()
+                }
+                
+                let isInVehicle = detectVehicleMovement(speed)
+                if currentActivityType != "Skidåkning" && isInVehicle {
+                    latestVehicleDetected = true
+                    lastLocation = location
+                    continue
+                } else {
+                    latestVehicleDetected = false
+                }
+                
+                let maxReasonableDistance = 50.0 * max(timeDiff, 1.0)
+                let isValidDistance = distanceFromLast <= maxReasonableDistance && distanceFromLast < 200
+                
+                if timeDiff > 0 && isValidDistance {
+                    totalDistance += distanceFromLast
+                    latestDistance = totalDistance / 1000.0
                     
-                    let wasOnLift = isOnLift
-                    isOnLift = avgSpeed > 10.0 && speedVariance < 5.0 && speedHistory.count >= 5
-                    
-                    if !isOnLift {
-                        if let lastAlt = lastValidAltitude, location.altitude > 0 {
-                            let altitudeDiff = location.altitude - lastAlt
-                            if altitudeDiff > 0 {
-                                newElevationGain = elevationGain + altitudeDiff
-                            }
-                            lastValidAltitude = location.altitude
-                        } else if location.altitude > 0 {
-                            lastValidAltitude = location.altitude
-                        }
+                    if currentActivityType == "Skidåkning" {
+                        updateSpeedHistory(speed)
+                        let avgSpeed = speedHistory.isEmpty ? 0 : speedHistory.reduce(0, +) / Double(speedHistory.count)
+                        let speedVariance = speedHistory.isEmpty ? 0 : speedHistory.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(speedHistory.count)
                         
+                        isOnLift = avgSpeed > 10.0 && speedVariance < 5.0 && speedHistory.count >= 5
+                        
+                        if !isOnLift {
+                            if let lastAlt = lastValidAltitude, location.altitude > 0 {
+                                let altitudeDiff = location.altitude - lastAlt
+                                if altitudeDiff > 0 {
+                                    elevationGain += altitudeDiff
+                                    latestElevationGain = elevationGain
+                                }
+                                lastValidAltitude = location.altitude
+                            } else if location.altitude > 0 {
+                                lastValidAltitude = location.altitude
+                            }
+                            
+                            if speed > maxSpeed {
+                                maxSpeed = speed
+                                latestMaxSpeed = speed
+                            }
+                        }
+                    } else {
                         if speed > maxSpeed {
-                            newMaxSpeed = speed
+                            maxSpeed = speed
+                            latestMaxSpeed = speed
                         }
                     }
-                } else {
-                    if speed > maxSpeed {
-                        newMaxSpeed = speed
-                    }
-                }
-                
-                // Check if we should add this point to route
-                if let lastRoutePoint = routeCoordinates.last {
-                    let lastRouteLocation = CLLocation(latitude: lastRoutePoint.latitude, longitude: lastRoutePoint.longitude)
-                    let distanceFromLastRoute = location.distance(from: lastRouteLocation)
                     
-                    // More lenient filtering to ensure route is visible
-                    let minDistance = 2.0 // Reduced from 3.0
-                    let maxDistance = 80.0 // Increased from 50.0
-                    let goodAccuracy = location.horizontalAccuracy <= 30 // More lenient (was 20)
-                    let isReasonableJump = distanceFromLastRoute >= minDistance && distanceFromLastRoute <= maxDistance
-                    let highAccuracyOverride = location.horizontalAccuracy < 15 && distanceFromLastRoute <= 150
-                    
-                    if (isReasonableJump && goodAccuracy) || highAccuracyOverride {
-                        newRoutePoint = location.coordinate
-                        print("📍 Route point added (#\(routeCoordinates.count + 1)): dist=\(String(format: "%.1f", distanceFromLastRoute))m, acc=\(String(format: "%.1f", location.horizontalAccuracy))m")
+                    if let lastRoutePoint = batchedRoutePoints.last ?? routeCoordinates.last {
+                        let lastRouteLocation = CLLocation(latitude: lastRoutePoint.latitude, longitude: lastRoutePoint.longitude)
+                        let distanceFromLastRoute = location.distance(from: lastRouteLocation)
+                        
+                        let minDistance = 2.0
+                        let maxDistance = 80.0
+                        let goodAccuracy = location.horizontalAccuracy <= 30
+                        let isReasonableJump = distanceFromLastRoute >= minDistance && distanceFromLastRoute <= maxDistance
+                        let highAccuracyOverride = location.horizontalAccuracy < 15 && distanceFromLastRoute <= 150
+                        
+                        if (isReasonableJump && goodAccuracy) || highAccuracyOverride {
+                            batchedRoutePoints.append(location.coordinate)
+                            print("📍 Route point added (#\(routeCoordinates.count + batchedRoutePoints.count)): dist=\(String(format: "%.1f", distanceFromLastRoute))m, acc=\(String(format: "%.1f", location.horizontalAccuracy))m")
+                        }
+                    } else {
+                        batchedRoutePoints.append(location.coordinate)
+                        print("📍 Second route point added")
                     }
-                } else {
-                    // First point after start - always add
-                    newRoutePoint = location.coordinate
-                    print("📍 Second route point added")
+                    
+                    lastLocation = location
+                } else if timeDiff > 30 {
+                    lastLocation = location
+                    batchedRoutePoints.append(location.coordinate)
+                    print("📍 Large time gap (\(String(format: "%.0f", timeDiff))s) — resetting lastLocation")
                 }
-                
-                lastLocation = location
-            } else if timeDiff > 30 {
-                // Large time gap (e.g., missed resume flag) — update lastLocation
-                // to prevent permanent freeze, but don't add distance
-                lastLocation = location
-                newRoutePoint = location.coordinate
-                print("📍 Large time gap (\(String(format: "%.0f", timeDiff))s) — resetting lastLocation")
             }
         }
         
-        // Single batched UI update for maximum performance
         Task { @MainActor in
-            self.userLocation = location.coordinate
-            if let speed = newSpeedKmh { self.currentSpeedKmh = speed }
-            if let vehicle = newVehicleDetected { self.vehicleDetected = vehicle }
-            if let dist = newDistance { self.distance = dist }
-            if let maxSpd = newMaxSpeed { self.maxSpeed = maxSpd }
-            if let elev = newElevationGain { self.elevationGain = elev }
-            if let point = newRoutePoint { self.routeCoordinates.append(point) }
+            self.userLocation = latestLocation.coordinate
+            if let speed = latestSpeedKmh { self.currentSpeedKmh = speed }
+            if let vehicle = latestVehicleDetected { self.vehicleDetected = vehicle }
+            if let dist = latestDistance { self.distance = dist }
+            if let maxSpd = latestMaxSpeed { self.maxSpeed = maxSpd }
+            if let elev = latestElevationGain { self.elevationGain = elev }
+            if !batchedRoutePoints.isEmpty {
+                self.routeCoordinates.append(contentsOf: batchedRoutePoints)
+            }
             
-            // Uppdatera Live Activity var 10:e sekund
             if self.isTracking && abs(self.lastLiveActivityUpdate.timeIntervalSinceNow) > 10 {
                 self.lastLiveActivityUpdate = Date()
                 let elapsed = self.activityStartTime.map { Int(Date().timeIntervalSince($0)) } ?? 0
@@ -433,7 +414,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 LiveActivityManager.shared.updateLiveActivity(with: state)
             }
         }
-        
     }
     
     private func updateSpeedHistory(_ speed: Double) {

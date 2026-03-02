@@ -279,19 +279,54 @@ struct WorkoutCelebrationView: View {
             return
         }
         
+        guard let pngData = image.pngData() else {
+            alertTitle = "Fel"
+            alertMessage = "Kunde inte skapa PNG-bilden."
+            showAlert = true
+            isSaving = false
+            return
+        }
+        
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("celebration_\(UUID().uuidString).png")
+        
+        do {
+            try pngData.write(to: tempURL)
+        } catch {
+            alertTitle = "Fel"
+            alertMessage = "Kunde inte skapa temporär fil."
+            showAlert = true
+            isSaving = false
+            return
+        }
+        
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            DispatchQueue.main.async {
-                if status == .authorized || status == .limited {
-                    UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                    alertTitle = "Sparat!"
-                    alertMessage = "Bilden har sparats till dina foton."
-                    showAlert = true
-                } else {
-                    alertTitle = "Åtkomst nekad"
-                    alertMessage = "Tillåt åtkomst till foton i Inställningar för att spara bilden."
-                    showAlert = true
+            guard status == .authorized || status == .limited else {
+                DispatchQueue.main.async {
+                    self.alertTitle = "Åtkomst nekad"
+                    self.alertMessage = "Tillåt åtkomst till foton i Inställningar för att spara bilden."
+                    self.showAlert = true
+                    self.isSaving = false
                 }
-                isSaving = false
+                return
+            }
+            
+            PHPhotoLibrary.shared().performChanges({
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, fileURL: tempURL, options: nil)
+            }) { success, error in
+                try? FileManager.default.removeItem(at: tempURL)
+                
+                DispatchQueue.main.async {
+                    if success {
+                        self.alertTitle = "Sparat!"
+                        self.alertMessage = "Bilden har sparats till dina foton."
+                    } else {
+                        self.alertTitle = "Fel"
+                        self.alertMessage = "Kunde inte spara bilden."
+                    }
+                    self.showAlert = true
+                    self.isSaving = false
+                }
             }
         }
     }

@@ -683,6 +683,7 @@ struct SessionMapView: View {
     @State private var highSpeedStartTime: Date? = nil
     @State private var hasShownSpeedWarning = false
     @State private var showVehicleDetectedAlert = false
+    @State private var showEndSessionConfirmation = false
     @State private var trackingStoppedDueToSpeed = false
     private let maxSpeedRunning: Double = 25.0 // km/h
     private let maxSpeedGolf: Double = 12.0 // km/h
@@ -968,7 +969,7 @@ struct SessionMapView: View {
                                         .cornerRadius(28)
                                     }
                                     
-                                    Button(action: { checkAndEndSession() }) {
+                                    Button(action: { showEndSessionConfirmation = true }) {
                                         HStack(spacing: 8) {
                                             Image(systemName: "flag.checkered")
                                                 .font(.system(size: 16, weight: .bold))
@@ -1265,6 +1266,12 @@ struct SessionMapView: View {
             }
         } message: {
             Text("För att spåra din rutt när appen är stängd måste du välja 'Tillåt alltid' för platsåtkomst i Inställningar.")
+        }
+        .alert("Vill du verkligen avsluta?", isPresented: $showEndSessionConfirmation) {
+            Button("Återuppta", role: .cancel) { }
+            Button("Avsluta", role: .destructive) {
+                checkAndEndSession()
+            }
         }
         .alert("Fordon detekterat", isPresented: $showVehicleDetectedAlert) {
             Button("OK") {

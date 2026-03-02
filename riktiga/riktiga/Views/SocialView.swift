@@ -272,8 +272,8 @@ struct SocialView: View {
                         .pageEntrance(delay: 0.05)
                     
                     VStack(spacing: 0) {
-                        // Show skeleton while initially loading (before first successful load)
-                        if !hasInitiallyLoaded || (socialViewModel.isLoading && socialViewModel.posts.isEmpty) {
+                        // Show skeleton only when we have no posts to display yet
+                        if socialViewModel.posts.isEmpty && (!hasInitiallyLoaded || socialViewModel.isLoading) {
                             loadingView
                         } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
                             // Show featured posts when user has no following
@@ -1271,20 +1271,13 @@ struct SocialView: View {
     private func loadInitialData() async {
         guard let userId = authViewModel.currentUser?.id else { return }
         
-        do {
-            try await AuthSessionManager.shared.ensureValidSession()
-        } catch {
-            print("❌ Session invalid, cannot fetch feed")
-            return
-        }
-        
-        // Load stories from friends
-        await loadStories(userId: userId)
-        
-        // Load active friends at gym
-        await loadActiveFriendsData()
-        
-        await socialViewModel.fetchSocialFeedAsync(userId: userId)
+        // Run session validation in parallel with data loading
+        // Feed shows cached posts instantly (no session needed), network fetch waits naturally
+        async let sessionTask: Void = { try? await AuthSessionManager.shared.ensureValidSession() }()
+        async let storiesTask: Void = loadStories(userId: userId)
+        async let friendsTask: Void = loadActiveFriendsData()
+        async let feedTask: Void = socialViewModel.fetchSocialFeedAsync(userId: userId)
+        _ = await (sessionTask, storiesTask, friendsTask, feedTask)
         
         // Mark initial load as complete with smooth animation
         await MainActor.run {
@@ -4277,7 +4270,9 @@ class SocialViewModel: ObservableObject {
             do {
                 let fetchedPosts = try await SocialService.shared.getSocialFeed(userId: userId)
                 await MainActor.run {
-                    self.posts = fetchedPosts
+                    if !fetchedPosts.isEmpty || self.posts.isEmpty {
+                        self.posts = fetchedPosts
+                    }
                     self.isLoading = false
                     self.prefetchAvatars(for: fetchedPosts)
                 }
@@ -4344,21 +4339,14 @@ class SocialViewModel: ObservableObject {
             let enhancedCached = applyKnownGoodCounts(to: cached)
             let sortedPosts = sortedByDateDesc(enhancedCached)
             
-            // Prefetch first avatar URLs with HIGH priority and WAIT for completion
-            let firstAvatarUrls = sortedPosts.prefix(3).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
-            if !firstAvatarUrls.isEmpty {
-                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
-            }
-            
-            // Now show posts - first avatars should be in cache
+            // Show posts immediately, prefetch avatars in background
             posts = sortedPosts
-            
-            // Prefetch rest in background (non-blocking)
-            Task.detached(priority: .background) {
-                await ImageCacheManager.shared.prefetchHighPriority(urls: sortedPosts.dropFirst(3).prefix(7).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty })
-            }
-            
             isLoading = false
+            
+            Task.detached(priority: .utility) {
+                let allAvatarUrls = sortedPosts.prefix(10).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+                await ImageCacheManager.shared.prefetchHighPriority(urls: allAvatarUrls)
+            }
             Task { await self.enrichAuthorMetadataIfNeeded() }
         } else {
             isLoading = true
@@ -4389,27 +4377,22 @@ class SocialViewModel: ObservableObject {
             
             let sortedPosts = sortedByDateDesc(fetchedPosts)
             
-            // Prefetch first avatar URLs with HIGH priority and WAIT for completion
-            let firstAvatarUrls = sortedPosts.prefix(3).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
-            if !firstAvatarUrls.isEmpty {
-                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+            if !sortedPosts.isEmpty || posts.isEmpty {
+                posts = sortedPosts
+                lastSuccessfulFetch = Date()
+                
+                AppCacheManager.shared.saveSocialFeed(sortedPosts, userId: userId)
+                
+                Task.detached(priority: .utility) {
+                    let allAvatarUrls = sortedPosts.prefix(10).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
+                    await ImageCacheManager.shared.prefetchHighPriority(urls: allAvatarUrls)
+                }
+                Task { await self.enrichAuthorMetadataIfNeeded() }
+            } else {
+                print("⚠️ Network returned empty feed, keeping existing posts")
             }
-            
-            // Now show posts - first avatars should be in cache
-            posts = sortedPosts
-            
-            // Prefetch rest in background (non-blocking)
-            Task.detached(priority: .background) {
-                await ImageCacheManager.shared.prefetchHighPriority(urls: sortedPosts.dropFirst(3).prefix(7).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty })
-            }
-            
             isLoading = false
             isFetching = false
-            lastSuccessfulFetch = Date()
-            
-            // Persist to cache
-            AppCacheManager.shared.saveSocialFeed(posts, userId: userId)
-            Task { await self.enrichAuthorMetadataIfNeeded() }
             
         } catch is CancellationError {
             // Request was cancelled (user navigated away) - just keep current posts
@@ -4573,10 +4556,12 @@ class SocialViewModel: ObservableObject {
             await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
             
             await MainActor.run {
-                self.posts = fetchedPosts
+                if !fetchedPosts.isEmpty || self.posts.isEmpty {
+                    self.posts = fetchedPosts
+                    self.lastUserPostsLoad = Date()
+                    self.lastUserPostsUserId = targetUserId
+                }
                 self.isLoading = false
-                self.lastUserPostsLoad = Date()
-                self.lastUserPostsUserId = targetUserId
                 self.prefetchAvatars(for: fetchedPosts)
             }
         } catch is CancellationError {

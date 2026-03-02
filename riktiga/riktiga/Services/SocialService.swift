@@ -939,6 +939,7 @@ class SocialService {
     func getSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()
+            
             // Always include the provided userId (avoid auth.user() cancellation problems)
             var userIdsToFetch: [String] = [userId]
             var followingFetchSucceeded = false
@@ -999,6 +1000,7 @@ class SocialService {
                 """)
                 .in("user_id", values: userIdsToFetch)
                 .order("created_at", ascending: false)
+                .limit(50)
                 .execute()
                 .value
             
@@ -1029,7 +1031,6 @@ class SocialService {
     /// Fetch social feed with guaranteed fallback so the user always sees their own and followed posts
     func getReliableSocialFeed(userId: String) async throws -> [SocialWorkoutPost] {
         do {
-            try await AuthSessionManager.shared.ensureValidSession()
             let primary = try await getSocialFeed(userId: userId)
             if !primary.isEmpty {
                 return primary
@@ -1214,15 +1215,12 @@ class SocialService {
                                 .value
                             
                             countsMap[postId] = (likeCount: likes.count, commentCount: comments.count)
-                            
-                            // Update cache with fresh counts
-                            self.postCountsCache[postId] = countsMap[postId]
                         }
                     } catch {
                         print("⚠️ Could not fetch fresh counts in fallback feed: \(error)")
-                        // Fall back to cache if fresh fetch fails
+                        // Use zero counts as fallback
                         for postId in postIds {
-                            countsMap[postId] = self.postCountsCache[postId] ?? (likeCount: 0, commentCount: 0)
+                            countsMap[postId] = (likeCount: 0, commentCount: 0)
                         }
                     }
                     
@@ -1267,6 +1265,12 @@ class SocialService {
                 collected.append(contentsOf: userPosts)
             }
         }
+        
+        // Update cache on the calling thread (single-threaded, no race)
+        for post in collected {
+            postCountsCache[post.id] = (likeCount: post.likeCount ?? 0, commentCount: post.commentCount ?? 0)
+        }
+        
         // Deduplicate by id and sort by createdAt desc
         var seenIds: Set<String> = []
         let deduped = collected.filter { post in

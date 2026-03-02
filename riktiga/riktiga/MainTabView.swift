@@ -515,6 +515,7 @@ struct MainTabView: View {
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.easeInOut(duration: 0.15), value: selectedTab)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
         .animation(.easeInOut(duration: 0.25), value: navigationTracker.hideTabBar)
@@ -610,8 +611,9 @@ struct MainTabView: View {
     }
     
     private func switchToTab(_ index: Int) {
-        // Instant tab switch - no delay
-        selectedTab = index
+        withAnimation(.easeInOut(duration: 0.15)) {
+            selectedTab = index
+        }
     }
     
     private func checkForActiveCoach() async {

@@ -194,4 +194,24 @@ struct GymExercisePost: Codable {
         self.isCardio = isCardio
         self.cardioSeconds = cardioSeconds
     }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        sets = try container.decode(Int.self, forKey: .sets)
+        reps = try container.decode([Int].self, forKey: .reps)
+        kg = try container.decode([Double].self, forKey: .kg)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        cardioSeconds = try container.decodeIfPresent(Int.self, forKey: .cardioSeconds)
+        
+        if let boolVal = try? container.decodeIfPresent(Bool.self, forKey: .isCardio) {
+            isCardio = boolVal
+        } else if let intVal = try? container.decodeIfPresent(Int.self, forKey: .isCardio) {
+            isCardio = intVal != 0
+        } else {
+            isCardio = nil
+        }
+    }
 }
