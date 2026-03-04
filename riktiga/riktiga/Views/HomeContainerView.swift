@@ -19,6 +19,7 @@ struct HomeContainerView: View {
                     showAddMealView = true
                 }
         }
+        .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
             showAddMealView = false
@@ -33,9 +34,6 @@ struct SimpleAppHeader: View {
     @State private var unreadNotifications = 0
     @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
-    @State private var showMonthlyPrize = false
-    @State private var showNonProAlert = false
-    @State private var showPaywall = false
     @State private var showFindFriends = false
     @State private var showPublicProfile = false
     @State private var lastUnreadFetch: Date = .distantPast
@@ -51,27 +49,28 @@ struct SimpleAppHeader: View {
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Månadens pris
-                Button {
-                    if isPremium {
-                        showMonthlyPrize = true
-                    } else {
-                        showNonProAlert = true
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trophy.fill")
+                // Center: Page title or Pro CTA
+                if isPremium {
+                    Text("Hem")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                } else {
+                    Button {
+                        SuperwallService.shared.showPaywall()
+                    } label: {
+                        Text("Bli pro medlem")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Månadens pris")
-                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                LinearGradient(colors: [.black, Color(white: 0.55)],
+                                               startPoint: .leading, endPoint: .trailing)
+                            )
+                            .cornerRadius(20)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.black)
-                    .cornerRadius(20)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 // Left and Right sides
                 HStack {
@@ -161,10 +160,6 @@ struct SimpleAppHeader: View {
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showMonthlyPrize) {
-            MonthlyPrizeView()
-                .environmentObject(authViewModel)
-        }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
                 NavigationStack {
@@ -179,17 +174,6 @@ struct SimpleAppHeader: View {
                         }
                 }
             }
-        }
-        .alert("Enbart för pro medlemmar", isPresented: $showNonProAlert) {
-            Button("Stäng", role: .cancel) { }
-            Button("Bli Pro") {
-                showNonProAlert = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    SuperwallService.shared.showPaywall()
-                }
-            }
-        } message: {
-            Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
         .task {
             await throttledRefresh()
@@ -243,9 +227,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
     @State private var unreadNotifications = 0
     @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
-    @State private var showMonthlyPrize = false
-    @State private var showNonProAlert = false
-    @State private var showPaywall = false
     @State private var showPublicProfile = false
     @State private var lastUnreadFetch: Date = .distantPast
     @StateObject private var dmService = DirectMessageService.shared
@@ -263,27 +244,28 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Månadens pris
-                Button {
-                    if isPremium {
-                        showMonthlyPrize = true
-                    } else {
-                        showNonProAlert = true
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trophy.fill")
+                // Center: Page title or Pro CTA
+                if isPremium {
+                    Text(selectedTab.rawValue)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                } else {
+                    Button {
+                        SuperwallService.shared.showPaywall()
+                    } label: {
+                        Text("Bli pro medlem")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Månadens pris")
-                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                LinearGradient(colors: [.black, Color(white: 0.55)],
+                                               startPoint: .leading, endPoint: .trailing)
+                            )
+                            .cornerRadius(20)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.black)
-                    .cornerRadius(20)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 // Left and Right sides
                 HStack {
@@ -428,10 +410,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showMonthlyPrize) {
-            MonthlyPrizeView()
-                .environmentObject(authViewModel)
-        }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
                 NavigationStack {
@@ -446,17 +424,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                         }
                 }
             }
-        }
-        .alert("Enbart för pro medlemmar", isPresented: $showNonProAlert) {
-            Button("Stäng", role: .cancel) { }
-            Button("Bli Pro") {
-                showNonProAlert = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    SuperwallService.shared.showPaywall()
-                }
-            }
-        } message: {
-            Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
         .task {
             await throttledRefresh()

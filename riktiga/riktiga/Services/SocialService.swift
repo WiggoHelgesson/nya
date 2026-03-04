@@ -960,51 +960,62 @@ class SocialService {
                 print("⚠️ Could not fetch following list: \(error) - proceeding with current user's posts only")
             }
             
-            // Only show featured users when we know for sure the user follows nobody
-            if followingFetchSucceeded && followingCount == 0 {
-                let featuredUserIds = try await getFeaturedUserIds()
-                userIdsToFetch.append(contentsOf: featuredUserIds)
-                print("📱 User follows no one - showing featured users: \(Self.featuredUsernames)")
+            let showGlobalFeed = followingFetchSucceeded && followingCount == 0
+            
+            if showGlobalFeed {
+                print("📱 User follows no one - showing global public feed")
             }
             
-            // Get posts from followed users AND current user with social data
-            let posts: [SocialWorkoutPost] = try await supabase
-                .from("workout_posts")
-                .select("""
-                    id,
-                    user_id,
-                    activity_type,
-                    title,
-                    description,
-                    distance,
-                    duration,
-                    image_url,
-                    user_image_url,
-                    elevation_gain,
-                    max_speed,
-                    created_at,
-                    split_data,
-                    exercises_data,
-                    pb_exercise_name,
-                    pb_value,
-                    streak_count,
-                    source,
-                    device_name,
-                    location,
-                    trained_with,
-                    route_data,
-                    is_public,
-                    profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
-                    workout_post_likes(count),
-                    workout_post_comments(count)
-                """)
-                .in("user_id", values: userIdsToFetch)
-                .order("created_at", ascending: false)
-                .limit(50)
-                .execute()
-                .value
+            let selectFields = """
+                id,
+                user_id,
+                activity_type,
+                title,
+                description,
+                distance,
+                duration,
+                image_url,
+                user_image_url,
+                elevation_gain,
+                max_speed,
+                created_at,
+                split_data,
+                exercises_data,
+                pb_exercise_name,
+                pb_value,
+                streak_count,
+                source,
+                device_name,
+                location,
+                trained_with,
+                route_data,
+                is_public,
+                profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
+                workout_post_likes(count),
+                workout_post_comments(count)
+            """
             
-            // Filter out private posts from other users (own posts always visible)
+            let posts: [SocialWorkoutPost]
+            if showGlobalFeed {
+                posts = try await supabase
+                    .from("workout_posts")
+                    .select(selectFields)
+                    .eq("is_public", value: true)
+                    .order("created_at", ascending: false)
+                    .limit(50)
+                    .execute()
+                    .value
+            } else {
+                posts = try await supabase
+                    .from("workout_posts")
+                    .select(selectFields)
+                    .in("user_id", values: userIdsToFetch)
+                    .order("created_at", ascending: false)
+                    .limit(50)
+                    .execute()
+                    .value
+            }
+            
             let visiblePosts = posts.filter { $0.userId == userId || $0.isPublic }
             
             for post in visiblePosts {
@@ -1321,16 +1332,18 @@ class SocialService {
                     isLikedByCurrentUser: likedSet.contains(post.id),
                     splits: post.splits,
                     exercises: post.exercises,
+                    trainedWith: post.trainedWith,
                     pbExerciseName: post.pbExerciseName,
                     pbValue: post.pbValue,
                     streakCount: post.streakCount,
                     source: post.source,
                     deviceName: post.deviceName,
+                    routeData: post.routeData,
                     isPublic: post.isPublic
                 )
             }
         } catch {
-            print("❌ Could not mark liked posts: \(error) - returning posts with isLikedByCurrentUser as false")
+            print("❌ Could not mark liked posts: \(error) - preserving existing like state")
             return posts.map { post in
                 SocialWorkoutPost(
                     id: post.id,
@@ -1351,14 +1364,16 @@ class SocialService {
                     strokes: post.strokes,
                     likeCount: post.likeCount,
                     commentCount: post.commentCount,
-                    isLikedByCurrentUser: false,
+                    isLikedByCurrentUser: post.isLikedByCurrentUser ?? false,
                     splits: post.splits,
                     exercises: post.exercises,
+                    trainedWith: post.trainedWith,
                     pbExerciseName: post.pbExerciseName,
                     pbValue: post.pbValue,
                     streakCount: post.streakCount,
                     source: post.source,
                     deviceName: post.deviceName,
+                    routeData: post.routeData,
                     isPublic: post.isPublic
                 )
             }

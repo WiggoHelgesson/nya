@@ -36,16 +36,16 @@ struct ProfileContainerView: View {
                 .animation(.easeInOut(duration: 0.25), value: selectedTab)
             }
             .navigationBarHidden(true)
-            .onChange(of: popToRootTrigger) { _, _ in
-                navigationPath = NavigationPath()
-                showSettings = false
-                // Notify inner ProfileView
-                NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedTab = .statistik
-                }
+        }
+        .id(popToRootTrigger)
+        .onChange(of: popToRootTrigger) { _, _ in
+            navigationPath = NavigationPath()
+            showSettings = false
+            NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = .statistik
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -132,9 +132,6 @@ struct ProfileHeaderWithTabs: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Binding var selectedTab: ProfileTab
     
-    @State private var showMonthlyPrize = false
-    @State private var showNonProAlert = false
-    @State private var showPaywall = false
     @State private var showPublicProfile = false
     
     var onSettingsTapped: (() -> Void)? = nil
@@ -147,27 +144,28 @@ struct ProfileHeaderWithTabs: View {
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Månadens pris
-                Button {
-                    if isPremium {
-                        showMonthlyPrize = true
-                    } else {
-                        showNonProAlert = true
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trophy.fill")
+                // Center: Page title or Pro CTA
+                if isPremium {
+                    Text("Profil")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                } else {
+                    Button {
+                        SuperwallService.shared.showPaywall()
+                    } label: {
+                        Text("Bli pro medlem")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Månadens pris")
-                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                LinearGradient(colors: [.black, Color(white: 0.55)],
+                                               startPoint: .leading, endPoint: .trailing)
+                            )
+                            .cornerRadius(20)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.black)
-                    .cornerRadius(20)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 // Left and Right sides
                 HStack {
@@ -230,10 +228,6 @@ struct ProfileHeaderWithTabs: View {
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showMonthlyPrize) {
-            MonthlyPrizeView()
-                .environmentObject(authViewModel)
-        }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
                 NavigationStack {
@@ -248,17 +242,6 @@ struct ProfileHeaderWithTabs: View {
                         }
                 }
             }
-        }
-        .alert("Enbart för pro medlemmar", isPresented: $showNonProAlert) {
-            Button("Stäng", role: .cancel) { }
-            Button("Bli Pro") {
-                showNonProAlert = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    SuperwallService.shared.showPaywall()
-                }
-            }
-        } message: {
-            Text("Uppgradera till Pro för att delta i månadens tävling och vinna häftiga priser!")
         }
     }
 }

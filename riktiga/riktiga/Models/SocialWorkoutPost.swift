@@ -25,10 +25,18 @@ struct SocialWorkoutPostRaw: Codable {
     let routeData: String?
     let isPublic: Bool?
     
-    // JOIN data
+    // JOIN data (from Supabase query)
     let profiles: ProfileData?
     let workoutPostLikes: [LikeCountData]?
     let workoutPostComments: [CommentCountData]?
+    
+    // Cache-friendly fields (present when decoded from local cache, nil from API)
+    let isLikedByCurrentUser: Bool?
+    let userName: String?
+    let userAvatarUrl: String?
+    let userIsPro: Bool?
+    let likeCount: Int?
+    let commentCount: Int?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -56,6 +64,12 @@ struct SocialWorkoutPostRaw: Codable {
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
+        case isLikedByCurrentUser = "is_liked_by_current_user"
+        case userName = "user_name"
+        case userAvatarUrl = "user_avatar_url"
+        case userIsPro = "user_is_pro"
+        case likeCount = "like_count"
+        case commentCount = "comment_count"
     }
 }
 
@@ -191,18 +205,18 @@ struct SocialWorkoutPost: Codable, Identifiable {
         userImageUrl = raw.userImageUrl
         createdAt = raw.createdAt
         
-        // Map social data from JOIN results
-        userName = raw.profiles?.username
-        userAvatarUrl = raw.profiles?.avatarUrl
-        userIsPro = raw.profiles?.isProMember
-        location = raw.location // Gym name or location
-        strokes = nil // Will be set if available
+        // Map social data from JOIN results, with cache fallbacks
+        userName = raw.profiles?.username ?? raw.userName
+        userAvatarUrl = raw.profiles?.avatarUrl ?? raw.userAvatarUrl
+        userIsPro = raw.profiles?.isProMember ?? raw.userIsPro
+        location = raw.location
+        strokes = nil
         
-        // Map like and comment counts
-        likeCount = raw.workoutPostLikes?.first?.count ?? 0
-        commentCount = raw.workoutPostComments?.first?.count ?? 0
+        // Map like and comment counts, with cache fallbacks
+        likeCount = raw.workoutPostLikes?.first?.count ?? raw.likeCount ?? 0
+        commentCount = raw.workoutPostComments?.first?.count ?? raw.commentCount ?? 0
         
-        isLikedByCurrentUser = false // Will be set separately
+        isLikedByCurrentUser = raw.isLikedByCurrentUser ?? false
         splits = raw.splits
         exercises = raw.exercises
         trainedWith = raw.trainedWith

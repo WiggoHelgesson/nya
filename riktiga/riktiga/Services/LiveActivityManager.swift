@@ -49,20 +49,26 @@ class LiveActivityManager {
     func endLiveActivity() {
         print("🛑 Attempting to end all Live Activities...")
         
-        // End synchronously on main thread to ensure it completes
-        Task { @MainActor in
-            let activities = ActivityKit.Activity<WorkoutActivityAttributes>.activities
-            print("🛑 Found \(activities.count) active Live Activities to end")
-            
-            for activity in activities {
+        let activities = ActivityKit.Activity<WorkoutActivityAttributes>.activities
+        print("🛑 Found \(activities.count) active Live Activities to end")
+        
+        for activity in activities {
+            Task {
                 await activity.end(nil, dismissalPolicy: .immediate)
                 print("🛑 Live Activity \(activity.id) avslutad")
             }
-            self.currentActivity = nil
         }
-        
-        // Also try ending immediately without waiting
-        for activity in ActivityKit.Activity<WorkoutActivityAttributes>.activities {
+        currentActivity = nil
+    }
+    
+    /// End any orphaned Live Activities that persist without an active session.
+    /// Call on app launch.
+    func cleanupOrphanedActivities() {
+        guard !SessionManager.shared.hasActiveSession else { return }
+        let activities = ActivityKit.Activity<WorkoutActivityAttributes>.activities
+        guard !activities.isEmpty else { return }
+        print("🧹 Found \(activities.count) orphaned Live Activities - cleaning up")
+        for activity in activities {
             Task {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }

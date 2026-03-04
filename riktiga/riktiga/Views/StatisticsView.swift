@@ -5,6 +5,9 @@ import Supabase
 enum SportType: String, CaseIterable, Identifiable {
     case gym = "Gym"
     case running = "Löpning"
+    case skiing = "Skidåkning"
+    case golf = "Golf"
+    case mountaineering = "Bergsklättring"
     
     var id: String { rawValue }
     
@@ -12,6 +15,9 @@ enum SportType: String, CaseIterable, Identifiable {
         switch self {
         case .gym: return "dumbbell.fill"
         case .running: return "figure.run"
+        case .skiing: return "figure.skiing.downhill"
+        case .golf: return "figure.golf"
+        case .mountaineering: return "mountain.2.fill"
         }
     }
     
@@ -19,6 +25,16 @@ enum SportType: String, CaseIterable, Identifiable {
         switch self {
         case .gym: return ["gym", "weight_training", "strength"]
         case .running: return ["run", "running", "trail_run"]
+        case .skiing: return ["ski", "skiing", "downhill_skiing", "cross_country_skiing"]
+        case .golf: return ["golf"]
+        case .mountaineering: return ["mountaineering", "climbing", "rock_climbing", "hiking"]
+        }
+    }
+    
+    var isCardioType: Bool {
+        switch self {
+        case .gym: return false
+        case .running, .skiing, .golf, .mountaineering: return true
         }
     }
 }
@@ -31,7 +47,8 @@ struct StatisticsView: View {
     @State private var isLoading = true
     @State private var progressStats: ProgressStats = ProgressStats()
     @State private var weeklyData: [WeekData] = []
-    @State private var workoutDays: Set<Int> = []
+    @State private var workoutDayActivities: [Int: Set<String>] = [:]
+    @State private var calendarMonthOffset = 0
     @State private var exerciseHistories: [StatExerciseHistory] = []
     @State private var aiPredictions: [OneRepMaxPredictionService.AIPrediction] = []
     @State private var isLoadingPredictions = false
@@ -44,6 +61,7 @@ struct StatisticsView: View {
     @State private var showMonthly = true
     @State private var showCalendar = true
     @State private var showProgressive = true
+    @State private var showConsistency = true
     @State private var show1RMPredictions = true
     @State private var showMuscleBalance = true
     @State private var showTopExercises = true
@@ -84,31 +102,32 @@ struct StatisticsView: View {
                     monthlyRecapSection
                         .padding(.top, 16)
                         .opacity(showMonthly ? 1 : 0)
-                        .offset(y: showMonthly ? 0 : 25)
-                        .scaleEffect(showMonthly ? 1 : 0.95, anchor: .top)
                         .pageEntrance()
                     
                     // MARK: - Sport Type Filter
                     sportTypeFilter
                         .padding(.top, 24)
                         .opacity(showFilter ? 1 : 0)
-                    .offset(y: showFilter ? 0 : 10)
-                    .pageEntrance(delay: 0.05)
+                        .pageEntrance(delay: 0.05)
                 
                 // MARK: - This Week Stats
                 thisWeekSection
                     .padding(.top, 32)
                     .opacity(showWeekStats ? 1 : 0)
-                    .offset(y: showWeekStats ? 0 : 20)
-                    .scaleEffect(showWeekStats ? 1 : 0.95, anchor: .top)
                     .pageEntrance(delay: 0.1)
                 
                 // MARK: - Past 12 Weeks Chart
                 past12WeeksChart
                     .padding(.top, 16)
                     .opacity(showChart ? 1 : 0)
-                    .offset(y: showChart ? 0 : 25)
-                    .scaleEffect(showChart ? 1 : 0.95, anchor: .top)
+                
+                // MARK: - Progressive Overload Section
+                Divider()
+                    .padding(.vertical, 32)
+                    .opacity(showProgressive ? 1 : 0)
+                
+                progressiveOverloadSection
+                    .opacity(showProgressive ? 1 : 0)
                 
                 // MARK: - Calendar Section
                 Divider()
@@ -117,8 +136,6 @@ struct StatisticsView: View {
                 
                 calendarSection
                     .opacity(showCalendar ? 1 : 0)
-                    .offset(y: showCalendar ? 0 : 25)
-                    .scaleEffect(showCalendar ? 1 : 0.95, anchor: .top)
                 
                 // MARK: - Progress Photos Section
                 Divider()
@@ -128,39 +145,20 @@ struct StatisticsView: View {
                 ProgressPhotosSectionView()
                     .environmentObject(authViewModel)
                     .opacity(showProgressPhotos ? 1 : 0)
-                    .offset(y: showProgressPhotos ? 0 : 25)
-                    .scaleEffect(showProgressPhotos ? 1 : 0.95, anchor: .top)
-                
-                // MARK: - Progressive Overload Section
-                Divider()
-                    .padding(.vertical, 32)
-                    .opacity(showProgressive ? 1 : 0)
-                
-                progressiveOverloadSection
-                    .opacity(showProgressive ? 1 : 0)
-                    .offset(y: showProgressive ? 0 : 25)
-                    .scaleEffect(showProgressive ? 1 : 0.95, anchor: .top)
-                
-                Divider()
-                    .padding(.vertical, 32)
-                    .opacity(show1RMPredictions ? 1 : 0)
-                
-                // MARK: - 1RM Predictions Section
-                oneRepMaxPredictionsSection
-                    .opacity(show1RMPredictions ? 1 : 0)
-                    .offset(y: show1RMPredictions ? 0 : 15)
                 
                 // MARK: - Muscle Distribution Section
                 muscleDistributionSection
                     .opacity(showMuscleBalance ? 1 : 0)
-                    .offset(y: showMuscleBalance ? 0 : 15)
                     .padding(.top, 32)
                 
                 // MARK: - Top Exercises Section
                 topExercisesSection
                     .opacity(showTopExercises ? 1 : 0)
-                    .offset(y: showTopExercises ? 0 : 15)
                     .padding(.top, 32)
+                
+                // MARK: - Feedback Link
+                feedbackSection
+                    .padding(.top, 40)
                 
                 Spacer(minLength: 100)
             }
@@ -189,6 +187,7 @@ struct StatisticsView: View {
         showCalendar = true
         showProgressPhotos = true
         showProgressive = true
+        showConsistency = true
         showMonthly = true
         showTrophyCase = true
         show1RMPredictions = true
@@ -243,6 +242,10 @@ struct StatisticsView: View {
                     StatColumn(label: "Volym", value: "\(Int(progressStats.distance)) kg", isAnimated: true, delay: 0.1)
                     StatColumn(label: "Set", value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.2)
                     StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
+                } else if selectedSport == .golf {
+                    StatColumn(label: "Rundor", value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.1)
+                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.2)
+                    StatColumn(label: "Pass", value: "\(Int(progressStats.distance))", isAnimated: true, delay: 0.3)
                 } else {
                     StatColumn(label: "Distans", value: String(format: "%.2f km", progressStats.distance), isAnimated: true, delay: 0.1)
                     StatColumn(label: "Höjdmeter", value: "\(Int(progressStats.elevation)) m", isAnimated: true, delay: 0.2)
@@ -281,7 +284,7 @@ struct StatisticsView: View {
                     
                     // Y-axis labels
                     VStack {
-                        let unit = selectedSport == .gym ? "kg" : "km"
+                        let unit = selectedSport == .gym ? "kg" : selectedSport == .golf ? "st" : "km"
                         Text("\(Int(maxValue)) \(unit)")
                             .font(.system(size: 10))
                             .foregroundColor(.gray)
@@ -565,22 +568,57 @@ struct StatisticsView: View {
     }
     
     // MARK: - Calendar Section
+    
+    private var displayedMonth: Date {
+        calendar.date(byAdding: .month, value: calendarMonthOffset, to: Date()) ?? Date()
+    }
+    
     private var calendarSection: some View {
-        let currentMonth = Date()
         let monthFormatter = DateFormatter()
         monthFormatter.dateFormat = "MMMM yyyy"
         monthFormatter.locale = Locale(identifier: "sv_SE")
         
         return VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text(monthFormatter.string(from: currentMonth).capitalized)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        calendarMonthOffset -= 1
+                        calculateCalendarData()
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(Circle())
+                }
+                
+                Spacer()
+                
+                Text(monthFormatter.string(from: displayedMonth).capitalized)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.primary)
                 
                 Spacer()
+                
+                Button {
+                    guard calendarMonthOffset < 0 else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        calendarMonthOffset += 1
+                        calculateCalendarData()
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(calendarMonthOffset < 0 ? .primary : .secondary.opacity(0.3))
+                        .frame(width: 32, height: 32)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(Circle())
+                }
+                .disabled(calendarMonthOffset >= 0)
             }
             
-            // Calendar grid
             calendarGrid
         }
         .padding(.horizontal, 20)
@@ -589,14 +627,14 @@ struct StatisticsView: View {
     // MARK: - Calendar Grid
     private var calendarGrid: some View {
         let weekdaySymbols = ["M", "T", "W", "T", "F", "S", "S"]
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date()))!
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth))!
         let daysInMonth = calendar.range(of: .day, in: .month, for: startOfMonth)?.count ?? 30
         let rawWeekday = calendar.component(.weekday, from: startOfMonth)
         let leadingDays = rawWeekday == 1 ? 6 : rawWeekday - 2
-        let today = calendar.component(.day, from: Date())
+        let isCurrentMonth = calendarMonthOffset == 0
+        let today = isCurrentMonth ? calendar.component(.day, from: Date()) : -1
         
         return VStack(spacing: 12) {
-            // Weekday headers
             HStack {
                 ForEach(weekdaySymbols, id: \.self) { symbol in
                     Text(symbol)
@@ -606,7 +644,6 @@ struct StatisticsView: View {
                 }
             }
             
-            // Calendar rows
             let totalCells = leadingDays + daysInMonth
             let rows = (totalCells + 6) / 7
             
@@ -618,12 +655,12 @@ struct StatisticsView: View {
                         
                         if day > 0 && day <= daysInMonth {
                             ZStack {
-                                if workoutDays.contains(day) {
+                                if let activities = workoutDayActivities[day], !activities.isEmpty {
                                     Circle()
                                         .fill(Color.primary)
                                         .frame(width: 32, height: 32)
                                     
-                                    Image(systemName: selectedSport.icon)
+                                    Image(systemName: iconForActivities(activities))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.white)
                                 } else if day == today {
@@ -637,7 +674,7 @@ struct StatisticsView: View {
                                 } else {
                                     Text("\(day)")
                                         .font(.system(size: 14))
-                                        .foregroundColor(day > today ? .gray.opacity(0.5) : .primary)
+                                        .foregroundColor(isCurrentMonth && day > today ? .gray.opacity(0.5) : .primary)
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -714,12 +751,13 @@ struct StatisticsView: View {
                         .stroke(Color.primary.opacity(0.06), lineWidth: 1)
                 )
             } else {
+                let topGainers = Array(exerciseHistories.sorted { $0.trendPercentage > $1.trendPercentage }.prefix(5))
                 VStack(spacing: 0) {
-                    ForEach(Array(exerciseHistories.prefix(5).enumerated()), id: \.element.id) { index, history in
+                    ForEach(Array(topGainers.enumerated()), id: \.element.id) { index, history in
                         NavigationLink {
                             StatExerciseDetailView(history: history)
                         } label: {
-                            StatExerciseRow(history: history, isLast: index == min(4, exerciseHistories.count - 1))
+                            StatExerciseRow(history: history, isLast: index == topGainers.count - 1)
                         }
                         .buttonStyle(.plain)
                     }
@@ -927,6 +965,234 @@ struct StatisticsView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Feedback Section
+    
+    private var feedbackSection: some View {
+        Button {
+            if let url = URL(string: "mailto:info@wiggio.se?subject=Feedback%20-%20Up%26Down") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Text("Har du tips på någon funktion du tycker vi saknar?")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Text("Ge feedback här")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .underline()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Consistency Section
+    
+    private var consistencySection: some View {
+        let stats = computeConsistencyStats()
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("KONTINUERLIGHET")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .tracking(1.5)
+                    
+                    Text("Din vana")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Hur regelbunden du är")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            if allPosts.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    
+                    Text("Ingen data ännu")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    Text("Logga dina pass för att se din kontinuerlighet")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+            } else {
+                VStack(spacing: 10) {
+                    consistencyStatCard(
+                        icon: "calendar",
+                        iconColor: Color(red: 0.30, green: 0.55, blue: 0.95),
+                        title: "Snitt pass per vecka",
+                        value: String(format: "%.1f", stats.avgSessionsPerWeek),
+                        subtitle: stats.totalWeeks > 0 ? "Senaste \(stats.totalWeeks) veckor" : nil
+                    )
+                    
+                    HStack(spacing: 10) {
+                        consistencyStatCard(
+                            icon: "flame.fill",
+                            iconColor: .orange,
+                            title: "Längsta streak",
+                            value: "\(stats.longestStreakDays)",
+                            subtitle: "dagar i rad"
+                        )
+                        
+                        consistencyStatCard(
+                            icon: "repeat",
+                            iconColor: Color(red: 0.55, green: 0.40, blue: 0.85),
+                            title: "Längsta streak",
+                            value: "\(stats.longestStreakWeeks)",
+                            subtitle: "veckor i rad"
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    private func consistencyStatCard(icon: String, iconColor: Color, title: String, value: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(iconColor)
+                    .frame(width: 32, height: 32)
+                    .background(iconColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary.opacity(0.4))
+            }
+            
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text(value)
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+    
+    private struct ConsistencyStats {
+        let avgSessionsPerWeek: Double
+        let longestStreakDays: Int
+        let longestStreakWeeks: Int
+        let totalWeeks: Int
+    }
+    
+    private func computeConsistencyStats() -> ConsistencyStats {
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+        
+        let dates: [Date] = allPosts.compactMap { post in
+            dateFormatter.date(from: post.createdAt) ?? fallbackFormatter.date(from: post.createdAt)
+        }.sorted()
+        
+        guard !dates.isEmpty else {
+            return ConsistencyStats(avgSessionsPerWeek: 0, longestStreakDays: 0, longestStreakWeeks: 0, totalWeeks: 0)
+        }
+        
+        let cal = Calendar.current
+        
+        // Average sessions per week
+        let firstDate = dates.first!
+        let daysSinceFirst = max(cal.dateComponents([.day], from: firstDate, to: Date()).day ?? 1, 1)
+        let totalWeeks = max(daysSinceFirst / 7, 1)
+        let avgPerWeek = Double(dates.count) / Double(totalWeeks)
+        
+        // Longest streak in consecutive days with activity
+        let uniqueDays = Set(dates.map { cal.startOfDay(for: $0) }).sorted()
+        var longestDayStreak = 1
+        var currentDayStreak = 1
+        for i in 1..<uniqueDays.count {
+            let diff = cal.dateComponents([.day], from: uniqueDays[i - 1], to: uniqueDays[i]).day ?? 0
+            if diff == 1 {
+                currentDayStreak += 1
+                longestDayStreak = max(longestDayStreak, currentDayStreak)
+            } else {
+                currentDayStreak = 1
+            }
+        }
+        if uniqueDays.count == 1 { longestDayStreak = 1 }
+        
+        // Longest streak in consecutive weeks with at least one activity
+        let weekIdentifiers = Set(dates.map { cal.component(.weekOfYear, from: $0) * 10000 + cal.component(.yearForWeekOfYear, from: $0) })
+        let sortedWeeks: [(year: Int, week: Int)] = weekIdentifiers.map { (year: $0 % 10000, week: $0 / 10000) }
+            .sorted { a, b in a.year != b.year ? a.year < b.year : a.week < b.week }
+        
+        var longestWeekStreak = 1
+        var currentWeekStreak = 1
+        for i in 1..<sortedWeeks.count {
+            let prev = sortedWeeks[i - 1]
+            let curr = sortedWeeks[i]
+            let prevDate = cal.date(from: DateComponents(weekOfYear: prev.week, yearForWeekOfYear: prev.year))
+            let currDate = cal.date(from: DateComponents(weekOfYear: curr.week, yearForWeekOfYear: curr.year))
+            if let p = prevDate, let c = currDate {
+                let weekDiff = cal.dateComponents([.weekOfYear], from: p, to: c).weekOfYear ?? 0
+                if weekDiff == 1 {
+                    currentWeekStreak += 1
+                    longestWeekStreak = max(longestWeekStreak, currentWeekStreak)
+                } else {
+                    currentWeekStreak = 1
+                }
+            }
+        }
+        if sortedWeeks.count == 1 { longestWeekStreak = 1 }
+        
+        return ConsistencyStats(
+            avgSessionsPerWeek: avgPerWeek,
+            longestStreakDays: longestDayStreak,
+            longestStreakWeeks: longestWeekStreak,
+            totalWeeks: totalWeeks
+        )
     }
     
     // MARK: - Muscle Distribution Section
@@ -1180,7 +1446,7 @@ struct StatisticsView: View {
             
             for exercise in exercises {
                 let category = (exercise.category ?? "").lowercased()
-                let setCount = exercise.kg.count
+                let setCount = exercise.sets > 0 ? exercise.sets : exercise.kg.count
                 
                 // Map categories to muscle groups
                 if category.contains("chest") || category.contains("bröst") {
@@ -1193,7 +1459,11 @@ struct StatisticsView: View {
                     muscleSetCounts["Biceps", default: 0] += setCount
                 } else if category.contains("tricep") {
                     muscleSetCounts["Triceps", default: 0] += setCount
-                } else if category.contains("quad") || category.contains("leg") || category.contains("ben") {
+                } else if category.contains("överarm") {
+                    let half = max(1, setCount / 2)
+                    muscleSetCounts["Biceps", default: 0] += half
+                    muscleSetCounts["Triceps", default: 0] += (setCount - half)
+                } else if category.contains("quad") || category.contains("leg") || category.contains("ben") || category.contains("lår") || category.contains("underben") {
                     muscleSetCounts["Quads", default: 0] += setCount
                 } else if category.contains("ham") || category.contains("hamstring") {
                     muscleSetCounts["Hams", default: 0] += setCount
@@ -1218,7 +1488,7 @@ struct StatisticsView: View {
             
             for exercise in exercises {
                 let name = exercise.name
-                let setCount = exercise.kg.count
+                let setCount = exercise.sets > 0 ? exercise.sets : exercise.kg.count
                 let maxWeight = exercise.kg.max() ?? 0
                 
                 if var existing = exerciseMap[name] {
@@ -1342,7 +1612,6 @@ struct StatisticsView: View {
             }
         
         if selectedSport == .gym {
-            // Calculate volume and sets for gym
             let volume = thisWeekPosts.reduce(0.0) { total, post in
                 let postVolume = post.exercises?.reduce(0.0) { exerciseTotal, exercise in
                     let exerciseVolume = zip(exercise.reps, exercise.kg).reduce(0.0) { setTotal, pair in
@@ -1359,14 +1628,19 @@ struct StatisticsView: View {
             }
             
             progressStats = ProgressStats(
-                distance: volume, // Using distance field for volume
-                elevation: Double(sets), // Using elevation field for sets
+                distance: volume,
+                elevation: Double(sets),
+                duration: thisWeekPosts.reduce(0) { $0 + Double($1.duration ?? 0) }
+            )
+        } else if selectedSport == .golf {
+            progressStats = ProgressStats(
+                distance: Double(thisWeekPosts.count),
+                elevation: Double(thisWeekPosts.count),
                 duration: thisWeekPosts.reduce(0) { $0 + Double($1.duration ?? 0) }
             )
         } else {
-            // Calculate distance and elevation for cardio
             progressStats = ProgressStats(
-                distance: thisWeekPosts.reduce(0) { $0 + (($1.distance ?? 0) / 1000) },
+                distance: thisWeekPosts.reduce(0) { $0 + ($1.distance ?? 0) },
                 elevation: thisWeekPosts.reduce(0) { $0 + ($1.elevationGain ?? 0) },
                 duration: thisWeekPosts.reduce(0) { $0 + Double($1.duration ?? 0) }
             )
@@ -1394,8 +1668,10 @@ struct StatisticsView: View {
                     } ?? 0.0
                     return total + postVolume
                 }
+            } else if selectedSport == .golf {
+                value = Double(weekPosts.count)
             } else {
-                value = weekPosts.reduce(0.0) { $0 + (($1.distance ?? 0) / 1000) }
+                value = weekPosts.reduce(0.0) { $0 + ($1.distance ?? 0) }
             }
             
             data.append(WeekData(weekStart: weekStart, value: value))
@@ -1406,22 +1682,36 @@ struct StatisticsView: View {
     
     private func calculateCalendarData() {
         withAnimation(.easeInOut(duration: 0.3)) {
-            let posts = filteredPosts
-            let thisMonth = calendar.dateComponents([.year, .month], from: Date())
+            guard let targetMonth = calendar.date(byAdding: .month, value: calendarMonthOffset, to: Date()) else { return }
+            let targetComponents = calendar.dateComponents([.year, .month], from: targetMonth)
             
-            var days: Set<Int> = []
-            for post in posts {
+            var dayActivities: [Int: Set<String>] = [:]
+            for post in allPosts {
                 if let date = parseDate(post.createdAt) {
                     let postComponents = calendar.dateComponents([.year, .month, .day], from: date)
-                    if postComponents.year == thisMonth.year && postComponents.month == thisMonth.month {
+                    if postComponents.year == targetComponents.year && postComponents.month == targetComponents.month {
                         if let day = postComponents.day {
-                            days.insert(day)
+                            dayActivities[day, default: []].insert(post.activityType)
                         }
                     }
                 }
             }
-            workoutDays = days
+            workoutDayActivities = dayActivities
         }
+    }
+    
+    private func iconForActivityType(_ type: String) -> String {
+        let t = type.lowercased()
+        if ["gym", "weight_training", "strength"].contains(where: { t.contains($0) }) { return "dumbbell.fill" }
+        if ["run", "running", "trail_run", "walk", "walking"].contains(where: { t.contains($0) }) { return "shoe.fill" }
+        if ["ski", "skiing"].contains(where: { t.contains($0) }) { return "figure.skiing.downhill" }
+        if ["golf"].contains(where: { t.contains($0) }) { return "figure.golf" }
+        if ["mountaineering", "climbing", "hiking"].contains(where: { t.contains($0) }) { return "mountain.2.fill" }
+        return "figure.walk"
+    }
+    
+    private func iconForActivities(_ activities: Set<String>) -> String {
+        return iconForActivityType(activities.first ?? "")
     }
     
     private func parseDate(_ dateString: String) -> Date? {
@@ -1477,19 +1767,16 @@ private struct StatColumn: View {
                 .font(.system(size: 12))
                 .foregroundColor(.gray)
                 .opacity(showValue ? 1 : 0)
-                .offset(y: showValue ? 0 : 10)
             
             Text(value)
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
                 .opacity(showValue ? 1 : 0)
-                .scaleEffect(showValue ? 1 : 0.5, anchor: .leading)
-                .offset(y: showValue ? 0 : 15)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if isAnimated {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(delay)) {
+                withAnimation(.smooth(duration: 0.4).delay(delay)) {
                     showValue = true
                 }
             } else {
@@ -2770,51 +3057,34 @@ struct MonthlyReportView: View {
                     } else {
                         headerSection(geometry: geometry)
                             .opacity(showHeader ? 1 : 0)
-                            .scaleEffect(showHeader ? 1 : 0.97)
                         
                         yearChartSection(geometry: geometry)
                             .opacity(showYearChart ? 1 : 0)
-                            .offset(y: showYearChart ? 0 : 25)
-                            .scaleEffect(showYearChart ? 1 : 0.98)
                         
                         monthTotalsSection(geometry: geometry)
                             .opacity(showTotals ? 1 : 0)
-                            .offset(y: showTotals ? 0 : 25)
-                            .scaleEffect(showTotals ? 1 : 0.98)
                         
                         if !livePhotoPosts.isEmpty {
                             livePhotosSliderSection(geometry: geometry)
                                 .opacity(showLivePhotos ? 1 : 0)
-                                .offset(y: showLivePhotos ? 0 : 25)
-                                .scaleEffect(showLivePhotos ? 1 : 0.98)
                         }
                         
                         calendarSection(geometry: geometry)
                             .opacity(showCalendar ? 1 : 0)
-                            .offset(y: showCalendar ? 0 : 25)
-                            .scaleEffect(showCalendar ? 1 : 0.98)
                         
                         topSportsSection(geometry: geometry)
                             .opacity(showSports ? 1 : 0)
-                            .offset(y: showSports ? 0 : 25)
-                            .scaleEffect(showSports ? 1 : 0.98)
                         
                         if !top5Exercises.isEmpty {
                             topExercisesSection(geometry: geometry)
                                 .opacity(showTopExercises ? 1 : 0)
-                                .offset(y: showTopExercises ? 0 : 25)
-                                .scaleEffect(showTopExercises ? 1 : 0.98)
                         }
                         
                         longestActivitySection(geometry: geometry)
                             .opacity(showLongest ? 1 : 0)
-                            .offset(y: showLongest ? 0 : 25)
-                            .scaleEffect(showLongest ? 1 : 0.98)
                         
                         kudosSection(geometry: geometry)
                             .opacity(showKudos ? 1 : 0)
-                            .offset(y: showKudos ? 0 : 25)
-                            .scaleEffect(showKudos ? 1 : 0.98)
                     }
                 }
             }
@@ -2853,17 +3123,17 @@ struct MonthlyReportView: View {
         showLongest = false
         showKudos = false
         
-        let spring = Animation.spring(response: 0.6, dampingFraction: 0.85)
+        let anim = Animation.smooth(duration: 0.4)
         
-        withAnimation(spring) { showHeader = true }
-        withAnimation(spring.delay(0.12)) { showYearChart = true }
-        withAnimation(spring.delay(0.22)) { showTotals = true }
-        withAnimation(spring.delay(0.30)) { showLivePhotos = true }
-        withAnimation(spring.delay(0.38)) { showCalendar = true }
-        withAnimation(spring.delay(0.46)) { showSports = true }
-        withAnimation(spring.delay(0.54)) { showTopExercises = true }
-        withAnimation(spring.delay(0.62)) { showLongest = true }
-        withAnimation(spring.delay(0.70)) { showKudos = true }
+        withAnimation(anim) { showHeader = true }
+        withAnimation(anim.delay(0.06)) { showYearChart = true }
+        withAnimation(anim.delay(0.12)) { showTotals = true }
+        withAnimation(anim.delay(0.18)) { showLivePhotos = true }
+        withAnimation(anim.delay(0.24)) { showCalendar = true }
+        withAnimation(anim.delay(0.30)) { showSports = true }
+        withAnimation(anim.delay(0.36)) { showTopExercises = true }
+        withAnimation(anim.delay(0.42)) { showLongest = true }
+        withAnimation(anim.delay(0.48)) { showKudos = true }
     }
     
     // MARK: - Header Section
@@ -3827,7 +4097,7 @@ struct StatExerciseHistory: Identifiable {
     var trendColor: Color {
         let change = trendPercentage
         if change > 0 { return .green }
-        if change < 0 { return .secondary }
+        if change < 0 { return .red }
         return .gray
     }
     
@@ -3971,15 +4241,20 @@ struct StatExerciseRow: View {
                 
                 Spacer()
                 
-                // Weight only (clean look)
-                if let bestWeight = history.personalBestWeight {
-                    HStack(spacing: 2) {
-                        Text("\(String(format: "%.0f", bestWeight))")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text("kg")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let bestWeight = history.personalBestWeight {
+                        HStack(spacing: 2) {
+                            Text("\(String(format: "%.0f", bestWeight))")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.primary)
+                            Text("kg")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    if history.history.count >= 2 {
+                        trendBadge
                     }
                 }
                 
@@ -3996,6 +4271,32 @@ struct StatExerciseRow: View {
             }
         }
     }
+    
+    @ViewBuilder
+    private var trendBadge: some View {
+        let change = history.trendPercentage
+        if change == 0 {
+            Text("Platå")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        } else {
+            Text(history.trendMessage)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(change > 0 ? .green : .red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background((change > 0 ? Color.green : Color.red).opacity(0.1))
+                .clipShape(Capsule())
+        }
+    }
 }
 
 // MARK: - All Exercises List View
@@ -4005,9 +4306,17 @@ struct AllExercisesListView: View {
     @State private var loadedHistories: [StatExerciseHistory] = []
     @State private var isLoading = false
     @State private var searchText = ""
+    @State private var selectedFilter: TrendFilter = .alla
     @State private var showStats = false
     @State private var showSearch = false
     @State private var showList = false
+    
+    enum TrendFilter: String, CaseIterable {
+        case alla = "Alla"
+        case okar = "Ökar"
+        case minskar = "Minskar"
+        case plata = "Platåat"
+    }
     
     // Initialize with provided histories (from StatisticsView)
     init(exerciseHistories: [StatExerciseHistory]) {
@@ -4024,13 +4333,27 @@ struct AllExercisesListView: View {
     }
     
     private var filteredExercises: [StatExerciseHistory] {
-        if searchText.isEmpty {
-            return exerciseHistories
+        var results = exerciseHistories
+        
+        if !searchText.isEmpty {
+            results = results.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                ($0.category?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
         }
-        return exerciseHistories.filter { 
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            ($0.category?.localizedCaseInsensitiveContains(searchText) ?? false)
+        
+        switch selectedFilter {
+        case .alla:
+            break
+        case .okar:
+            results = results.filter { $0.trendPercentage > 0 }
+        case .minskar:
+            results = results.filter { $0.trendPercentage < 0 }
+        case .plata:
+            results = results.filter { $0.trendPercentage == 0 && $0.history.count >= 2 }
         }
+        
+        return results
     }
     
     var body: some View {
@@ -4065,7 +4388,34 @@ struct AllExercisesListView: View {
                         )
                         .padding(.horizontal, 16)
                         .opacity(showSearch ? 1 : 0)
-                        .offset(y: showSearch ? 0 : 10)
+                        
+                        // Trend filter buttons
+                        HStack(spacing: 8) {
+                            ForEach(TrendFilter.allCases, id: \.self) { filter in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        selectedFilter = filter
+                                    }
+                                } label: {
+                                    Text(filter.rawValue)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(selectedFilter == filter ? .white : .primary)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            Capsule()
+                                                .fill(selectedFilter == filter ? Color.primary : Color(.secondarySystemBackground))
+                                        )
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(Color.primary.opacity(selectedFilter == filter ? 0 : 0.1), lineWidth: 1)
+                                        )
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .opacity(showSearch ? 1 : 0)
                         
                         // Exercise list
                         VStack(spacing: 0) {
@@ -4087,7 +4437,6 @@ struct AllExercisesListView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 20)
                         .opacity(showList ? 1 : 0)
-                        .offset(y: showList ? 0 : 15)
                     }
                     .padding(.top, 16)
                 }
@@ -4103,13 +4452,13 @@ struct AllExercisesListView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showStats = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.1)) {
                 showSearch = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.2)) {
                 showList = true
             }
         }
@@ -4251,15 +4600,20 @@ private struct CleanExerciseRow: View {
                 
                 Spacer()
                 
-                // Weight only (clean look)
-                if let bestWeight = history.personalBestWeight {
-                    HStack(spacing: 2) {
-                        Text("\(String(format: "%.0f", bestWeight))")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text("kg")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let bestWeight = history.personalBestWeight {
+                        HStack(spacing: 2) {
+                            Text("\(String(format: "%.0f", bestWeight))")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.primary)
+                            Text("kg")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    if history.history.count >= 2 {
+                        cleanTrendBadge
                     }
                 }
                 
@@ -4276,6 +4630,32 @@ private struct CleanExerciseRow: View {
                     .frame(height: 1)
                     .padding(.leading, 86)
             }
+        }
+    }
+    
+    @ViewBuilder
+    private var cleanTrendBadge: some View {
+        let change = history.trendPercentage
+        if change == 0 {
+            Text("Platå")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        } else {
+            Text(history.trendMessage)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(change > 0 ? .green : .red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background((change > 0 ? Color.green : Color.red).opacity(0.1))
+                .clipShape(Capsule())
         }
     }
 }
@@ -4310,24 +4690,20 @@ struct StatExerciseDetailView: View {
                 // Hero card with image
                 heroCard
                     .opacity(showHero ? 1 : 0)
-                    .scaleEffect(showHero ? 1 : 0.95)
                 
                 // Stats grid
                 statsGrid
                     .opacity(showStats ? 1 : 0)
-                    .offset(y: showStats ? 0 : 15)
                 
                 // Chart
                 if history.history.count >= 2 {
                     chartCard
                         .opacity(showChart ? 1 : 0)
-                        .offset(y: showChart ? 0 : 15)
                 }
                 
                 // History list
                 historyCard
                     .opacity(showHistory ? 1 : 0)
-                    .offset(y: showHistory ? 0 : 15)
             }
             .padding(16)
         }
@@ -4335,16 +4711,16 @@ struct StatExerciseDetailView: View {
         .navigationTitle(history.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showHero = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.1)) {
                 showStats = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.2)) {
                 showChart = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.3)) {
                 showHistory = true
             }
         }
@@ -4823,13 +5199,12 @@ struct All1RMPredictionsView: View {
             }
             .padding(.top, 16)
             .opacity(showContent ? 1 : 0)
-            .offset(y: showContent ? 0 : 15)
         }
         .background(Color(.systemBackground))
         .navigationTitle("1RM Prediktioner")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showContent = true
             }
         }
@@ -4885,32 +5260,27 @@ struct OneRepMaxDetailView: View {
                 // Hero card with exercise image
                 heroCard
                     .opacity(showHero ? 1 : 0)
-                    .scaleEffect(showHero ? 1 : 0.95)
                 
                 // Current 1RM card
                 current1RMCard
                     .opacity(showCurrent ? 1 : 0)
-                    .offset(y: showCurrent ? 0 : 15)
                 
                 // AI Tips card (if available)
                 if let tips = aiPrediction?.tips, !tips.isEmpty {
                     aiTipsCard(tips: tips)
                         .opacity(showTips ? 1 : 0)
-                        .offset(y: showTips ? 0 : 15)
                 }
                 
                 // Future predictions
                 if hasAIPrediction || history.canPredict {
                     futurePredictionsCard
                         .opacity(showPredictions ? 1 : 0)
-                        .offset(y: showPredictions ? 0 : 15)
                 }
                 
                 // 1RM progression chart
                 if history.history.count >= 2 {
                     oneRMChartCard
                         .opacity(showChart ? 1 : 0)
-                        .offset(y: showChart ? 0 : 15)
                 }
             }
             .padding(16)
@@ -4919,19 +5289,19 @@ struct OneRepMaxDetailView: View {
         .navigationTitle(history.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showHero = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.1)) {
                 showCurrent = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.15)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.15)) {
                 showTips = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.2)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.2)) {
                 showPredictions = true
             }
-            withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.3)) {
                 showChart = true
             }
         }
@@ -5507,13 +5877,12 @@ struct AllTopExercisesView: View {
             .cornerRadius(20)
             .padding(16)
             .opacity(showContent ? 1 : 0)
-            .offset(y: showContent ? 0 : 15)
         }
         .background(Color(.systemBackground))
         .navigationTitle("Top Övningar")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showContent = true
             }
         }
@@ -5606,7 +5975,6 @@ struct TrophyDetailView: View {
                     .padding(.bottom, 24)
                 }
                 .opacity(showContent ? 1 : 0)
-                .offset(y: showContent ? 0 : 15)
             }
             .background(Color(.systemBackground))
             .navigationTitle("Prestationer")
@@ -5626,7 +5994,7 @@ struct TrophyDetailView: View {
                 }
             }
             .onAppear {
-                withAnimation(.easeOut(duration: 0.4)) {
+                withAnimation(.smooth(duration: 0.4)) {
                     showContent = true
                 }
             }

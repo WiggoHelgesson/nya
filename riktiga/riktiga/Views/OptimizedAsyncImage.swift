@@ -379,12 +379,19 @@ extension View {
     }
 }
 
-// MARK: - Page Entrance (no-op for instant navigation)
+// MARK: - Page Entrance Animation
 struct PageEntranceModifier: ViewModifier {
     let delay: Double
+    @State private var isVisible = false
     
     func body(content: Content) -> some View {
         content
+            .opacity(isVisible ? 1 : 0)
+            .onAppear {
+                withAnimation(.smooth(duration: 0.4).delay(delay)) {
+                    isVisible = true
+                }
+            }
     }
 }
 

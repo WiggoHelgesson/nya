@@ -78,7 +78,6 @@ struct UserProfileView: View {
                             selectedPost: $selectedLivePhotoPost
                         )
                         .opacity(showHeader ? 1 : 0)
-                        .offset(y: showHeader ? 0 : 10)
                     }
                     
                     // Header
@@ -86,7 +85,6 @@ struct UserProfileView: View {
                         HStack(spacing: 12) {
                             ProfileAvatarView(path: avatarUrl ?? "", size: 72)
                                 .overlay(Circle().stroke(Color(.systemGray5), lineWidth: 1))
-                                .scaleEffect(showHeader ? 1 : 0.8)
                                 .opacity(showHeader ? 1 : 0)
                             
                             VStack(alignment: .leading, spacing: 6) {
@@ -151,7 +149,6 @@ struct UserProfileView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .opacity(showStats ? 1 : 0)
-                                .offset(y: showStats ? 0 : 10)
                                 
                                 // Personal Records button
                                 HStack {
@@ -175,7 +172,6 @@ struct UserProfileView: View {
                                 }
                                 .padding(.top, 4)
                                 .opacity(showStats ? 1 : 0)
-                                .scaleEffect(showStats ? 1 : 0.95)
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -226,7 +222,6 @@ struct UserProfileView: View {
                             }
                             .padding(.horizontal, 16)
                             .opacity(showStats ? 1 : 0)
-                            .offset(y: showStats ? 0 : 10)
                         }
                     }
                     .padding(.bottom, 12)
@@ -240,7 +235,6 @@ struct UserProfileView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .opacity(showChart ? 1 : 0)
-                    .offset(y: showChart ? 0 : 15)
                     
                     // MARK: - Compare Button
                     if let currentUser = authViewModel.currentUser, currentUser.id != userId {
@@ -254,7 +248,6 @@ struct UserProfileView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 12)
                         .opacity(showChart ? 1 : 0)
-                        .offset(y: showChart ? 0 : 10)
                     }
                     
                     Divider()
@@ -294,7 +287,6 @@ struct UserProfileView: View {
                             }
                             .padding(.top, 40)
                             .opacity(showPosts ? 1 : 0)
-                            .offset(y: showPosts ? 0 : 20)
                         } else {
                             LazyVStack(spacing: 0) {
                                 ForEach(Array(profilePostsViewModel.posts.enumerated()), id: \.element.id) { index, post in
@@ -312,8 +304,7 @@ struct UserProfileView: View {
                                         }
                                     )
                                     .opacity(showPosts ? 1 : 0)
-                                    .offset(y: showPosts ? 0 : 20)
-                                    .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05), value: showPosts)
+                                    .animation(.smooth(duration: 0.4).delay(Double(index) * 0.05), value: showPosts)
                                     
                                     Divider()
                                         .background(Color(.systemGray5))
@@ -530,24 +521,24 @@ struct UserProfileView: View {
     
     private func triggerAnimations() {
         // Staggered animations for smooth loading appearance
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        withAnimation(.smooth(duration: 0.4)) {
             showHeader = true
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showStats = true
             }
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showChart = true
             }
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            withAnimation(.smooth(duration: 0.4)) {
                 showPosts = true
             }
         }

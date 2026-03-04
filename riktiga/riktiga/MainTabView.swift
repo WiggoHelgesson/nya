@@ -83,6 +83,7 @@ struct MainTabView: View {
     @State private var showCoachInvitationPopup = false
     @State private var hasCheckedInvitations = false
     @State private var hideFloatingButton = false
+    @State private var showIntelligenceSheet = false
     @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0]
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
@@ -159,6 +160,9 @@ struct MainTabView: View {
             }
             .sheet(isPresented: $showCoachInvitationPopup) {
                 coachInvitationSheet
+            }
+            .sheet(isPresented: $showIntelligenceSheet) {
+                IntelligenceView()
             }
             .onAppear {
                 if hasActiveSession && !showStartSession && !showResumeSession {
@@ -255,7 +259,6 @@ struct MainTabView: View {
                     }
                     
                     HStack(spacing: 12) {
-                        // Barcode Scan - check if limit reached for non-pro users
                         if !revenueCatManager.isProMember && barcodeScanLimitManager.isAtLimit() {
                             barcodeScanLimitedOption()
                                 .scaleEffect(showAddMealSheet ? 1 : 0.8)
@@ -268,7 +271,6 @@ struct MainTabView: View {
                             .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         }
                         
-                        // AI Scan - check if limit reached for non-pro users
                         if !revenueCatManager.isProMember && scanLimitManager.isAtLimit() {
                             aiScanLimitedOption()
                                 .scaleEffect(showAddMealSheet ? 1 : 0.8)
@@ -445,6 +447,71 @@ struct MainTabView: View {
             .frame(width: 150, height: 120)
             .background(disabledMealOptionBackground)
         }
+    }
+    
+    // MARK: - Ask Up&Down Button
+    
+    private var askUpAndDownButton: some View {
+        Button {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            withAnimation { showAddMealSheet = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showIntelligenceSheet = true
+            }
+        } label: {
+            VStack(spacing: 10) {
+                glassSphereIcon
+                
+                Text("Fråga Up&Down")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+            }
+            .padding(.horizontal, 8)
+            .frame(width: 150, height: 120)
+            .background(mealOptionBackground)
+        }
+    }
+    
+    private var glassSphereIcon: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.9),
+                            Color(red: 0.85, green: 0.85, blue: 0.88),
+                            Color(red: 0.75, green: 0.75, blue: 0.80),
+                        ],
+                        center: .init(x: 0.35, y: 0.3),
+                        startRadius: 2,
+                        endRadius: 22
+                    )
+                )
+                .frame(width: 36, height: 36)
+            
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.7),
+                            Color.clear,
+                        ],
+                        center: .init(x: 0.3, y: 0.25),
+                        startRadius: 0,
+                        endRadius: 12
+                    )
+                )
+                .frame(width: 36, height: 36)
+            
+            Circle()
+                .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                .frame(width: 36, height: 36)
+        }
+        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
     }
     
     // MARK: - Custom Tab View (all iOS versions)

@@ -133,11 +133,11 @@ struct HomeView: View {
     @StateObject private var viewModel = CalorieTrackerViewModel()
     @ObservedObject private var analyzingManager = AnalyzingFoodManager.shared
     
-    // Animation states - default true for instant navigation
-    @State private var showCalendar = true
-    @State private var showCards = true
-    @State private var showWater = true
-    @State private var showRecent = true
+    // Animation states
+    @State private var showCalendar = false
+    @State private var showCards = false
+    @State private var showWater = false
+    @State private var showRecent = false
     @State private var showFoodScanner = false
     @State private var selectedFoodLog: FoodLogEntry?
     @State private var showNutritionDetail = false
@@ -209,20 +209,11 @@ struct HomeView: View {
             }
             
             ZStack {
-                // Background gradient - light blue
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.95, green: 0.97, blue: 1.0),
-                        Color(red: 0.98, green: 0.95, blue: 0.97),
-                        Color(.systemGroupedBackground)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 20) {
                         // Scroll offset detector
                         GeometryReader { geometry in
                             Color.clear.preference(
@@ -266,25 +257,20 @@ struct HomeView: View {
                         // MARK: - Week Calendar
                         weekCalendarView
                         .opacity(showCalendar ? 1 : 0)
-                        .offset(y: showCalendar ? 0 : 10)
                         .pageEntrance(delay: 0.05)
                     
                     // MARK: - Calorie Card
                     calorieTrackerCard
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
-                        .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
-                        .scaleEffect(isTransitioning ? 0.98 : 1)
-                        .offset(y: showCards ? 0 : 15)
+                        .opacity(showCards ? 1 : 0)
                         .pageEntrance(delay: 0.08)
                     
                     // MARK: - Macro Cards
                     macroCardsRow
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
-                        .opacity(showCards ? (isTransitioning ? 0.7 : 1) : 0)
-                        .scaleEffect(isTransitioning ? 0.98 : 1)
-                        .offset(y: showCards ? 0 : 15)
+                        .opacity(showCards ? 1 : 0)
                         .pageEntrance(delay: 0.12)
                     
                     // MARK: - AI Text Food Input
@@ -320,9 +306,10 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.white)
-                                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.systemBackground))
+                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
                         )
                     }
                     .padding(.horizontal, 16)
@@ -341,8 +328,7 @@ struct HomeView: View {
                     // MARK: - Recently Logged Section
                     recentlyLoggedSection
                         .padding(.horizontal, 16)
-                        .opacity(showRecent ? (isTransitioning ? 0.6 : 1) : 0)
-                        .offset(y: showRecent ? (isTransitioning ? 5 : 0) : 15)
+                        .opacity(showRecent ? 1 : 0)
                     
                     Spacer(minLength: 120)
                 }
@@ -574,7 +560,7 @@ struct HomeView: View {
                         
                         Text("\(displayValue)")
                             .font(.system(size: 56, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                             .fixedSize(horizontal: true, vertical: false)
@@ -585,18 +571,18 @@ struct HomeView: View {
                         
                         Text(showEatenMode ? "Kalorier ätit" : "Kalorier kvar")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                             .contentTransition(.opacity)
                             .animation(.easeInOut(duration: 0.2), value: showEatenMode)
                     } else {
                         // Show "?" for users who haven't completed nutrition onboarding
                         Text("?")
                             .font(.system(size: 56, weight: .bold))
-                            .foregroundColor(.black)
+                            .foregroundColor(.primary)
                         
                         Text("Tryck för att ställa in")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -618,13 +604,14 @@ struct HomeView: View {
                     
                     Image(systemName: hasCompletedNutritionOnboarding ? "flame.fill" : "questionmark")
                         .font(.system(size: 28))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
             }
-            .padding(30)
-            .background(Color.white)
-            .cornerRadius(26)
-            .shadow(color: Color.black.opacity(0.07), radius: 14, x: 0, y: 6)
+            .padding(28)
+            .background(Color(.systemBackground))
+            .cornerRadius(22)
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -704,7 +691,7 @@ struct HomeView: View {
             if let value = value {
                 Text("\(value)g")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                     .contentTransition(.numericText(value: Double(value)))
                     .animation(.spring(response: 0.5, dampingFraction: 0.8), value: value)
                     .opacity(isModeTransitioning ? 0 : 1)
@@ -712,16 +699,16 @@ struct HomeView: View {
                 
                 Text(name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             } else {
                 Text("?")
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
                 
                 Text(name)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             }
             
@@ -750,12 +737,13 @@ struct HomeView: View {
                 Spacer()
             }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity)
         .frame(height: 130)
-        .background(Color.white)
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+        .background(Color(.systemBackground))
+        .cornerRadius(18)
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
     }
     
     // MARK: - AI Text Food Input Section
@@ -866,9 +854,10 @@ struct HomeView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white)
-                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
                 )
             }
             .buttonStyle(.plain)
@@ -1085,8 +1074,8 @@ struct HomeView: View {
     private var recentlyLoggedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Nyligen uppladdat")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.black)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.primary)
             
             if viewModel.recentLogs.isEmpty {
                 // Empty state
@@ -1106,9 +1095,10 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
-                .background(Color.white)
-                .cornerRadius(18)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                .background(Color(.systemBackground))
+                .cornerRadius(20)
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
                     removal: .opacity.combined(with: .scale(scale: 0.95))
@@ -1173,11 +1163,18 @@ struct HomeView: View {
     
     // MARK: - Animation
     private func animateContent() {
-        // Show everything instantly for fast navigation
-        showCalendar = true
-        showCards = true
-        showWater = true
-        showRecent = true
+        withAnimation(.smooth(duration: 0.4)) {
+            showCalendar = true
+        }
+        withAnimation(.smooth(duration: 0.4).delay(0.06)) {
+            showCards = true
+        }
+        withAnimation(.smooth(duration: 0.4).delay(0.12)) {
+            showWater = true
+        }
+        withAnimation(.smooth(duration: 0.4).delay(0.18)) {
+            showRecent = true
+        }
     }
     
     // MARK: - Load Streak Count
@@ -2258,8 +2255,8 @@ struct FoodLogCardView: View {
                 OptimizedAsyncImage(url: imageUrl, width: 110, height: 110, cornerRadius: 0)
                     .clipShape(
                         UnevenRoundedRectangle(
-                            topLeadingRadius: 16,
-                            bottomLeadingRadius: 16,
+                            topLeadingRadius: 18,
+                            bottomLeadingRadius: 18,
                             bottomTrailingRadius: 0,
                             topTrailingRadius: 0
                         )
@@ -2272,7 +2269,7 @@ struct FoodLogCardView: View {
                 HStack(alignment: .top) {
                     Text(entry.name)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
@@ -2280,7 +2277,7 @@ struct FoodLogCardView: View {
                     
                     Text(displayTime)
                         .font(.system(size: 13))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                 }
                 
                 // Calories row
@@ -2290,7 +2287,7 @@ struct FoodLogCardView: View {
                         .foregroundColor(.orange)
                     Text("\(entry.calories) Kalorier")
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 
                 // Macros row
@@ -2304,28 +2301,13 @@ struct FoodLogCardView: View {
             .padding(.vertical, 16)
         }
         .frame(minHeight: hasImage ? 110 : nil)
-        .background(
-            ZStack {
-                // Base color
-                Color.white
-                
-                // Subtle gradient overlay
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.98, green: 0.98, blue: 0.99),
-                        Color(red: 0.96, green: 0.96, blue: 0.97)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-        )
+        .background(Color(.systemBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
         )
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .cornerRadius(18)
+        .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 2)
     }
     
     private var imagePlaceholder: some View {
@@ -2346,7 +2328,7 @@ struct FoodLogCardView: View {
                 .grayscale(1)
             Text(value)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.black)
+                .foregroundColor(.primary)
         }
     }
     
@@ -3091,60 +3073,61 @@ struct ActivityLogCardView: View {
                 
                 Image(systemName: "dumbbell.fill")
                     .font(.system(size: 22))
-                    .foregroundColor(.black)
+                    .foregroundColor(.primary)
             }
             
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(activityTypeSwedish)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     
                     Spacer()
                     
                     Text(timeFormatter.string(from: entry.loggedAt))
                         .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color.gray.opacity(0.08))
                         .cornerRadius(8)
                 }
                 
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 13))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                     Text("\(entry.caloriesBurned) kalorier")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.primary)
                 }
                 
                 HStack(spacing: 12) {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 11))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                         Text("Intensitet: \(intensitySwedish)")
                             .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                     
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
                             .font(.system(size: 11))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                         Text("\(entry.duration) min")
                             .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
         }
-        .padding(12)
-        .background(Color.white)
-        .cornerRadius(18)
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+        .padding(14)
+        .background(Color(.systemBackground))
+        .cornerRadius(20)
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.1), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
     }
 }
 

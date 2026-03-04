@@ -505,7 +505,9 @@ struct GymSessionView: View {
                 subscribeToUppys()
             }
             .onDisappear {
-                persistSession(force: true)
+                if !showCompleteSession {
+                    persistSession(force: true)
+                }
                 viewModel.stopTimer()
                 uppySubscriptionTask?.cancel()
             }
@@ -575,10 +577,11 @@ struct GymSessionView: View {
             return
         }
         
-        persistSession(force: true)
         let duration = viewModel.elapsedSeconds
         let isPro = RevenueCatManager.shared.isProMember
         viewModel.completeSession(duration: duration, isPro: isPro)
+        
+        SessionManager.shared.clearPersistedSession()
         
         // Update streak
         StreakManager.shared.registerActivityCompletion()
@@ -592,10 +595,11 @@ struct GymSessionView: View {
     
     private func completeSession() {
         focusedField = nil
-        persistSession(force: true)
         let duration = viewModel.elapsedSeconds
         let isPro = RevenueCatManager.shared.isProMember
         viewModel.completeSession(duration: duration, isPro: isPro)
+        
+        SessionManager.shared.clearPersistedSession()
         
         // Update streak
         StreakManager.shared.registerActivityCompletion()

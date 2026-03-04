@@ -390,13 +390,11 @@ struct StreakCelebrationView: View {
                             .font(.system(size: 32, weight: .black))
                     .foregroundColor(.primary)
                             .opacity(showContent ? 1 : 0)
-                            .offset(y: showContent ? 0 : 20)
                         
                         Text(streakInfo.streakTitle)
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.gray)
                             .opacity(showContent ? 1 : 0)
-                            .offset(y: showContent ? 0 : 20)
                     }
                     
                     // Flame icon
@@ -441,7 +439,6 @@ struct StreakCelebrationView: View {
                     }
                     .padding(.horizontal, 32)
                     .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 30)
                     
                     // Week calendar
                     VStack(spacing: 16) {
@@ -456,7 +453,6 @@ struct StreakCelebrationView: View {
                         }
                     }
                     .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 30)
                     
                     Text("Fortsätt logga pass för att hålla streaken vid liv!")
                         .font(.system(size: 15, weight: .medium))
@@ -478,14 +474,13 @@ struct StreakCelebrationView: View {
                     }
                     .padding(.horizontal, 32)
                     .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 30)
                     
                     Spacer().frame(height: 40)
                 }
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2)) {
+            withAnimation(.smooth(duration: 0.4).delay(0.2)) {
                 showContent = true
             }
             withAnimation(.spring(response: 0.8, dampingFraction: 0.6).delay(0.3)) {

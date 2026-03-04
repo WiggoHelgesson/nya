@@ -626,7 +626,6 @@ struct RewardsView: View {
                         .padding(.bottom, 16)
                         .background(sectionBackgroundColor)
                         .opacity(showHeader ? 1 : 0)
-                        .offset(y: showHeader ? 0 : 10)
                         .pageEntrance()
                         
                         LazyVStack(spacing: 12) {
@@ -634,42 +633,34 @@ struct RewardsView: View {
                                 bannerAdSection
                                     .background(sectionBackgroundColor)
                                     .opacity(showHeroBanner ? 1 : 0)
-                                    .offset(y: showHeroBanner ? 0 : 20)
-                                    .scaleEffect(showHeroBanner ? 1 : 0.95)
                             }
                             
                             categoriesSection
                                 .padding(.vertical, 16)
                                 .background(sectionBackgroundColor)
                                 .opacity(showCategories ? 1 : 0)
-                                .offset(y: showCategories ? 0 : 20)
                                 .pageEntrance(delay: 0.05)
                             
                             // Golf section
                             sliderSectionOptimized(title: "Golf", rewards: golfRewards)
                                 .opacity(showGolfSection ? 1 : 0)
-                                .offset(y: showGolfSection ? 0 : 25)
                                 .pageEntrance(delay: 0.1)
                             
                             // Gym section
                             sliderSectionOptimized(title: "Gym", rewards: gymRewards)
                                 .opacity(showGymSection ? 1 : 0)
-                                .offset(y: showGymSection ? 0 : 25)
                             
                             // Energy drinks section
                             sliderSectionOptimized(title: "Energidryck", rewards: energyDrinkRewards)
                                 .opacity(showEnergySection ? 1 : 0)
-                                .offset(y: showEnergySection ? 0 : 25)
                             
                             // Running section
                             sliderSectionOptimized(title: "Löpning", rewards: runningRewards)
                                 .opacity(showRunningSection ? 1 : 0)
-                                .offset(y: showRunningSection ? 0 : 25)
                             
                             // Skiing section
                             sliderSectionOptimized(title: "Skidåkning", rewards: skiRewards)
                                 .opacity(showSkiSection ? 1 : 0)
-                                .offset(y: showSkiSection ? 0 : 25)
                             
                             Spacer(minLength: 100)
                         }

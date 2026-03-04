@@ -181,11 +181,8 @@ class SessionManager: ObservableObject {
             
             print("💾 Session saved: duration=\(duration)s, distance=\(String(format: "%.2f", distance))km, coords=\(routeCoordinates.count)")
             
-            // Update in-memory state on main thread
-            DispatchQueue.main.async { [weak self] in
-                self?.hasActiveSession = true
-                self?.activeSession = session
-            }
+            self.hasActiveSession = true
+            self.activeSession = session
         } catch {
             print("❌ Failed to encode session for saving: \(error)")
         }
@@ -193,6 +190,10 @@ class SessionManager: ObservableObject {
     
     /// Force save the current in-memory session (useful for emergency saves)
     func forceSaveCurrentSession() {
+        guard !isFinalized else {
+            print("⏭️ forceSaveCurrentSession ignored - session is finalized")
+            return
+        }
         guard let session = activeSession else {
             print("⚠️ No active session to force save")
             return
@@ -283,6 +284,19 @@ class SessionManager: ObservableObject {
         finalizeSession()
     }
 
+    /// Clear only the persisted session from UserDefaults without resetting in-memory state.
+    /// Use when the session is being completed and we no longer need crash recovery.
+    func clearPersistedSession() {
+        UserDefaults.standard.removeObject(forKey: sessionKey)
+        UserDefaults.standard.removeObject(forKey: backupSessionKey)
+        UserDefaults.standard.set(false, forKey: hasSessionKey)
+        UserDefaults.standard.removeObject(forKey: lastSaveTimeKey)
+        UserDefaults.standard.synchronize()
+        acceptsSaves = false
+        isFinalized = true
+        print("🧹 Persisted session cleared (completion in progress)")
+    }
+    
     /// Call when starting or resuming a session to allow saves again
     func beginSession() {
         acceptsSaves = true

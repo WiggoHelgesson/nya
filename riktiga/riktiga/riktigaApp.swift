@@ -183,6 +183,7 @@ struct UpAndDownApp: App {
                     NotificationManager.shared.cancelMealReminders()
                     NotificationManager.shared.scheduleMonthlyReportNotifications(avatarUrl: authViewModel.currentUser?.avatarUrl)
                     WidgetSyncService.shared.syncStreakData()
+                    LiveActivityManager.shared.cleanupOrphanedActivities()
                 }
         } else {
             AuthenticationView()

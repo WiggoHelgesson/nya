@@ -744,7 +744,6 @@ struct SocialView: View {
                     // Always show feed content
                     feedContent
                         .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 30)
                 }
             }
             .onChange(of: highlightedPostId) { _, postId in
@@ -776,7 +775,7 @@ struct SocialView: View {
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button {
-                if let url = URL(string: "itms-apps://itunes.apple.com/app/id6749190145?action=write-review") {
+                if let url = URL(string: "https://apps.apple.com/app/id6749190145?action=write-review") {
                     UIApplication.shared.open(url)
                 }
             } label: {
@@ -1594,9 +1593,8 @@ struct SocialView: View {
                         .background(Color(.systemGray5))
                 }
                 .opacity(showPosts ? 1 : 0)
-                .offset(y: showPosts ? 0 : 20)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.8)
+                    .smooth(duration: 0.4)
                     .delay(Double(min(index, 5)) * 0.05),
                     value: showPosts
                 )
@@ -1615,8 +1613,7 @@ struct SocialView: View {
                         showPaywall = true
                     })
                     .opacity(showPosts ? 1 : 0)
-                    .offset(y: showPosts ? 0 : 15)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: showPosts)
+                    .animation(.smooth(duration: 0.4).delay(0.2), value: showPosts)
                     Divider()
                         .background(Color(.systemGray5))
                 }
@@ -1626,13 +1623,11 @@ struct SocialView: View {
                     if let feedAd = adService.feedAds.first {
                         FeedAdCard(ad: feedAd)
                             .opacity(showPosts ? 1 : 0)
-                            .offset(y: showPosts ? 0 : 15)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
                     } else {
                         SponsoredPostCard()
                             .opacity(showPosts ? 1 : 0)
-                            .offset(y: showPosts ? 0 : 15)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
                     }
                     Divider()
                         .background(Color(.systemGray5))
@@ -1646,8 +1641,7 @@ struct SocialView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 15)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
                     Divider()
                         .background(Color(.systemGray5))
                 }
@@ -1656,8 +1650,7 @@ struct SocialView: View {
                 if index == 1, shouldShowBrandSlider {
                     brandSliderInlineSection
                         .opacity(showPosts ? 1 : 0)
-                        .offset(y: showPosts ? 0 : 15)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: showPosts)
+                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
                     Divider()
                         .background(Color(.systemGray5))
                 }

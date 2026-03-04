@@ -24,8 +24,6 @@ struct ProgressSectionView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             .opacity(showStreakCard ? 1 : 0)
-            .offset(y: showStreakCard ? 0 : 20)
-            .scaleEffect(showStreakCard ? 1 : 0.9)
             .padding(.horizontal, 20)
         }
         .padding(.vertical, 16)
@@ -48,7 +46,7 @@ struct ProgressSectionView: View {
     private func animateCards() {
         showStreakCard = false
         
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+        withAnimation(.smooth(duration: 0.4)) {
             showStreakCard = true
         }
     }

@@ -200,9 +200,9 @@ struct GymExercisePost: Codable {
         id = try container.decodeIfPresent(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         category = try container.decodeIfPresent(String.self, forKey: .category)
-        sets = try container.decode(Int.self, forKey: .sets)
-        reps = try container.decode([Int].self, forKey: .reps)
-        kg = try container.decode([Double].self, forKey: .kg)
+        sets = try container.decodeIfPresent(Int.self, forKey: .sets) ?? 0
+        reps = try container.decodeIfPresent([Int].self, forKey: .reps) ?? []
+        kg = try container.decodeIfPresent([Double].self, forKey: .kg) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         cardioSeconds = try container.decodeIfPresent(Int.self, forKey: .cardioSeconds)
         
