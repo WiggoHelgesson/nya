@@ -2577,6 +2577,16 @@ struct ExerciseListRow: View {
 struct SavedWorkoutsSheet: View {
     @ObservedObject var viewModel: GymSessionViewModel
     @Binding var isPresented: Bool
+    @ObservedObject private var pinnedStore = PinnedRoutineStore.shared
+    
+    private var sortedWorkouts: [SavedGymWorkout] {
+        return viewModel.savedWorkouts.sorted {
+            let p0 = pinnedStore.isPinned($0.id)
+            let p1 = pinnedStore.isPinned($1.id)
+            if p0 != p1 { return p0 }
+            return $0.createdAt > $1.createdAt
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -2601,43 +2611,43 @@ struct SavedWorkoutsSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        ForEach(viewModel.savedWorkouts) { workout in
-                            Button {
-                                viewModel.applySavedWorkout(workout)
-                                isPresented = false
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(workout.name)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.primary)
+                        ForEach(sortedWorkouts) { workout in
+                            HStack {
+                                Button {
+                                    viewModel.applySavedWorkout(workout)
+                                    isPresented = false
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(workout.name)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.primary)
+                                            
+                                            Text("\(workout.exercises.count) övningar")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.secondary)
+                                        }
                                         
-                                        Text("\(workout.exercises.count) övningar")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(.secondary)
+                                        Spacer()
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
+                                    .padding(.vertical, 4)
                                 }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                        .onDelete { indexSet in
-                            // Delete saved workout
-                            for index in indexSet {
-                                let workout = viewModel.savedWorkouts[index]
-                                Task {
-                                    if let userId = UserDefaults.standard.string(forKey: "currentUserId") {
-                                        try? await SavedWorkoutService.shared.deleteWorkoutTemplate(id: workout.id, userId: userId)
+                                
+                                Button {
+                                    withAnimation(.smooth(duration: 0.3)) {
+                                        pinnedStore.toggle(workout.id)
                                     }
-                                    await MainActor.run {
-                                        viewModel.savedWorkouts.remove(at: index)
-                                    }
+                                } label: {
+                                    Image(systemName: pinnedStore.isPinned(workout.id) ? "pin.fill" : "pin")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(pinnedStore.isPinned(workout.id) ? .black : .gray)
+                                        .padding(6)
                                 }
+                                .buttonStyle(.plain)
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
                             }
                         }
                     }

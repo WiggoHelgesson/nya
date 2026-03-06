@@ -2300,7 +2300,7 @@ struct SocialPostCard: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 14)
+            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
@@ -2377,9 +2377,9 @@ struct SocialPostCard: View {
         HStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: post.userId)) {
                 if post.userIsPro == true {
-                    ProProfileImage(url: post.userAvatarUrl, size: 40)
+                    ProProfileImage(url: post.userAvatarUrl, size: 48)
                 } else {
-                    ProfileImage(url: post.userAvatarUrl, size: 40)
+                    ProfileImage(url: post.userAvatarUrl, size: 48)
                 }
             }
             
@@ -2389,7 +2389,7 @@ struct SocialPostCard: View {
                         if let name = post.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
                            !name.isEmpty {
                             Text(name)
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                             
                             // Pro member verified badge
@@ -2414,8 +2414,9 @@ struct SocialPostCard: View {
                 // Date and device info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(formatStravaDate(post.createdAt))
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                     
                     if let location = post.location {
                         HStack(spacing: 4) {
@@ -2445,8 +2446,8 @@ struct SocialPostCard: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
     
     @ViewBuilder
@@ -2505,7 +2506,7 @@ struct SocialPostCard: View {
     }
     
     private var statsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             // Trained with friends — above the title
             if let trainedWith = post.trainedWith, !trainedWith.isEmpty {
                 HStack(spacing: 6) {
@@ -2527,7 +2528,7 @@ struct SocialPostCard: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.top, 8)
             }
             
             HStack(spacing: 8) {
@@ -2545,7 +2546,7 @@ struct SocialPostCard: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, hasTrainedWith ? 4 : 12)
+            .padding(.top, hasTrainedWith ? 2 : 8)
             
             if let description = trimmedDescription {
                 Text(description)
@@ -2620,7 +2621,7 @@ struct SocialPostCard: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 4)
             }
         }
         .onTapGesture {
@@ -2682,7 +2683,7 @@ struct SocialPostCard: View {
                 .foregroundColor(.primary)
         }
         .frame(alignment: .leading)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
     
     private func getAchievementCount() -> Int? {
@@ -3143,8 +3144,8 @@ private extension SocialPostCard {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 4)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
     }
     
     var likeCountText: String {
@@ -5144,7 +5145,7 @@ struct GymExercisesListView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(height: hasUserImage ? 420 : 380)
+        .frame(height: hasUserImage ? 360 : 320)
         .padding(.horizontal, 16)
         .task {
             await loadPRs()

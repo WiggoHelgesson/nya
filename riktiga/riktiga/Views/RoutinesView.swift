@@ -11,6 +11,7 @@ struct RoutinesView: View {
     @State private var showDeleteAlert = false
     @State private var workoutToDelete: SavedGymWorkout?
     @State private var showCreateRoutine = false
+    @ObservedObject private var pinnedStore = PinnedRoutineStore.shared
     
     var body: some View {
         ZStack {
@@ -175,7 +176,19 @@ struct RoutinesView: View {
                         onDelete: {
                             workoutToDelete = workout
                             showDeleteAlert = true
-                        }
+                        },
+                        onTogglePin: {
+                            pinnedStore.toggle(workout.id)
+                            withAnimation(.smooth(duration: 0.3)) {
+                                savedWorkouts.sort {
+                                    let p0 = pinnedStore.isPinned($0.id)
+                                    let p1 = pinnedStore.isPinned($1.id)
+                                    if p0 != p1 { return p0 }
+                                    return $0.createdAt > $1.createdAt
+                                }
+                            }
+                        },
+                        isPinned: pinnedStore.isPinned(workout.id)
                     )
                 }
             }
@@ -194,7 +207,12 @@ struct RoutinesView: View {
         do {
             let workouts = try await SavedWorkoutService.shared.fetchSavedWorkouts(for: userId)
             await MainActor.run {
-                self.savedWorkouts = workouts.sorted { $0.createdAt > $1.createdAt }
+                self.savedWorkouts = workouts.sorted {
+                    let p0 = pinnedStore.isPinned($0.id)
+                    let p1 = pinnedStore.isPinned($1.id)
+                    if p0 != p1 { return p0 }
+                    return $0.createdAt > $1.createdAt
+                }
                 self.isLoading = false
             }
         } catch {
@@ -226,6 +244,8 @@ struct SavedWorkoutCard: View {
     let workout: SavedGymWorkout
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onTogglePin: () -> Void
+    var isPinned: Bool = false
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -282,6 +302,15 @@ struct SavedWorkoutCard: View {
                         .background(Color.black.opacity(0.1))
                         .cornerRadius(6)
                 }
+                
+                // Pin button
+                Button(action: onTogglePin) {
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 15))
+                        .foregroundColor(isPinned ? .black : .gray)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
                 
                 // Delete button
                 Button(action: onDelete) {

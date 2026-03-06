@@ -1163,16 +1163,16 @@ struct HomeView: View {
     
     // MARK: - Animation
     private func animateContent() {
-        withAnimation(.smooth(duration: 0.4)) {
+        withAnimation(.smooth(duration: 0.5).delay(0.15)) {
             showCalendar = true
         }
-        withAnimation(.smooth(duration: 0.4).delay(0.06)) {
+        withAnimation(.smooth(duration: 0.5).delay(0.25)) {
             showCards = true
         }
-        withAnimation(.smooth(duration: 0.4).delay(0.12)) {
+        withAnimation(.smooth(duration: 0.5).delay(0.35)) {
             showWater = true
         }
-        withAnimation(.smooth(duration: 0.4).delay(0.18)) {
+        withAnimation(.smooth(duration: 0.5).delay(0.45)) {
             showRecent = true
         }
     }

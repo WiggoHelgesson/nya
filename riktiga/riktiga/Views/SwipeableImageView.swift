@@ -9,7 +9,7 @@ struct SwipeableImageView: View {
     @State private var currentId: Int? = 0
     private let peekWidth: CGFloat = 8
     private let gapWidth: CGFloat = 8
-    private let imageHeight: CGFloat = 300
+    private let imageHeight: CGFloat = 260
     
     private var images: [String] {
         var result: [String] = []

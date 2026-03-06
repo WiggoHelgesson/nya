@@ -908,10 +908,10 @@ struct SessionMapView: View {
                                 .frame(maxWidth: .infinity)
                                 
                                 VStack(spacing: 4) {
-                                    Text(currentPaceFromSpeed(locationManager.currentSpeedKmh))
+                                    Text(averagePaceForSession())
                                         .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Tempo (min/km)")
+                                    Text("Snitt tempo")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1701,6 +1701,15 @@ struct SessionMapView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    func averagePaceForSession() -> String {
+        guard locationManager.distance > 0.01, sessionDuration > 0 else { return "0:00" }
+        let minutesPerKm = (Double(sessionDuration) / 60.0) / locationManager.distance
+        if minutesPerKm > 30 { return "0:00" }
+        let minutes = Int(minutesPerKm)
+        let seconds = Int((minutesPerKm - Double(minutes)) * 60)
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
     func formattedTime(_ seconds: Int) -> String {
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
@@ -1833,17 +1842,33 @@ struct SessionMapView: View {
                 
                 Spacer()
                 
-                // Pace (main focus)
-                VStack(spacing: 8) {
-                    Text(currentPaceFromSpeed(locationManager.currentSpeedKmh))
-                        .font(.system(size: 120, weight: .bold, design: .default))
-                        .foregroundColor(.primary)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                    Text("Tempo (min/km)")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
+                // Pace (current + average side by side)
+                HStack(spacing: 0) {
+                    VStack(spacing: 8) {
+                        Text(currentPaceFromSpeed(locationManager.currentSpeedKmh))
+                            .font(.system(size: 56, weight: .bold, design: .default))
+                            .foregroundColor(.primary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        Text("Tempo (min/km)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    VStack(spacing: 8) {
+                        Text(averagePaceForSession())
+                            .font(.system(size: 56, weight: .bold, design: .default))
+                            .foregroundColor(.primary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                        Text("Snitt (min/km)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .padding(.horizontal, 16)
                 
                 Spacer()
                 

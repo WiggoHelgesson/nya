@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct SavedGymWorkout: Identifiable, Codable {
     let id: String
@@ -14,5 +15,23 @@ struct SavedGymWorkout: Identifiable, Codable {
         self.exercises = exercises
         self.createdAt = createdAt
     }
+}
+
+class PinnedRoutineStore: ObservableObject {
+    static let shared = PinnedRoutineStore()
+    private let key = "pinned_routines"
+    
+    @Published var pinnedIds: Set<String>
+    
+    private init() {
+        pinnedIds = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+    
+    func toggle(_ id: String) {
+        if pinnedIds.contains(id) { pinnedIds.remove(id) } else { pinnedIds.insert(id) }
+        UserDefaults.standard.set(Array(pinnedIds), forKey: key)
+    }
+    
+    func isPinned(_ id: String) -> Bool { pinnedIds.contains(id) }
 }
 

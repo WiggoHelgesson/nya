@@ -47,7 +47,7 @@ struct UpAndDownApp: App {
                                 await adService.fetchPopupAd()
                             }
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                                 splashMinTimeElapsed = true
                                 dismissSplashIfReady()
                             }
@@ -162,7 +162,7 @@ struct UpAndDownApp: App {
     
     private func dismissSplashIfReady() {
         guard splashMinTimeElapsed, !authViewModel.isCheckingAuth else { return }
-        withAnimation {
+        withAnimation(.smooth(duration: 0.6)) {
             showSplash = false
         }
         if adService.popupAd != nil {

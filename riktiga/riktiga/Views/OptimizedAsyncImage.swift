@@ -388,7 +388,7 @@ struct PageEntranceModifier: ViewModifier {
         content
             .opacity(isVisible ? 1 : 0)
             .onAppear {
-                withAnimation(.smooth(duration: 0.4).delay(delay)) {
+                withAnimation(.smooth(duration: 0.5).delay(delay)) {
                     isVisible = true
                 }
             }
