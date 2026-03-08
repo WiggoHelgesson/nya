@@ -21,7 +21,7 @@ struct CreateNewsView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                     .foregroundColor(.gray)
@@ -36,7 +36,7 @@ struct CreateNewsView: View {
                                 .background(Color.black.opacity(0.6))
                                 .cornerRadius(16)
                         } else {
-                            Text("Publicera")
+                            Text(L.t(sv: "Publicera", nb: "Publiser"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(width: 90, height: 32)
@@ -66,7 +66,7 @@ struct CreateNewsView: View {
                                 // Text input
                                 ZStack(alignment: .topLeading) {
                                     if content.isEmpty {
-                                        Text("Vad händer?")
+                                        Text(L.t(sv: "Vad händer?", nb: "Hva skjer?"))
                                             .foregroundColor(.gray)
                                             .padding(.top, 8)
                                     }

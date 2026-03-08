@@ -39,7 +39,7 @@ struct PersonalRecordsView: View {
                             Image(systemName: "figure.run")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundColor(.primary)
-                            Text("Löpning PR")
+                            Text(L.t(sv: "Löpning PR", nb: "Løping PR"))
                                 .font(.system(size: 20, weight: .bold))
                         }
                         .padding(.horizontal, 16)
@@ -52,7 +52,7 @@ struct PersonalRecordsView: View {
                             }
                             .padding(.vertical, 20)
                         } else if !hasRunningData {
-                            noDataCard(message: "Saknas data")
+                            noDataCard(message: L.t(sv: "Saknas data", nb: "Mangler data"))
                         } else {
                             VStack(spacing: 8) {
                                 ForEach(runningPRs) { pr in
@@ -72,7 +72,7 @@ struct PersonalRecordsView: View {
                             Image(systemName: "dumbbell.fill")
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundColor(.primary)
-                            Text("Gym PR")
+                            Text(L.t(sv: "Gym PR", nb: "Gym PR"))
                                 .font(.system(size: 20, weight: .bold))
                         }
                         .padding(.horizontal, 16)
@@ -85,7 +85,7 @@ struct PersonalRecordsView: View {
                             }
                             .padding(.vertical, 20)
                         } else if !hasGymData {
-                            noDataCard(message: "Saknas data")
+                            noDataCard(message: L.t(sv: "Saknas data", nb: "Mangler data"))
                         } else {
                             VStack(spacing: 8) {
                                 ForEach(gymPRs) { pr in
@@ -100,11 +100,11 @@ struct PersonalRecordsView: View {
                 }
                 .padding(.top, 20)
             }
-            .navigationTitle("\(username)s rekord")
+            .navigationTitle(L.t(sv: "\(username)s rekord", nb: "\(username)s rekorder"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }

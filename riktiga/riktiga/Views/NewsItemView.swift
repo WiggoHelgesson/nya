@@ -61,13 +61,13 @@ struct NewsItemView: View {
                             Button(action: {
                                 onEdit?(news)
                             }) {
-                                Label("Redigera", systemImage: "pencil")
+                                Label(L.t(sv: "Redigera", nb: "Rediger"), systemImage: "pencil")
                             }
                             
                             Button(role: .destructive, action: {
                                 showDeleteConfirmation = true
                             }) {
-                                Label("Radera", systemImage: "trash")
+                                Label(L.t(sv: "Radera", nb: "Slett"), systemImage: "trash")
                             }
                         } label: {
                             Image(systemName: "ellipsis")
@@ -132,13 +132,13 @@ struct NewsItemView: View {
         .onChange(of: news.likeCount) { newValue in
             likeCount = newValue ?? 0
         }
-        .alert("Radera nyhet", isPresented: $showDeleteConfirmation) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Radera nyhet", nb: "Slett nyhet"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 onDelete?(news)
             }
         } message: {
-            Text("Är du säker på att du vill radera denna nyhet?")
+            Text(L.t(sv: "Är du säker på att du vill radera denna nyhet?", nb: "Er du sikker på at du vil slette denne nyheten?"))
         }
     }
     

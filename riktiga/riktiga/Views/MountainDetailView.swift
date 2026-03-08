@@ -41,7 +41,7 @@ struct MountainDetailView: View {
                 // Add Photos Section (only for owner)
                 if isOwner {
                     VStack(spacing: 12) {
-                        Text("Lägg till minnen")
+                        Text(L.t(sv: "Lägg till minnen", nb: "Legg til minner"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.primary)
                         
@@ -49,7 +49,7 @@ struct MountainDetailView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "photo.on.rectangle.angled")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text("Välj foton")
+                                Text(L.t(sv: "Välj foton", nb: "Velg bilder"))
                                     .font(.system(size: 16, weight: .semibold))
                             }
                             .foregroundColor(.white)
@@ -65,7 +65,7 @@ struct MountainDetailView: View {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .tint(.black)
-                                Text("Laddar upp...")
+                                Text(L.t(sv: "Laddar upp...", nb: "Laster opp..."))
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
                             }
@@ -87,11 +87,11 @@ struct MountainDetailView: View {
                         Image(systemName: "photo.on.rectangle.angled")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text(isOwner ? "Inga minnen ännu" : "Inga minnen har lagts till")
+                        Text(isOwner ? L.t(sv: "Inga minnen ännu", nb: "Ingen minner ennå") : L.t(sv: "Inga minnen har lagts till", nb: "Ingen minner har blitt lagt til"))
                             .font(.system(size: 16))
                             .foregroundColor(.gray)
                         if isOwner {
-                            Text("Lägg till dina första minnen från denna resa")
+                            Text(L.t(sv: "Lägg till dina första minnen från denna resa", nb: "Legg til dine første minner fra denne turen"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray.opacity(0.8))
                         }
@@ -99,7 +99,7 @@ struct MountainDetailView: View {
                     .padding(.top, 40)
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Minnen (\(memories.count))")
+                        Text(L.t(sv: "Minnen (\(memories.count))", nb: "Minner (\(memories.count))"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.primary)
                             .padding(.horizontal, 16)
@@ -169,7 +169,7 @@ struct MountainDetailView: View {
             }
             .padding(.vertical, 16)
         }
-        .navigationTitle("Bestigning")
+        .navigationTitle(L.t(sv: "Bestigning", nb: "Bestigning"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadMemories()
@@ -179,20 +179,20 @@ struct MountainDetailView: View {
                 await uploadPhotos(items: newItems)
             }
         }
-        .alert("Fel", isPresented: $showError) {
+        .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "Ett fel uppstod")
+            Text(errorMessage ?? L.t(sv: "Ett fel uppstod", nb: "En feil oppstod"))
         }
-        .confirmationDialog("Ta bort minne?", isPresented: $showDeleteConfirmation, presenting: memoryToDelete) { memory in
-            Button("Ta bort", role: .destructive) {
+        .confirmationDialog(L.t(sv: "Ta bort minne?", nb: "Slette minne?"), isPresented: $showDeleteConfirmation, presenting: memoryToDelete) { memory in
+            Button(L.t(sv: "Ta bort", nb: "Slett"), role: .destructive) {
                 Task {
                     await deleteMemory(memory)
                 }
             }
-            Button("Avbryt", role: .cancel) {}
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         } message: { _ in
-            Text("Detta kommer att ta bort bilden permanent")
+            Text(L.t(sv: "Detta kommer att ta bort bilden permanent", nb: "Dette vil slette bildet permanent"))
         }
         .overlay {
             if let selectedImageUrl = selectedImageUrl {
@@ -278,7 +278,7 @@ struct MountainDetailView: View {
             } catch {
                 print("❌ Error uploading mountain memory: \(error)")
                 await MainActor.run {
-                    errorMessage = "Kunde inte ladda upp bild"
+                    errorMessage = L.t(sv: "Kunde inte ladda upp bild", nb: "Kunne ikke laste opp bilde")
                     showError = true
                 }
             }
@@ -309,7 +309,7 @@ struct MountainDetailView: View {
         } catch {
             print("❌ Error deleting mountain memory: \(error)")
             await MainActor.run {
-                errorMessage = "Kunde inte ta bort bilden"
+                errorMessage = L.t(sv: "Kunde inte ta bort bilden", nb: "Kunne ikke slette bildet")
                 showError = true
             }
         }

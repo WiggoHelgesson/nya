@@ -139,7 +139,7 @@ struct ProgressPhotosView: View {
                 }
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Progress Bilder")
+            .navigationTitle(L.t(sv: "Progress Bilder", nb: "Fremgangsbilder"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -192,11 +192,11 @@ struct ProgressPhotosView: View {
                 .foregroundColor(.gray.opacity(0.4))
             
             VStack(spacing: 8) {
-                Text("Inga progress bilder än")
+                Text(L.t(sv: "Inga progress bilder än", nb: "Ingen fremgangsbilder ennå"))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("Lägg till din första bild för att\nfölja din resa")
+                Text(L.t(sv: "Lägg till din första bild för att\nfölja din resa", nb: "Legg til ditt første bilde for å\nfølge reisen din"))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -208,7 +208,7 @@ struct ProgressPhotosView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Lägg till bild")
+                    Text(L.t(sv: "Lägg till bild", nb: "Legg til bilde"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -325,9 +325,9 @@ struct AddWeightProgressView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
         if Calendar.current.isDateInToday(photoDate) {
-            return "Idag"
+            return L.t(sv: "Idag", nb: "I dag")
         } else if Calendar.current.isDateInYesterday(photoDate) {
-            return "Igår"
+            return L.t(sv: "Igår", nb: "I går")
         } else {
             formatter.dateFormat = "d MMMM yyyy"
             return formatter.string(from: photoDate)
@@ -340,7 +340,7 @@ struct AddWeightProgressView: View {
                 VStack(spacing: 24) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Bekräfta din vikt")
+                        Text(L.t(sv: "Bekräfta din vikt", nb: "Bekreft vekten din"))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.primary)
                     }
@@ -362,7 +362,7 @@ struct AddWeightProgressView: View {
                         }
                         
                         if let lastWeight = lastWeight {
-                            Text("Senaste inlägg: \(String(format: "%.1f", lastWeight)) kg")
+                            Text(L.t(sv: "Senaste inlägg: \(String(format: "%.1f", lastWeight)) kg", nb: "Siste innlegg: \(String(format: "%.1f", lastWeight)) kg"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                         }
@@ -374,7 +374,7 @@ struct AddWeightProgressView: View {
                     
                     // Progress Photo section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Progress Bild")
+                        Text(L.t(sv: "Progress Bild", nb: "Fremgangsbilde"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                         
@@ -404,7 +404,7 @@ struct AddWeightProgressView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "plus")
                                         .font(.system(size: 16))
-                                    Text("Ladda upp bild")
+                                    Text(L.t(sv: "Ladda upp bild", nb: "Last opp bilde"))
                                         .font(.system(size: 16, weight: .medium))
                                 }
                                 .foregroundColor(.primary)
@@ -430,7 +430,7 @@ struct AddWeightProgressView: View {
                         showDatePicker = true
                     } label: {
                         HStack {
-                            Text("Datum")
+                            Text(L.t(sv: "Datum", nb: "Dato"))
                                 .font(.system(size: 16))
                                 .foregroundColor(.primary)
                             
@@ -461,7 +461,7 @@ struct AddWeightProgressView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("Spara")
+                                Text(L.t(sv: "Spara", nb: "Lagre"))
                                     .font(.system(size: 17, weight: .semibold))
                             }
                         }
@@ -576,7 +576,7 @@ struct WeightPhotoDatePickerSheet: View {
         NavigationStack {
             VStack {
                 DatePicker(
-                    "Välj datum",
+                    L.t(sv: "Välj datum", nb: "Velg dato"),
                     selection: $selectedDate,
                     in: ...Date(),
                     displayedComponents: .date
@@ -586,11 +586,11 @@ struct WeightPhotoDatePickerSheet: View {
                 
                 Spacer()
             }
-            .navigationTitle("Välj datum")
+            .navigationTitle(L.t(sv: "Välj datum", nb: "Velg dato"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -691,13 +691,13 @@ struct WeightEntryDetailView: View {
                 }
             }
         }
-        .alert("Radera bild?", isPresented: $showDeleteAlert) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Radera bild?", nb: "Slette bilde?"), isPresented: $showDeleteAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 deletePhoto()
             }
         } message: {
-            Text("Är du säker på att du vill radera denna progress bild?")
+            Text(L.t(sv: "Är du säker på att du vill radera denna progress bild?", nb: "Er du sikker på at du vil slette dette fremgangsbildet?"))
         }
     }
     
@@ -780,7 +780,7 @@ struct ProgressPhotosSectionView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
-                Text("Progress Bilder")
+                Text(L.t(sv: "Progress Bilder", nb: "Fremgangsbilder"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -790,7 +790,7 @@ struct ProgressPhotosSectionView: View {
                     Button {
                         showAllPhotos = true
                     } label: {
-                        Text("Se alla")
+                        Text(L.t(sv: "Se alla", nb: "Se alle"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -820,7 +820,7 @@ struct ProgressPhotosSectionView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Vill du lägga till en bild för att\nfölja din utveckling?")
+                        Text(L.t(sv: "Vill du lägga till en bild för att\nfölja din utveckling?", nb: "Vil du legge til et bilde for å\nfølge utviklingen din?"))
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
                             .lineLimit(2)
@@ -831,7 +831,7 @@ struct ProgressPhotosSectionView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 13, weight: .medium))
-                                Text("Ladda upp bild")
+                                Text(L.t(sv: "Ladda upp bild", nb: "Last opp bilde"))
                                     .font(.system(size: 14, weight: .medium))
                             }
                             .foregroundColor(.primary)
@@ -863,7 +863,7 @@ struct ProgressPhotosSectionView: View {
                                     .font(.system(size: 24))
                                     .foregroundColor(.gray)
                                 
-                                Text("Ladda upp\nbild")
+                                Text(L.t(sv: "Ladda upp\nbild", nb: "Last opp\nbilde"))
                                     .font(.system(size: 13))
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)

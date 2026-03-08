@@ -10,6 +10,12 @@ enum SocialTab: String, CaseIterable {
     case feed = "Flödet"
     // Active Friends tab temporarily hidden
     // case activeFriends = "Aktiva vänner"
+    
+    var displayName: String {
+        switch self {
+        case .feed: return L.t(sv: "Flödet", nb: "Feeden")
+        }
+    }
 }
 
 struct SocialView: View {
@@ -332,17 +338,19 @@ struct SocialView: View {
         guard let userId = authViewModel.currentUser?.id else { return }
         
         // Load streak
-        streakCount = StreakManager.shared.getCurrentStreak().currentStreak
+        withAnimation(.smooth(duration: 0.4)) {
+            streakCount = StreakManager.shared.getCurrentStreak().currentStreak
+        }
         
         // Load friend count and avatars
         Task {
             do {
-                // Fetch follower users directly to get their avatars
                 let followerUsers = try await SocialService.shared.getFollowerUsers(userId: userId)
                 
                 await MainActor.run {
-                    self.friendCount = followerUsers.count
-                    // Take up to 3 avatars from actual followers
+                    withAnimation(.smooth(duration: 0.4)) {
+                        self.friendCount = followerUsers.count
+                    }
                     self.friendAvatars = followerUsers.prefix(3).map { $0.avatarUrl }
                 }
             } catch {
@@ -359,11 +367,11 @@ struct SocialView: View {
                 showFollowersList = true
             } label: {
                 HStack(spacing: 0) {
-                    // Three profile pictures (Actual Friends)
                     HStack(spacing: -14) {
-                        ForEach(0..<friendAvatars.count, id: \.self) { index in
-                            ProfileImage(url: friendAvatars[index], size: 36)
+                        ForEach(Array(friendAvatars.enumerated()), id: \.offset) { _, avatarUrl in
+                            ProfileImage(url: avatarUrl, size: 36)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
+                                .transition(.opacity)
                         }
                         
                         if friendAvatars.isEmpty {
@@ -378,6 +386,7 @@ struct SocialView: View {
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
                         }
                     }
+                    .animation(.smooth(duration: 0.4), value: friendAvatars.count)
                     
                     Spacer()
                     
@@ -385,8 +394,9 @@ struct SocialView: View {
                         Text("\(friendCount)")
                             .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundColor(.black)
+                            .contentTransition(.numericText())
                         
-                        Text("Vänner")
+                        Text(L.t(sv: "Vänner", nb: "Venner"))
                             .font(.system(size: 17, weight: .medium, design: .rounded))
                             .foregroundColor(.black)
                     }
@@ -410,6 +420,7 @@ struct SocialView: View {
                 Text("\(streakCount)")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(.black)
+                    .contentTransition(.numericText())
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -455,7 +466,7 @@ struct SocialView: View {
                     Button {
                         SuperwallService.shared.showPaywall()
                     } label: {
-                        Text("Uppgradera till PRO")
+                        Text(L.t(sv: "Uppgradera till PRO", nb: "Oppgrader til PRO"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.3), radius: 4)
@@ -499,7 +510,7 @@ struct SocialView: View {
                     
                     // Greeting text
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Kör hårt,")
+                        Text(L.t(sv: "Kör hårt,", nb: "Kjør hardt,"))
                             .font(.system(size: 32, weight: .medium, design: .rounded))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.4), radius: 5)
@@ -678,10 +689,10 @@ struct SocialView: View {
                     .font(.system(size: 64))
                     .foregroundColor(.gray.opacity(0.6))
                 
-                Text("Inga inlägg än")
+                Text(L.t(sv: "Inga inlägg än", nb: "Ingen innlegg ennå"))
                     .font(.system(size: 24, weight: .bold))
                 
-                Text("Följ andra användare för att se deras inlägg i ditt flöde")
+                Text(L.t(sv: "Följ andra användare för att se deras inlägg i ditt flöde", nb: "Følg andre brukere for å se innleggene deres i feeden din"))
                     .font(.system(size: 15))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -693,7 +704,7 @@ struct SocialView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Lägg till vänner")
+                        Text(L.t(sv: "Lägg till vänner", nb: "Legg til venner"))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -774,33 +785,19 @@ struct SocialView: View {
     // MARK: - Friends at Gym Section
     private var friendsAtGymSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button {
-                if let url = URL(string: "https://apps.apple.com/app/id6749190145?action=write-review") {
-                    UIApplication.shared.open(url)
-                }
-            } label: {
-                Text("Gillar du Up&Down? Skriv gärna ett omdöme på AppStore!")
-                    .font(.system(size: 12))
-                    .foregroundColor(.primary)
-                    .underline()
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
-            
             VStack(alignment: .leading, spacing: 4) {
-                Text("Vänner som tränar")
+                Text(L.t(sv: "Vänner som tränar", nb: "Venner som trener"))
                     .font(.system(size: 20, weight: .bold))
                 
-                Text("Tryck på dina vänner för att se exakt vart de tränar")
+                Text(L.t(sv: "Tryck på dina vänner för att se exakt vart de tränar", nb: "Trykk på vennene dine for å se nøyaktig hvor de trener"))
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
+            .pageEntrance(delay: 0.1)
             
-            // Horizontal scroll with app logo + active friends
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    // App logo first (always visible) - tap to open map
                     friendAtGymCard(
                         imageContent: AnyView(
                             Image("23")
@@ -817,10 +814,8 @@ struct SocialView: View {
                         }
                     )
                     
-                    // Active friends or placeholders
                     if activeFriends.isEmpty && !isLoadingActiveFriends {
-                        // Show text when no friends are active
-                        Text("Inga av dina vänner tränar just nu")
+                        Text(L.t(sv: "Inga av dina vänner tränar just nu", nb: "Ingen av vennene dine trener akkurat nå"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.secondary)
                             .padding(.leading, 8)
@@ -858,6 +853,7 @@ struct SocialView: View {
                                     showFriendsMap = true
                                 }
                             )
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
                 }
@@ -865,7 +861,7 @@ struct SocialView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             }
-            .animation(.easeInOut(duration: 0.3), value: activeFriends.count)
+            .pageEntrance(delay: 0.15)
         }
         .padding(.vertical, 8)
         .task {
@@ -955,15 +951,15 @@ struct SocialView: View {
     
     private func activityLabelForFriend(_ activityType: String) -> String {
         switch activityType.lowercased() {
-        case "running", "löpning", "löppass": return "Löppass"
-        case "gym", "strength", "walking", "gympass": return "Gympass"
-        case "cycling", "cykling": return "Cykling"
-        case "promenad", "bestiga berg", "hiking": return "Promenad"
-        case "swimming", "simning": return "Simning"
-        case "yoga": return "Yoga"
-        case "golf", "golfrunda": return "Golfrunda"
-        case "skidåkning", "skiing": return "Skidpass"
-        default: return "Tränar"
+        case "running", "löpning", "löppass": return L.t(sv: "Löppass", nb: "Løpeøkt")
+        case "gym", "strength", "walking", "gympass": return L.t(sv: "Gympass", nb: "Treningsøkt")
+        case "cycling", "cykling": return L.t(sv: "Cykling", nb: "Sykling")
+        case "promenad", "bestiga berg", "hiking": return L.t(sv: "Promenad", nb: "Spasertur")
+        case "swimming", "simning": return L.t(sv: "Simning", nb: "Svømming")
+        case "yoga": return L.t(sv: "Yoga", nb: "Yoga")
+        case "golf", "golfrunda": return L.t(sv: "Golfrunda", nb: "Golfrunde")
+        case "skidåkning", "skiing": return L.t(sv: "Skidpass", nb: "Skiøkt")
+        default: return L.t(sv: "Tränar", nb: "Trener")
         }
     }
     
@@ -990,8 +986,7 @@ struct SocialView: View {
             // Fetch active friends (now filters out stale sessions)
             let active = try await ActiveSessionService.shared.fetchActiveFriends(userId: userId)
             await MainActor.run {
-                // Use animation to smoothly update the list
-                withAnimation(.easeInOut(duration: 0.3)) {
+                withAnimation(.smooth(duration: 0.4)) {
                     activeFriends = active
                     isLoadingActiveFriends = false
                 }
@@ -999,9 +994,7 @@ struct SocialView: View {
         } catch {
             print("⚠️ Failed to load friends data: \(error)")
             await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isLoadingActiveFriends = false
-                }
+                isLoadingActiveFriends = false
             }
         }
     }
@@ -1047,16 +1040,16 @@ struct SocialView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Se din utveckling")
+                    Text(L.t(sv: "Se din utveckling", nb: "Se din utvikling"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.gray)
                         .textCase(.uppercase)
                     
-                    Text("Progressive Overload")
+                    Text(L.t(sv: "Progressive Overload", nb: "Progressive Overload"))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Följ din styrketräning och se hur du blir starkare över tid.")
+                    Text(L.t(sv: "Följ din styrketräning och se hur du blir starkare över tid.", nb: "Følg styrketreningen din og se hvordan du blir sterkere over tid."))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .lineLimit(2)
@@ -1077,13 +1070,13 @@ struct SocialView: View {
         NavigationLink(destination: StatisticsView()) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Din veckostatistik")
+                    Text(L.t(sv: "Din veckostatistik", nb: "Din ukestatistikk"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                     
                     Spacer()
                     
-                    Text("Se mer")
+                    Text(L.t(sv: "Se mer", nb: "Se mer"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.primary)
                 }
@@ -1091,7 +1084,7 @@ struct SocialView: View {
                 HStack(spacing: 0) {
                     // Activities
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Aktiviteter")
+                        Text(L.t(sv: "Aktiviteter", nb: "Aktiviteter"))
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
                         Text("\(weeklyActivities)")
@@ -1103,7 +1096,7 @@ struct SocialView: View {
                     
                     // Time
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Tid")
+                        Text(L.t(sv: "Tid", nb: "Tid"))
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
                         Text(formatDuration(weeklyTime))
@@ -1115,7 +1108,7 @@ struct SocialView: View {
                     
                     // Weight (Kg)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Kg")
+                        Text(L.t(sv: "Kg", nb: "Kg"))
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
                         Text(formatWeight(weeklyWeight))
@@ -1246,7 +1239,7 @@ struct SocialView: View {
                     }
                 } label: {
                     VStack(spacing: 8) {
-                        Text(tab.rawValue)
+                        Text(tab.displayName)
                             .font(.system(size: 15, weight: selectedTab == tab ? .bold : .medium))
                             .foregroundColor(selectedTab == tab ? .primary : .gray)
                         
@@ -1537,11 +1530,11 @@ struct SocialView: View {
             
             VStack(alignment: .leading, spacing: 3) {
                 if uploadManager.uploadFailed {
-                    Text("Uppladdning misslyckades")
+                    Text(L.t(sv: "Uppladdning misslyckades", nb: "Opplasting mislyktes"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.red)
                 } else {
-                    Text("Ditt inlägg håller på att publiceras...")
+                    Text(L.t(sv: "Ditt inlägg håller på att publiceras...", nb: "Innlegget ditt publiseres..."))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -1667,7 +1660,7 @@ struct SocialView: View {
             }
             
             if visiblePostCount >= socialViewModel.posts.count {
-                Text("Inga fler inlägg")
+                Text(L.t(sv: "Inga fler inlägg", nb: "Ingen flere innlegg"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .padding()
@@ -1727,9 +1720,9 @@ struct SocialView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Nyhetsprofil")
+                            Text(L.t(sv: "Nyhetsprofil", nb: "Nyhetsprofil"))
                                 .font(.system(size: 15, weight: .semibold))
-                            Text("Tryck för att byta profilbild")
+                            Text(L.t(sv: "Tryck för att byta profilbild", nb: "Trykk for å bytte profilbilde"))
                                 .font(.system(size: 13))
                                 .foregroundColor(.gray)
                         }
@@ -1745,7 +1738,7 @@ struct SocialView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 20))
-                            Text("Skapa nyhet")
+                            Text(L.t(sv: "Skapa nyhet", nb: "Opprett nyhet"))
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -1775,10 +1768,10 @@ struct SocialView: View {
                         .font(.system(size: 48))
                         .foregroundColor(.gray.opacity(0.5))
                         .padding(.top, 60)
-                    Text("Inga nyheter än")
+                    Text(L.t(sv: "Inga nyheter än", nb: "Ingen nyheter ennå"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.gray)
-                    Text("Håll utkik för uppdateringar!")
+                    Text(L.t(sv: "Håll utkik för uppdateringar!", nb: "Hold utkikk etter oppdateringer!"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray.opacity(0.8))
                 }
@@ -1924,7 +1917,7 @@ struct SocialView: View {
     private var recommendedFriendsInlineSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Rekommenderade vänner")
+                Text(L.t(sv: "Rekommenderade vänner", nb: "Anbefalte venner"))
                     .font(.system(size: 18, weight: .bold))
                 Spacer()
                 if isLoadingRecommended && recommendedUsers.isEmpty {
@@ -1951,7 +1944,7 @@ struct SocialView: View {
                         .padding(.horizontal, 16)
                     }
                 } else {
-                    Text("Vi hittar snart fler att följa.")
+                    Text(L.t(sv: "Vi hittar snart fler att följa.", nb: "Vi finner snart flere å følge."))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                         .padding(.horizontal, 16)
@@ -1981,7 +1974,7 @@ struct SocialView: View {
     
     private var emptyStateRecommendedFriends: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Rekommenderade att följa")
+            Text(L.t(sv: "Rekommenderade att följa", nb: "Anbefalte å følge"))
                 .font(.system(size: 20, weight: .bold))
                 .padding(.horizontal, 16)
             
@@ -1995,10 +1988,10 @@ struct SocialView: View {
             } else if recommendedUsersWithPhoto.isEmpty {
                 VStack(spacing: 16) {
                     VStack(spacing: 8) {
-                        Text("Inga rekommendationer just nu")
+                        Text(L.t(sv: "Inga rekommendationer just nu", nb: "Ingen anbefalinger akkurat nå"))
                             .font(.system(size: 15))
                             .foregroundColor(.gray)
-                        Text("Bjud in dina vänner för att träna tillsammans!")
+                        Text(L.t(sv: "Bjud in dina vänner för att träna tillsammans!", nb: "Inviter vennene dine for å trene sammen!"))
                             .font(.system(size: 13))
                             .foregroundColor(.gray.opacity(0.8))
                     }
@@ -2010,7 +2003,7 @@ struct SocialView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "person.badge.plus")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Bjud in dina vänner")
+                            Text(L.t(sv: "Bjud in dina vänner", nb: "Inviter vennene dine"))
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -2047,7 +2040,7 @@ struct SocialView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "person.badge.plus")
                             .font(.system(size: 14, weight: .medium))
-                        Text("Bjud in fler vänner")
+                        Text(L.t(sv: "Bjud in fler vänner", nb: "Inviter flere venner"))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(.primary)
@@ -2076,10 +2069,10 @@ struct SocialView: View {
     private var brandSliderInlineSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Varumärken")
+                Text(L.t(sv: "Varumärken", nb: "Merkevarer"))
                     .font(.system(size: 18, weight: .bold))
                 
-                Text("Få rabatter hos dessa varumärken genom att samla poäng genom dina gympass")
+                Text(L.t(sv: "Få rabatter hos dessa varumärken genom att samla poäng genom dina gympass", nb: "Få rabatter hos disse merkevarene ved å samle poeng gjennom treningsøktene dine"))
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2328,34 +2321,34 @@ struct SocialPostCard: View {
         .onChange(of: post.isLikedByCurrentUser) { newValue in
             isLiked = newValue ?? isLiked
         }
-        .confirmationDialog("Post Options", isPresented: $showMenu, titleVisibility: .hidden) {
-            Button("Redigera") {
+        .confirmationDialog(L.t(sv: "Inläggsalternativ", nb: "Innleggsalternativer"), isPresented: $showMenu, titleVisibility: .hidden) {
+            Button(L.t(sv: "Redigera", nb: "Rediger")) {
                 showEditSheet = true
             }
             if canSaveAsRoutine {
-                Button("Gör till en rutin") {
+                Button(L.t(sv: "Gör till en rutin", nb: "Gjør til en rutine")) {
                     Task {
                         await saveAsRoutine()
                     }
                 }
             }
-            Button("Ta bort inlägg", role: .destructive) {
+            Button(L.t(sv: "Ta bort inlägg", nb: "Fjern innlegg"), role: .destructive) {
                 showDeleteAlert = true
             }
-            Button("Avbryt", role: .cancel) {}
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         }
-        .alert("Rutin sparad!", isPresented: $routineSavedSuccess) {
-            Button("OK", role: .cancel) {}
+        .alert(L.t(sv: "Rutin sparad!", nb: "Rutine lagret!"), isPresented: $routineSavedSuccess) {
+            Button(L.t(sv: "OK", nb: "OK"), role: .cancel) {}
         } message: {
-            Text("Gympasset har sparats som en rutin. Du hittar den under \"Gym rutiner\" när du startar ett nytt gympass.")
+            Text(L.t(sv: "Gympasset har sparats som en rutin. Du hittar den under \"Gym rutiner\" när du startar ett nytt gympass.", nb: "Treningsøkten er lagret som en rutine. Du finner den under \"Gym rutiner\" når du starter en ny treningsøkt."))
         }
-        .alert("Ta bort inlägg", isPresented: $showDeleteAlert) {
-            Button("Avbryt", role: .cancel) {}
-            Button("Ta bort", role: .destructive) {
+        .alert(L.t(sv: "Ta bort inlägg", nb: "Fjern innlegg"), isPresented: $showDeleteAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
+            Button(L.t(sv: "Ta bort", nb: "Fjern"), role: .destructive) {
                 deletePost()
             }
         } message: {
-            Text("Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.")
+            Text(L.t(sv: "Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.", nb: "Er du sikker på at du vil fjerne dette innlegget? Denne handlingen kan ikke angres."))
         }
         .sheet(isPresented: $showShareSheet) {
             ShareActivityView(post: post)
@@ -2510,7 +2503,7 @@ struct SocialPostCard: View {
             // Trained with friends — above the title
             if let trainedWith = post.trainedWith, !trainedWith.isEmpty {
                 HStack(spacing: 6) {
-                    Text("Tränade med")
+                    Text(L.t(sv: "Tränade med", nb: "Trente med"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                     
@@ -2565,20 +2558,20 @@ struct SocialPostCard: View {
                 HStack(alignment: .top, spacing: 20) {
                     if isGymPost {
                         if let volume = gymVolumeText {
-                            statColumn(title: "Volym", value: volume)
+                            statColumn(title: L.t(sv: "Volym", nb: "Volum"), value: volume)
                         }
                         
                         if let sets = gymSetsCount {
-                            statColumn(title: "Sets", value: "\(sets)")
+                            statColumn(title: L.t(sv: "Sets", nb: "Sett"), value: "\(sets)")
                         }
                         
                         if let duration = post.duration {
-                            statColumn(title: "Tid", value: formatDuration(duration))
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
                         }
                         
                         if let achievements = getAchievementCount(), achievements > 0 {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Prestationer")
+                                Text(L.t(sv: "Prestationer", nb: "Prestasjoner"))
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                                 HStack(spacing: 4) {
@@ -2597,26 +2590,26 @@ struct SocialPostCard: View {
                         if let distance = post.distance {
                             if post.isSwimmingPost {
                                 let meters = Int(distance * 1000)
-                                statColumn(title: "Distans", value: "\(meters) m")
+                                statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: "\(meters) m")
                             } else {
-                                statColumn(title: "Distans", value: String(format: "%.2f km", distance))
+                                statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", distance))
                             }
                         }
                         
                         if let duration = post.duration {
-                            statColumn(title: "Tid", value: formatDuration(duration))
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
                         }
                         
                         if let pace = averagePaceText {
                             if post.isSwimmingPost {
-                                statColumn(title: "Tempo/100m", value: pace)
+                                statColumn(title: L.t(sv: "Tempo/100m", nb: "Tempo/100m"), value: pace)
                             } else {
-                                statColumn(title: "Tempo", value: pace)
+                                statColumn(title: L.t(sv: "Tempo", nb: "Tempo"), value: pace)
                             }
                         }
                         
                         if let strokes = post.strokes {
-                            statColumn(title: "Slag", value: "\(strokes)")
+                            statColumn(title: L.t(sv: "Slag", nb: "Slag"), value: "\(strokes)")
                         }
                     }
                 }
@@ -2773,7 +2766,7 @@ struct SocialPostCard: View {
         
         do {
             // Use the post title as the routine name
-            let routineName = post.title.isEmpty ? "Mitt gympass" : post.title
+            let routineName = post.title.isEmpty ? L.t(sv: "Mitt gympass", nb: "Min treningsøkt") : post.title
             
             // Save as a workout template
             _ = try await SavedWorkoutService.shared.saveWorkoutTemplate(
@@ -2974,15 +2967,15 @@ struct SocialPostCard: View {
         guard let parsedDate = date else { return dateString }
         
         let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "sv_SE")
-        dateFormatter.dateFormat = "d MMMM, yyyy 'klockan' HH:mm"
+        dateFormatter.locale = Locale(identifier: L.t(sv: "sv_SE", nb: "nb_NO"))
+        dateFormatter.dateFormat = L.t(sv: "d MMMM, yyyy 'klockan' HH:mm", nb: "d MMMM, yyyy 'klokken' HH:mm")
         
         let datePart = dateFormatter.string(from: parsedDate)
         
         let sourcePart: String
         if let source = post.source?.lowercased() {
             if source == "app" {
-                sourcePart = "Reggat med Up&Down"
+                sourcePart = L.t(sv: "Reggat med Up&Down", nb: "Registrert med Up&Down")
             } else if source == "strava" {
                 sourcePart = "Strava App"
             } else if source == "garmin" {
@@ -2993,7 +2986,7 @@ struct SocialPostCard: View {
                 sourcePart = source.capitalized
             }
         } else {
-            sourcePart = "Reggat med Up&Down"
+            sourcePart = L.t(sv: "Reggat med Up&Down", nb: "Registrert med Up&Down")
         }
         
         return "\(datePart) • \(sourcePart)"
@@ -3036,14 +3029,14 @@ struct SocialPostCard: View {
         if calendar.isDateInToday(parsedDate) {
             let timeFormatter = DateFormatter()
             timeFormatter.timeStyle = .short
-            timeFormatter.locale = Locale(identifier: "sv_SE")
-            return "Idag \(timeFormatter.string(from: parsedDate))"
+            timeFormatter.locale = Locale(identifier: L.t(sv: "sv_SE", nb: "nb_NO"))
+            return L.t(sv: "Idag \(timeFormatter.string(from: parsedDate))", nb: "I dag \(timeFormatter.string(from: parsedDate))")
         } else if calendar.isDateInYesterday(parsedDate) {
-            return "Igår"
+            return L.t(sv: "Igår", nb: "I går")
         } else {
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "d MMM"
-            dateFormatter.locale = Locale(identifier: "sv_SE")
+            dateFormatter.locale = Locale(identifier: L.t(sv: "sv_SE", nb: "nb_NO"))
             return dateFormatter.string(from: parsedDate)
         }
     }
@@ -3121,7 +3114,7 @@ private extension SocialPostCard {
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Bli först att gilla")
+                Text(L.t(sv: "Bli först att gilla", nb: "Bli den første til å like"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.gray)
             }
@@ -3135,7 +3128,7 @@ private extension SocialPostCard {
             .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
             .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
             ) {
-                Text("\(commentCount) kommentarer")
+                Text(L.t(sv: "\(commentCount) kommentarer", nb: "\(commentCount) kommentarer"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .contentTransition(.numericText())
@@ -3149,7 +3142,7 @@ private extension SocialPostCard {
     }
     
     var likeCountText: String {
-        likeCount == 1 ? "1 like" : "\(likeCount) likes"
+        likeCount == 1 ? L.t(sv: "1 like", nb: "1 like") : L.t(sv: "\(likeCount) likes", nb: "\(likeCount) likes")
     }
 }
 
@@ -3341,7 +3334,7 @@ struct CommentsView: View {
                 .offset(y: inputAppeared ? 0 : 30)
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Diskussion")
+        .navigationTitle(L.t(sv: "Diskussion", nb: "Diskusjon"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await reloadComments()
@@ -3400,7 +3393,7 @@ struct CommentsView: View {
                 
                 // User info and stats
                 HStack(spacing: 4) {
-                    Text(post.userName ?? "Användare")
+                    Text(post.userName ?? L.t(sv: "Användare", nb: "Bruker"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
@@ -3472,11 +3465,11 @@ struct CommentsView: View {
             
             if let replyTarget {
                 HStack {
-                    Text("Svara på \(replyTarget.userName ?? "användare")")
+                    Text(L.t(sv: "Svara på \(replyTarget.userName ?? "användare")", nb: "Svar på \(replyTarget.userName ?? "bruker")"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.gray)
                     Spacer()
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         cancelReply()
                     }
                     .font(.system(size: 13, weight: .semibold))
@@ -3491,7 +3484,7 @@ struct CommentsView: View {
             }
             
             HStack(spacing: 12) {
-                TextField(replyTarget != nil ? "Svara \(replyTarget?.userName ?? "")..." : "Lägg till en kommentar", text: $newComment)
+                TextField(replyTarget != nil ? L.t(sv: "Svara \(replyTarget?.userName ?? "")...", nb: "Svar \(replyTarget?.userName ?? "")...") : L.t(sv: "Lägg till en kommentar", nb: "Legg til en kommentar"), text: $newComment)
                     .font(.system(size: 15))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -3507,7 +3500,7 @@ struct CommentsView: View {
                             .tint(.primary)
                             .frame(width: 50)
                     } else {
-                        Text("Skicka")
+                        Text(L.t(sv: "Skicka", nb: "Send"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .black)
                     }
@@ -3592,7 +3585,7 @@ struct CommentsView: View {
     private func formatDate(_ date: Date) -> String {
         let outputFormatter = DateFormatter()
         outputFormatter.dateFormat = "d MMM yyyy"
-        outputFormatter.locale = Locale(identifier: "sv_SE")
+        outputFormatter.locale = Locale(identifier: L.t(sv: "sv_SE", nb: "nb_NO"))
         return outputFormatter.string(from: date)
     }
     
@@ -3616,7 +3609,7 @@ struct CommentsView: View {
         if totalVolume > 0 {
             return String(format: "%.0f kg", totalVolume)
         }
-        return "\(totalSets) set"
+        return L.t(sv: "\(totalSets) set", nb: "\(totalSets) sett")
     }
     
     private func addComment() {
@@ -3689,10 +3682,10 @@ struct CommentsView: View {
             Image(systemName: "bubble.left")
                 .font(.system(size: 32))
                 .foregroundColor(.gray)
-            Text("Inga kommentarer än")
+            Text(L.t(sv: "Inga kommentarer än", nb: "Ingen kommentarer ennå"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.gray)
-            Text("Starta konversationen genom att lämna en kommentar.")
+            Text(L.t(sv: "Starta konversationen genom att lämna en kommentar.", nb: "Start samtalen ved å legge igjen en kommentar."))
                 .font(.system(size: 13))
                 .foregroundColor(.gray)
         }
@@ -3765,7 +3758,7 @@ struct CommentRow: View {
                     // Red for delete, Black for reply
                     isOwnComment ? Color.red : Color.black
                     
-                    Text(isOwnComment ? "Radera" : "Svara")
+                        Text(isOwnComment ? L.t(sv: "Radera", nb: "Slett") : L.t(sv: "Svara", nb: "Svar"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .opacity(actionOpacity)
@@ -3841,13 +3834,13 @@ struct CommentRow: View {
                 )
         }
         .clipped()
-        .alert("Vill du radera?", isPresented: $showDeleteConfirmation) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Vill du radera?", nb: "Vil du slette?"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 onDelete()
             }
         } message: {
-            Text("Den här kommentaren kommer att tas bort permanent.")
+            Text(L.t(sv: "Den här kommentaren kommer att tas bort permanent.", nb: "Denne kommentaren vil bli fjernet permanent."))
         }
     }
     
@@ -3862,7 +3855,7 @@ struct CommentRow: View {
                         UserProfileView(userId: comment.userId)
                             .environmentObject(authViewModel)
                     } label: {
-                        Text(comment.userName ?? "Användare")
+                        Text(comment.userName ?? L.t(sv: "Användare", nb: "Bruker"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.primary)
                     }
@@ -3905,7 +3898,7 @@ struct CommentRow: View {
                     }
                     
                     if comment.likeCount > 0 {
-                        Text(comment.likeCount == 1 ? "1 like" : "\(comment.likeCount) likes")
+                        Text(comment.likeCount == 1 ? L.t(sv: "1 like", nb: "1 like") : L.t(sv: "\(comment.likeCount) likes", nb: "\(comment.likeCount) likes"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -3989,17 +3982,17 @@ struct CommentRow: View {
         guard let parsedDate = date else { return isoString }
         
         let elapsed = Int(Date().timeIntervalSince(parsedDate))
-        if elapsed < 60 { return "just nu" }
+        if elapsed < 60 { return L.t(sv: "just nu", nb: "akkurat nå") }
         let minutes = elapsed / 60
-        if minutes < 60 { return "\(minutes) min sedan" }
+        if minutes < 60 { return L.t(sv: "\(minutes) min sedan", nb: "\(minutes) min siden") }
         let hours = minutes / 60
-        if hours < 24 { return "\(hours) timmar sedan" }
+        if hours < 24 { return L.t(sv: "\(hours) timmar sedan", nb: "\(hours) timer siden") }
         let days = hours / 24
-        if days < 7 { return "\(days) dagar sedan" }
+        if days < 7 { return L.t(sv: "\(days) dagar sedan", nb: "\(days) dager siden") }
         let weeks = days / 7
-        if weeks < 4 { return "\(weeks) veckor sedan" }
+        if weeks < 4 { return L.t(sv: "\(weeks) veckor sedan", nb: "\(weeks) uker siden") }
         let months = days / 30
-        return "\(months) månader sedan"
+        return L.t(sv: "\(months) månader sedan", nb: "\(months) måneder siden")
     }
 }
 
@@ -4996,7 +4989,7 @@ struct GymAchievementBanner: View {
     // Get the user's first name
     private var firstName: String {
         guard let name = post.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else { return "Användaren" }
+              !name.isEmpty else { return L.t(sv: "Användaren", nb: "Brukeren") }
         return name.components(separatedBy: " ").first ?? name
     }
     
@@ -5065,9 +5058,9 @@ enum GymAchievement {
     func message(firstName: String) -> String {
         switch self {
         case .heaviestLift(let exercise):
-            return "\(firstName) tog sitt tyngsta lyft i \(exercise)"
+            return L.t(sv: "\(firstName) tog sitt tyngsta lyft i \(exercise)", nb: "\(firstName) tok sitt tyngste løft i \(exercise)")
         case .streak(let days):
-            return "\(firstName) har en streak på \(days) dagar"
+            return L.t(sv: "\(firstName) har en streak på \(days) dagar", nb: "\(firstName) har en streak på \(days) dager")
         }
     }
 }
@@ -5210,7 +5203,7 @@ struct GymExercisesListView: View {
                 
                 // Show PR percentage if available
                 if let prPercent = prResults[exercise.name], prPercent > 0 {
-                    Text("+\(String(format: "%.0f", prPercent))% ökning!")
+                    Text(L.t(sv: "+\(String(format: "%.0f", prPercent))% ökning!", nb: "+\(String(format: "%.0f", prPercent))% økning!"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.green)
                 }
@@ -5235,7 +5228,7 @@ struct GymExercisesListView: View {
                     }
                     .padding(.top, 4)
                 } else {
-                    Text("\(exercise.sets) sets")
+                    Text(L.t(sv: "\(exercise.sets) sets", nb: "\(exercise.sets) sett"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     
@@ -5296,7 +5289,7 @@ struct GymExercisesListView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     )
                     .overlay(
-                        Text(imageUrl.contains("live_") ? "Up&Down Live" : "Din bild")
+                        Text(imageUrl.contains("live_") ? "Up&Down Live" : L.t(sv: "Din bild", nb: "Ditt bilde"))
                             .font(.system(size: 14, weight: .semibold))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -5463,7 +5456,7 @@ struct EmptyStateUserCard: View {
                     isProcessing = false
                 }
             }) {
-                Text(isFollowing ? "Följer" : "Följ")
+                Text(isFollowing ? L.t(sv: "Följer", nb: "Følger") : L.t(sv: "Följ", nb: "Følg"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(isFollowing ? .secondary : .white)
                     .frame(maxWidth: .infinity)
@@ -5486,7 +5479,7 @@ struct InviteFriendsSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     private let appStoreLink = "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB" // App Store link
-    private let inviteMessage = "Utmana mig i Zonkriget (:"
+    private var inviteMessage: String { L.t(sv: "Utmana mig i Zonkriget (:", nb: "Utfordre meg i Sonekrigen (:") }
     
     var body: some View {
         NavigationStack {
@@ -5497,10 +5490,10 @@ struct InviteFriendsSheet: View {
                         .font(.system(size: 60))
                         .foregroundColor(.primary)
                     
-                    Text("Bjud in dina vänner")
+                    Text(L.t(sv: "Bjud in dina vänner", nb: "Inviter vennene dine"))
                         .font(.system(size: 24, weight: .bold))
                     
-                    Text("Träna tillsammans med dina vänner och tävla om territorier i Zonkriget!")
+                    Text(L.t(sv: "Träna tillsammans med dina vänner och tävla om territorier i Zonkriget!", nb: "Tren sammen med vennene dine og konkurrer om territorier i Sonekrigen!"))
                         .font(.system(size: 15))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -5515,13 +5508,13 @@ struct InviteFriendsSheet: View {
                     // Share via Messages/SMS
                     ShareLink(
                         item: URL(string: appStoreLink)!,
-                        subject: Text("Träna med mig!"),
+                        subject: Text(L.t(sv: "Träna med mig!", nb: "Tren med meg!")),
                         message: Text(inviteMessage)
                     ) {
                         HStack(spacing: 12) {
                             Image(systemName: "message.fill")
                                 .font(.system(size: 20))
-                            Text("Dela via meddelande")
+                            Text(L.t(sv: "Dela via meddelande", nb: "Del via melding"))
                                 .font(.system(size: 16, weight: .semibold))
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -5542,7 +5535,7 @@ struct InviteFriendsSheet: View {
                         HStack(spacing: 12) {
                             Image(systemName: "link")
                                 .font(.system(size: 20))
-                            Text("Kopiera länk")
+                            Text(L.t(sv: "Kopiera länk", nb: "Kopier lenke"))
                                 .font(.system(size: 16, weight: .semibold))
                             Spacer()
                             Image(systemName: "doc.on.doc")
@@ -5560,7 +5553,7 @@ struct InviteFriendsSheet: View {
                         HStack(spacing: 12) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.system(size: 20))
-                            Text("Dela via andra appar")
+                            Text(L.t(sv: "Dela via andra appar", nb: "Del via andre apper"))
                                 .font(.system(size: 16, weight: .semibold))
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -5578,7 +5571,7 @@ struct InviteFriendsSheet: View {
                 Spacer()
                 
                 // Info text
-                Text("Ju fler vänner, desto roligare träning! 🎉")
+                Text(L.t(sv: "Ju fler vänner, desto roligare träning! 🎉", nb: "Jo flere venner, desto morsommere trening! 🎉"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .padding(.bottom, 20)
@@ -5586,7 +5579,7 @@ struct InviteFriendsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                     .foregroundColor(.primary)
@@ -5691,19 +5684,19 @@ struct ExternalActivityCard: View {
                 // Distance
                 if let distance = post.distance, distance > 0 {
                     statItem(
-                        title: "Distans",
+                        title: L.t(sv: "Distans", nb: "Distanse"),
                         value: post.isSwimmingPost ? "\(Int(distance * 1000)) m" : String(format: "%.2f km", distance)
                     )
                 }
                 
                 // Elevation Gain
                 if let elevation = post.elevationGain, elevation > 0 {
-                    statItem(title: "Höjdmeter", value: "\(Int(elevation)) m")
+                    statItem(title: L.t(sv: "Höjdmeter", nb: "Høydemeter"), value: "\(Int(elevation)) m")
                 }
                 
                 // Time
                 if let duration = post.duration, duration > 0 {
-                    statItem(title: "Tid", value: formatTimeStrava(duration))
+                    statItem(title: L.t(sv: "Tid", nb: "Tid"), value: formatTimeStrava(duration))
                 }
             }
             .padding(.horizontal, 16)
@@ -5872,7 +5865,7 @@ private struct FeedAdCard: View {
                             .foregroundColor(.primary)
                             .lineLimit(1)
                         
-                        Text("Sponsrad")
+                        Text(L.t(sv: "Sponsrad", nb: "Sponset"))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
@@ -5880,7 +5873,7 @@ private struct FeedAdCard: View {
                             .background(Capsule().fill(Color.gray))
                     }
                     
-                    Text("Annons")
+                    Text(L.t(sv: "Annons", nb: "Annonse"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -5968,7 +5961,7 @@ private struct SponsoredPostCard: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.primary)
                         
-                        Text("Sponsrad")
+                        Text(L.t(sv: "Sponsrad", nb: "Sponset"))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
@@ -5979,7 +5972,7 @@ private struct SponsoredPostCard: View {
                             )
                     }
                     
-                    Text("Annons")
+                    Text(L.t(sv: "Annons", nb: "Annonse"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -6022,7 +6015,7 @@ private struct SponsoredPostCard: View {
                     
                     Spacer()
                     
-                    Text("Besök")
+                    Text(L.t(sv: "Besök", nb: "Besøk"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
@@ -6062,18 +6055,18 @@ private struct ProUpgradeBanner: View {
                 // Content
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("UPPGRADERA TILL")
+                        Text(L.t(sv: "UPPGRADERA TILL", nb: "OPPGRADER TIL"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white.opacity(0.8))
                             .tracking(1.2)
                         
-                        Text("PRO MEDLEMSKAP")
+                        Text(L.t(sv: "PRO MEDLEMSKAP", nb: "PRO MEDLEMSKAP"))
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.white)
                         
                         // CTA Button (White)
                         HStack(spacing: 6) {
-                            Text("LÄS MER")
+                            Text(L.t(sv: "LÄS MER", nb: "LES MER"))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.black)
                             
@@ -6249,7 +6242,7 @@ struct FriendsLocationMapView: View {
                     // Bottom text overlay
                     if friendsWithLocation.isEmpty {
                         // Simple text when no active friends
-                        Text("Dina vänner tränar inte just nu")
+                        Text(L.t(sv: "Dina vänner tränar inte just nu", nb: "Vennene dine trener ikke akkurat nå"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 16)
@@ -6269,11 +6262,11 @@ struct FriendsLocationMapView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("\(friendsWithLocation.count) vänner tränar")
+                                Text(L.t(sv: "\(friendsWithLocation.count) vänner tränar", nb: "\(friendsWithLocation.count) venner trener"))
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                                 
-                                Text("Aktiva pass just nu")
+                                Text(L.t(sv: "Aktiva pass just nu", nb: "Aktive økter akkurat nå"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                             }
@@ -6292,18 +6285,18 @@ struct FriendsLocationMapView: View {
                 }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("Vänner som tränar")
-        .alert("Skicka en Uppy till \(selectedFriend?.userName ?? "")", isPresented: $showUppyConfirmation) {
-            Button("Avbryt", role: .cancel) {
+        .navigationTitle(L.t(sv: "Vänner som tränar", nb: "Venner som trener"))
+        .alert(L.t(sv: "Skicka en Uppy till \(selectedFriend?.userName ?? "")", nb: "Send en Uppy til \(selectedFriend?.userName ?? "")"), isPresented: $showUppyConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {
                 selectedFriend = nil
             }
-            Button("Skicka 💪") {
+            Button(L.t(sv: "Skicka 💪", nb: "Send 💪")) {
                 if let friend = selectedFriend {
                     sendUppy(to: friend)
                 }
             }
         } message: {
-            Text("Heja på din vän under deras gympass!")
+            Text(L.t(sv: "Heja på din vän under deras gympass!", nb: "Hei på vennen din under treningsøkten!"))
         }
         .onAppear {
             // Hide the floating add button when map is shown

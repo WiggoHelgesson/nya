@@ -22,14 +22,14 @@ struct EditNewsView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                     .foregroundColor(.gray)
                     
                     Spacer()
                     
-                    Text("Redigera nyhet")
+                    Text(L.t(sv: "Redigera nyhet", nb: "Rediger nyhet"))
                         .font(.system(size: 17, weight: .semibold))
                     
                     Spacer()
@@ -42,7 +42,7 @@ struct EditNewsView: View {
                                 .background(Color.black.opacity(0.6))
                                 .cornerRadius(16)
                         } else {
-                            Text("Spara")
+                            Text(L.t(sv: "Spara", nb: "Lagre"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(width: 70, height: 32)
@@ -72,7 +72,7 @@ struct EditNewsView: View {
                                 // Text input
                                 ZStack(alignment: .topLeading) {
                                     if content.isEmpty {
-                                        Text("Vad händer?")
+                                        Text(L.t(sv: "Vad händer?", nb: "Hva skjer?"))
                                             .foregroundColor(.gray)
                                             .padding(.top, 8)
                                     }

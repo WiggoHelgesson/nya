@@ -45,7 +45,7 @@ struct NewMessageView: View {
                                     .foregroundColor(.primary)
                             }
                             
-                            Text("Skapa grupp")
+                            Text(L.t(sv: "Skapa grupp", nb: "Opprett gruppe"))
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(.primary)
                             
@@ -71,7 +71,7 @@ struct NewMessageView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.gray)
                             
-                            TextField("Gruppnamn", text: $groupName)
+                            TextField(L.t(sv: "Gruppnamn", nb: "Gruppenavn"), text: $groupName)
                                 .font(.system(size: 16))
                         }
                         .padding(12)
@@ -118,7 +118,7 @@ struct NewMessageView: View {
                         .font(.system(size: 16))
                         .foregroundColor(.gray)
                     
-                    TextField("Sök bland dina följare", text: $searchText)
+                    TextField(L.t(sv: "Sök bland dina följare", nb: "Søk blant følgerne dine"), text: $searchText)
                         .font(.system(size: 16))
                         .onChange(of: searchText) { _, newValue in
                             filterFollowers(query: newValue)
@@ -153,7 +153,7 @@ struct NewMessageView: View {
                         Image(systemName: "person.2.slash")
                             .font(.system(size: 36))
                             .foregroundColor(.secondary)
-                        Text(searchText.isEmpty ? "Inga följare än" : "Inga resultat")
+                        Text(searchText.isEmpty ? L.t(sv: "Inga följare än", nb: "Ingen følgere ennå") : L.t(sv: "Inga resultat", nb: "Ingen resultater"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -213,11 +213,11 @@ struct NewMessageView: View {
                     }
                 }
             }
-            .navigationTitle(isGroupMode ? "Skapa grupp" : "Nytt meddelande")
+            .navigationTitle(isGroupMode ? L.t(sv: "Skapa grupp", nb: "Opprett gruppe") : L.t(sv: "Nytt meddelande", nb: "Ny melding"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(isGroupMode ? "Tillbaka" : "Stäng") {
+                    Button(isGroupMode ? L.t(sv: "Tillbaka", nb: "Tilbake") : L.t(sv: "Stäng", nb: "Lukk")) {
                         if isGroupMode {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isGroupMode = false
@@ -233,7 +233,7 @@ struct NewMessageView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Skapa") {
+                    Button(L.t(sv: "Skapa", nb: "Opprett")) {
                         if isGroupMode {
                             if selectedGroupUsers.count >= 2 {
                                 showGroupGuidelines = true
@@ -308,12 +308,12 @@ struct NewMessageView: View {
                     }
                     .padding(.top, 8)
                     
-                    Text("Skicka \(user.name) ett meddelande")
+                    Text(L.t(sv: "Skicka \(user.name) ett meddelande", nb: "Send \(user.name) en melding"))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                     
-                    Text("Följ våra **riktlinjer** och var respektfull när du skickar meddelanden. Låt oss hålla Up&Down positivt!")
+                    Text(L.t(sv: "Följ våra **riktlinjer** och var respektfull när du skickar meddelanden. Låt oss hålla Up&Down positivt!", nb: "Følg våre **retningslinjer** og vær respektfull når du sender meldinger. La oss holde Up&Down positivt!"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -385,16 +385,16 @@ struct NewMessageView: View {
                     }
                     .padding(.top, 8)
                     
-                    Text("Skapa grupp \"\(groupName.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                    Text(L.t(sv: "Skapa grupp \"\(groupName.trimmingCharacters(in: .whitespacesAndNewlines))\"", nb: "Opprett gruppe \"\(groupName.trimmingCharacters(in: .whitespacesAndNewlines))\""))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                     
-                    Text("\(selectedGroupUsers.count + 1) medlemmar")
+                    Text(L.t(sv: "\(selectedGroupUsers.count + 1) medlemmar", nb: "\(selectedGroupUsers.count + 1) medlemmer"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
-                    Text("Följ våra **riktlinjer** och var respektfull i gruppkonversationer. Låt oss hålla Up&Down positivt!")
+                    Text(L.t(sv: "Följ våra **riktlinjer** och var respektfull i gruppkonversationer. Låt oss hålla Up&Down positivt!", nb: "Følg våre **retningslinjer** og vær respektfull i gruppesamtaler. La oss holde Up&Down positivt!"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -411,7 +411,7 @@ struct NewMessageView: View {
                                 ProgressView()
                                     .tint(.white)
                             }
-                            Text("Skapa grupp")
+                            Text(L.t(sv: "Skapa grupp", nb: "Opprett gruppe"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                         }

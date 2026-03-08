@@ -79,7 +79,7 @@ struct ReferralView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Referera och tjäna")
+                Text(L.t(sv: "Referera och tjäna", nb: "Referer og tjen"))
                     .font(.system(size: 17, weight: .semibold))
             }
             ToolbarItem(placement: .navigationBarLeading) {
@@ -103,7 +103,7 @@ struct ReferralView: View {
             if showCopiedToast {
                 VStack {
                     Spacer()
-                    Text("Kopierad!")
+                    Text(L.t(sv: "Kopierad!", nb: "Kopiert!"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
@@ -115,31 +115,31 @@ struct ReferralView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .alert("Begär utbetalning", isPresented: $showPayoutAlert) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Bekräfta") {
+        .alert(L.t(sv: "Begär utbetalning", nb: "Be om utbetaling"), isPresented: $showPayoutAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Bekräfta", nb: "Bekreft")) {
                 requestPayout()
             }
         } message: {
             if let stats = stats {
-                Text("Du kommer att få \(Int(stats.pendingEarnings)) kr utbetalt till ditt kopplade Stripe-konto.")
+                Text(L.t(sv: "Du kommer att få \(Int(stats.pendingEarnings)) kr utbetalt till ditt kopplade Stripe-konto.", nb: "Du vil få \(Int(stats.pendingEarnings)) kr utbetalt til din tilkoblede Stripe-konto."))
             }
         }
-        .alert("Utbetalning begärd!", isPresented: $showPayoutSuccess) {
+        .alert(L.t(sv: "Utbetalning begärd!", nb: "Utbetaling forespurt!"), isPresented: $showPayoutSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Din utbetalning behandlas. Pengarna kommer att överföras inom 3-5 arbetsdagar.")
+            Text(L.t(sv: "Din utbetalning behandlas. Pengarna kommer att överföras inom 3-5 arbetsdagar.", nb: "Utbetalingen din behandles. Pengene vil bli overført innen 3-5 virkedager."))
         }
-        .alert("Kod uppdaterad!", isPresented: $showCodeUpdateSuccess) {
+        .alert(L.t(sv: "Kod uppdaterad!", nb: "Kode oppdatert!"), isPresented: $showCodeUpdateSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Din referenskod har ändrats till \(referralCode)")
+            Text(L.t(sv: "Din referenskod har ändrats till \(referralCode)", nb: "Referansekoden din er endret til \(referralCode)"))
         }
-        .alert("Kod uppdaterad!", isPresented: $showSupportCodeChangeSuccess) {
+        .alert(L.t(sv: "Kod uppdaterad!", nb: "Kode oppdatert!"), isPresented: $showSupportCodeChangeSuccess) {
             Button("OK", role: .cancel) { }
         } message: {
             if let info = supportingCodeInfo {
-                Text("Du stödjer nu \(info.ownerUsername) med kod \(info.code)")
+                Text(L.t(sv: "Du stödjer nu \(info.ownerUsername) med kod \(info.code)", nb: "Du støtter nå \(info.ownerUsername) med kode \(info.code)"))
             }
         }
         .sheet(isPresented: $showEditCodeSheet) {
@@ -154,7 +154,7 @@ struct ReferralView: View {
     private var headerSection: some View {
         VStack(spacing: 16) {
             // Title
-            Text("Referera en vän")
+            Text(L.t(sv: "Referera en vän", nb: "Referer en venn"))
                 .font(.system(size: 32, weight: .bold))
                 .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -189,9 +189,9 @@ struct ReferralView: View {
             
             // Subtitle
             VStack(spacing: 4) {
-                Text("Hjälp dina vänner")
+                Text(L.t(sv: "Hjälp dina vänner", nb: "Hjelp vennene dine"))
                     .font(.system(size: 22, weight: .semibold))
-                Text("& tjäna pengar tillsammans")
+                Text(L.t(sv: "& tjäna pengar tillsammans", nb: "& tjen penger sammen"))
                     .font(.system(size: 16))
                     .foregroundColor(.gray)
             }
@@ -212,7 +212,7 @@ struct ReferralView: View {
     private var promoCodeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Din personliga kod")
+                Text(L.t(sv: "Din personliga kod", nb: "Din personlige kode"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                 
@@ -226,7 +226,7 @@ struct ReferralView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "pencil")
                             .font(.system(size: 12))
-                        Text(canEditCode ? "Redigera" : "Redigera om \(daysUntilEdit) dagar")
+                        Text(canEditCode ? L.t(sv: "Redigera", nb: "Rediger") : L.t(sv: "Redigera om \(daysUntilEdit) dagar", nb: "Rediger om \(daysUntilEdit) dager"))
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(canEditCode ? .black : .gray)
@@ -269,7 +269,7 @@ struct ReferralView: View {
         Button {
             shareCode()
         } label: {
-            Text("Dela")
+            Text(L.t(sv: "Dela", nb: "Del"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -283,7 +283,7 @@ struct ReferralView: View {
     private var howToEarnSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
-                Text("Så tjänar du")
+                Text(L.t(sv: "Så tjänar du", nb: "Slik tjener du"))
                     .font(.system(size: 18, weight: .semibold))
                 
                 Circle()
@@ -296,9 +296,9 @@ struct ReferralView: View {
             }
             
             VStack(alignment: .leading, spacing: 12) {
-                bulletPoint("Dela din kod med dina vänner")
-                bulletPoint("Tjäna 40% på alla köp de gör")
-                bulletPoint("Ta ut pengarna när du nått 300 kr")
+                bulletPoint(L.t(sv: "Dela din kod med dina vänner", nb: "Del koden din med vennene dine"))
+                bulletPoint(L.t(sv: "Tjäna 40% på alla köp de gör", nb: "Tjen 40% på alle kjøp de gjør"))
+                bulletPoint(L.t(sv: "Ta ut pengarna när du nått 300 kr", nb: "Ta ut pengene når du har nådd 300 kr"))
             }
         }
         .padding(20)
@@ -321,7 +321,7 @@ struct ReferralView: View {
         VStack(spacing: 0) {
             // Top section - User slider
             VStack(alignment: .leading, spacing: 16) {
-                Text("Betalande användare du kan värva")
+                Text(L.t(sv: "Betalande användare du kan värva", nb: "Betalende brukere du kan verve"))
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.primary.opacity(0.8))
                 
@@ -372,7 +372,7 @@ struct ReferralView: View {
             
             // Bottom section - Estimated earnings
             VStack(alignment: .leading, spacing: 12) {
-                Text("Beräknad intjäning")
+                Text(L.t(sv: "Beräknad intjäning", nb: "Beregnet inntjening"))
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.primary.opacity(0.8))
                 
@@ -380,7 +380,7 @@ struct ReferralView: View {
                     .font(.system(size: 42, weight: .bold))
                     .foregroundColor(.black)
                 
-                Text("baserat på årsabonnemang (160 kr/person med 40%)")
+                Text(L.t(sv: "baserat på årsabonnemang (160 kr/person med 40%)", nb: "basert på årsabonnement (160 kr/person med 40%)"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -394,20 +394,20 @@ struct ReferralView: View {
     // MARK: - Stats Section
     private func statsSection(stats: ReferralStats) -> some View {
         VStack(spacing: 16) {
-            Text("Din statistik")
+            Text(L.t(sv: "Din statistik", nb: "Din statistikk"))
                 .font(.system(size: 18, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 16) {
                 statCard(
-                    title: "Refererade",
+                    title: L.t(sv: "Refererade", nb: "Refererte"),
                     value: "\(stats.totalReferrals)",
                     icon: "person.2.fill",
                     color: .blue
                 )
                 
                 statCard(
-                    title: "Intjänat",
+                    title: L.t(sv: "Intjänat", nb: "Opptjent"),
                     value: "\(Int(stats.totalEarnings)) kr",
                     icon: "banknote.fill",
                     color: .green
@@ -416,14 +416,14 @@ struct ReferralView: View {
             
             HStack(spacing: 16) {
                 statCard(
-                    title: "Tillgängligt",
+                    title: L.t(sv: "Tillgängligt", nb: "Tilgjengelig"),
                     value: "\(Int(stats.pendingEarnings)) kr",
                     icon: "wallet.pass.fill",
                     color: .orange
                 )
                 
                 statCard(
-                    title: "Utbetalt",
+                    title: L.t(sv: "Utbetalt", nb: "Utbetalt"),
                     value: "\(Int(stats.paidOutEarnings)) kr",
                     icon: "checkmark.circle.fill",
                     color: .purple
@@ -463,9 +463,9 @@ struct ReferralView: View {
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Redo för utbetalning!")
+                    Text(L.t(sv: "Redo för utbetalning!", nb: "Klar for utbetaling!"))
                         .font(.system(size: 18, weight: .semibold))
-                    Text("Du har \(Int(stats.pendingEarnings)) kr tillgängligt")
+                    Text(L.t(sv: "Du har \(Int(stats.pendingEarnings)) kr tillgängligt", nb: "Du har \(Int(stats.pendingEarnings)) kr tilgjengelig"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 }
@@ -489,7 +489,7 @@ struct ReferralView: View {
                                 .tint(.white)
                         } else {
                             Image(systemName: "link.badge.plus")
-                            Text("Koppla bankkonto")
+                            Text(L.t(sv: "Koppla bankkonto", nb: "Koble bankkonto"))
                         }
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -501,7 +501,7 @@ struct ReferralView: View {
                 }
                 .disabled(isSettingUpStripe)
                 
-                Text("Du behöver koppla ett bankkonto för att ta emot utbetalningar.")
+                Text(L.t(sv: "Du behöver koppla ett bankkonto för att ta emot utbetalningar.", nb: "Du må koble en bankkonto for å motta utbetalinger."))
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -516,7 +516,7 @@ struct ReferralView: View {
                                 .tint(.black)
                         } else {
                             Image(systemName: "arrow.down.to.line")
-                            Text("Begär utbetalning")
+                            Text(L.t(sv: "Begär utbetalning", nb: "Be om utbetaling"))
                         }
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -585,10 +585,10 @@ struct ReferralView: View {
                         .font(.system(size: 50))
                         .foregroundColor(.black)
                     
-                    Text("Ändra din kod")
+                    Text(L.t(sv: "Ändra din kod", nb: "Endre koden din"))
                         .font(.system(size: 24, weight: .bold))
                     
-                    Text("Skriv in din nya personliga kod")
+                    Text(L.t(sv: "Skriv in din nya personliga kod", nb: "Skriv inn din nye personlige kode"))
                         .font(.system(size: 15))
                         .foregroundColor(.gray)
                 }
@@ -596,11 +596,11 @@ struct ReferralView: View {
                 
                 // Input field
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Ny kod (3-12 tecken)")
+                    Text(L.t(sv: "Ny kod (3-12 tecken)", nb: "Ny kode (3-12 tegn)"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
-                    TextField("T.ex. MITTNAMN", text: $editedCode)
+                    TextField(L.t(sv: "T.ex. MITTNAMN", nb: "F.eks. MITTNAVNN"), text: $editedCode)
                         .font(.system(size: 20, weight: .semibold))
                         .textCase(.uppercase)
                         .autocorrectionDisabled()
@@ -628,7 +628,7 @@ struct ReferralView: View {
                 }
                 
                 // Info text
-                Text("Du kan ändra din kod var 6:e dag. Koden måste vara unik.")
+                Text(L.t(sv: "Du kan ändra din kod var 6:e dag. Koden måste vara unik.", nb: "Du kan endre koden din hver 6. dag. Koden må være unik."))
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -645,7 +645,7 @@ struct ReferralView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text("Spara")
+                            Text(L.t(sv: "Spara", nb: "Lagre"))
                                 .font(.system(size: 17, weight: .semibold))
                         }
                     }
@@ -684,7 +684,7 @@ struct ReferralView: View {
         // Validate code format
         let normalizedCode = editedCode.uppercased().trimmingCharacters(in: .whitespaces)
         guard normalizedCode.count >= 3 && normalizedCode.count <= 12 else {
-            codeUpdateError = "Koden måste vara 3-12 tecken"
+            codeUpdateError = L.t(sv: "Koden måste vara 3-12 tecken", nb: "Koden må være 3-12 tegn")
             return
         }
         
@@ -703,7 +703,7 @@ struct ReferralView: View {
                 if isChangingCode && !canEdit {
                     await MainActor.run {
                         isUpdatingCode = false
-                        codeUpdateError = "Du kan ändra koden om \(daysLeft) dagar"
+                        codeUpdateError = L.t(sv: "Du kan ändra koden om \(daysLeft) dagar", nb: "Du kan endre koden om \(daysLeft) dager")
                     }
                     return
                 }
@@ -723,14 +723,14 @@ struct ReferralView: View {
                             await checkEditStatus()
                         }
                     } else {
-                        codeUpdateError = "Koden är redan tagen av någon annan"
+                        codeUpdateError = L.t(sv: "Koden är redan tagen av någon annan", nb: "Koden er allerede tatt av noen andre")
                     }
                 }
             } catch {
                 print("❌ Error updating code: \(error)")
                 await MainActor.run {
                     isUpdatingCode = false
-                    codeUpdateError = "Kunde inte uppdatera koden. Försök igen."
+                    codeUpdateError = L.t(sv: "Kunde inte uppdatera koden. Försök igen.", nb: "Kunne ikke oppdatere koden. Prøv igjen.")
                 }
             }
         }
@@ -756,7 +756,7 @@ struct ReferralView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Du stödjer")
+                    Text(L.t(sv: "Du stödjer", nb: "Du støtter"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
@@ -780,7 +780,7 @@ struct ReferralView: View {
                     newSupportCode = ""
                     showChangeSupportCodeSheet = true
                 } label: {
-                    Text("Byt")
+                    Text(L.t(sv: "Byt", nb: "Bytt"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 16)
@@ -790,7 +790,7 @@ struct ReferralView: View {
                 }
             }
             
-            Text("Genom att stödja \(info.ownerUsername) hjälper du dem att tjäna 40% provision på alla dina köp i appen.")
+            Text(L.t(sv: "Genom att stödja \(info.ownerUsername) hjälper du dem att tjäna 40% provision på alla dina köp i appen.", nb: "Ved å støtte \(info.ownerUsername) hjelper du dem med å tjene 40% provisjon på alle dine kjøp i appen."))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
         }
@@ -814,11 +814,11 @@ struct ReferralView: View {
                     .foregroundColor(.blue)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Stöd någon")
+                    Text(L.t(sv: "Stöd någon", nb: "Støtt noen"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
                     
-                    Text("Ange en referenskod för att stödja någon")
+                    Text(L.t(sv: "Ange en referenskod för att stödja någon", nb: "Skriv inn en referansekode for å støtte noen"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -851,15 +851,15 @@ struct ReferralView: View {
                         .font(.system(size: 50))
                         .foregroundColor(.green)
                     
-                    Text(supportingCodeInfo == nil ? "Stöd någon" : "Byt vem du stödjer")
+                    Text(supportingCodeInfo == nil ? L.t(sv: "Stöd någon", nb: "Støtt noen") : L.t(sv: "Byt vem du stödjer", nb: "Bytt hvem du støtter"))
                         .font(.system(size: 24, weight: .bold))
                     
                     if let currentInfo = supportingCodeInfo {
-                        Text("Du stödjer just nu \(currentInfo.ownerUsername)")
+                        Text(L.t(sv: "Du stödjer just nu \(currentInfo.ownerUsername)", nb: "Du støtter akkurat nå \(currentInfo.ownerUsername)"))
                             .font(.system(size: 15))
                             .foregroundColor(.gray)
                     } else {
-                        Text("Ange en referenskod för att stödja någon")
+                        Text(L.t(sv: "Ange en referenskod för att stödja någon", nb: "Skriv inn en referansekode for å støtte noen"))
                             .font(.system(size: 15))
                             .foregroundColor(.gray)
                     }
@@ -868,11 +868,11 @@ struct ReferralView: View {
                 
                 // Input field
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Referenskod")
+                    Text(L.t(sv: "Referenskod", nb: "Referansekode"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
-                    TextField("T.ex. WIGGO123", text: $newSupportCode)
+                    TextField(L.t(sv: "T.ex. WIGGO123", nb: "F.eks. WIGGO123"), text: $newSupportCode)
                         .font(.system(size: 20, weight: .semibold))
                         .textCase(.uppercase)
                         .autocorrectionDisabled()
@@ -901,13 +901,13 @@ struct ReferralView: View {
                 
                 // Info text
                 VStack(spacing: 8) {
-                    Text("Genom att stödja någon hjälper du dem att tjäna 40% provision på alla dina köp.")
+                    Text(L.t(sv: "Genom att stödja någon hjälper du dem att tjäna 40% provision på alla dina köp.", nb: "Ved å støtte noen hjelper du dem med å tjene 40% provisjon på alle dine kjøp."))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
                     
                     if supportingCodeInfo != nil {
-                        Text("Du kan byta när som helst.")
+                        Text(L.t(sv: "Du kan byta när som helst.", nb: "Du kan bytte når som helst."))
                             .font(.system(size: 13))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -926,7 +926,7 @@ struct ReferralView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text("Spara")
+                            Text(L.t(sv: "Spara", nb: "Lagre"))
                                 .font(.system(size: 17, weight: .semibold))
                         }
                     }
@@ -964,7 +964,7 @@ struct ReferralView: View {
         
         let normalizedCode = newSupportCode.uppercased().trimmingCharacters(in: .whitespaces)
         guard normalizedCode.count >= 3 else {
-            changeSupportCodeError = "Koden måste vara minst 3 tecken"
+            changeSupportCodeError = L.t(sv: "Koden måste vara minst 3 tecken", nb: "Koden må være minst 3 tegn")
             return
         }
         
@@ -987,14 +987,14 @@ struct ReferralView: View {
                             await loadSupportingCodeInfo()
                         }
                     } else {
-                        changeSupportCodeError = "Koden hittades inte eller är ogiltig"
+                        changeSupportCodeError = L.t(sv: "Koden hittades inte eller är ogiltig", nb: "Koden ble ikke funnet eller er ugyldig")
                     }
                 }
             } catch {
                 print("❌ Error changing support code: \(error)")
                 await MainActor.run {
                     isChangingSupportCode = false
-                    changeSupportCodeError = "Kunde inte ändra kod. Försök igen."
+                    changeSupportCodeError = L.t(sv: "Kunde inte ändra kod. Försök igen.", nb: "Kunne ikke endre kode. Prøv igjen.")
                 }
             }
         }
@@ -1075,13 +1075,22 @@ struct ReferralView: View {
     }
     
     private func shareCode() {
-        let message = """
-        Gå med mig på Up&Down! 💪
-        
-        Använd min kod: \(referralCode)
-        
-        Ladda ner appen här: https://apps.apple.com/app/upanddown/id123456789
-        """
+        let message = L.t(
+            sv: """
+            Gå med mig på Up&Down! 💪
+            
+            Använd min kod: \(referralCode)
+            
+            Ladda ner appen här: https://apps.apple.com/app/upanddown/id123456789
+            """,
+            nb: """
+            Bli med meg på Up&Down! 💪
+            
+            Bruk koden min: \(referralCode)
+            
+            Last ned appen her: https://apps.apple.com/app/upanddown/id123456789
+            """
+        )
         
         let activityVC = UIActivityViewController(
             activityItems: [message],

@@ -21,11 +21,11 @@ struct NutritionSettingsView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.orange)
                         
-                        Text("Näringsmål")
+                        Text(L.t(sv: "Näringsmål", nb: "Ernæringsmål"))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.black)
                         
-                        Text("Justera dina dagliga mål")
+                        Text(L.t(sv: "Justera dina dagliga mål", nb: "Juster dine daglige mål"))
                             .font(.system(size: 16))
                             .foregroundColor(.gray)
                     }
@@ -35,7 +35,7 @@ struct NutritionSettingsView: View {
                     VStack(spacing: 16) {
                         NutritionGoalCard(
                             emoji: "🔥",
-                            title: "Kalorier",
+                            title: L.t(sv: "Kalorier", nb: "Kalorier"),
                             value: $caloriesGoal,
                             unit: "kcal",
                             range: 1000...5000,
@@ -44,7 +44,7 @@ struct NutritionSettingsView: View {
                         
                         NutritionGoalCard(
                             emoji: "🍗",
-                            title: "Protein",
+                            title: L.t(sv: "Protein", nb: "Protein"),
                             value: $proteinGoal,
                             unit: "g",
                             range: 50...300,
@@ -53,7 +53,7 @@ struct NutritionSettingsView: View {
                         
                         NutritionGoalCard(
                             emoji: "🌾",
-                            title: "Kolhydrater",
+                            title: L.t(sv: "Kolhydrater", nb: "Karbohydrater"),
                             value: $carbsGoal,
                             unit: "g",
                             range: 50...500,
@@ -62,7 +62,7 @@ struct NutritionSettingsView: View {
                         
                         NutritionGoalCard(
                             emoji: "🥑",
-                            title: "Fett",
+                            title: L.t(sv: "Fett", nb: "Fett"),
                             value: $fatGoal,
                             unit: "g",
                             range: 30...200,
@@ -83,7 +83,7 @@ struct NutritionSettingsView: View {
                                 .background(Color.black)
                                 .clipShape(Capsule())
                         } else {
-                            Text("Spara ändringar")
+                            Text(L.t(sv: "Spara ändringar", nb: "Lagre endringer"))
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -103,7 +103,7 @@ struct NutritionSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                     .foregroundColor(.black)

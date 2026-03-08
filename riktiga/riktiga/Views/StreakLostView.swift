@@ -129,7 +129,7 @@ struct StreakLostView: View {
                     StreakManager.shared.clearLostStreakFlag()
                     onContinue()
                 } label: {
-                    Text("Fortsätt")
+                    Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
@@ -161,21 +161,21 @@ struct StreakLostView: View {
     
     private var streakLostTitle: String {
         if lostStreakDays == 1 {
-            return "1 dag streak förlorad"
+            return L.t(sv: "1 dag streak förlorad", nb: "1 dag streak tapt")
         } else {
-            return "\(lostStreakDays) dagars streak förlorad"
+            return L.t(sv: "\(lostStreakDays) dagars streak förlorad", nb: "\(lostStreakDays) dagers streak tapt")
         }
     }
     
     private var motivationalMessage: String {
         if lostStreakDays >= 30 {
-            return "Imponerande streak! Men ge inte upp. Logga ett pass idag för att börja om."
+            return L.t(sv: "Imponerande streak! Men ge inte upp. Logga ett pass idag för att börja om.", nb: "Imponerende streak! Men ikke gi opp. Logg et pass i dag for å begynne på nytt.")
         } else if lostStreakDays >= 14 {
-            return "Du hade en bra streak! Börja om och slå ditt rekord."
+            return L.t(sv: "Du hade en bra streak! Börja om och slå ditt rekord.", nb: "Du hadde en god streak! Begynn på nytt og slå rekorden din.")
         } else if lostStreakDays >= 7 {
-            return "En vecka är en bra start. Låt oss göra det ännu bättre!"
+            return L.t(sv: "En vecka är en bra start. Låt oss göra det ännu bättre!", nb: "En uke er en god start. La oss gjøre det enda bedre!")
         } else {
-            return "Ge inte upp. Logga ett pass idag för att komma tillbaka på banan!"
+            return L.t(sv: "Ge inte upp. Logga ett pass idag för att komma tillbaka på banan!", nb: "Ikke gi opp. Logg et pass i dag for å komme tilbake på sporet!")
         }
     }
     

@@ -40,7 +40,7 @@ struct LivePhotoCaptureView: View {
                         Circle()
                             .fill(cameraManager.currentPosition == .back ? Color.white : Color.white.opacity(0.3))
                             .frame(width: 8, height: 8)
-                        Text(cameraManager.currentPosition == .back ? "Bakkamera" : "Framkamera")
+                        Text(cameraManager.currentPosition == .back ? L.t(sv: "Bakkamera", nb: "Bakkamera") : L.t(sv: "Framkamera", nb: "Frontkamera"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
                         Circle()
@@ -282,10 +282,10 @@ class DualCameraManager: NSObject, ObservableObject {
             setupSession(position: .back)
             // Wait for session to stabilize
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.capturePhoto(phase: "📸 Tar bild bakåt...")
+                self?.capturePhoto(phase: L.t(sv: "📸 Tar bild bakåt...", nb: "📸 Tar bilde bakover..."))
             }
         } else {
-            capturePhoto(phase: "📸 Tar bild bakåt...")
+            capturePhoto(phase: L.t(sv: "📸 Tar bild bakåt...", nb: "📸 Tar bilde bakover..."))
         }
     }
     
@@ -302,7 +302,7 @@ class DualCameraManager: NSObject, ObservableObject {
             guard let connection = self.photoOutput.connection(with: .video), connection.isActive else {
                 print("❌ No active video connection")
                 DispatchQueue.main.async {
-                    self.capturePhase = "❌ Kamerafel"
+                    self.capturePhase = L.t(sv: "❌ Kamerafel", nb: "❌ Kamerafeil")
                     self.isCapturingDual = false
                 }
                 return
@@ -320,7 +320,7 @@ class DualCameraManager: NSObject, ObservableObject {
         }
         
         DispatchQueue.main.async {
-            self.capturePhase = "🎨 Skapar bild..."
+            self.capturePhase = L.t(sv: "🎨 Skapar bild...", nb: "🎨 Lager bilde...")
         }
         
         // Use 4:3 aspect ratio (1200x900) - works well with 300px height display
@@ -399,7 +399,7 @@ extension DualCameraManager: AVCapturePhotoCaptureDelegate {
         if let error = error {
             print("❌ Photo capture error: \(error)")
             DispatchQueue.main.async {
-                self.capturePhase = "❌ Fel vid fotografering"
+                self.capturePhase = L.t(sv: "❌ Fel vid fotografering", nb: "❌ Feil ved fotografering")
                 self.isCapturingDual = false
             }
             return
@@ -419,7 +419,7 @@ extension DualCameraManager: AVCapturePhotoCaptureDelegate {
             
             // Now switch to front camera and capture
             DispatchQueue.main.async {
-                self.capturePhase = "🔄 Byter till framkamera..."
+                self.capturePhase = L.t(sv: "🔄 Byter till framkamera...", nb: "🔄 Bytter til frontkamera...")
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
@@ -427,7 +427,7 @@ extension DualCameraManager: AVCapturePhotoCaptureDelegate {
                 
                 // Wait for front camera to be ready
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                    self?.capturePhoto(phase: "📸 Tar selfie...")
+                    self?.capturePhoto(phase: L.t(sv: "📸 Tar selfie...", nb: "📸 Tar selfie..."))
                 }
             }
         } else {

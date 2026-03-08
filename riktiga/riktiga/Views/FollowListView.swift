@@ -22,18 +22,18 @@ struct FollowListView: View {
         var title: String {
             switch self {
             case .followers:
-                return "Följare"
+                return L.t(sv: "Följare", nb: "Følgere")
             case .following:
-                return "Följer"
+                return L.t(sv: "Följer", nb: "Følger")
             }
         }
         
         var sectionHeader: String {
             switch self {
             case .followers:
-                return "PERSONER SOM FÖLJER DIG"
+                return L.t(sv: "PERSONER SOM FÖLJER DIG", nb: "PERSONER SOM FØLGER DEG")
             case .following:
-                return "PERSONER DU FÖLJER"
+                return L.t(sv: "PERSONER DU FÖLJER", nb: "PERSONER DU FØLGER")
             }
         }
     }
@@ -52,7 +52,7 @@ struct FollowListView: View {
                     }
                 } label: {
                     VStack(spacing: 8) {
-                        Text("Följer")
+                        Text(L.t(sv: "Följer", nb: "Følger"))
                             .font(.system(size: 16, weight: selectedTab == .following ? .semibold : .regular))
                             .foregroundColor(selectedTab == .following ? .black : .gray)
                         
@@ -73,7 +73,7 @@ struct FollowListView: View {
                     }
                 } label: {
                     VStack(spacing: 8) {
-                        Text("Följare")
+                        Text(L.t(sv: "Följare", nb: "Følgere"))
                             .font(.system(size: 16, weight: selectedTab == .followers ? .semibold : .regular))
                             .foregroundColor(selectedTab == .followers ? .black : .gray)
                         
@@ -91,7 +91,7 @@ struct FollowListView: View {
             // Content
             if viewModel.isLoading && viewModel.users.isEmpty {
                 Spacer()
-                ProgressView("Laddar...")
+                ProgressView(L.t(sv: "Laddar...", nb: "Laster..."))
                     .foregroundColor(.gray)
                 Spacer()
             } else if viewModel.users.isEmpty {
@@ -101,12 +101,12 @@ struct FollowListView: View {
                         .font(.system(size: 50))
                         .foregroundColor(.gray)
                     
-                    Text(selectedTab == .followers ? "Inga följare än" : "Följer ingen än")
+                    Text(selectedTab == .followers ? L.t(sv: "Inga följare än", nb: "Ingen følgere ennå") : L.t(sv: "Följer ingen än", nb: "Følger ingen ennå"))
                         .font(.title2)
                         .fontWeight(.medium)
                         .foregroundColor(.gray)
                     
-                    Text(selectedTab == .followers ? "När någon följer dig kommer de att visas här" : "När du börjar följa någon kommer de att visas här")
+                    Text(selectedTab == .followers ? L.t(sv: "När någon följer dig kommer de att visas här", nb: "Når noen følger deg vil de vises her") : L.t(sv: "När du börjar följa någon kommer de att visas här", nb: "Når du begynner å følge noen vil de vises her"))
                         .font(.body)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -149,7 +149,7 @@ struct FollowListView: View {
                 }
             }
         }
-        .navigationTitle("Vänner")
+        .navigationTitle(L.t(sv: "Vänner", nb: "Venner"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             NavigationDepthTracker.shared.pushView()
@@ -205,7 +205,7 @@ struct UserFollowRow: View {
                             .scaleEffect(0.8)
                             .frame(width: 90, height: 36)
                     } else {
-                        Text(isFollowing ? "Följer" : "Följ")
+                        Text(isFollowing ? L.t(sv: "Följer", nb: "Følger") : L.t(sv: "Följ", nb: "Følg"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(isFollowing ? .black : .white)
                             .frame(width: 90, height: 36)
@@ -218,13 +218,13 @@ struct UserFollowRow: View {
                     }
                 }
                 .disabled(isLoading)
-                .alert("Är du säker?", isPresented: $showUnfollowConfirmation) {
-                    Button("Avbryt", role: .cancel) { }
-                    Button("Avfölj", role: .destructive) {
+                .alert(L.t(sv: "Är du säker?", nb: "Er du sikker?"), isPresented: $showUnfollowConfirmation) {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+                    Button(L.t(sv: "Avfölj", nb: "Slutt å følge"), role: .destructive) {
                         performFollowToggle()
                     }
                 } message: {
-                    Text("Du kommer att sluta följa \(user.name)")
+                    Text(L.t(sv: "Du kommer att sluta följa \(user.name)", nb: "Du vil slutte å følge \(user.name)"))
                 }
             }
         }

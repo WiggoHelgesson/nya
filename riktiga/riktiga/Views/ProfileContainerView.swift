@@ -3,6 +3,13 @@ import SwiftUI
 enum ProfileTab: String, CaseIterable {
     case statistik = "Statistik"
     case aktiviteter = "Aktiviteter"
+
+    var displayName: String {
+        switch self {
+        case .statistik: return L.t(sv: "Statistik", nb: "Statistikk")
+        case .aktiviteter: return L.t(sv: "Aktiviteter", nb: "Aktiviteter")
+        }
+    }
 }
 
 struct ProfileContainerView: View {
@@ -146,14 +153,14 @@ struct ProfileHeaderWithTabs: View {
             ZStack {
                 // Center: Page title or Pro CTA
                 if isPremium {
-                    Text("Profil")
+                    Text(L.t(sv: "Profil", nb: "Profil"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                 } else {
                     Button {
                         SuperwallService.shared.showPaywall()
                     } label: {
-                        Text("Bli pro medlem")
+                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -209,7 +216,7 @@ struct ProfileHeaderWithTabs: View {
                         }
                     } label: {
                         VStack(spacing: 10) {
-                            Text(tab.rawValue)
+                            Text(tab.displayName)
                                 .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
                                 .foregroundColor(selectedTab == tab ? .primary : .gray)
                             
@@ -235,7 +242,7 @@ struct ProfileHeaderWithTabs: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }
@@ -269,7 +276,7 @@ private struct ProBannerView: View {
                 // Content
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Skaffa Up&Down Pro och lås upp alla förmåner")
+                        Text(L.t(sv: "Skaffa Up&Down Pro och lås upp alla förmåner", nb: "Skaff Up&Down Pro og lås opp alle fordeler"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .lineLimit(2)
@@ -277,7 +284,7 @@ private struct ProBannerView: View {
                         
                         // CTA Button (White)
                         HStack(spacing: 4) {
-                            Text("Prenumerera nu")
+                            Text(L.t(sv: "Prenumerera nu", nb: "Abonner nå"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.black)
                             

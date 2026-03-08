@@ -38,7 +38,7 @@ struct BookingChatView: View {
                                 VStack(spacing: 12) {
                                     ProgressView()
                                         .scaleEffect(1.2)
-                                    Text("Laddar chatt...")
+                                    Text(L.t(sv: "Laddar chatt...", nb: "Laster chat..."))
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
@@ -53,7 +53,7 @@ struct BookingChatView: View {
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.center)
-                                    Button("Försök igen") {
+                                    Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                                         Task { await viewModel.loadMessages() }
                                     }
                                     .buttonStyle(.borderedProminent)
@@ -61,7 +61,7 @@ struct BookingChatView: View {
                                 }
                                 .padding(.top, 50)
                             } else if viewModel.messages.isEmpty && !viewModel.isLoading {
-                                Text("Inga meddelanden ännu.\nSkriv något för att starta chatten!")
+                                Text(L.t(sv: "Inga meddelanden ännu.\nSkriv något för att starta chatten!", nb: "Ingen meldinger ennå.\nSkriv noe for å starte chatten!"))
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
@@ -105,14 +105,14 @@ struct BookingChatView: View {
     
     private var customNavigationBar: some View {
         HStack {
-            Button("Stäng") {
+            Button(L.t(sv: "Stäng", nb: "Lukk")) {
                 dismiss()
             }
             .foregroundColor(.primary)
             
             Spacer()
             
-            Text(booking.trainerName ?? "Chatt")
+            Text(booking.trainerName ?? L.t(sv: "Chatt", nb: "Chat"))
                 .font(.headline)
             
             Spacer()
@@ -122,13 +122,13 @@ struct BookingChatView: View {
                     Button {
                         Task { await viewModel.acceptBooking() }
                     } label: {
-                        Label("Godkänn", systemImage: "checkmark.circle")
+                        Label(L.t(sv: "Godkänn", nb: "Godkjenn"), systemImage: "checkmark.circle")
                     }
                     
                     Button(role: .destructive) {
                         Task { await viewModel.declineBooking() }
                     } label: {
-                        Label("Avböj", systemImage: "xmark.circle")
+                        Label(L.t(sv: "Avböj", nb: "Avslå"), systemImage: "xmark.circle")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -161,7 +161,7 @@ struct BookingChatView: View {
             .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.isTrainer ? (booking.studentUsername ?? "Kund") : (booking.trainerName ?? "Tränare"))
+                Text(viewModel.isTrainer ? (booking.studentUsername ?? L.t(sv: "Kund", nb: "Kunde")) : (booking.trainerName ?? L.t(sv: "Tränare", nb: "Trener")))
                     .font(.headline)
                 
                 HStack(spacing: 4) {
@@ -200,7 +200,7 @@ struct BookingChatView: View {
     
     private var inputBar: some View {
         HStack(spacing: 12) {
-            TextField("Skriv ett meddelande...", text: $messageText, axis: .vertical)
+            TextField(L.t(sv: "Skriv ett meddelande...", nb: "Skriv en melding..."), text: $messageText, axis: .vertical)
                 .lineLimit(1...4)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -333,7 +333,7 @@ class BookingChatViewModel: ObservableObject {
             try? await TrainerService.shared.markMessagesAsRead(bookingId: booking.id)
         } catch {
             print("❌ Failed to load messages: \(error)")
-            errorMessage = "Kunde inte hämta meddelanden: \(error.localizedDescription)"
+            errorMessage = L.t(sv: "Kunde inte hämta meddelanden: \(error.localizedDescription)", nb: "Kunne ikke hente meldinger: \(error.localizedDescription)")
         }
         
         isLoading = false
@@ -346,7 +346,7 @@ class BookingChatViewModel: ObservableObject {
             await loadMessages()
         } catch {
             print("❌ Failed to send message: \(error)")
-            errorMessage = "Kunde inte skicka meddelande"
+            errorMessage = L.t(sv: "Kunde inte skicka meddelande", nb: "Kunne ikke sende melding")
         }
     }
     

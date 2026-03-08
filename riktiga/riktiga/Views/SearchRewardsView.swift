@@ -26,7 +26,7 @@ struct SearchRewardsView: View {
                         .foregroundColor(.gray)
                         .font(.system(size: 16))
                     
-                    TextField("Sök efter belöningar...", text: $searchText)
+                    TextField(L.t(sv: "Sök efter belöningar...", nb: "Søk etter belønninger..."), text: $searchText)
                         .font(.system(size: 16))
                         .textFieldStyle(PlainTextFieldStyle())
                 }
@@ -44,11 +44,11 @@ struct SearchRewardsView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
                         
-                        Text("Inga resultat hittades")
+                        Text(L.t(sv: "Inga resultat hittades", nb: "Ingen resultater funnet"))
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.gray)
                         
-                        Text("Prova att söka efter ett annat ord")
+                        Text(L.t(sv: "Prova att söka efter ett annat ord", nb: "Prøv å søke etter et annet ord"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                     }
@@ -68,11 +68,11 @@ struct SearchRewardsView: View {
                     }
                 }
             }
-            .navigationTitle("Sök belöningar")
+            .navigationTitle(L.t(sv: "Sök belöningar", nb: "Søk belønninger"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }

@@ -15,11 +15,11 @@ struct NewTerritoryCelebrationView: View {
                 .onTapGesture { onComplete() }
             
             VStack(spacing: 16) {
-                Text("Nytt område!")
+                Text(L.t(sv: "Nytt område!", nb: "Nytt område!"))
                     .font(.system(size: 28, weight: .black))
                     .foregroundColor(.white)
                 
-                Text("Du har tagit över ett område.")
+                Text(L.t(sv: "Du har tagit över ett område.", nb: "Du har tatt over et område."))
                     .foregroundColor(.white.opacity(0.8))
                 
                 Button {
@@ -33,7 +33,7 @@ struct NewTerritoryCelebrationView: View {
                     }
                     onComplete()
                 } label: {
-                    Text("Visa på kartan")
+                    Text(L.t(sv: "Visa på kartan", nb: "Vis på kartet"))
                         .font(.system(size: 15, weight: .bold))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
@@ -42,7 +42,7 @@ struct NewTerritoryCelebrationView: View {
                         .clipShape(Capsule())
                 }
                 
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     onComplete()
                 }
                 .foregroundColor(.white.opacity(0.8))

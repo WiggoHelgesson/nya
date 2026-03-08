@@ -28,41 +28,41 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .name: return "Välj användarnamn"
-        case .profilePicture: return "Lägg till profilbild"
-        case .gender: return "Välj ditt kön"
-        case .workouts: return "Hur många pass tränar du per vecka?"
-        case .heightWeight: return "Längd & vikt"
-        case .birthday: return "När är du född?"
-        case .goal: return "Vad är ditt mål?"
-        case .results: return "Up&Down gör det lättare för dig att nå dina mål"
-        case .targetWeight: return "Vad är din målvikt?"
-        case .motivation: return "Få 2x så mycket motivation genom att träna med Up&Down"
-        case .referralCode: return "Ange kod (valfritt)"
-        case .rating: return "Betygsätt oss"
-        case .progress: return "Att nå sina mål tar lite tid men du fixar det!"
-        case .appleHealth: return "Aktivera Apple Health"
-        case .notifications: return "Aktivera notiser"
+        case .name: return L.t(sv: "Välj användarnamn", nb: "Velg brukernavn")
+        case .profilePicture: return L.t(sv: "Lägg till profilbild", nb: "Legg til profilbilde")
+        case .gender: return L.t(sv: "Välj ditt kön", nb: "Velg ditt kjønn")
+        case .workouts: return L.t(sv: "Hur många pass tränar du per vecka?", nb: "Hvor mange økter trener du per uke?")
+        case .heightWeight: return L.t(sv: "Längd & vikt", nb: "Høyde & vekt")
+        case .birthday: return L.t(sv: "När är du född?", nb: "Når er du født?")
+        case .goal: return L.t(sv: "Vad är ditt mål?", nb: "Hva er målet ditt?")
+        case .results: return L.t(sv: "Up&Down gör det lättare för dig att nå dina mål", nb: "Up&Down gjør det lettere for deg å nå målene dine")
+        case .targetWeight: return L.t(sv: "Vad är din målvikt?", nb: "Hva er målvekten din?")
+        case .motivation: return L.t(sv: "Få 2x så mycket motivation genom att träna med Up&Down", nb: "Få 2x så mye motivasjon ved å trene med Up&Down")
+        case .referralCode: return L.t(sv: "Ange kod (valfritt)", nb: "Skriv inn kode (valgfritt)")
+        case .rating: return L.t(sv: "Betygsätt oss", nb: "Gi oss en vurdering")
+        case .progress: return L.t(sv: "Att nå sina mål tar lite tid men du fixar det!", nb: "Å nå målene sine tar litt tid, men du klarer det!")
+        case .appleHealth: return L.t(sv: "Aktivera Apple Health", nb: "Aktiver Apple Health")
+        case .notifications: return L.t(sv: "Aktivera notiser", nb: "Aktiver varsler")
         }
     }
     
     var subtitle: String {
         switch self {
-        case .name: return "Välj ett användarnamn som visas för andra."
-        case .profilePicture: return "Allt blir roligare med en profilbild."
-        case .gender: return "Detta används för att kalibrera din personliga plan."
-        case .workouts: return "Detta används för att kalibrera din personliga plan."
-        case .heightWeight: return "Detta används för att kalibrera din personliga plan."
-        case .birthday: return "Detta används för att kalibrera din personliga plan."
-        case .goal: return "Detta hjälper oss skapa en plan för ditt kaloriintag."
+        case .name: return L.t(sv: "Välj ett användarnamn som visas för andra.", nb: "Velg et brukernavn som vises for andre.")
+        case .profilePicture: return L.t(sv: "Allt blir roligare med en profilbild.", nb: "Alt blir morsommere med et profilbilde.")
+        case .gender: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .workouts: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .heightWeight: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .birthday: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .goal: return L.t(sv: "Detta hjälper oss skapa en plan för ditt kaloriintag.", nb: "Dette hjelper oss å lage en plan for kaloriinntaket ditt.")
         case .results: return ""
-        case .targetWeight: return "Välj den vikt du vill uppnå."
+        case .targetWeight: return L.t(sv: "Välj den vikt du vill uppnå.", nb: "Velg vekten du vil oppnå.")
         case .motivation: return ""
-        case .referralCode: return "Du kan hoppa över detta steg"
+        case .referralCode: return L.t(sv: "Du kan hoppa över detta steg", nb: "Du kan hoppe over dette steget")
         case .rating: return ""
         case .progress: return ""
-        case .appleHealth: return "Appen behöver hälsodata för att logga dina pass och steg."
-        case .notifications: return "Så vi kan påminna dig om mål och belöningar."
+        case .appleHealth: return L.t(sv: "Appen behöver hälsodata för att logga dina pass och steg.", nb: "Appen trenger helsedata for å logge øktene og skrittene dine.")
+        case .notifications: return L.t(sv: "Så vi kan påminna dig om mål och belöningar.", nb: "Slik at vi kan minne deg på mål og belønninger.")
         }
     }
 }
@@ -230,7 +230,7 @@ struct AuthenticationView: View {
             
             let healthAuthorized = HealthKitManager.shared.isHealthDataAuthorized()
             data.healthAuthorized = healthAuthorized
-            healthRequestStatus = healthAuthorized ? "Apple Health aktiverad" : nil
+            healthRequestStatus = healthAuthorized ? L.t(sv: "Apple Health aktiverad", nb: "Apple Health aktivert") : nil
             
             // Set up Apple Sign In callback
             authViewModel.onAppleSignInComplete = { success, _, appleFirstName, appleLastName in
@@ -275,7 +275,7 @@ struct AuthenticationView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             let authorized = HealthKitManager.shared.isHealthDataAuthorized()
             data.healthAuthorized = authorized
-            healthRequestStatus = authorized ? "Apple Health aktiverad" : nil
+            healthRequestStatus = authorized ? L.t(sv: "Apple Health aktiverad", nb: "Apple Health aktivert") : nil
         }
     }
     
@@ -319,7 +319,7 @@ struct AuthenticationView: View {
                         showLanding = false
                         showSignupForm = true
                     } label: {
-                        Text("Skapa konto helt gratis")
+                        Text(L.t(sv: "Skapa konto helt gratis", nb: "Opprett konto helt gratis"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(buttonTextColor)
                             .frame(maxWidth: .infinity)
@@ -333,7 +333,7 @@ struct AuthenticationView: View {
                         showLanding = false
                         showSignupForm = false
                     } label: {
-                        Text("Logga in")
+                        Text(L.t(sv: "Logga in", nb: "Logg inn"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(primaryTextColor)
                     }
@@ -366,7 +366,7 @@ struct AuthenticationView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    Text("Logga in på Up&Down")
+                    Text(L.t(sv: "Logga in på Up&Down", nb: "Logg inn på Up&Down"))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(primaryTextColor)
                         .padding(.top, 8)
@@ -376,7 +376,7 @@ struct AuthenticationView: View {
                     
                     HStack {
                         Rectangle().fill(Color(.systemGray4)).frame(height: 1)
-                        Text("eller").font(.system(size: 14)).foregroundColor(.gray).padding(.horizontal, 16)
+                        Text(L.t(sv: "eller", nb: "eller")).font(.system(size: 14)).foregroundColor(.gray).padding(.horizontal, 16)
                         Rectangle().fill(Color(.systemGray4)).frame(height: 1)
                     }
                     
@@ -386,7 +386,7 @@ struct AuthenticationView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20, weight: .medium))
-                            Text("Logga in med Apple")
+                            Text(L.t(sv: "Logga in med Apple", nb: "Logg inn med Apple"))
                                 .font(.system(size: 17, weight: .medium))
                             Spacer()
                         }
@@ -405,7 +405,7 @@ struct AuthenticationView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 20, height: 20)
-                            Text("Logga in med Google")
+                            Text(L.t(sv: "Logga in med Google", nb: "Logg inn med Google"))
                                 .font(.system(size: 17, weight: .medium))
                             Spacer()
                         }
@@ -416,7 +416,7 @@ struct AuthenticationView: View {
                     }
                     .disabled(authViewModel.isLoading)
                     
-                    Text("Genom att fortsätta godkänner du våra [användarvillkor](https://wiggio.se/privacy) och [integritetspolicy](https://wiggio.se/privacy).")
+                    Text(L.t(sv: "Genom att fortsätta godkänner du våra [användarvillkor](https://wiggio.se/privacy) och [integritetspolicy](https://wiggio.se/privacy).", nb: "Ved å fortsette godtar du våre [brukervilkår](https://wiggio.se/privacy) og [personvern](https://wiggio.se/privacy)."))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .tint(primaryTextColor)
@@ -449,7 +449,7 @@ struct AuthenticationView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text("Skapa konto")
+                    Text(L.t(sv: "Skapa konto", nb: "Opprett konto"))
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(primaryTextColor)
                         .padding(.top, 8)
@@ -460,7 +460,7 @@ struct AuthenticationView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20, weight: .medium))
-                            Text("Skapa konto med Apple")
+                            Text(L.t(sv: "Skapa konto med Apple", nb: "Opprett konto med Apple"))
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(primaryTextColor)
@@ -478,7 +478,7 @@ struct AuthenticationView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 20, height: 20)
-                            Text("Skapa konto med Google")
+                            Text(L.t(sv: "Skapa konto med Google", nb: "Opprett konto med Google"))
                                 .font(.system(size: 17, weight: .medium))
                         }
                         .foregroundColor(primaryTextColor)
@@ -490,13 +490,13 @@ struct AuthenticationView: View {
                     
                     HStack {
                         Rectangle().fill(Color(.systemGray4)).frame(height: 1)
-                        Text("eller").font(.system(size: 14)).foregroundColor(.gray).padding(.horizontal, 16)
+                        Text(L.t(sv: "eller", nb: "eller")).font(.system(size: 14)).foregroundColor(.gray).padding(.horizontal, 16)
                         Rectangle().fill(Color(.systemGray4)).frame(height: 1)
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("E-post").font(.system(size: 15)).foregroundColor(primaryTextColor)
-                        TextField("E-post", text: $signupEmail)
+                        Text(L.t(sv: "E-post", nb: "E-post")).font(.system(size: 15)).foregroundColor(primaryTextColor)
+                        TextField(L.t(sv: "E-post", nb: "E-post"), text: $signupEmail)
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -505,8 +505,8 @@ struct AuthenticationView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Lösenord").font(.system(size: 15)).foregroundColor(primaryTextColor)
-                        SecureField("Minst 6 tecken", text: $signupPassword)
+                        Text(L.t(sv: "Lösenord", nb: "Passord")).font(.system(size: 15)).foregroundColor(primaryTextColor)
+                        SecureField(L.t(sv: "Minst 6 tecken", nb: "Minst 6 tegn"), text: $signupPassword)
                             .padding(14)
                             .background(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 1))
                     }
@@ -517,7 +517,7 @@ struct AuthenticationView: View {
                         if authViewModel.isLoading {
                             ProgressView().tint(buttonTextColor).frame(maxWidth: .infinity).padding(.vertical, 16).background(buttonBackgroundColor).clipShape(Capsule())
                         } else {
-                            Text("Registrera dig")
+                            Text(L.t(sv: "Registrera dig", nb: "Registrer deg"))
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(canCreateAccount ? buttonTextColor : .gray)
                                 .frame(maxWidth: .infinity)
@@ -532,7 +532,7 @@ struct AuthenticationView: View {
                         Text(authViewModel.errorMessage).font(.system(size: 14)).foregroundColor(.red)
                     }
                     
-                    Text("Genom att fortsätta godkänner du våra [Användarvillkor](https://www.upanddownapp.com/terms) och [Integritetspolicy](https://www.upanddownapp.com/privacy).")
+                    Text(L.t(sv: "Genom att fortsätta godkänner du våra [Användarvillkor](https://www.upanddownapp.com/terms) och [Integritetspolicy](https://www.upanddownapp.com/privacy).", nb: "Ved å fortsette godtar du våre [Brukervilkår](https://www.upanddownapp.com/terms) og [Personvern](https://www.upanddownapp.com/privacy)."))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .tint(primaryTextColor)
@@ -675,10 +675,10 @@ struct AuthenticationView: View {
     private var nameStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Användarnamn")
+                Text(L.t(sv: "Användarnamn", nb: "Brukernavn"))
                     .font(.system(size: 15))
                     .foregroundColor(primaryTextColor)
-                TextField("t.ex. johan_123", text: $data.firstName)
+                TextField(L.t(sv: "t.ex. johan_123", nb: "f.eks. johan_123"), text: $data.firstName)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(16)
@@ -688,7 +688,7 @@ struct AuthenticationView: View {
                     }
             }
             
-            Text("Detta är namnet som visas för andra användare i appen.")
+            Text(L.t(sv: "Detta är namnet som visas för andra användare i appen.", nb: "Dette er navnet som vises for andre brukere i appen."))
                 .font(.system(size: 13))
                 .foregroundColor(.gray)
             
@@ -698,19 +698,19 @@ struct AuthenticationView: View {
                     if isCheckingUsername {
                         ProgressView()
                             .scaleEffect(0.8)
-                        Text("Kontrollerar tillgänglighet...")
+                        Text(L.t(sv: "Kontrollerar tillgänglighet...", nb: "Sjekker tilgjengelighet..."))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                     } else if usernameIsTaken {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.red)
-                        Text("Användarnamnet \"\(data.firstName)\" är redan taget")
+                        Text(L.t(sv: "Användarnamnet \"\(data.firstName)\" är redan taget", nb: "Brukernavnet \"\(data.firstName)\" er allerede tatt"))
                             .font(.system(size: 14))
                             .foregroundColor(.red)
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("Användarnamnet är tillgängligt")
+                        Text(L.t(sv: "Användarnamnet är tillgängligt", nb: "Brukernavnet er tilgjengelig"))
                             .font(.system(size: 14))
                             .foregroundColor(.green)
                     }
@@ -719,7 +719,7 @@ struct AuthenticationView: View {
                 .animation(.easeInOut(duration: 0.2), value: isCheckingUsername)
                 .animation(.easeInOut(duration: 0.2), value: usernameIsTaken)
             } else {
-                Text("Din profil är offentlig som standard.")
+                Text(L.t(sv: "Din profil är offentlig som standard.", nb: "Profilen din er offentlig som standard."))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -730,7 +730,7 @@ struct AuthenticationView: View {
     private var profilePictureStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Profilbild")
+                Text(L.t(sv: "Profilbild", nb: "Profilbilde"))
                     .font(.system(size: 15))
                     .foregroundColor(primaryTextColor)
                 
@@ -772,11 +772,11 @@ struct AuthenticationView: View {
                         
                         // Text beside the image
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(selectedProfileImage == nil ? "Lägg till foto" : "Byt foto")
+                            Text(selectedProfileImage == nil ? L.t(sv: "Lägg till foto", nb: "Legg til bilde") : L.t(sv: "Byt foto", nb: "Bytt bilde"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            Text("Tryck för att välja från biblioteket")
+                            Text(L.t(sv: "Tryck för att välja från biblioteket", nb: "Trykk for å velge fra biblioteket"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                         }
@@ -809,7 +809,7 @@ struct AuthenticationView: View {
                 }
             }
             
-            Text("Din profilbild visas för dina vänner på Up&Down.")
+            Text(L.t(sv: "Din profilbild visas för dina vänner på Up&Down.", nb: "Profilbildet ditt vises for vennene dine på Up&Down."))
                 .font(.system(size: 14))
                 .foregroundColor(.gray)
         }
@@ -826,7 +826,7 @@ struct AuthenticationView: View {
             
             // Referral code input with Submit button
             HStack(spacing: 12) {
-                TextField("Kod", text: $referralCodeInput)
+                TextField(L.t(sv: "Kod", nb: "Kode"), text: $referralCodeInput)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .padding(.horizontal, 16)
@@ -844,7 +844,7 @@ struct AuthenticationView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Skicka")
+                        Text(L.t(sv: "Skicka", nb: "Send"))
                             .font(.system(size: 16, weight: .semibold))
                     }
                 }
@@ -862,7 +862,7 @@ struct AuthenticationView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Kod aktiverad!")
+                    Text(L.t(sv: "Kod aktiverad!", nb: "Kode aktivert!"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.green)
                 }
@@ -870,7 +870,7 @@ struct AuthenticationView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.red)
-                    Text("Koden hittades inte")
+                    Text(L.t(sv: "Koden hittades inte", nb: "Koden ble ikke funnet"))
                         .font(.system(size: 14))
                         .foregroundColor(.red)
                 }
@@ -924,7 +924,7 @@ struct AuthenticationView: View {
                                 }
                             }
                             
-                            Text("50+ AppStore betyg")
+                            Text(L.t(sv: "50+ AppStore betyg", nb: "50+ AppStore vurderinger"))
                                 .font(.system(size: 14))
                                 .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.4))
                         }
@@ -944,7 +944,7 @@ struct AuthenticationView: View {
                 
                 // "Made for people like you" section
                 VStack(spacing: 16) {
-                    Text("Up&Down skapades för\nmänniskor som du")
+                    Text(L.t(sv: "Up&Down skapades för\nmänniskor som du", nb: "Up&Down ble laget for\nmennesker som deg"))
                         .font(.system(size: 24, weight: .bold))
                         .multilineTextAlignment(.center)
                         .foregroundColor(primaryTextColor)
@@ -961,7 +961,7 @@ struct AuthenticationView: View {
                         }
                     }
                     
-                    Text("4k+ Up&Down användare")
+                    Text(L.t(sv: "4k+ Up&Down användare", nb: "4k+ Up&Down brukere"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
@@ -971,12 +971,12 @@ struct AuthenticationView: View {
                 VStack(spacing: 12) {
                     OnboardingReviewCardSimple(
                         name: "Biffoli1",
-                        review: "Laddade ner appen i sommras och sen dess har jag alltid använt den när jag har gymmat. Grymt bra sätt att tracka sina pass samtidigt som man blir belönad för det, riktigt bra har inte sett ngn liknande app innan."
+                        review: L.t(sv: "Laddade ner appen i sommras och sen dess har jag alltid använt den när jag har gymmat. Grymt bra sätt att tracka sina pass samtidigt som man blir belönad för det, riktigt bra har inte sett ngn liknande app innan.", nb: "Lastet ned appen i sommer og siden da har jeg alltid brukt den når jeg har trent. Kjempebra måte å registrere øktene sine på samtidig som man blir belønnet for det, virkelig bra har ikke sett noen lignende app før.")
                     )
                     
                     OnboardingReviewCardSimple(
                         name: "Frank Höglund",
-                        review: "Jag har använt appen i någon månad nu och tycker verkligen att det har gett mig motivation både att hålla uppe min gym träning men framförallt har det hjälpt mig att tracka mina kalorier eftersom det är så lätt."
+                        review: L.t(sv: "Jag har använt appen i någon månad nu och tycker verkligen att det har gett mig motivation både att hålla uppe min gym träning men framförallt har det hjälpt mig att tracka mina kalorier eftersom det är så lätt.", nb: "Jeg har brukt appen i noen måneder nå og synes virkelig det har gitt meg motivasjon både til å holde oppe gymtreningen min, men fremfor alt har det hjulpet meg å registrere kaloriene mine siden det er så lett.")
                     )
                 }
             }
@@ -1003,7 +1003,7 @@ struct AuthenticationView: View {
             
             // Progress graph card
             VStack(spacing: 20) {
-                Text("Din resa")
+                Text(L.t(sv: "Din resa", nb: "Din reise"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1087,22 +1087,22 @@ struct AuthenticationView: View {
                 
                 // Day labels
                 HStack {
-                    Text("3 Dagar")
+                    Text(L.t(sv: "3 Dagar", nb: "3 Dager"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                     Spacer()
-                    Text("7 Dagar")
+                    Text(L.t(sv: "7 Dagar", nb: "7 Dager"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                     Spacer()
-                    Text("30 Dagar")
+                    Text(L.t(sv: "30 Dagar", nb: "30 Dager"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
                 .padding(.horizontal, 30)
                 
                 // Description
-                Text("Baserat på våra tidigare användare så är det viktigt att man håller igång i ungefär en månad innan resultaten kickar in.")
+                Text(L.t(sv: "Baserat på våra tidigare användare så är det viktigt att man håller igång i ungefär en månad innan resultaten kickar in.", nb: "Basert på våre tidligere brukere er det viktig at man holder det gående i omtrent en måned før resultatene slår inn."))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -1167,9 +1167,9 @@ struct AuthenticationView: View {
     private var genderStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 40)
-            genderButton(title: "Man", value: "male")
-            genderButton(title: "Kvinna", value: "female")
-            genderButton(title: "Annat", value: "other")
+            genderButton(title: L.t(sv: "Man", nb: "Mann"), value: "male")
+            genderButton(title: L.t(sv: "Kvinna", nb: "Kvinne"), value: "female")
+            genderButton(title: L.t(sv: "Annat", nb: "Annet"), value: "other")
         }
     }
     
@@ -1192,9 +1192,9 @@ struct AuthenticationView: View {
     private var workoutsStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 20)
-            workoutButton(range: "0-2", description: "Tränar då och då", icon: "circle.fill", value: "0-2")
-            workoutButton(range: "3-5", description: "Några pass i veckan", icon: "circle.grid.2x1.fill", value: "3-5")
-            workoutButton(range: "6+", description: "Dedikerad atlet", icon: "circle.grid.3x3.fill", value: "6+")
+            workoutButton(range: "0-2", description: L.t(sv: "Tränar då och då", nb: "Trener av og til"), icon: "circle.fill", value: "0-2")
+            workoutButton(range: "3-5", description: L.t(sv: "Några pass i veckan", nb: "Noen økter i uken"), icon: "circle.grid.2x1.fill", value: "3-5")
+            workoutButton(range: "6+", description: L.t(sv: "Dedikerad atlet", nb: "Dedikert atlet"), icon: "circle.grid.3x3.fill", value: "6+")
         }
     }
     
@@ -1232,8 +1232,8 @@ struct AuthenticationView: View {
             
             HStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text("Längd").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
-                    Picker("Längd", selection: $data.heightCm) {
+                    Text(L.t(sv: "Längd", nb: "Høyde")).font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
+                    Picker(L.t(sv: "Längd", nb: "Høyde"), selection: $data.heightCm) {
                         ForEach(140...220, id: \.self) { cm in
                             Text("\(cm) cm").tag(cm)
                         }
@@ -1244,8 +1244,8 @@ struct AuthenticationView: View {
                 .frame(maxWidth: .infinity)
                 
                 VStack(spacing: 8) {
-                    Text("Vikt").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
-                    Picker("Vikt", selection: Binding(
+                    Text(L.t(sv: "Vikt", nb: "Vekt")).font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
+                    Picker(L.t(sv: "Vikt", nb: "Vekt"), selection: Binding(
                         get: { Int(data.weightKg) },
                         set: { data.weightKg = Double($0) }
                     )) {
@@ -1274,9 +1274,9 @@ struct AuthenticationView: View {
     private var goalStepContent: some View {
                 VStack(spacing: 12) {
             Spacer().frame(height: 40)
-            goalButton(title: "Gå ner i vikt", value: "lose")
-            goalButton(title: "Behålla vikt", value: "maintain")
-            goalButton(title: "Gå upp i vikt", value: "gain")
+            goalButton(title: L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt"), value: "lose")
+            goalButton(title: L.t(sv: "Behålla vikt", nb: "Beholde vekt"), value: "maintain")
+            goalButton(title: L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt"), value: "gain")
         }
     }
     
@@ -1304,7 +1304,7 @@ struct AuthenticationView: View {
             
             // Graph card
             VStack(alignment: .leading, spacing: 16) {
-                Text("Din vikt")
+                Text(L.t(sv: "Din vikt", nb: "Din vekt"))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(primaryTextColor)
                 
@@ -1365,8 +1365,7 @@ struct AuthenticationView: View {
                         .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                         .animation(.easeOut(duration: 1.0).delay(0.3), value: showResultsGraph)
                         
-                        // "Traditionell diet" label
-                        Text("Traditionell diet")
+                        Text(L.t(sv: "Traditionell diet", nb: "Tradisjonell diett"))
                             .font(.system(size: 12))
                             .foregroundColor(.red.opacity(0.8))
                             .offset(x: width * 0.55, y: height * 0.35)
@@ -1446,7 +1445,7 @@ struct AuthenticationView: View {
                         Text("Up&Down")
                             .font(.system(size: 12, weight: .semibold))
                         
-                        Text("Vikt")
+                        Text(L.t(sv: "Vikt", nb: "Vekt"))
                             .font(.system(size: 10))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
@@ -1463,11 +1462,11 @@ struct AuthenticationView: View {
                 
                 // X-axis labels
                 HStack {
-                    Text("Månad 1")
+                    Text(L.t(sv: "Månad 1", nb: "Måned 1"))
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                     Spacer()
-                    Text("Månad 6")
+                    Text(L.t(sv: "Månad 6", nb: "Måned 6"))
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                 }
@@ -1476,7 +1475,7 @@ struct AuthenticationView: View {
                 .animation(.easeOut(duration: 0.5).delay(0.6), value: showResultsGraph)
                 
                 // Bottom text
-                Text("80% av Up&Down-användare behåller sin viktnedgång även 6 månader senare")
+                Text(L.t(sv: "80% av Up&Down-användare behåller sin viktnedgång även 6 månader senare", nb: "80% av Up&Down-brukere beholder vektnedgangen sin selv 6 måneder senere"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -1513,16 +1512,16 @@ struct AuthenticationView: View {
         VStack(spacing: 24) {
             Spacer().frame(height: 20)
             
-            Text(data.goal == "lose" ? "Gå ner i vikt" : data.goal == "gain" ? "Gå upp i vikt" : "Behåll vikt")
+            Text(data.goal == "lose" ? L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt") : data.goal == "gain" ? L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt") : L.t(sv: "Behåll vikt", nb: "Behold vekt"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.gray)
             
             HStack {
-                Text("Nuvarande vikt:").font(.system(size: 14)).foregroundColor(.gray)
+                Text(L.t(sv: "Nuvarande vikt:", nb: "Nåværende vekt:")).font(.system(size: 14)).foregroundColor(.gray)
                 Text("\(Int(data.weightKg)) kg").font(.system(size: 14, weight: .semibold)).foregroundColor(primaryTextColor)
             }
             
-            Picker("Målvikt", selection: Binding(
+            Picker(L.t(sv: "Målvikt", nb: "Målvekt"), selection: Binding(
                 get: { Int(data.targetWeightKg) },
                 set: { data.targetWeightKg = Double($0) }
             )) {
@@ -1538,7 +1537,7 @@ struct AuthenticationView: View {
                 HStack(spacing: 8) {
                     Image(systemName: diff < 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
                         .foregroundColor(diff < 0 ? .green : .orange)
-                    Text("\(abs(diff)) kg \(diff < 0 ? "att gå ner" : "att gå upp")")
+                    Text("\(abs(diff)) kg \(diff < 0 ? L.t(sv: "att gå ner", nb: "å gå ned") : L.t(sv: "att gå upp", nb: "å gå opp"))")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(primaryTextColor)
                 }
@@ -1559,9 +1558,8 @@ struct AuthenticationView: View {
             VStack(spacing: 24) {
                 // Bar chart comparison
                 HStack(spacing: 16) {
-                    // Without Up&Down
                     VStack(spacing: 12) {
-                        Text("Utan")
+                        Text(L.t(sv: "Utan", nb: "Uten"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                         Text("Up&Down")
@@ -1584,9 +1582,8 @@ struct AuthenticationView: View {
                     }
                     .frame(height: 200)
                     
-                    // With Up&Down
                     VStack(spacing: 12) {
-                        Text("Med")
+                        Text(L.t(sv: "Med", nb: "Med"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                         Text("Up&Down")
@@ -1611,8 +1608,7 @@ struct AuthenticationView: View {
                 }
                 .padding(.horizontal, 20)
                 
-                // Description text
-                Text("Genom att dela med vänner, få belöningar, se statistik & tracka dina pass håller våra användare igång längre jämfört med innan de började träna med Up&Down.")
+                Text(L.t(sv: "Genom att dela med vänner, få belöningar, se statistik & tracka dina pass håller våra användare igång längre jämfört med innan de började träna med Up&Down.", nb: "Ved å dele med venner, få belønninger, se statistikk og registrere øktene dine holder brukerne våre det gående lenger sammenlignet med før de begynte å trene med Up&Down."))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -1659,8 +1655,8 @@ struct AuthenticationView: View {
                         .padding(.top, 8)
 
             Text(data.healthAuthorized
-                             ? "Apple Health är aktiverat. Du kan gå vidare."
-                 : "Tryck på Fortsätt för att aktivera Apple Health.")
+                             ? L.t(sv: "Apple Health är aktiverat. Du kan gå vidare.", nb: "Apple Health er aktivert. Du kan gå videre.")
+                 : L.t(sv: "Tryck på Fortsätt för att aktivera Apple Health.", nb: "Trykk på Fortsett for å aktivere Apple Health."))
                             .multilineTextAlignment(.center)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(secondaryTextColor)
@@ -1685,15 +1681,15 @@ struct AuthenticationView: View {
                 .foregroundColor(primaryTextColor)
                 .frame(maxWidth: .infinity)
             
-                    Text("Få påminnelser om pass och nya belöningar.")
+                    Text(L.t(sv: "Få påminnelser om pass och nya belöningar.", nb: "Få påminnelser om økter og nye belønninger."))
                 .font(.system(size: 16))
                 .foregroundColor(secondaryTextColor)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
             
             Text(data.notificationsAuthorized
-                 ? "Notiser är aktiverade – tryck Fortsätt."
-                 : "Tryck på Fortsätt för att aktivera notiser.")
+                 ? L.t(sv: "Notiser är aktiverade – tryck Fortsätt.", nb: "Varsler er aktivert – trykk Fortsett.")
+                 : L.t(sv: "Tryck på Fortsätt för att aktivera notiser.", nb: "Trykk på Fortsett for å aktivere varsler."))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(secondaryTextColor)
                 .multilineTextAlignment(.center)
@@ -1719,7 +1715,7 @@ struct AuthenticationView: View {
                 .contentTransition(.numericText())
                 .animation(.easeOut(duration: 0.1), value: calculationProgress)
             
-            Text("Vi skapar allt\nåt dig")
+            Text(L.t(sv: "Vi skapar allt\nåt dig", nb: "Vi lager alt\nfor deg"))
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(primaryTextColor)
                 .multilineTextAlignment(.center)
@@ -1743,15 +1739,15 @@ struct AuthenticationView: View {
             Spacer()
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Daglig rekommendation för")
+                Text(L.t(sv: "Daglig rekommendation för", nb: "Daglig anbefaling for"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(primaryTextColor)
                 
-                checklistItem(text: "Kalorier", isChecked: calculationProgress >= 20)
-                checklistItem(text: "Kolhydrater", isChecked: calculationProgress >= 40)
-                checklistItem(text: "Protein", isChecked: calculationProgress >= 60)
-                checklistItem(text: "Fett", isChecked: calculationProgress >= 80)
-                checklistItem(text: "Hälsopoäng", isChecked: calculationProgress >= 100)
+                checklistItem(text: L.t(sv: "Kalorier", nb: "Kalorier"), isChecked: calculationProgress >= 20)
+                checklistItem(text: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), isChecked: calculationProgress >= 40)
+                checklistItem(text: L.t(sv: "Protein", nb: "Protein"), isChecked: calculationProgress >= 60)
+                checklistItem(text: L.t(sv: "Fett", nb: "Fett"), isChecked: calculationProgress >= 80)
+                checklistItem(text: L.t(sv: "Hälsopoäng", nb: "Helsepoeng"), isChecked: calculationProgress >= 100)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 60)
@@ -1793,17 +1789,17 @@ struct AuthenticationView: View {
                         .font(.system(size: 50))
                         .foregroundColor(primaryTextColor)
                     
-                    Text("Grattis")
+                    Text(L.t(sv: "Grattis", nb: "Gratulerer"))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(primaryTextColor)
                     
-                    Text("din personliga plan är klar!")
+                    Text(L.t(sv: "din personliga plan är klar!", nb: "din personlige plan er klar!"))
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(primaryTextColor)
                 }
                 
                 VStack(spacing: 12) {
-                    Text("Du bör:")
+                    Text(L.t(sv: "Du bör:", nb: "Du bør:"))
                         .font(.system(size: 16))
                         .foregroundColor(.gray)
                     
@@ -1818,20 +1814,20 @@ struct AuthenticationView: View {
                 
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Daglig rekommendation")
+                        Text(L.t(sv: "Daglig rekommendation", nb: "Daglig anbefaling"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(primaryTextColor)
-                        Text("Du kan ändra detta när som helst")
+                        Text(L.t(sv: "Du kan ändra detta när som helst", nb: "Du kan endre dette når som helst"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                     }
                     .padding(.horizontal, 24)
                     
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        MacroResultCard(emoji: "🔥", title: "Kalorier", value: $data.dailyCalories, unit: "", progress: 0.75)
-                        MacroResultCard(emoji: "🌾", title: "Kolhydrater", value: $data.dailyCarbs, unit: "g", progress: 0.65)
-                        MacroResultCard(emoji: "🍗", title: "Protein", value: $data.dailyProtein, unit: "g", progress: 0.70)
-                        MacroResultCard(emoji: "🥑", title: "Fett", value: $data.dailyFat, unit: "g", progress: 0.55)
+                        MacroResultCard(emoji: "🔥", title: L.t(sv: "Kalorier", nb: "Kalorier"), value: $data.dailyCalories, unit: "", progress: 0.75)
+                        MacroResultCard(emoji: "🌾", title: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), value: $data.dailyCarbs, unit: "g", progress: 0.65)
+                        MacroResultCard(emoji: "🍗", title: L.t(sv: "Protein", nb: "Protein"), value: $data.dailyProtein, unit: "g", progress: 0.70)
+                        MacroResultCard(emoji: "🥑", title: L.t(sv: "Fett", nb: "Fett"), value: $data.dailyFat, unit: "g", progress: 0.55)
                     }
                     .padding(.horizontal, 24)
                 }
@@ -1841,7 +1837,7 @@ struct AuthenticationView: View {
                 Button {
                     completeOnboarding()
                 } label: {
-                    Text("Kom igång!")
+                    Text(L.t(sv: "Kom igång!", nb: "Kom i gang!"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(buttonTextColor)
                         .frame(maxWidth: .infinity)
@@ -1864,8 +1860,8 @@ struct AuthenticationView: View {
         dateFormatter.locale = Locale(identifier: "sv_SE")
         dateFormatter.dateFormat = "d MMMM"
         
-        let action = data.goal == "lose" ? "Gå ner" : data.goal == "gain" ? "Gå upp" : "Behåll"
-        return "\(action) \(Int(weightDiff)) kg till \(dateFormatter.string(from: targetDate))"
+        let action = data.goal == "lose" ? L.t(sv: "Gå ner", nb: "Gå ned") : data.goal == "gain" ? L.t(sv: "Gå upp", nb: "Gå opp") : L.t(sv: "Behåll", nb: "Behold")
+        return "\(action) \(Int(weightDiff)) kg \(L.t(sv: "till", nb: "til")) \(dateFormatter.string(from: targetDate))"
     }
     
     // MARK: - Username Validation
@@ -1941,9 +1937,9 @@ struct AuthenticationView: View {
     private func continueButtonText(for step: OnboardingStep) -> String {
         switch step {
         case .referralCode:
-            return "Hoppa över"
+            return L.t(sv: "Hoppa över", nb: "Hopp over")
         default:
-            return "Fortsätt"
+            return L.t(sv: "Fortsätt", nb: "Fortsett")
         }
     }
     
@@ -1967,7 +1963,7 @@ struct AuthenticationView: View {
                     DispatchQueue.main.async {
                         let authorized = HealthKitManager.shared.isHealthDataAuthorized()
                         data.healthAuthorized = authorized
-                        healthRequestStatus = authorized ? "Apple Health aktiverad" : nil
+                        healthRequestStatus = authorized ? L.t(sv: "Apple Health aktiverad", nb: "Apple Health aktivert") : nil
                         goToNextStep()
                     }
                 }
@@ -1979,7 +1975,7 @@ struct AuthenticationView: View {
                 NotificationManager.shared.requestAuthorization { granted in
                     DispatchQueue.main.async {
                         data.notificationsAuthorized = granted
-                        notificationsStatus = granted ? "Notiser aktiverade" : "Notiser nekades"
+                        notificationsStatus = granted ? L.t(sv: "Notiser aktiverade", nb: "Varsler aktivert") : L.t(sv: "Notiser nekades", nb: "Varsler nektet")
                         startCalculation()
                     }
                 }
@@ -2114,11 +2110,11 @@ struct AuthenticationView: View {
         }
         
         let steps = [
-            "Beräknar BMR...",
-            "Tillämpar aktivitetsnivå...",
-            "Optimerar makrofördelning...",
-            "Anpassar efter mål...",
-            "Färdigställer plan..."
+            L.t(sv: "Beräknar BMR...", nb: "Beregner BMR..."),
+            L.t(sv: "Tillämpar aktivitetsnivå...", nb: "Bruker aktivitetsnivå..."),
+            L.t(sv: "Optimerar makrofördelning...", nb: "Optimaliserer makrofordeling..."),
+            L.t(sv: "Anpassar efter mål...", nb: "Tilpasser etter mål..."),
+            L.t(sv: "Färdigställer plan...", nb: "Ferdigstiller plan...")
         ]
         
         var currentStepIndex = 0
@@ -2227,7 +2223,7 @@ struct AuthenticationView: View {
                 }
             } catch {
                 await MainActor.run {
-                    authViewModel.errorMessage = "Kunde inte skapa konto: \(error.localizedDescription)"
+                    authViewModel.errorMessage = L.t(sv: "Kunde inte skapa konto: \(error.localizedDescription)", nb: "Kunne ikke opprette konto: \(error.localizedDescription)")
                     authViewModel.isLoading = false
                 }
             }
@@ -2626,8 +2622,8 @@ struct LoginFormView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("E-post").font(.system(size: 14, weight: .medium)).foregroundColor(.black)
-                TextField("E-post", text: $email)
+                Text(L.t(sv: "E-post", nb: "E-post")).font(.system(size: 14, weight: .medium)).foregroundColor(.black)
+                TextField(L.t(sv: "E-post", nb: "E-post"), text: $email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
@@ -2637,12 +2633,12 @@ struct LoginFormView: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Lösenord").font(.system(size: 14, weight: .medium)).foregroundColor(.black)
+                Text(L.t(sv: "Lösenord", nb: "Passord")).font(.system(size: 14, weight: .medium)).foregroundColor(.black)
                 ZStack(alignment: .trailing) {
                     if isPasswordVisible {
-                        TextField("Lösenord", text: $password).textContentType(.password).padding(14).background(Color(.systemGray6)).cornerRadius(8)
+                        TextField(L.t(sv: "Lösenord", nb: "Passord"), text: $password).textContentType(.password).padding(14).background(Color(.systemGray6)).cornerRadius(8)
                     } else {
-                        SecureField("Lösenord", text: $password).textContentType(.password).padding(14).background(Color(.systemGray6)).cornerRadius(8)
+                        SecureField(L.t(sv: "Lösenord", nb: "Passord"), text: $password).textContentType(.password).padding(14).background(Color(.systemGray6)).cornerRadius(8)
                     }
                     Button { isPasswordVisible.toggle() } label: {
                         Image(systemName: isPasswordVisible ? "eye.slash.fill" : "eye.fill").foregroundColor(.gray).padding(.trailing, 14)
@@ -2654,7 +2650,7 @@ struct LoginFormView: View {
                 forgotPasswordEmail = email
                 showForgotPassword = true
             } label: {
-                Text("Glömt lösenord?").font(.system(size: 14, weight: .medium)).foregroundColor(.black.opacity(0.7)).underline()
+                Text(L.t(sv: "Glömt lösenord?", nb: "Glemt passord?")).font(.system(size: 14, weight: .medium)).foregroundColor(.black.opacity(0.7)).underline()
             }
             
             if !authViewModel.errorMessage.isEmpty {
@@ -2669,7 +2665,7 @@ struct LoginFormView: View {
                     if authViewModel.isLoading {
                         ProgressView().tint(.black.opacity(0.6))
                     } else {
-                        Text("Logga in").font(.system(size: 17, weight: .semibold)).foregroundColor(email.isEmpty || password.isEmpty ? .black.opacity(0.4) : .black)
+                        Text(L.t(sv: "Logga in", nb: "Logg inn")).font(.system(size: 17, weight: .semibold)).foregroundColor(email.isEmpty || password.isEmpty ? .black.opacity(0.4) : .black)
                     }
                     Spacer()
                 }
@@ -2714,13 +2710,13 @@ struct ForgotPasswordSheet: View {
             VStack(spacing: 24) {
                 VStack(spacing: 12) {
                     Image(systemName: "envelope.badge").font(.system(size: 50)).foregroundColor(.primary)
-                    Text("Återställ lösenord").font(.system(size: 24, weight: .bold))
-                    Text("Ange din e-postadress så skickar vi instruktioner för att återställa ditt lösenord.")
+                    Text(L.t(sv: "Återställ lösenord", nb: "Tilbakestill passord")).font(.system(size: 24, weight: .bold))
+                    Text(L.t(sv: "Ange din e-postadress så skickar vi instruktioner för att återställa ditt lösenord.", nb: "Skriv inn e-postadressen din, så sender vi instruksjoner for å tilbakestille passordet ditt."))
                         .font(.system(size: 15)).foregroundColor(.gray).multilineTextAlignment(.center).padding(.horizontal)
                 }
                 .padding(.top, 20)
                 
-                TextField("E-postadress", text: $email)
+                TextField(L.t(sv: "E-postadress", nb: "E-postadresse"), text: $email)
                     .textContentType(.emailAddress).keyboardType(.emailAddress).autocapitalization(.none)
                     .padding(14).background(Color(.systemGray6)).cornerRadius(12).padding(.horizontal, 24)
                 
@@ -2730,12 +2726,12 @@ struct ForgotPasswordSheet: View {
                 
                 if success {
                     Button { onDismiss() } label: {
-                        Text("Stäng").font(.system(size: 16, weight: .semibold)).foregroundColor(.white).frame(maxWidth: .infinity).padding(14).background(Color.black).cornerRadius(12)
+                        Text(L.t(sv: "Stäng", nb: "Lukk")).font(.system(size: 16, weight: .semibold)).foregroundColor(.white).frame(maxWidth: .infinity).padding(14).background(Color.black).cornerRadius(12)
                     }
                     .padding(.horizontal, 24)
                 } else {
                     Button { onReset() } label: {
-                        if isLoading { ProgressView().tint(.white) } else { Text("Skicka återställningslänk").font(.system(size: 16, weight: .semibold)) }
+                        if isLoading { ProgressView().tint(.white) } else { Text(L.t(sv: "Skicka återställningslänk", nb: "Send tilbakestillingslenke")).font(.system(size: 16, weight: .semibold)) }
                     }
                     .foregroundColor(.white).frame(maxWidth: .infinity).padding(14).background(email.isEmpty ? Color.gray : Color.black).cornerRadius(12).disabled(email.isEmpty || isLoading).padding(.horizontal, 24)
                 }
@@ -2745,7 +2741,7 @@ struct ForgotPasswordSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Avbryt") { onDismiss() }.foregroundColor(.primary)
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) { onDismiss() }.foregroundColor(.primary)
                 }
             }
         }
@@ -2796,11 +2792,11 @@ struct MacroResultCard: View {
         .background(isDarkMode ? Color(.systemGray6) : Color.white)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(isDarkMode ? 0 : 0.06), radius: 8, x: 0, y: 2)
-        .alert("Ändra \(title.lowercased())", isPresented: $isEditing) {
-            TextField("Värde", text: $editValue)
+        .alert(L.t(sv: "Ändra \(title.lowercased())", nb: "Endre \(title.lowercased())"), isPresented: $isEditing) {
+            TextField(L.t(sv: "Värde", nb: "Verdi"), text: $editValue)
                 .keyboardType(.numberPad)
-            Button("Avbryt", role: .cancel) { }
-            Button("Spara") {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Spara", nb: "Lagre")) {
                 if let newValue = Int(editValue), newValue > 0 {
                     value = newValue
                     let generator = UIImpactFeedbackGenerator(style: .light)
@@ -2808,7 +2804,7 @@ struct MacroResultCard: View {
                 }
             }
         } message: {
-            Text("Ange nytt värde för \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")")
+            Text(L.t(sv: "Ange nytt värde för \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")", nb: "Skriv inn ny verdi for \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")"))
         }
     }
 }

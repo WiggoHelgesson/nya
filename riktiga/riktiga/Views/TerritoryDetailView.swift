@@ -23,7 +23,7 @@ struct TerritoryDetailView: View {
     @State private var ownerProfile: TerritoryOwnerProfile?
     @State private var isLoadingProfile = true
     @State private var showUserProfile = false
-    @State private var locationName: String = "Sverige"
+    @State private var locationName: String = L.t(sv: "Sverige", nb: "Sverige")
     @State private var isInitialLoading = true
     
     var body: some View {
@@ -38,7 +38,7 @@ struct TerritoryDetailView: View {
                         .scaleEffect(1.2)
                         .tint(.white)
                     
-                    Text("Laddar...")
+                    Text(L.t(sv: "Laddar...", nb: "Laster..."))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -128,7 +128,7 @@ struct TerritoryDetailView: View {
                                     .fill(Color.gray.opacity(0.3))
                                     .frame(width: 100, height: 18)
                             } else {
-                                Text(ownerProfile?.name ?? "Okänd")
+                                Text(ownerProfile?.name ?? L.t(sv: "Okänd", nb: "Ukjent"))
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -138,7 +138,7 @@ struct TerritoryDetailView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
                             } else {
-                                Text("Nyligen")
+                                Text(L.t(sv: "Nyligen", nb: "Nylig"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
                             }
@@ -183,7 +183,7 @@ struct TerritoryDetailView: View {
                 // Duration
                 StatItem(
                     value: formatDuration(territory.sessionDuration),
-                    label: "Tid",
+                    label: L.t(sv: "Tid", nb: "Tid"),
                     color: .white
                 )
                 
@@ -208,7 +208,7 @@ struct TerritoryDetailView: View {
                 HStack {
                     Image(systemName: "square.grid.3x3.fill")
                         .foregroundColor(.cyan)
-                    Text("\(tileCount) rutor erövrade")
+                    Text(L.t(sv: "\(tileCount) rutor erövrade", nb: "\(tileCount) ruter erobret"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.cyan)
                 }
@@ -231,11 +231,11 @@ struct TerritoryDetailView: View {
     
     private var activityName: String {
         switch territory.activity {
-        case .running: return "Löppass"
-        case .golf: return "Golfrunda"
-        case .skiing: return "Skidpass"
-        case .hiking: return "Vandring"
-        default: return "Aktivitet"
+        case .running: return L.t(sv: "Löppass", nb: "Løpetur")
+        case .golf: return L.t(sv: "Golfrunda", nb: "Golfrunde")
+        case .skiing: return L.t(sv: "Skidpass", nb: "Skitur")
+        case .hiking: return L.t(sv: "Vandring", nb: "Fottur")
+        default: return L.t(sv: "Aktivitet", nb: "Aktivitet")
         }
     }
     
@@ -335,9 +335,9 @@ struct TerritoryDetailView: View {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(center)
             if let placemark = placemarks.first {
-                let name = placemark.locality ?? placemark.subAdministrativeArea ?? placemark.administrativeArea ?? "Sverige"
+                let name = placemark.locality ?? placemark.subAdministrativeArea ?? placemark.administrativeArea ?? L.t(sv: "Sverige", nb: "Sverige")
                 await MainActor.run {
-                    self.locationName = "\(name), Sverige"
+                    self.locationName = "\(name), " + L.t(sv: "Sverige", nb: "Sverige")
                 }
             }
         } catch {

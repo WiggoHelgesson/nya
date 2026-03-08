@@ -21,12 +21,12 @@ struct ForceUpdateView: View {
                     .foregroundColor(.primary)
                 
                 // Title
-                Text(isForced ? "Uppdatering krävs" : "Uppdatering tillgänglig")
+                Text(isForced ? L.t(sv: "Uppdatering krävs", nb: "Oppdatering kreves") : L.t(sv: "Uppdatering tillgänglig", nb: "Oppdatering tilgjengelig"))
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.primary)
                 
                 // Message
-                Text("Uppdatera appen via App Store för att använda den")
+                Text(L.t(sv: "Uppdatera appen via App Store för att använda den", nb: "Oppdater appen via App Store for å bruke den"))
                     .font(.system(size: 16))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -40,7 +40,7 @@ struct ForceUpdateView: View {
                     Button {
                         openAppStore()
                     } label: {
-                        Text("Uppdatera nu")
+                        Text(L.t(sv: "Uppdatera nu", nb: "Oppdater nå"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -54,7 +54,7 @@ struct ForceUpdateView: View {
                         Button {
                             dismiss()
                         } label: {
-                            Text("Senare")
+                            Text(L.t(sv: "Senare", nb: "Senere"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.gray)
                         }

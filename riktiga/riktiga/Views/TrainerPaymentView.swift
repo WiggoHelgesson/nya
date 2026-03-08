@@ -58,17 +58,17 @@ struct TrainerPaymentView: View {
                 
                 // Payment Info
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Boka lektion")
+                    Text(L.t(sv: "Boka lektion", nb: "Bestill time"))
                         .font(.headline)
                     
-                    Text("För att boka en lektion med \(trainer.name) behöver du betala bokningsavgiften.")
+                    Text(L.t(sv: "För att boka en lektion med \(trainer.name) behöver du betala bokningsavgiften.", nb: "For å bestille en time med \(trainer.name) må du betale bestillingsavgiften."))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
                     // Price breakdown
                     VStack(spacing: 12) {
                         HStack {
-                            Text(lessonType?.name ?? "Lektionsavgift")
+                            Text(lessonType?.name ?? L.t(sv: "Lektionsavgift", nb: "Timeavgift"))
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text("\(amount) kr")
@@ -78,7 +78,7 @@ struct TrainerPaymentView: View {
                         Divider()
                         
                         HStack {
-                            Text("Totalt")
+                            Text(L.t(sv: "Totalt", nb: "Totalt"))
                                 .font(.headline)
                             Spacer()
                             Text("\(amount) kr")
@@ -103,7 +103,7 @@ struct TrainerPaymentView: View {
                     ) {
                         HStack {
                             Image(systemName: "creditcard.fill")
-                            Text("Betala \(amount) kr")
+                            Text(L.t(sv: "Betala \(amount) kr", nb: "Betal \(amount) kr"))
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -123,7 +123,7 @@ struct TrainerPaymentView: View {
                                     .tint(.white)
                             } else {
                                 Image(systemName: "creditcard.fill")
-                                Text("Betala \(amount) kr")
+                                Text(L.t(sv: "Betala \(amount) kr", nb: "Betal \(amount) kr"))
                             }
                         }
                         .font(.headline)
@@ -141,25 +141,25 @@ struct TrainerPaymentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill")
                         .font(.caption)
-                    Text("Säker betalning via Stripe")
+                    Text(L.t(sv: "Säker betalning via Stripe", nb: "Sikker betaling via Stripe"))
                         .font(.caption)
                 }
                 .foregroundColor(.secondary)
                 .padding(.bottom, 20)
             }
-            .navigationTitle("Betala")
+            .navigationTitle(L.t(sv: "Betala", nb: "Betal"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
             }
-            .alert("Fel", isPresented: $showError) {
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: $showError) {
                 Button("OK") { }
             } message: {
-                Text(errorMessage ?? "Ett fel uppstod")
+                Text(errorMessage ?? L.t(sv: "Ett fel uppstod", nb: "En feil oppsto"))
             }
             .task {
                 await preparePaymentSheetAsync()

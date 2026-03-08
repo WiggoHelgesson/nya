@@ -28,13 +28,13 @@ struct MyQRCodeView: View {
             VStack(spacing: 0) {
                 // Tab selector
                 HStack(spacing: 32) {
-                    TabButton(title: "Min QR", isSelected: selectedTab == .myQR) {
+                    TabButton(title: L.t(sv: "Min QR", nb: "Min QR"), isSelected: selectedTab == .myQR) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = .myQR
                         }
                     }
                     
-                    TabButton(title: "Skanna QR", isSelected: selectedTab == .scanQR) {
+                    TabButton(title: L.t(sv: "Skanna QR", nb: "Skann QR"), isSelected: selectedTab == .scanQR) {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = .scanQR
                         }
@@ -77,7 +77,7 @@ struct MyQRCodeView: View {
     private var myQRContent: some View {
         VStack(spacing: 24) {
             // Description text
-            Text("Användare kan lägga till dig som vän genom att skanna den här koden")
+            Text(L.t(sv: "Användare kan lägga till dig som vän genom att skanna den här koden", nb: "Brukere kan legge deg til som venn ved å skanne denne koden"))
                 .font(.system(size: 15))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -144,7 +144,7 @@ struct MyQRCodeView: View {
     // MARK: - Scan QR Content
     private var scanQRContent: some View {
         VStack(spacing: 24) {
-            Text("Skanna en väns QR-kod för att lägga till dem")
+            Text(L.t(sv: "Skanna en väns QR-kod för att lägga till dem", nb: "Skann en venns QR-kode for å legge dem til"))
                 .font(.system(size: 15))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -164,11 +164,11 @@ struct MyQRCodeView: View {
                                     .font(.system(size: 50))
                                     .foregroundColor(.white.opacity(0.6))
                                 
-                                Text("Kameraåtkomst nekad")
+                                Text(L.t(sv: "Kameraåtkomst nekad", nb: "Kameratilgang nektet"))
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(.white)
                                 
-                                Text("Aktivera kameraåtkomst i Inställningar för att skanna QR-koder")
+                                Text(L.t(sv: "Aktivera kameraåtkomst i Inställningar för att skanna QR-koder", nb: "Aktiver kameratilgang i Innstillinger for å skanne QR-koder"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.white.opacity(0.7))
                                     .multilineTextAlignment(.center)
@@ -179,7 +179,7 @@ struct MyQRCodeView: View {
                                         UIApplication.shared.open(url)
                                     }
                                 } label: {
-                                    Text("Öppna Inställningar")
+                                    Text(L.t(sv: "Öppna Inställningar", nb: "Åpne Innstillinger"))
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.black)
                                         .padding(.horizontal, 24)

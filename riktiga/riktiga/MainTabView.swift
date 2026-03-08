@@ -92,18 +92,18 @@ struct MainTabView: View {
     private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
         if hasActiveCoach {
             return [
-                ("house", "Hem", "house.fill"),
-                ("fork.knife", "Kalorier", "fork.knife"),
-                ("person.badge.shield.checkmark", "Coach", "person.badge.shield.checkmark.fill"),
-                ("gift", "Belöningar", "gift.fill"),
-                ("person", "Profil", "person.fill")
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
+                ("fork.knife", L.t(sv: "Kalorier", nb: "Kalorier"), "fork.knife"),
+                ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         } else {
             return [
-                ("house", "Hem", "house.fill"),
-                ("fork.knife", "Kalorier", "fork.knife"),
-                ("gift", "Belöningar", "gift.fill"),
-                ("person", "Profil", "person.fill")
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
+                ("fork.knife", L.t(sv: "Kalorier", nb: "Kalorier"), "fork.knife"),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         }
     }
@@ -205,7 +205,7 @@ struct MainTabView: View {
                         pendingCoachInvitation = nil
                     }
                 )
-                .navigationTitle("Coach-inbjudan")
+                .navigationTitle(L.t(sv: "Coach-inbjudan", nb: "Coach-invitasjon"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -243,14 +243,14 @@ struct MainTabView: View {
                 
                 VStack(spacing: 12) {
                     HStack(spacing: 12) {
-                        addMealOption(icon: "dumbbell.fill", title: "Starta gympass") {
+                        addMealOption(icon: "dumbbell.fill", title: L.t(sv: "Starta gympass", nb: "Start treningsøkt")) {
                             showAddMealSheet = false
                             startActivityType = .walking
                             showStartSession = true
                         }
                         .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         
-                        addMealOption(icon: "figure.run", title: "Starta löppass") {
+                        addMealOption(icon: "figure.run", title: L.t(sv: "Starta löppass", nb: "Start løpeøkt")) {
                             showAddMealSheet = false
                             startActivityType = .running
                             showStartSession = true
@@ -263,7 +263,7 @@ struct MainTabView: View {
                             barcodeScanLimitedOption()
                                 .scaleEffect(showAddMealSheet ? 1 : 0.8)
                         } else {
-                            addMealOption(icon: "barcode.viewfinder", title: "Scanna streckkod") {
+                            addMealOption(icon: "barcode.viewfinder", title: L.t(sv: "Scanna streckkod", nb: "Skann strekkode")) {
                                 showAddMealSheet = false
                                 initialScannerMode = .barcode
                                 showFoodScanner = true
@@ -332,7 +332,7 @@ struct MainTabView: View {
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
-                Text("Tracka kalorier med AI")
+                Text(L.t(sv: "Tracka kalorier med AI", nb: "Spor kalorier med AI"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
@@ -394,14 +394,14 @@ struct MainTabView: View {
                         .offset(x: 20, y: -8)
                 }
                 
-                Text("Tracka kalorier med AI")
+                Text(L.t(sv: "Tracka kalorier med AI", nb: "Spor kalorier med AI"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.gray.opacity(0.5))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                 
-                Text("0 kvar")
+                Text(L.t(sv: "0 kvar", nb: "0 igjen"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.orange)
             }
@@ -433,7 +433,7 @@ struct MainTabView: View {
                         .offset(x: 20, y: -8)
                 }
                 
-                Text("Scanna streckkod")
+                Text(L.t(sv: "Scanna streckkod", nb: "Skann strekkode"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.gray.opacity(0.5))
                     .multilineTextAlignment(.center)
@@ -463,7 +463,7 @@ struct MainTabView: View {
             VStack(spacing: 10) {
                 glassSphereIcon
                 
-                Text("Fråga Up&Down")
+                Text(L.t(sv: "Fråga Up&Down", nb: "Spør Up&Down"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
@@ -759,7 +759,7 @@ struct MainTabView: View {
             // Main banner content
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Pågående pass")
+                    Text(L.t(sv: "Pågående pass", nb: "Pågående økt"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
                 }
@@ -773,7 +773,7 @@ struct MainTabView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 10))
-                        Text("Återuppta")
+                        Text(L.t(sv: "Återuppta", nb: "Gjenoppta"))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(.green)
@@ -790,7 +790,7 @@ struct MainTabView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .semibold))
-                        Text("Avsluta")
+                        Text(L.t(sv: "Avsluta", nb: "Avslutt"))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(.red)
@@ -801,15 +801,15 @@ struct MainTabView: View {
             .background(activeSessionBannerBackground)
         }
         .padding(.horizontal, 16)
-        .alert("Avsluta pass?", isPresented: $showDiscardConfirmation) {
-            Button("Fortsätt träna", role: .cancel) { }
-            Button("Avsluta", role: .destructive) {
+        .alert(L.t(sv: "Avsluta pass?", nb: "Avslutte økt?"), isPresented: $showDiscardConfirmation) {
+            Button(L.t(sv: "Fortsätt träna", nb: "Fortsett trening"), role: .cancel) { }
+            Button(L.t(sv: "Avsluta", nb: "Avslutt"), role: .destructive) {
                 // End Live Activity first, then finalize session
                 LiveActivityManager.shared.endLiveActivity()
                 SessionManager.shared.finalizeSession()
             }
         } message: {
-            Text("Ditt pågående pass kommer att förkastas och inte sparas.")
+            Text(L.t(sv: "Ditt pågående pass kommer att förkastas och inte sparas.", nb: "Økten din vil bli forkastet og ikke lagret."))
         }
     }
 }

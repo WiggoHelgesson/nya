@@ -80,7 +80,7 @@ struct WorkoutDetailView: View {
                 Spacer(minLength: 40)
             }
         }
-        .navigationTitle("Träningsdetaljer")
+        .navigationTitle(L.t(sv: "Träningsdetaljer", nb: "Treningsdetaljer"))
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemBackground))
     }
@@ -111,7 +111,7 @@ struct WorkoutDetailView: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(post.userName ?? "Användare")
+                Text(post.userName ?? L.t(sv: "Användare", nb: "Bruker"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
@@ -129,14 +129,14 @@ struct WorkoutDetailView: View {
         HStack(spacing: 0) {
             // Time
             if let duration = post.duration {
-                gymStatColumn(title: "Tid", value: formattedDuration)
+                gymStatColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formattedDuration)
             }
             
             // Volume
             if let volume = calculateVolume() {
                 Divider()
                     .frame(height: 40)
-                gymStatColumn(title: "Volym", value: formatVolume(volume))
+                gymStatColumn(title: L.t(sv: "Volym", nb: "Volum"), value: formatVolume(volume))
             }
             
             // Sets
@@ -144,7 +144,7 @@ struct WorkoutDetailView: View {
                 let totalSets = exercises.reduce(0) { $0 + $1.sets }
                 Divider()
                     .frame(height: 40)
-                gymStatColumn(title: "Set", value: "\(totalSets)")
+                gymStatColumn(title: L.t(sv: "Set", nb: "Sett"), value: "\(totalSets)")
             }
         }
     }
@@ -198,7 +198,7 @@ struct WorkoutDetailView: View {
         let maxValue = sortedSplits.first?.value ?? 1
         
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Muskelfördelning")
+            Text(L.t(sv: "Muskelfördelning", nb: "Muskelfordeling"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
             
@@ -234,7 +234,7 @@ struct WorkoutDetailView: View {
                 Button {
                     // Could expand to show all
                 } label: {
-                    Text("Visa \(sortedSplits.count - 3) till")
+                    Text(L.t(sv: "Visa \(sortedSplits.count - 3) till", nb: "Vis \(sortedSplits.count - 3) til"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.black)
                 }
@@ -246,7 +246,7 @@ struct WorkoutDetailView: View {
     // MARK: - Workout Section
     private func workoutSection(exercises: [GymExercisePost]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Träning")
+            Text(L.t(sv: "Träning", nb: "Trening"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
             
@@ -310,12 +310,12 @@ struct WorkoutDetailView: View {
             } else {
                 // Sets table header
                 HStack {
-                    Text("SET")
+                    Text(L.t(sv: "SET", nb: "SETT"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 40, alignment: .leading)
                     
-                    Text("VIKT & REPS")
+                    Text(L.t(sv: "VIKT & REPS", nb: "VEKT & REPS"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                     
@@ -461,7 +461,7 @@ struct WorkoutDetailView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(post.userName ?? "Användare")
+                            Text(post.userName ?? L.t(sv: "Användare", nb: "Bruker"))
                                 .font(.system(size: 15, weight: .semibold))
                             Text(formattedDate)
                                 .font(.system(size: 13))
@@ -493,15 +493,15 @@ struct WorkoutDetailView: View {
                     // MARK: Stats grid
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
-                            runStatCell(label: "Distance", value: formattedDistance)
-                            runStatCell(label: "Avg Pace", value: avgPace)
+                            runStatCell(label: L.t(sv: "Distans", nb: "Distanse"), value: formattedDistance)
+                            runStatCell(label: L.t(sv: "Snittempo", nb: "Snittempo"), value: avgPace)
                         }
                         
                         Divider().padding(.horizontal, 16)
                         
                         HStack(spacing: 0) {
-                            runStatCell(label: "Moving Time", value: movingTime)
-                            runStatCell(label: "Elevation Gain", value: elevationString)
+                            runStatCell(label: L.t(sv: "Tid i rörelse", nb: "Tid i bevegelse"), value: movingTime)
+                            runStatCell(label: L.t(sv: "Höjdmeter", nb: "Høydemeter"), value: elevationString)
                         }
                     }
                     .padding(.top, 20)
@@ -540,7 +540,7 @@ struct WorkoutDetailView: View {
     
     private var splitsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Splits")
+            Text(L.t(sv: "Splits", nb: "Splits"))
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.primary)
             
@@ -584,7 +584,7 @@ struct WorkoutDetailView: View {
                     }
                 }
             } else {
-                Text("Inga splits tillgängliga.")
+                Text(L.t(sv: "Inga splits tillgängliga.", nb: "Ingen splits tilgjengelig."))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .padding(.top, 4)
@@ -635,7 +635,7 @@ struct WorkoutDetailView: View {
         var muscleCount: [String: Int] = [:]
         
         for exercise in exercises {
-            let category = exercise.category ?? "Övrigt"
+            let category = exercise.category ?? L.t(sv: "Övrigt", nb: "Annet")
             let swedishCategory = translateCategory(category)
             muscleCount[swedishCategory, default: 0] += 1
         }
@@ -653,27 +653,27 @@ struct WorkoutDetailView: View {
     
     private func translateCategory(_ category: String) -> String {
         let translations: [String: String] = [
-            "chest": "Bröst",
-            "back": "Rygg",
-            "shoulders": "Axlar",
-            "biceps": "Biceps",
-            "triceps": "Triceps",
-            "arms": "Armar",
-            "legs": "Ben",
-            "quadriceps": "Lår",
-            "hamstrings": "Baksida lår",
-            "glutes": "Rumpa",
-            "calves": "Vader",
-            "abs": "Mage",
-            "core": "Core",
-            "cardio": "Kondition",
-            "full body": "Helkropp",
-            "Bröst": "Bröst",
-            "Rygg": "Rygg",
-            "Axlar": "Axlar",
-            "Armar": "Armar",
-            "Ben": "Ben",
-            "Mage": "Mage"
+            "chest": L.t(sv: "Bröst", nb: "Bryst"),
+            "back": L.t(sv: "Rygg", nb: "Rygg"),
+            "shoulders": L.t(sv: "Axlar", nb: "Skuldre"),
+            "biceps": L.t(sv: "Biceps", nb: "Biceps"),
+            "triceps": L.t(sv: "Triceps", nb: "Triceps"),
+            "arms": L.t(sv: "Armar", nb: "Armer"),
+            "legs": L.t(sv: "Ben", nb: "Ben"),
+            "quadriceps": L.t(sv: "Lår", nb: "Lår"),
+            "hamstrings": L.t(sv: "Baksida lår", nb: "Bakside lår"),
+            "glutes": L.t(sv: "Rumpa", nb: "Rumpe"),
+            "calves": L.t(sv: "Vader", nb: "Legger"),
+            "abs": L.t(sv: "Mage", nb: "Mage"),
+            "core": L.t(sv: "Core", nb: "Core"),
+            "cardio": L.t(sv: "Kondition", nb: "Kondisjon"),
+            "full body": L.t(sv: "Helkropp", nb: "Helkropp"),
+            "bröst": L.t(sv: "Bröst", nb: "Bryst"),
+            "rygg": L.t(sv: "Rygg", nb: "Rygg"),
+            "axlar": L.t(sv: "Axlar", nb: "Skuldre"),
+            "armar": L.t(sv: "Armar", nb: "Armer"),
+            "ben": L.t(sv: "Ben", nb: "Ben"),
+            "mage": L.t(sv: "Mage", nb: "Mage")
         ]
         return translations[category.lowercased()] ?? category.capitalized
     }

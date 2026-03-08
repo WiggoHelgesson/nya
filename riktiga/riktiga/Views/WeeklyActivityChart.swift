@@ -26,7 +26,13 @@ struct WeeklyActivityChart: View {
         }
         
         var displayName: String {
-            return self.rawValue
+            switch self {
+            case .run: return L.t(sv: "Löpning", nb: "Løping")
+            case .golf: return L.t(sv: "Golf", nb: "Golf")
+            case .climbing: return L.t(sv: "Berg", nb: "Fjell")
+            case .skiing: return L.t(sv: "Skidor", nb: "Ski")
+            case .gym: return L.t(sv: "Gym", nb: "Gym")
+            }
         }
     }
     
@@ -43,7 +49,7 @@ struct WeeklyActivityChart: View {
                         HStack(spacing: 3) {
                             Image(systemName: type.icon)
                                 .font(.system(size: 11, weight: .medium))
-                            Text(type.rawValue)
+                            Text(type.displayName)
                                 .font(.system(size: 11, weight: .medium))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -73,21 +79,21 @@ struct WeeklyActivityChart: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.gray)
             } else {
-                Text("Denna vecka")
+                Text(L.t(sv: "Denna vecka", nb: "Denne uken"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.gray)
             }
             
             if selectedActivity == .gym {
                 HStack(spacing: 20) {
-                    StatView(title: "Tid", value: formatTime(totalTime))
-                    StatView(title: "Volym", value: formatVolume(totalPrimary))
+                    StatView(title: L.t(sv: "Tid", nb: "Tid"), value: formatTime(totalTime))
+                    StatView(title: L.t(sv: "Volym", nb: "Volum"), value: formatVolume(totalPrimary))
                 }
             } else {
                 HStack(spacing: 20) {
-                    StatView(title: "Distans", value: String(format: "%.2f km", totalPrimary))
-                    StatView(title: "Tid", value: formatTime(totalTime))
-                    StatView(title: "Höjd", value: String(format: "%.0f m", totalElevation))
+                    StatView(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", totalPrimary))
+                    StatView(title: L.t(sv: "Tid", nb: "Tid"), value: formatTime(totalTime))
+                    StatView(title: L.t(sv: "Höjd", nb: "Høyde"), value: String(format: "%.0f m", totalElevation))
                 }
             }
             
@@ -110,7 +116,7 @@ struct WeeklyActivityChart: View {
                 HStack {
                     Image(systemName: "chart.xyaxis.line")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Se mer av din statistik")
+                    Text(L.t(sv: "Se mer av din statistik", nb: "Se mer av statistikken din"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -200,7 +206,7 @@ struct WeeklyActivityChart: View {
         // Capitalize first letter
         let capitalizedMonth = monthName.prefix(1).uppercased() + monthName.dropFirst()
         
-        return "\(capitalizedMonth) Vecka \(weekOfYear)"
+        return "\(capitalizedMonth) \(L.t(sv: "Vecka", nb: "Uke")) \(weekOfYear)"
     }
 }
 

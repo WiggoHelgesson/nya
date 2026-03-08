@@ -36,7 +36,7 @@ struct MessagesListView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .medium))
-                        Text("Hem")
+                        Text(L.t(sv: "Hem", nb: "Hjem"))
                             .font(.system(size: 16))
                     }
                     .foregroundColor(.primary)
@@ -44,7 +44,7 @@ struct MessagesListView: View {
                 
                 Spacer()
                 
-                Text("Meddelanden")
+                Text(L.t(sv: "Meddelanden", nb: "Meldinger"))
                     .font(.system(size: 17, weight: .bold))
                 
                 Spacer()
@@ -111,7 +111,7 @@ struct MessagesListView: View {
             LazyVStack(spacing: 0) {
                 // Coach chat section
                 if let coach = coachRelation, let trainerProfile = coachTrainerProfile {
-                    sectionHeader("Din coach")
+                    sectionHeader(L.t(sv: "Din coach", nb: "Din coach"))
                     
                     NavigationLink(destination: TrainerChatView(trainer: trainerProfile)) {
                         coachRow(coach: coach, trainer: trainerProfile)
@@ -130,7 +130,7 @@ struct MessagesListView: View {
                 
                 // Trainer chats section
                 if !trainerChatService.conversations.isEmpty {
-                    sectionHeader("Tränare")
+                    sectionHeader(L.t(sv: "Tränare", nb: "Trenere"))
                     
                     ForEach(Array(trainerChatService.conversations.enumerated()), id: \.element.id) { index, conversation in
                         trainerConversationRow(conversation: conversation, index: index)
@@ -140,7 +140,7 @@ struct MessagesListView: View {
                 // Regular DM conversations
                 if !dmService.conversations.isEmpty {
                     if coachRelation != nil || !trainerChatService.conversations.isEmpty {
-                        sectionHeader("Direktmeddelanden")
+                        sectionHeader(L.t(sv: "Direktmeddelanden", nb: "Direktemeldinger"))
                     }
                     
                     ForEach(Array(dmService.conversations.enumerated()), id: \.element.id) { index, conversation in
@@ -219,7 +219,7 @@ struct MessagesListView: View {
                         .cornerRadius(4)
                 }
                 
-                Text(coachLastMessage ?? "Tryck för att chatta med din coach")
+                Text(coachLastMessage ?? L.t(sv: "Tryck för att chatta med din coach", nb: "Trykk for å chatte med coachen din"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -246,14 +246,14 @@ struct MessagesListView: View {
     private func trainerConversationRow(conversation: TrainerConversation, index: Int) -> some View {
         let currentUserId = authViewModel.currentUser?.id ?? ""
         let isTrainer = conversation.trainerUserId == currentUserId
-        let displayName = isTrainer ? (conversation.userUsername ?? "Klient") : (conversation.trainerName ?? "Tränare")
+        let displayName = isTrainer ? (conversation.userUsername ?? L.t(sv: "Klient", nb: "Klient")) : (conversation.trainerName ?? L.t(sv: "Tränare", nb: "Trener"))
         let avatarUrl = isTrainer ? conversation.userAvatarUrl : conversation.trainerAvatarUrl
         
         // Build a GolfTrainer for navigation (we need the trainer to open TrainerChatView)
         let trainer = GolfTrainer(
             id: conversation.trainerId,
             userId: conversation.trainerUserId ?? "",
-            name: conversation.trainerName ?? "Tränare",
+            name: conversation.trainerName ?? L.t(sv: "Tränare", nb: "Trener"),
             description: "",
             hourlyRate: 0,
             handicap: 0,
@@ -300,7 +300,7 @@ struct MessagesListView: View {
                             .foregroundColor(.primary)
                             .lineLimit(1)
                         
-                        Text("TRÄNARE")
+                        Text(L.t(sv: "TRÄNARE", nb: "TRENER"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.blue)
                             .padding(.horizontal, 6)
@@ -315,7 +315,7 @@ struct MessagesListView: View {
                             .foregroundColor((conversation.unreadCount ?? 0) > 0 ? .primary : .secondary)
                             .lineLimit(1)
                     } else {
-                        Text("Tryck för att chatta")
+                        Text(L.t(sv: "Tryck för att chatta", nb: "Trykk for å chatte"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
@@ -359,11 +359,11 @@ struct MessagesListView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.secondary.opacity(0.5))
             
-            Text("Inga meddelanden än")
+            Text(L.t(sv: "Inga meddelanden än", nb: "Ingen meldinger ennå"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
             
-            Text("Skicka ett meddelande till någon för att starta en konversation")
+            Text(L.t(sv: "Skicka ett meddelande till någon för att starta en konversation", nb: "Send en melding til noen for å starte en samtale"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -372,7 +372,7 @@ struct MessagesListView: View {
             Button {
                 showNewMessage = true
             } label: {
-                Text("Nytt meddelande")
+                Text(L.t(sv: "Nytt meddelande", nb: "Ny melding"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
@@ -463,11 +463,11 @@ struct MessagesListView: View {
             formatter.dateFormat = "HH:mm"
             return formatter.string(from: date)
         } else if calendar.isDateInYesterday(date) {
-            return "Igår"
+            return L.t(sv: "Igår", nb: "I går")
         } else {
             let formatter = DateFormatter()
             formatter.dateFormat = "d MMM"
-            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.locale = Locale(identifier: LanguageManager.shared.currentLanguage == .norwegian ? "nb_NO" : "sv_SE")
             return formatter.string(from: date)
         }
     }
@@ -516,7 +516,7 @@ struct ConversationRow: View {
                 if let lastMessage = conversation.lastMessage, !lastMessage.isEmpty {
                     HStack(spacing: 0) {
                         if conversation.lastMessageSenderId == currentUserId {
-                            Text("Du: ")
+                            Text(L.t(sv: "Du: ", nb: "Du: "))
                                 .font(.system(size: 13))
                                 .foregroundColor(.secondary)
                         } else if isGroup, let senderName = conversation.lastMessageSenderName {
@@ -572,17 +572,17 @@ struct ConversationRow: View {
             // Try to parse activity type for a more specific preview
             if let data = trimmed.data(using: .utf8),
                let invite = try? JSONDecoder().decode(GymInviteData.self, from: data) {
-                return "Skickade ett träningsförslag: \(invite.resolvedActivityType.displayName) \(invite.resolvedActivityType.emoji)"
+                return L.t(sv: "Skickade ett träningsförslag: \(invite.resolvedActivityType.displayName) \(invite.resolvedActivityType.emoji)", nb: "Sendte et treningsforslag: \(invite.resolvedActivityType.displayName) \(invite.resolvedActivityType.emoji)")
             }
-            return "Skickade ett träningsförslag 💪"
+            return L.t(sv: "Skickade ett träningsförslag 💪", nb: "Sendte et treningsforslag 💪")
         }
         
         // Detect training invite response
         if trimmed == "accepted" {
-            return "Godkände träningsförslaget ✅"
+            return L.t(sv: "Godkände träningsförslaget ✅", nb: "Godkjente treningsforslaget ✅")
         }
         if trimmed == "declined" {
-            return "Avböjde träningsförslaget"
+            return L.t(sv: "Avböjde träningsförslaget", nb: "Avslo treningsforslaget")
         }
         
         return message
@@ -595,11 +595,11 @@ struct ConversationRow: View {
             formatter.dateFormat = "HH:mm"
             return formatter.string(from: date)
         } else if calendar.isDateInYesterday(date) {
-            return "Igår"
+            return L.t(sv: "Igår", nb: "I går")
         } else {
             let formatter = DateFormatter()
             formatter.dateFormat = "d MMM"
-            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.locale = Locale(identifier: LanguageManager.shared.currentLanguage == .norwegian ? "nb_NO" : "sv_SE")
             return formatter.string(from: date)
         }
     }

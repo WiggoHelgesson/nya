@@ -75,7 +75,7 @@ struct TrainerChatView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("Personlig tränare")
+                Text(L.t(sv: "Personlig tränare", nb: "Personlig trener"))
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
@@ -137,7 +137,7 @@ struct TrainerChatView: View {
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.primary)
             
-            Text("Skicka ett meddelande till \(trainer.name) för att komma igång!")
+            Text(L.t(sv: "Skicka ett meddelande till \(trainer.name) för att komma igång!", nb: "Send en melding til \(trainer.name) for å komme i gang!"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -156,7 +156,7 @@ struct TrainerChatView: View {
             HStack(spacing: 12) {
                 // Text input
                 HStack {
-                    TextField("Skriv ett meddelande...", text: $messageText, axis: .vertical)
+                    TextField(L.t(sv: "Skriv ett meddelande...", nb: "Skriv en melding..."), text: $messageText, axis: .vertical)
                         .font(.system(size: 15))
                         .lineLimit(1...5)
                         .focused($isInputFocused)
@@ -202,7 +202,7 @@ struct TrainerChatView: View {
             isLoading = false
         } catch {
             print("❌ Failed to setup chat: \(error)")
-            errorMessage = "Kunde inte starta chatten. Försök igen."
+            errorMessage = L.t(sv: "Kunde inte starta chatten. Försök igen.", nb: "Kunne ikke starte chatten. Prøv igjen.")
             isLoading = false
         }
     }
@@ -281,7 +281,7 @@ private struct MessageBubbleView: View {
         if calendar.isDateInToday(date) {
             formatter.dateFormat = "HH:mm"
         } else if calendar.isDateInYesterday(date) {
-            formatter.dateFormat = "'Igår' HH:mm"
+            formatter.dateFormat = "'\(L.t(sv: "Igår", nb: "I går"))' HH:mm"
         } else {
             formatter.dateFormat = "d MMM HH:mm"
         }

@@ -12,7 +12,7 @@ struct WorkoutCelebrationView: View {
     @State private var coverImage: UIImage?
     @State private var showAlert = false
     @State private var alertMessage = ""
-    @State private var alertTitle = "Meddelande"
+    @State private var alertTitle = L.t(sv: "Meddelande", nb: "Melding")
     @State private var isSaving = false
     @State private var selectedBackground: ShareBackgroundOption = .transparent
     @State private var showBackgroundDialog = false
@@ -52,7 +52,7 @@ struct WorkoutCelebrationView: View {
                 // Header with title and emoji
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Bra jobbat!")
+                        Text(L.t(sv: "Bra jobbat!", nb: "Bra jobbet!"))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
                         
@@ -95,7 +95,7 @@ struct WorkoutCelebrationView: View {
                     Spacer()
                     
                     // Share prompt text
-                    Text("Dela passet - Tagga @upanddown")
+                    Text(L.t(sv: "Dela passet - Tagga @upanddown", nb: "Del økten - Tagg @upanddown"))
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -110,7 +110,7 @@ struct WorkoutCelebrationView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: selectedBackground == .transparent ? "square.dashed" : "square.fill")
                                     .font(.system(size: 18))
-                                Text("Bakgrund")
+                                Text(L.t(sv: "Bakgrund", nb: "Bakgrunn"))
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundColor(.primary)
@@ -127,7 +127,7 @@ struct WorkoutCelebrationView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 18))
-                                Text("Ladda ner")
+                                Text(L.t(sv: "Ladda ner", nb: "Last ned"))
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundColor(.primary)
@@ -142,7 +142,7 @@ struct WorkoutCelebrationView: View {
                     
                     // Done button
                     Button(action: finishAndDismiss) {
-                        Text("Klar")
+                        Text(L.t(sv: "Klar", nb: "Ferdig"))
                             .font(.system(size: 17, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -179,19 +179,19 @@ struct WorkoutCelebrationView: View {
         } message: {
             Text(alertMessage)
         }
-        .confirmationDialog("Välj bakgrund", isPresented: $showBackgroundDialog, titleVisibility: .visible) {
+        .confirmationDialog(L.t(sv: "Välj bakgrund", nb: "Velg bakgrunn"), isPresented: $showBackgroundDialog, titleVisibility: .visible) {
             ForEach(ShareBackgroundOption.allCases) { option in
                 Button(option.displayName) {
                     selectedBackground = option
                 }
             }
-            Button("Avbryt", role: .cancel) {}
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         }
     }
     
     private var workoutCountText: String {
         let total = max(insightsLoader.insights.totalWorkouts, 1)
-        return "Detta är ditt \(ordinalString(for: total)) pass"
+        return L.t(sv: "Detta är ditt \(ordinalString(for: total)) pass", nb: "Dette er din \(ordinalString(for: total)) økt")
     }
     
     private func ordinalString(for number: Int) -> String {
@@ -272,16 +272,16 @@ struct WorkoutCelebrationView: View {
         isSaving = true
         
         guard let image = renderCurrentCardImage() else {
-            alertTitle = "Fel"
-            alertMessage = "Kunde inte skapa bilden."
+            alertTitle = L.t(sv: "Fel", nb: "Feil")
+            alertMessage = L.t(sv: "Kunde inte skapa bilden.", nb: "Kunne ikke lage bildet.")
             showAlert = true
             isSaving = false
             return
         }
         
         guard let pngData = image.pngData() else {
-            alertTitle = "Fel"
-            alertMessage = "Kunde inte skapa PNG-bilden."
+            alertTitle = L.t(sv: "Fel", nb: "Feil")
+            alertMessage = L.t(sv: "Kunde inte skapa PNG-bilden.", nb: "Kunne ikke lage PNG-bildet.")
             showAlert = true
             isSaving = false
             return
@@ -292,8 +292,8 @@ struct WorkoutCelebrationView: View {
         do {
             try pngData.write(to: tempURL)
         } catch {
-            alertTitle = "Fel"
-            alertMessage = "Kunde inte skapa temporär fil."
+            alertTitle = L.t(sv: "Fel", nb: "Feil")
+            alertMessage = L.t(sv: "Kunde inte skapa temporär fil.", nb: "Kunne ikke lage midlertidig fil.")
             showAlert = true
             isSaving = false
             return
@@ -302,8 +302,8 @@ struct WorkoutCelebrationView: View {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
                 DispatchQueue.main.async {
-                    self.alertTitle = "Åtkomst nekad"
-                    self.alertMessage = "Tillåt åtkomst till foton i Inställningar för att spara bilden."
+                    self.alertTitle = L.t(sv: "Åtkomst nekad", nb: "Tilgang nektet")
+                    self.alertMessage = L.t(sv: "Tillåt åtkomst till foton i Inställningar för att spara bilden.", nb: "Tillat tilgang til bilder i Innstillinger for å lagre bildet.")
                     self.showAlert = true
                     self.isSaving = false
                 }
@@ -318,11 +318,11 @@ struct WorkoutCelebrationView: View {
                 
                 DispatchQueue.main.async {
                     if success {
-                        self.alertTitle = "Sparat!"
-                        self.alertMessage = "Bilden har sparats till dina foton."
+                        self.alertTitle = L.t(sv: "Sparat!", nb: "Lagret!")
+                        self.alertMessage = L.t(sv: "Bilden har sparats till dina foton.", nb: "Bildet er lagret i bildene dine.")
                     } else {
-                        self.alertTitle = "Fel"
-                        self.alertMessage = "Kunde inte spara bilden."
+                        self.alertTitle = L.t(sv: "Fel", nb: "Feil")
+                        self.alertMessage = L.t(sv: "Kunde inte spara bilden.", nb: "Kunne ikke lagre bildet.")
                     }
                     self.showAlert = true
                     self.isSaving = false
@@ -559,12 +559,12 @@ struct HevyStyleShareCard: View {
                 .padding(.top, 8 * scale)
             
             // "Week Streak" text
-            Text("Veckostreak")
+            Text(L.t(sv: "Veckostreak", nb: "Ukestreak"))
                 .font(.system(size: 28 * scale, weight: .bold))
                 .foregroundColor(textColor)
             
             // Description
-            Text("Du har tränat konsekvent i \(weekStreak) \(weekStreak == 1 ? "vecka" : "veckor") i rad!")
+            Text(L.t(sv: "Du har tränat konsekvent i \(weekStreak) \(weekStreak == 1 ? "vecka" : "veckor") i rad!", nb: "Du har trent konsekvent i \(weekStreak) \(weekStreak == 1 ? "uke" : "uker") på rad!"))
                 .font(.system(size: 16 * scale, weight: .medium))
                 .foregroundColor(textColor.opacity(0.75))
                 .multilineTextAlignment(.center)
@@ -607,7 +607,7 @@ struct HevyStyleShareCard: View {
         
         return VStack(spacing: 16 * scale) {
             // Title
-            Text("\(insights.monthWorkoutDates.count) pass")
+            Text(L.t(sv: "\(insights.monthWorkoutDates.count) pass", nb: "\(insights.monthWorkoutDates.count) økter"))
                 .font(.system(size: 32 * scale, weight: .bold))
                 .foregroundColor(textColor)
                 .padding(.top, 28 * scale)

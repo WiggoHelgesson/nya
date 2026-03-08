@@ -13,8 +13,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 1,
             brandName: "PUMPLABS",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "54",
             category: "Gym",
             isBookmarked: false
@@ -22,8 +22,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 2,
             brandName: "ZEN ENERGY",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "52",
             category: "Gym",
             isBookmarked: false
@@ -31,8 +31,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 3,
             brandName: "PLIKTGOLF",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "56",
             category: "Golf",
             isBookmarked: false
@@ -40,8 +40,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 4,
             brandName: "PEGMATE",
-            discount: "5% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "5% rabatt", nb: "5% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "49",
             category: "Golf",
             isBookmarked: false
@@ -49,8 +49,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 5,
             brandName: "LONEGOLF",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "50",
             category: "Golf",
             isBookmarked: false
@@ -58,8 +58,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 6,
             brandName: "WINWIZE",
-            discount: "25% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "25% rabatt", nb: "25% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "51",
             category: "Golf",
             isBookmarked: false
@@ -67,8 +67,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 7,
             brandName: "SCANDIGOLF",
-            discount: "15% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "15% rabatt", nb: "15% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "8",
             category: "Golf",
             isBookmarked: false
@@ -76,8 +76,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 9,
             brandName: "HAPPYALBA",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "57",
             category: "Golf",
             isBookmarked: false
@@ -85,8 +85,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 10,
             brandName: "RETROGOLF",
-            discount: "10% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "10% rabatt", nb: "10% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "11",
             category: "Golf",
             isBookmarked: false
@@ -94,8 +94,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 24,
             brandName: "CLYRO",
-            discount: "20% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "20% rabatt", nb: "20% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "39",
             category: "Gym",
             isBookmarked: false
@@ -103,8 +103,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 25,
             brandName: "CLYRO",
-            discount: "20% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "20% rabatt", nb: "20% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "39",
             category: "Löpning",
             isBookmarked: false
@@ -112,8 +112,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 26,
             brandName: "Fjällsyn UF",
-            discount: "15% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "15% rabatt", nb: "15% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "38",
             category: "Skidåkning",
             isBookmarked: false
@@ -121,8 +121,8 @@ struct ActivitiesView: View {
         RewardCard(
             id: 27,
             brandName: "Powerwell",
-            discount: "15% rabatt",
-            points: "200 poäng",
+            discount: L.t(sv: "15% rabatt", nb: "15% rabatt"),
+            points: L.t(sv: "200 poäng", nb: "200 poeng"),
             imageName: "40",
             category: "Gym",
             isBookmarked: false
@@ -138,7 +138,7 @@ struct ActivitiesView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .tint(AppColors.brandBlue)
-                        Text("Hämtar dina inlägg...")
+                        Text(L.t(sv: "Hämtar dina inlägg...", nb: "Henter innleggene dine..."))
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
@@ -147,9 +147,9 @@ struct ActivitiesView: View {
                         Image(systemName: "figure.run")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Inga träningspass än")
+                        Text(L.t(sv: "Inga träningspass än", nb: "Ingen treningsøkter ennå"))
                             .font(.headline)
-                        Text("Starta ett pass för att se det här")
+                        Text(L.t(sv: "Starta ett pass för att se det här", nb: "Start en økt for å se det her"))
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -158,7 +158,7 @@ struct ActivitiesView: View {
                         VStack(spacing: 24) {
                             // MARK: - Alla belöningar sliderbar
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Alla belöningar")
+                                Text(L.t(sv: "Alla belöningar", nb: "Alle belønninger"))
                                     .font(.headline)
                                     .foregroundColor(.primary)
                                     .padding(.horizontal, 16)
@@ -200,7 +200,7 @@ struct ActivitiesView: View {
                     }
                 }
             }
-            .navigationTitle("Aktiviteter")
+            .navigationTitle(L.t(sv: "Aktiviteter", nb: "Aktiviteter"))
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $selectedPost) { post in
                 WorkoutDetailView(post: post)
@@ -253,18 +253,18 @@ struct WorkoutPostCard: View {
                 HStack(spacing: 0) {
                     if post.activityType == "Gympass" {
                         if let duration = post.duration {
-                            statColumn(title: "Tid", value: formatDuration(duration))
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
                         }
                         if let volume = gymVolumeText {
                             if post.duration != nil {
                                 Divider()
                                     .frame(height: 40)
                             }
-                            statColumn(title: "Volym", value: volume)
+                            statColumn(title: L.t(sv: "Volym", nb: "Volum"), value: volume)
                         }
                     } else {
                         if let distance = post.distance {
-                            statColumn(title: "Distans", value: String(format: "%.2f km", distance))
+                            statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", distance))
                         }
                         
                         if let duration = post.duration {
@@ -272,7 +272,7 @@ struct WorkoutPostCard: View {
                                 Divider()
                                     .frame(height: 40)
                             }
-                            statColumn(title: "Tid", value: formatDuration(duration))
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
                         }
                         // Show elevation for skiing and hiking
                         if (post.activityType == "Skidåkning" || post.activityType == "Bestiga berg"),
@@ -281,7 +281,7 @@ struct WorkoutPostCard: View {
                                 Divider()
                                     .frame(height: 40)
                             }
-                            statColumn(title: "Höjdmeter", value: String(format: "%.0f m", elevationGain))
+                            statColumn(title: L.t(sv: "Höjdmeter", nb: "Høydemeter"), value: String(format: "%.0f m", elevationGain))
                         }
                     }
                 }

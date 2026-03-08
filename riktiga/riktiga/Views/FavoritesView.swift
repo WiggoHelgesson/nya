@@ -18,11 +18,11 @@ struct FavoritesView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
                         
-                        Text("Inga favoriter än")
+                        Text(L.t(sv: "Inga favoriter än", nb: "Ingen favoritter ennå"))
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.gray)
                         
-                        Text("Markera belöningar som favoriter för att se dem här")
+                        Text(L.t(sv: "Markera belöningar som favoriter för att se dem här", nb: "Merk belønninger som favoritter for å se dem her"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -43,11 +43,11 @@ struct FavoritesView: View {
                     }
                 }
             }
-            .navigationTitle("Favoriter")
+            .navigationTitle(L.t(sv: "Favoriter", nb: "Favoritter"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
@@ -78,7 +78,7 @@ struct FavoriteRewardCard: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Text("200 poäng")
+                        Text(L.t(sv: "200 poäng", nb: "200 poeng"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)

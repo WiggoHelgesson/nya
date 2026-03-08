@@ -17,6 +17,12 @@ struct User: Codable, Identifiable {
     var climbedMountains: [String] = []
     var completedRaces: [String] = []
     var onboardingCompleted: Bool = false
+    var bio: String? = nil
+    var pinnedPostIds: [String] = []
+    var gymPbs: [GymPB] = []
+    var homeGym: String? = nil
+    var trainingGoal: String? = nil
+    var trainingIdentity: String? = nil
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -35,6 +41,12 @@ struct User: Codable, Identifiable {
         case climbedMountains = "climbed_mountains"
         case completedRaces = "completed_races"
         case onboardingCompleted = "onboarding_completed"
+        case bio
+        case pinnedPostIds = "pinned_post_ids"
+        case gymPbs = "gym_pbs"
+        case homeGym = "home_gym"
+        case trainingGoal = "training_goal"
+        case trainingIdentity = "training_identity"
     }
     
     // Custom decode för att hantera att email inte finns i profiles
@@ -56,6 +68,12 @@ struct User: Codable, Identifiable {
         climbedMountains = try container.decodeIfPresent([String].self, forKey: .climbedMountains) ?? []
         completedRaces = try container.decodeIfPresent([String].self, forKey: .completedRaces) ?? []
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
+        pinnedPostIds = try container.decodeIfPresent([String].self, forKey: .pinnedPostIds) ?? []
+        gymPbs = try container.decodeIfPresent([GymPB].self, forKey: .gymPbs) ?? []
+        homeGym = try container.decodeIfPresent(String.self, forKey: .homeGym)
+        trainingGoal = try container.decodeIfPresent(String.self, forKey: .trainingGoal)
+        trainingIdentity = try container.decodeIfPresent(String.self, forKey: .trainingIdentity)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -76,9 +94,15 @@ struct User: Codable, Identifiable {
         try container.encode(climbedMountains, forKey: .climbedMountains)
         try container.encode(completedRaces, forKey: .completedRaces)
         try container.encode(onboardingCompleted, forKey: .onboardingCompleted)
+        try container.encodeIfPresent(bio, forKey: .bio)
+        try container.encode(pinnedPostIds, forKey: .pinnedPostIds)
+        try container.encode(gymPbs, forKey: .gymPbs)
+        try container.encodeIfPresent(homeGym, forKey: .homeGym)
+        try container.encodeIfPresent(trainingGoal, forKey: .trainingGoal)
+        try container.encodeIfPresent(trainingIdentity, forKey: .trainingIdentity)
     }
     
-    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, bannerUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil, climbedMountains: [String] = [], completedRaces: [String] = [], onboardingCompleted: Bool = false) {
+    init(id: String, name: String, email: String, currentXP: Int = 0, currentLevel: Int = 0, isProMember: Bool = false, avatarUrl: String? = nil, bannerUrl: String? = nil, pb5kmMinutes: Int? = nil, pb10kmHours: Int? = nil, pb10kmMinutes: Int? = nil, pbMarathonHours: Int? = nil, pbMarathonMinutes: Int? = nil, climbedMountains: [String] = [], completedRaces: [String] = [], onboardingCompleted: Bool = false, bio: String? = nil, pinnedPostIds: [String] = [], gymPbs: [GymPB] = [], homeGym: String? = nil, trainingGoal: String? = nil, trainingIdentity: String? = nil) {
         self.id = id
         self.name = name
         self.email = email
@@ -95,7 +119,20 @@ struct User: Codable, Identifiable {
         self.climbedMountains = climbedMountains
         self.completedRaces = completedRaces
         self.onboardingCompleted = onboardingCompleted
+        self.bio = bio
+        self.pinnedPostIds = pinnedPostIds
+        self.gymPbs = gymPbs
+        self.homeGym = homeGym
+        self.trainingGoal = trainingGoal
+        self.trainingIdentity = trainingIdentity
     }
+}
+
+struct GymPB: Codable, Identifiable {
+    var id: String { name }
+    var name: String
+    var kg: Double
+    var reps: Int
 }
 
 struct Mountain: Identifiable {

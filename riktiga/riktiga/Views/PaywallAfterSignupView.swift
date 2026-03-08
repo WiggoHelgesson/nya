@@ -29,7 +29,7 @@ struct PaywallAfterSignupView: View {
                 VStack(spacing: 20) {
                     ProgressView()
                         .scaleEffect(1.5)
-                    Text("Laddar...")
+                    Text(L.t(sv: "Laddar...", nb: "Laster..."))
                         .font(.headline)
                         .foregroundColor(.gray)
                 }

@@ -31,7 +31,7 @@ struct RoutinesView: View {
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                     
-                    Button("Försök igen") {
+                    Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                         Task { await loadSavedWorkouts() }
                     }
                     .font(.system(size: 15, weight: .semibold))
@@ -44,11 +44,11 @@ struct RoutinesView: View {
                 workoutsList
             }
         }
-        .navigationTitle("Gym rutiner")
+        .navigationTitle(L.t(sv: "Gym rutiner", nb: "Gymrutiner"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     dismiss()
                 }
             }
@@ -81,9 +81,9 @@ struct RoutinesView: View {
                 .environmentObject(authViewModel)
             }
         }
-        .alert("Ta bort pass", isPresented: $showDeleteAlert) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Ta bort", role: .destructive) {
+        .alert(L.t(sv: "Ta bort pass", nb: "Fjern økt"), isPresented: $showDeleteAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Ta bort", nb: "Fjern"), role: .destructive) {
                 if let workout = workoutToDelete {
                     Task {
                         await deleteWorkout(workout)
@@ -91,7 +91,7 @@ struct RoutinesView: View {
                 }
             }
         } message: {
-            Text("Är du säker på att du vill ta bort denna gym rutin?")
+            Text(L.t(sv: "Är du säker på att du vill ta bort denna gym rutin?", nb: "Er du sikker på at du vil fjerne denne gymrutinen?"))
         }
         .task {
             await loadSavedWorkouts()
@@ -108,11 +108,11 @@ struct RoutinesView: View {
                 .cornerRadius(16)
             
             VStack(spacing: 8) {
-                Text("Inga gym rutiner")
+                Text(L.t(sv: "Inga gym rutiner", nb: "Ingen gymrutiner"))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("Skapa en ny rutin eller spara ett gympass efter träningen.")
+                Text(L.t(sv: "Skapa en ny rutin eller spara ett gympass efter träningen.", nb: "Opprett en ny rutine eller lagre en gymøkt etter treningen."))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -123,7 +123,7 @@ struct RoutinesView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Skapa ny rutin")
+                    Text(L.t(sv: "Skapa ny rutin", nb: "Opprett ny rutine"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -152,7 +152,7 @@ struct RoutinesView: View {
                                 .foregroundColor(.black)
                         }
                         
-                        Text("Skapa ny rutin")
+                        Text(L.t(sv: "Skapa ny rutin", nb: "Opprett ny rutine"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                         
@@ -199,7 +199,7 @@ struct RoutinesView: View {
     // MARK: - Data Loading
     private func loadSavedWorkouts() async {
         guard let userId = authViewModel.currentUser?.id else {
-            errorMessage = "Kunde inte hitta användare"
+            errorMessage = L.t(sv: "Kunde inte hitta användare", nb: "Kunne ikke finne bruker")
             isLoading = false
             return
         }
@@ -217,7 +217,7 @@ struct RoutinesView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta gym rutiner"
+                self.errorMessage = L.t(sv: "Kunde inte hämta gym rutiner", nb: "Kunne ikke hente gymrutiner")
                 self.isLoading = false
             }
         }
@@ -281,7 +281,7 @@ struct SavedWorkoutCard: View {
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    Text("\(workout.exercises.count) övningar")
+                    Text(L.t(sv: "\(workout.exercises.count) övningar", nb: "\(workout.exercises.count) øvelser"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     
@@ -372,7 +372,7 @@ struct SavedWorkoutDetailView: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Sparat \(dateFormatter.string(from: workout.createdAt))")
+                    Text(L.t(sv: "Sparat \(dateFormatter.string(from: workout.createdAt))", nb: "Lagret \(dateFormatter.string(from: workout.createdAt))"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -380,15 +380,15 @@ struct SavedWorkoutDetailView: View {
                 
                 // Stats
                 HStack(spacing: 12) {
-                    RoutineStatBox(value: "\(workout.exercises.count)", label: "Övningar")
-                    RoutineStatBox(value: "\(totalSets)", label: "Set")
-                    RoutineStatBox(value: formatVolume(totalVolume), label: "Volym")
+                    RoutineStatBox(value: "\(workout.exercises.count)", label: L.t(sv: "Övningar", nb: "Øvelser"))
+                    RoutineStatBox(value: "\(totalSets)", label: L.t(sv: "Set", nb: "Sett"))
+                    RoutineStatBox(value: formatVolume(totalVolume), label: L.t(sv: "Volym", nb: "Volum"))
                 }
                 .padding(.horizontal, 16)
                 
                 // Exercises list
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Övningar")
+                    Text(L.t(sv: "Övningar", nb: "Øvelser"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                         .padding(.horizontal, 16)
@@ -421,7 +421,7 @@ struct SavedWorkoutDetailView: View {
                                     
                                     // Sets info
                                     VStack(alignment: .trailing, spacing: 2) {
-                                        Text("\(exercise.sets) set")
+                                        Text(L.t(sv: "\(exercise.sets) set", nb: "\(exercise.sets) sett"))
                                             .font(.system(size: 14, weight: .semibold))
                                             .foregroundColor(.primary)
                                         
@@ -450,7 +450,7 @@ struct SavedWorkoutDetailView: View {
                 Button(action: { showDeleteAlert = true }) {
                     HStack {
                         Image(systemName: "trash")
-                        Text("Ta bort sparat pass")
+                        Text(L.t(sv: "Ta bort sparat pass", nb: "Fjern lagret økt"))
                     }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.gray)
@@ -464,23 +464,23 @@ struct SavedWorkoutDetailView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("Detaljer")
+        .navigationTitle(L.t(sv: "Detaljer", nb: "Detaljer"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     dismiss()
                 }
             }
         }
-        .alert("Ta bort pass", isPresented: $showDeleteAlert) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Ta bort", role: .destructive) {
+        .alert(L.t(sv: "Ta bort pass", nb: "Fjern økt"), isPresented: $showDeleteAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Ta bort", nb: "Fjern"), role: .destructive) {
                 onDelete()
                 dismiss()
             }
         } message: {
-            Text("Är du säker på att du vill ta bort denna gym rutin?")
+            Text(L.t(sv: "Är du säker på att du vill ta bort denna gym rutin?", nb: "Er du sikker på at du vil fjerne denne gymrutinen?"))
         }
     }
     
@@ -554,7 +554,7 @@ struct CreateRoutineView: View {
             }
             .padding(.bottom, 100)
         }
-        .navigationTitle("Skapa ny rutin")
+        .navigationTitle(L.t(sv: "Skapa ny rutin", nb: "Opprett ny rutine"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .navigationDestination(isPresented: $showExercisePicker) {
@@ -599,11 +599,11 @@ struct CreateRoutineView: View {
     // MARK: - Name Field Section
     private var nameFieldSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Namn på rutin")
+            Text(L.t(sv: "Namn på rutin", nb: "Navn på rutine"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
             
-            TextField("T.ex. Benpass, Push-dag...", text: $routineName)
+            TextField(L.t(sv: "T.ex. Benpass, Push-dag...", nb: "F.eks. Bendag, Push-dag..."), text: $routineName)
                 .font(.system(size: 16))
                 .padding(14)
                 .background(Color(.secondarySystemBackground))
@@ -628,7 +628,7 @@ struct CreateRoutineView: View {
     
     private var exercisesSectionHeader: some View {
         HStack {
-            Text("Övningar (\(selectedExercises.count))")
+            Text(L.t(sv: "Övningar (\(selectedExercises.count))", nb: "Øvelser (\(selectedExercises.count))"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
             
@@ -637,7 +637,7 @@ struct CreateRoutineView: View {
             Button(action: { showExercisePicker = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
-                    Text("Lägg till")
+                    Text(L.t(sv: "Lägg till", nb: "Legg til"))
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.black)
@@ -652,12 +652,12 @@ struct CreateRoutineView: View {
                 .font(.system(size: 30))
                 .foregroundColor(.gray.opacity(0.5))
             
-            Text("Inga övningar tillagda")
+            Text(L.t(sv: "Inga övningar tillagda", nb: "Ingen øvelser lagt til"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
             
             Button(action: { showExercisePicker = true }) {
-                Text("Sök övningar")
+                Text(L.t(sv: "Sök övningar", nb: "Søk øvelser"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 20)
@@ -722,7 +722,7 @@ struct CreateRoutineView: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 18))
-                Text("Lägg till fler övningar")
+                Text(L.t(sv: "Lägg till fler övningar", nb: "Legg til flere øvelser"))
                     .font(.system(size: 14, weight: .medium))
             }
             .foregroundColor(.black)
@@ -738,13 +738,13 @@ struct CreateRoutineView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            Button("Avbryt") {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                 dismiss()
             }
         }
         
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button("Spara") {
+            Button(L.t(sv: "Spara", nb: "Lagre")) {
                 saveRoutine()
             }
             .font(.system(size: 16, weight: .semibold))
@@ -890,7 +890,7 @@ private struct CreateRoutineExerciseRow: View {
                     Text("\(exercise.sets)")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
-                    Text("set")
+                    Text(L.t(sv: "set", nb: "sett"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -898,7 +898,7 @@ private struct CreateRoutineExerciseRow: View {
                     Text("\(exercise.reps.first ?? 10)")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
-                    Text("reps")
+                    Text(L.t(sv: "reps", nb: "reps"))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -936,7 +936,7 @@ struct SetsSelectorSheet: View {
                 .padding(.top, 8)
             
             VStack(spacing: 8) {
-                Text("Konfigurera övning")
+                Text(L.t(sv: "Konfigurera övning", nb: "Konfigurer øvelse"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -948,7 +948,7 @@ struct SetsSelectorSheet: View {
             
             // Sets section
             VStack(alignment: .leading, spacing: 12) {
-                Text("Antal set")
+                Text(L.t(sv: "Antal set", nb: "Antall sett"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 16)
@@ -966,7 +966,7 @@ struct SetsSelectorSheet: View {
                                         .font(.system(size: 20, weight: .bold))
                                         .foregroundColor(selectedSets == sets ? .white : .primary)
                                     
-                                    Text("set")
+                                    Text(L.t(sv: "set", nb: "sett"))
                                         .font(.system(size: 11))
                                         .foregroundColor(selectedSets == sets ? .white.opacity(0.8) : .secondary)
                                 }
@@ -982,7 +982,7 @@ struct SetsSelectorSheet: View {
             
             // Reps section
             VStack(alignment: .leading, spacing: 12) {
-                Text("Repetitioner per set")
+                Text(L.t(sv: "Repetitioner per set", nb: "Repetisjoner per sett"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 16)
@@ -1000,7 +1000,7 @@ struct SetsSelectorSheet: View {
                                         .font(.system(size: 20, weight: .bold))
                                         .foregroundColor(selectedReps == reps ? .white : .primary)
                                     
-                                    Text("reps")
+                                    Text(L.t(sv: "reps", nb: "reps"))
                                         .font(.system(size: 11))
                                         .foregroundColor(selectedReps == reps ? .white.opacity(0.8) : .secondary)
                                 }
@@ -1019,7 +1019,7 @@ struct SetsSelectorSheet: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                Text("\(selectedSets) set × \(selectedReps) reps")
+                Text(L.t(sv: "\(selectedSets) set × \(selectedReps) reps", nb: "\(selectedSets) sett × \(selectedReps) reps"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1030,7 +1030,7 @@ struct SetsSelectorSheet: View {
                 onConfirm()
                 dismiss()
             }) {
-                Text("Bekräfta")
+                Text(L.t(sv: "Bekräfta", nb: "Bekreft"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

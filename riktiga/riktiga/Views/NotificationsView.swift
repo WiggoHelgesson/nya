@@ -38,7 +38,7 @@ struct NotificationsView: View {
                         .font(.system(size: 50))
                         .foregroundColor(.orange)
                     
-                    Text("Kunde inte ladda notiser")
+                    Text(L.t(sv: "Kunde inte ladda notiser", nb: "Kunne ikke laste varsler"))
                         .font(.system(size: 18, weight: .bold))
                     
                     Text(error)
@@ -47,7 +47,7 @@ struct NotificationsView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
-                    Button("Försök igen") {
+                    Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                         Task { await loadNotifications() }
                     }
                     .font(.system(size: 15, weight: .semibold))
@@ -92,7 +92,7 @@ struct NotificationsView: View {
                 }
             }
         }
-        .navigationTitle("Notiser")
+        .navigationTitle(L.t(sv: "Notiser", nb: "Varsler"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await loadNotifications()
@@ -145,11 +145,11 @@ struct NotificationsView: View {
                             Task { await loadNotifications() }
                         }
                     )
-                    .navigationTitle("Coach-inbjudan")
+                    .navigationTitle(L.t(sv: "Coach-inbjudan", nb: "Trener-invitasjon"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Stäng") {
+                            Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                 showCoachInvitation = nil
                             }
                         }
@@ -170,10 +170,10 @@ struct NotificationsView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.gray)
             
-            Text("Inga notiser ännu")
+            Text(L.t(sv: "Inga notiser ännu", nb: "Ingen varsler ennå"))
                 .font(.system(size: 18, weight: .bold))
             
-            Text("När någon gillar, kommenterar eller följer dig kommer det att visas här.")
+            Text(L.t(sv: "När någon gillar, kommenterar eller följer dig kommer det att visas här.", nb: "Når noen liker, kommenterer eller følger deg vil det vises her."))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -352,7 +352,7 @@ struct NotificationsView: View {
             } catch {
                 print("❌ Failed to accept invitation: \(error)")
                 await MainActor.run {
-                    errorMessage = "Kunde inte acceptera inbjudan: \(error.localizedDescription)"
+                    errorMessage = L.t(sv: "Kunde inte acceptera inbjudan: \(error.localizedDescription)", nb: "Kunne ikke godta invitasjon: \(error.localizedDescription)")
                 }
                 // Refresh to reset state
                 await loadNotifications()
@@ -376,7 +376,7 @@ struct NotificationsView: View {
             } catch {
                 print("❌ Failed to decline invitation: \(error)")
                 await MainActor.run {
-                    errorMessage = "Kunde inte avböja inbjudan: \(error.localizedDescription)"
+                    errorMessage = L.t(sv: "Kunde inte avböja inbjudan: \(error.localizedDescription)", nb: "Kunne ikke avslå invitasjon: \(error.localizedDescription)")
                 }
                 // Refresh to reset state
                 await loadNotifications()
@@ -425,11 +425,11 @@ struct CoachInvitationNotificationRow: View {
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Coach-inbjudan")
+                    Text(L.t(sv: "Coach-inbjudan", nb: "Trener-invitasjon"))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("\(invitation.coach?.displayName ?? "En tränare") vill coacha dig!")
+                    Text(L.t(sv: "\(invitation.coach?.displayName ?? "En tränare") vill coacha dig!", nb: "\(invitation.coach?.displayName ?? "En trener") vil coache deg!"))
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
                     
@@ -455,7 +455,7 @@ struct CoachInvitationNotificationRow: View {
                                 .scaleEffect(0.8)
                                 .tint(.white)
                         } else {
-                            Text("Godkänn")
+                            Text(L.t(sv: "Godkänn", nb: "Godkjenn"))
                         }
                     }
                     .font(.system(size: 14, weight: .semibold))
@@ -477,7 +477,7 @@ struct CoachInvitationNotificationRow: View {
                             ProgressView()
                                 .scaleEffect(0.8)
                         } else {
-                            Text("Avböj")
+                            Text(L.t(sv: "Avböj", nb: "Avslå"))
                         }
                     }
                     .font(.system(size: 14, weight: .medium))
@@ -516,19 +516,19 @@ struct CoachInvitationNotificationRow: View {
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "HH:mm"
             timeFormatter.locale = Locale(identifier: "sv_SE")
-            return "Idag kl \(timeFormatter.string(from: parsedDate))"
+            return L.t(sv: "Idag kl \(timeFormatter.string(from: parsedDate))", nb: "I dag kl \(timeFormatter.string(from: parsedDate))")
         }
         
         if calendar.isDateInYesterday(parsedDate) {
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "HH:mm"
             timeFormatter.locale = Locale(identifier: "sv_SE")
-            return "Igår kl \(timeFormatter.string(from: parsedDate))"
+            return L.t(sv: "Igår kl \(timeFormatter.string(from: parsedDate))", nb: "I går kl \(timeFormatter.string(from: parsedDate))")
         }
         
         if diff < 604800 {
             let days = Int(diff / 86400)
-            return "\(days) dagar sedan"
+            return L.t(sv: "\(days) dagar sedan", nb: "\(days) dager siden")
         }
         
         let dateFormatter = DateFormatter()
@@ -582,25 +582,25 @@ struct NotificationRowStrava: View {
     private var notificationTitle: String {
         switch notification.type {
         case .like:
-            return "Ny gilla-markering"
+            return L.t(sv: "Ny gilla-markering", nb: "Ny liker-markering")
         case .comment:
-            return "Ny kommentar"
+            return L.t(sv: "Ny kommentar", nb: "Ny kommentar")
         case .follow:
-            return "Ny följare"
+            return L.t(sv: "Ny följare", nb: "Ny følger")
         case .reply:
-            return "Svar på din kommentar"
+            return L.t(sv: "Svar på din kommentar", nb: "Svar på din kommentar")
         case .newWorkout:
-            return "Nytt träningspass"
+            return L.t(sv: "Nytt träningspass", nb: "Ny treningsøkt")
         case .coachInvitation:
-            return "Coach-inbjudan"
+            return L.t(sv: "Coach-inbjudan", nb: "Trener-invitasjon")
         case .coachProgramAssigned:
-            return "Nytt träningsprogram"
+            return L.t(sv: "Nytt träningsprogram", nb: "Nytt treningsprogram")
         case .trainerChatMessage:
-            return "Nytt meddelande"
+            return L.t(sv: "Nytt meddelande", nb: "Ny melding")
         case .coachScheduleUpdated:
-            return "Schema uppdaterat"
+            return L.t(sv: "Schema uppdaterat", nb: "Timeplan oppdatert")
         case .unknown:
-            return "Notis"
+            return L.t(sv: "Notis", nb: "Varsel")
         }
     }
     
@@ -609,31 +609,31 @@ struct NotificationRowStrava: View {
         
         switch notification.type {
         case .like:
-            return "\(name) gillade ditt inlägg"
+            return L.t(sv: "\(name) gillade ditt inlägg", nb: "\(name) likte innlegget ditt")
         case .comment:
             if let text = notification.commentText, !text.isEmpty {
-                return "\(name) kommenterade: \"\(text)\""
+                return L.t(sv: "\(name) kommenterade: \"\(text)\"", nb: "\(name) kommenterte: \"\(text)\"")
             }
-            return "\(name) kommenterade på ditt inlägg"
+            return L.t(sv: "\(name) kommenterade på ditt inlägg", nb: "\(name) kommenterte på innlegget ditt")
         case .follow:
-            return "\(name) började följa dig"
+            return L.t(sv: "\(name) började följa dig", nb: "\(name) begynte å følge deg")
         case .reply:
             if let text = notification.commentText, !text.isEmpty {
-                return "\(name) svarade: \"\(text)\""
+                return L.t(sv: "\(name) svarade: \"\(text)\"", nb: "\(name) svarte: \"\(text)\"")
             }
-            return "\(name) svarade på din kommentar"
+            return L.t(sv: "\(name) svarade på din kommentar", nb: "\(name) svarte på kommentaren din")
         case .newWorkout:
-            return "\(name) har avslutat ett träningspass!"
+            return L.t(sv: "\(name) har avslutat ett träningspass!", nb: "\(name) har fullført en treningsøkt!")
         case .coachInvitation:
-            return "\(name) vill coacha dig! Tryck för att svara."
+            return L.t(sv: "\(name) vill coacha dig! Tryck för att svara.", nb: "\(name) vil coache deg! Trykk for å svare.")
         case .coachProgramAssigned:
-            return "\(name) har tilldelat dig ett nytt träningsprogram"
+            return L.t(sv: "\(name) har tilldelat dig ett nytt träningsprogram", nb: "\(name) har tildelt deg et nytt treningsprogram")
         case .trainerChatMessage:
-            return "\(name) skickade ett meddelande"
+            return L.t(sv: "\(name) skickade ett meddelande", nb: "\(name) sendte en melding")
         case .coachScheduleUpdated:
-            return "\(name) uppdaterade ditt träningsschema"
+            return L.t(sv: "\(name) uppdaterade ditt träningsschema", nb: "\(name) oppdaterte treningsplanen din")
         case .unknown:
-            return "\(name) skickade en notis"
+            return L.t(sv: "\(name) skickade en notis", nb: "\(name) sendte et varsel")
         }
     }
     
@@ -658,7 +658,7 @@ struct NotificationRowStrava: View {
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "HH:mm"
             timeFormatter.locale = Locale(identifier: "sv_SE")
-            return "Idag kl \(timeFormatter.string(from: parsedDate))"
+            return L.t(sv: "Idag kl \(timeFormatter.string(from: parsedDate))", nb: "I dag kl \(timeFormatter.string(from: parsedDate))")
         }
         
         // If yesterday
@@ -666,13 +666,13 @@ struct NotificationRowStrava: View {
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "HH:mm"
             timeFormatter.locale = Locale(identifier: "sv_SE")
-            return "Igår kl \(timeFormatter.string(from: parsedDate))"
+            return L.t(sv: "Igår kl \(timeFormatter.string(from: parsedDate))", nb: "I går kl \(timeFormatter.string(from: parsedDate))")
         }
         
         // If within last 7 days
         if diff < 604800 {
             let days = Int(diff / 86400)
-            return "\(days) dagar sedan"
+            return L.t(sv: "\(days) dagar sedan", nb: "\(days) dager siden")
         }
         
         // Otherwise show full date
@@ -704,14 +704,14 @@ struct CoachProgramsListView: View {
                         .font(.system(size: 48))
                         .foregroundColor(.orange)
                     
-                    Text("Kunde inte ladda program")
+                    Text(L.t(sv: "Kunde inte ladda program", nb: "Kunne ikke laste program"))
                         .font(.system(size: 16, weight: .medium))
                     
                     Text(error)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
-                    Button("Försök igen") {
+                    Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                         Task { await loadPrograms() }
                     }
                     .padding(.top, 8)
@@ -722,11 +722,11 @@ struct CoachProgramsListView: View {
                         .font(.system(size: 48))
                         .foregroundColor(.gray)
                     
-                    Text("Inga träningsprogram")
+                    Text(L.t(sv: "Inga träningsprogram", nb: "Ingen treningsprogram"))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.gray)
                     
-                    Text("Du har inga tilldelade program från din tränare just nu")
+                    Text(L.t(sv: "Du har inga tilldelade program från din tränare just nu", nb: "Du har ingen tildelte program fra treneren din akkurat nå"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -743,7 +743,7 @@ struct CoachProgramsListView: View {
                                             Text(program.title)
                                                 .font(.system(size: 17, weight: .semibold))
                                             
-                                            Text("Från \(assignment.coach?.username ?? "din tränare")")
+                                            Text(L.t(sv: "Från \(assignment.coach?.username ?? "din tränare")", nb: "Fra \(assignment.coach?.username ?? "treneren din")"))
                                                 .font(.system(size: 14))
                                                 .foregroundColor(.secondary)
                                         }
@@ -783,7 +783,7 @@ struct CoachProgramsListView: View {
                                                     Text(routine.name)
                                                         .font(.system(size: 15, weight: .medium))
                                                     
-                                                    Text("\(routine.exercises.count) övningar")
+                                                    Text(L.t(sv: "\(routine.exercises.count) övningar", nb: "\(routine.exercises.count) øvelser"))
                                                         .font(.system(size: 13))
                                                         .foregroundColor(.secondary)
                                                 }
@@ -802,7 +802,7 @@ struct CoachProgramsListView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Pass från tränare")
+        .navigationTitle(L.t(sv: "Pass från tränare", nb: "Økter fra trener"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadPrograms()

@@ -22,7 +22,7 @@ struct StoriesRowView: View {
                             let myUserStories = UserStories(
                                 id: currentUserId,
                                 userId: currentUserId,
-                                username: "Din händelse",
+                                username: L.t(sv: "Din händelse", nb: "Din hendelse"),
                                 avatarUrl: nil, // Will be loaded from profile
                                 isProMember: false,
                                 stories: myStories,
@@ -142,7 +142,7 @@ struct MyStoryCircle: View {
                     }
                 }
                 
-                Text("Din händelse")
+                Text(L.t(sv: "Din händelse", nb: "Din hendelse"))
                     .font(.system(size: 12))
                     .foregroundColor(.black)
                     .lineLimit(1)
@@ -253,11 +253,11 @@ struct StoryViewerOverlay: View {
                 if userStories.stories.isEmpty {
                     // No stories - show message and close
                     VStack(spacing: 16) {
-                        Text("Inga stories")
+                        Text(L.t(sv: "Inga stories", nb: "Ingen stories"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
                         
-                        Button("Stäng") {
+                        Button(L.t(sv: "Stäng", nb: "Lukk")) {
                             closeViewer()
                         }
                         .foregroundColor(.white)
@@ -390,7 +390,7 @@ struct StoryViewerOverlay: View {
                                                     Image(systemName: "photo")
                                                         .font(.system(size: 40))
                                                         .foregroundColor(.white.opacity(0.5))
-                                                    Text("Kunde inte ladda bild")
+                                                    Text(L.t(sv: "Kunde inte ladda bild", nb: "Kunne ikke laste bilde"))
                                                         .font(.system(size: 14))
                                                         .foregroundColor(.white.opacity(0.5))
                                                 }
@@ -404,7 +404,7 @@ struct StoryViewerOverlay: View {
                                             ProgressView()
                                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                                 .scaleEffect(1.2)
-                                            Text("Laddar...")
+                                            Text(L.t(sv: "Laddar...", nb: "Laster..."))
                                                 .font(.system(size: 14))
                                                 .foregroundColor(.white.opacity(0.7))
                                         }
@@ -493,7 +493,7 @@ struct StoryViewerOverlay: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 16, weight: .semibold))
-                                    Text("Tillbaka")
+                                    Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                                         .font(.system(size: 16))
                                 }
                                 .foregroundColor(.primary)
@@ -502,13 +502,13 @@ struct StoryViewerOverlay: View {
                     }
             }
         }
-        .alert("Radera story?", isPresented: $showDeleteConfirmation) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Radera story?", nb: "Slette story?"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 deleteCurrentStory()
             }
         } message: {
-            Text("Denna story kommer att tas bort permanent.")
+            Text(L.t(sv: "Denna story kommer att tas bort permanent.", nb: "Denne storyen vil bli slettet permanent."))
         }
         .onDisappear {
             stopTimer()
@@ -830,11 +830,11 @@ struct PostToStoryPopup: View {
                     .cornerRadius(16)
                 
                 // Title
-                Text("Dela till din story?")
+                Text(L.t(sv: "Dela till din story?", nb: "Del til din story?"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.black)
                 
-                Text("Din bild kommer vara synlig för dina följare i 24 timmar")
+                Text(L.t(sv: "Din bild kommer vara synlig för dina följare i 24 timmar", nb: "Bildet ditt vil være synlig for følgerne dine i 24 timer"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -845,7 +845,7 @@ struct PostToStoryPopup: View {
                     Button {
                         onCancel()
                     } label: {
-                        Text("Nej tack")
+                        Text(L.t(sv: "Nej tack", nb: "Nei takk"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
@@ -865,7 +865,7 @@ struct PostToStoryPopup: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             }
-                            Text(isPosting ? "Postar..." : "Dela")
+                            Text(isPosting ? L.t(sv: "Postar...", nb: "Poster...") : L.t(sv: "Dela", nb: "Del"))
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -917,7 +917,7 @@ struct StoryViewersListView: View {
                         Image(systemName: "eye.slash")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Ingen har sett din story än")
+                        Text(L.t(sv: "Ingen har sett din story än", nb: "Ingen har sett storyen din ennå"))
                             .font(.headline)
                             .foregroundColor(.gray)
                     }
@@ -925,7 +925,7 @@ struct StoryViewersListView: View {
                 } else {
                     // Viewers list header
                     HStack {
-                        Text("Vem som har sett händelsen")
+                        Text(L.t(sv: "Vem som har sett händelsen", nb: "Hvem som har sett hendelsen"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.black)
                         Spacer()
@@ -996,7 +996,7 @@ struct StoryViewersListView: View {
                     }
                 }
             }
-            .navigationTitle("Aktivitet")
+            .navigationTitle(L.t(sv: "Aktivitet", nb: "Aktivitet"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

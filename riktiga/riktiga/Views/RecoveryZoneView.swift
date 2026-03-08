@@ -14,7 +14,7 @@ struct RecoveryZoneView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
-                Text("Återhämtning")
+                Text(L.t(sv: "Återhämtning", nb: "Restitusjon"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                 
@@ -36,7 +36,7 @@ struct RecoveryZoneView: View {
                     Circle()
                         .fill(statusColor)
                         .frame(width: 8, height: 8)
-                    Text(overallStatus.status)
+                    Text(localizedStatusText(overallStatus.status))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(statusColor)
                 }
@@ -78,7 +78,7 @@ struct RecoveryZoneView: View {
                                 Circle()
                                     .fill(Color.red.opacity(0.8))
                                     .frame(width: 10, height: 10)
-                                Text("Behöver vila")
+                                Text(L.t(sv: "Behöver vila", nb: "Trenger hvile"))
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.9))
                             }
@@ -102,7 +102,7 @@ struct RecoveryZoneView: View {
                                 Circle()
                                     .fill(Color(red: 0.2, green: 0.8, blue: 0.4))
                                     .frame(width: 10, height: 10)
-                                Text("Redo att träna")
+                                Text(L.t(sv: "Redo att träna", nb: "Klar til å trene"))
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.9))
                             }
@@ -148,6 +148,16 @@ struct RecoveryZoneView: View {
         }
     }
     
+    private func localizedStatusText(_ status: String) -> String {
+        switch status {
+        case "Redo": return L.t(sv: "Redo", nb: "Klar")
+        case "Nästan redo": return L.t(sv: "Nästan redo", nb: "Nesten klar")
+        case "Delvis vilad": return L.t(sv: "Delvis vilad", nb: "Delvis restituert")
+        case "Vila": return L.t(sv: "Vila", nb: "Hvile")
+        default: return status
+        }
+    }
+    
     private var statusColor: Color {
         switch overallStatus.status {
         case "Redo":
@@ -182,7 +192,7 @@ struct RecoveryZoneView: View {
                 self.isLoading = false
                 // Show all as ready if we can't load data
                 self.readyToTrain = service.allMuscleGroups
-                self.overallStatus = ("Redo", "Kunde inte ladda träningshistorik.")
+                self.overallStatus = ("Redo", L.t(sv: "Kunde inte ladda träningshistorik.", nb: "Kunne ikke laste treningshistorikk."))
             }
         }
     }
@@ -298,16 +308,16 @@ struct CompactRecoveryZoneView: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Återhämtning")
+                Text(L.t(sv: "Återhämtning", nb: "Restitusjon"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
                 if isLoading {
-                    Text("Laddar...")
+                    Text(L.t(sv: "Laddar...", nb: "Laster..."))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 } else {
-                    Text("\(readyCount)/\(service.allMuscleGroups.count) muskelgrupper redo")
+                    Text(L.t(sv: "\(readyCount)/\(service.allMuscleGroups.count) muskelgrupper redo", nb: "\(readyCount)/\(service.allMuscleGroups.count) muskelgrupper klare"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -316,7 +326,7 @@ struct CompactRecoveryZoneView: View {
             Spacer()
             
             // Status badge
-            Text(overallStatus)
+            Text(localizedStatusText(overallStatus))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(statusColor)
                 .padding(.horizontal, 10)
@@ -334,6 +344,16 @@ struct CompactRecoveryZoneView: View {
             Task {
                 await loadData(forceRefresh: true)
             }
+        }
+    }
+    
+    private func localizedStatusText(_ status: String) -> String {
+        switch status {
+        case "Redo": return L.t(sv: "Redo", nb: "Klar")
+        case "Nästan redo": return L.t(sv: "Nästan redo", nb: "Nesten klar")
+        case "Delvis vilad": return L.t(sv: "Delvis vilad", nb: "Delvis restituert")
+        case "Vila": return L.t(sv: "Vila", nb: "Hvile")
+        default: return status
         }
     }
     

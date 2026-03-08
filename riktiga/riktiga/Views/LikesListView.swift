@@ -13,7 +13,7 @@ struct LikesListView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("Laddar gillningar...")
+                    ProgressView(L.t(sv: "Laddar gillningar...", nb: "Laster likerklikk..."))
                         .tint(.gray)
                 } else if let errorMessage {
                     VStack(spacing: 12) {
@@ -24,7 +24,7 @@ struct LikesListView: View {
                             .font(.system(size: 16, weight: .medium))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.gray)
-                        Button("Försök igen") {
+                        Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                             Task { await loadData() }
                         }
                         .buttonStyle(.borderedProminent)
@@ -35,10 +35,10 @@ struct LikesListView: View {
                         Image(systemName: "hand.thumbsup")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Inga gillningar ännu")
+                        Text(L.t(sv: "Inga gillningar ännu", nb: "Ingen likerklikk ennå"))
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("När någon gillar det här passet visas de här.")
+                        Text(L.t(sv: "När någon gillar det här passet visas de här.", nb: "Når noen liker denne økten, vises de her."))
                             .font(.body)
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -60,7 +60,7 @@ struct LikesListView: View {
                                 )
                             }
                         } header: {
-                            Text("ANDRA ATLETER")
+                            Text(L.t(sv: "ANDRA ATLETER", nb: "ANDRE UTØVERE"))
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(.secondary)
                         }
@@ -69,7 +69,7 @@ struct LikesListView: View {
                 }
             }
             .padding(.top, isLoading || likers.isEmpty ? 40 : 0)
-            .navigationTitle("Gillningar")
+            .navigationTitle(L.t(sv: "Gillningar", nb: "Likerklikk"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -91,7 +91,7 @@ struct LikesListView: View {
     private func loadData() async {
         guard let currentUserId = authViewModel.currentUser?.id else {
             await MainActor.run {
-                errorMessage = "Du behöver vara inloggad för att se gillningar."
+                errorMessage = L.t(sv: "Du behöver vara inloggad för att se gillningar.", nb: "Du må være innlogget for å se likerklikk.")
                 isLoading = false
             }
             return
@@ -117,7 +117,7 @@ struct LikesListView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta listan just nu."
+                self.errorMessage = L.t(sv: "Kunde inte hämta listan just nu.", nb: "Kunne ikke hente listen akkurat nå.")
                 self.isLoading = false
             }
         }
@@ -143,7 +143,7 @@ struct LikesListView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte uppdatera följ-status. Försök igen."
+                self.errorMessage = L.t(sv: "Kunde inte uppdatera följ-status. Försök igen.", nb: "Kunne ikke oppdatere følgestatus. Prøv igjen.")
             }
         }
     }
@@ -176,7 +176,7 @@ private struct LikeUserRow: View {
             
             if !isCurrentUser {
                 Button(action: onFollowToggle) {
-                    Text(isFollowing ? "Avfölj" : "Följ")
+                    Text(isFollowing ? L.t(sv: "Avfölj", nb: "Slutt å følge") : L.t(sv: "Följ", nb: "Følg"))
                         .font(.system(size: 14, weight: .semibold))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)

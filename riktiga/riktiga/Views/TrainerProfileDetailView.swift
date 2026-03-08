@@ -134,7 +134,7 @@ struct TrainerProfileDetailView: View {
                         .foregroundColor(.primary)
                     
                     if let reviews = trainer.totalReviews, reviews > 0 {
-                        Text("(\(reviews) recensioner)")
+                        Text(L.t(sv: "(\(reviews) recensioner)", nb: "(\(reviews) anmeldelser)"))
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     }
@@ -150,16 +150,16 @@ struct TrainerProfileDetailView: View {
     private var statsRow: some View {
         HStack(spacing: 0) {
             // Hourly rate
-            statItem(value: "\(trainer.hourlyRate)kr", label: "Timpris")
+            statItem(value: "\(trainer.hourlyRate)kr", label: L.t(sv: "Timpris", nb: "Timepris"))
             
             Divider()
                 .frame(height: 40)
             
             // Experience
             if let years = trainer.experienceYears, years > 0 {
-                statItem(value: "\(years) år", label: "Erfarenhet")
+                statItem(value: L.t(sv: "\(years) år", nb: "\(years) år"), label: L.t(sv: "Erfarenhet", nb: "Erfaring"))
             } else {
-                statItem(value: "-", label: "Erfarenhet")
+                statItem(value: "-", label: L.t(sv: "Erfarenhet", nb: "Erfaring"))
             }
         }
         .padding(.vertical, 16)
@@ -210,7 +210,7 @@ struct TrainerProfileDetailView: View {
             // Location
             if let city = trainer.city, !city.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Kursplatser")
+                    Text(L.t(sv: "Kursplatser", nb: "Kurssteder"))
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
                         .padding(.top, 8)
@@ -252,12 +252,12 @@ struct TrainerProfileDetailView: View {
     
     private var pricesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Priser")
+            Text(L.t(sv: "Priser", nb: "Priser"))
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.primary)
             
             VStack(alignment: .leading, spacing: 12) {
-                priceRow(label: "Timpris", value: "\(trainer.hourlyRate)kr/h")
+                priceRow(label: L.t(sv: "Timpris", nb: "Timepris"), value: "\(trainer.hourlyRate)kr/h")
             }
             .padding(16)
             .background(
@@ -293,7 +293,7 @@ struct TrainerProfileDetailView: View {
         return Group {
             if hasSocialMedia {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Sociala medier")
+                    Text(L.t(sv: "Sociala medier", nb: "Sosiale medier"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
@@ -317,7 +317,7 @@ struct TrainerProfileDetailView: View {
                         if let website = trainer.websiteUrl, !website.isEmpty {
                             socialMediaButton(
                                 icon: "globe",
-                                label: "Hemsida",
+                                label: L.t(sv: "Hemsida", nb: "Nettside"),
                                 url: website
                             )
                         }
@@ -382,7 +382,7 @@ struct TrainerProfileDetailView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "message.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Kontakta tränaren")
+                        Text(L.t(sv: "Kontakta tränaren", nb: "Kontakt treneren"))
                             .font(.system(size: 17, weight: .bold))
                     }
                     .foregroundColor(.white)

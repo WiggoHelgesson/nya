@@ -32,7 +32,7 @@ struct CheerEmojiPickerView: View {
                 Spacer()
                 
                 VStack(spacing: 2) {
-                    Text("Heja på")
+                    Text(L.t(sv: "Heja på", nb: "Heia på"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     Text(friend.userName.components(separatedBy: " ").first ?? friend.userName)
@@ -85,7 +85,7 @@ struct CheerEmojiPickerView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(0.8)
                     } else {
-                        Text("Skicka")
+                        Text(L.t(sv: "Skicka", nb: "Send"))
                             .font(.system(size: 17, weight: .semibold))
                         if let emoji = selectedEmoji {
                             Text(emoji)
@@ -136,7 +136,7 @@ struct CheerReceivedAnimationView: View {
                 
                 // Message
                 VStack(spacing: 4) {
-                    Text("\(cheer.fromUserName) skickade")
+                    Text(L.t(sv: "\(cheer.fromUserName) skickade", nb: "\(cheer.fromUserName) sendte"))
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.black)
                     
@@ -145,7 +145,7 @@ struct CheerReceivedAnimationView: View {
                 }
                 
                 // Motivational message
-                Text("Du är grym, fortsätt kämpa!")
+                Text(L.t(sv: "Du är grym, fortsätt kämpa!", nb: "Du er rå, fortsett å kjempe!"))
                     .font(.system(size: 16))
                     .foregroundColor(.gray)
                     .padding(.top, 4)
@@ -154,7 +154,7 @@ struct CheerReceivedAnimationView: View {
                 Button {
                     dismissAnimation()
                 } label: {
-                    Text("Tack!")
+                    Text(L.t(sv: "Tack!", nb: "Takk!"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)

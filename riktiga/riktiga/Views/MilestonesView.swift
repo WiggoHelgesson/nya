@@ -37,7 +37,7 @@ struct MilestonesView: View {
                 .padding(.bottom, 40)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Milstolpar")
+            .navigationTitle(L.t(sv: "Milstolpar", nb: "Milepæler"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -115,7 +115,7 @@ struct MilestonesView: View {
                     }
                 }
                 
-                Text("Streak")
+                Text(L.t(sv: "Streak", nb: "Streak"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
             }
@@ -150,7 +150,7 @@ struct MilestonesView: View {
                         .foregroundColor(.white)
                 }
                 
-                Text("Utmärkelser")
+                Text(L.t(sv: "Utmärkelser", nb: "Utmerkelser"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
             }
@@ -169,10 +169,10 @@ struct MilestonesView: View {
                     .foregroundColor(.orange)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(streakInfo.longestStreak) dagar")
+                    Text(L.t(sv: "\(streakInfo.longestStreak) dagar", nb: "\(streakInfo.longestStreak) dager"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
-                    Text("längsta svit")
+                    Text(L.t(sv: "längsta svit", nb: "lengste serie"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
@@ -196,7 +196,7 @@ struct MilestonesView: View {
                     )
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(unlockedCount)/\(totalBadges) utmärkelser")
+                    Text(L.t(sv: "\(unlockedCount)/\(totalBadges) utmärkelser", nb: "\(unlockedCount)/\(totalBadges) utmerkelser"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.primary)
                     
@@ -230,25 +230,25 @@ struct MilestonesView: View {
         VStack(spacing: 24) {
             // Streaks category
             achievementSection(
-                title: "Dagssvitar",
+                title: L.t(sv: "Dagssvitar", nb: "Dagsserier"),
                 achievements: Achievement.allAchievements.filter { $0.category == .streaks }
             )
             
             // Meals category
             achievementSection(
-                title: "Matloggning",
+                title: L.t(sv: "Matloggning", nb: "Matlogging"),
                 achievements: Achievement.allAchievements.filter { $0.category == .meals }
             )
             
             // Workouts category
             achievementSection(
-                title: "Träning",
+                title: L.t(sv: "Träning", nb: "Trening"),
                 achievements: Achievement.allAchievements.filter { $0.category == .workouts }
             )
             
             // Social category
             achievementSection(
-                title: "Socialt",
+                title: L.t(sv: "Socialt", nb: "Sosialt"),
                 achievements: Achievement.allAchievements.filter { $0.category == .social }
             )
         }

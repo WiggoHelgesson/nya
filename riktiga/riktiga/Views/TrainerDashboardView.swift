@@ -39,11 +39,11 @@ struct TrainerDashboardView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Utbetalningar & info")
+            .navigationTitle(L.t(sv: "Utbetalningar & info", nb: "Utbetalinger & info"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
@@ -86,15 +86,15 @@ struct TrainerDashboardView: View {
                 TrainerOnboardingView(isEditMode: true)
                     .environmentObject(AuthViewModel.shared)
             }
-            .alert("Avaktivera tränarkonto", isPresented: $showDeactivateConfirmation) {
-                Button("Avbryt", role: .cancel) {}
-                Button("Avaktivera", role: .destructive) {
+            .alert(L.t(sv: "Avaktivera tränarkonto", nb: "Deaktiver trenerkonto"), isPresented: $showDeactivateConfirmation) {
+                Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
+                Button(L.t(sv: "Avaktivera", nb: "Deaktiver"), role: .destructive) {
                     Task {
                         await deactivateTrainerAccount()
                     }
                 }
             } message: {
-                Text("Är du säker på att du vill avaktivera ditt tränarkonto? Din annons kommer att tas bort från kartan men du kan aktivera det igen senare.")
+                Text(L.t(sv: "Är du säker på att du vill avaktivera ditt tränarkonto? Din annons kommer att tas bort från kartan men du kan aktivera det igen senare.", nb: "Er du sikker på at du vil deaktivere trenerkontoen din? Annonsen din fjernes fra kartet, men du kan aktivere den igjen senere."))
             }
         }
     }
@@ -151,7 +151,7 @@ struct TrainerDashboardView: View {
             HStack {
                 Image(systemName: "creditcard.fill")
                     .foregroundColor(.primary)
-                Text("Utbetalningar")
+                Text(L.t(sv: "Utbetalningar", nb: "Utbetalinger"))
                     .font(.system(size: 18, weight: .bold))
                 Spacer()
             }
@@ -160,7 +160,7 @@ struct TrainerDashboardView: View {
                 HStack {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text("Laddar...")
+                    Text(L.t(sv: "Laddar...", nb: "Laster..."))
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -199,9 +199,9 @@ struct TrainerDashboardView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.primary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Konto aktivt")
+                    Text(L.t(sv: "Konto aktivt", nb: "Konto aktivt"))
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Redo att ta emot betalningar")
+                    Text(L.t(sv: "Redo att ta emot betalningar", nb: "Klar til å motta betalinger"))
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -214,7 +214,7 @@ struct TrainerDashboardView: View {
                 
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Tillgängligt")
+                        Text(L.t(sv: "Tillgängligt", nb: "Tilgjengelig"))
                             .font(.caption)
                             .foregroundColor(.gray)
                         if let available = balance.available?.first {
@@ -230,7 +230,7 @@ struct TrainerDashboardView: View {
                     Spacer()
                     
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text("Väntande")
+                        Text(L.t(sv: "Väntande", nb: "Ventende"))
                             .font(.caption)
                             .foregroundColor(.gray)
                         if let pending = balance.pending?.first {
@@ -250,7 +250,7 @@ struct TrainerDashboardView: View {
                 openStripeDashboard()
             } label: {
                 HStack {
-                    Text("Öppna Stripe Dashboard")
+                    Text(L.t(sv: "Öppna Stripe Dashboard", nb: "Åpne Stripe Dashboard"))
                         .font(.system(size: 14, weight: .medium))
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12))
@@ -270,9 +270,9 @@ struct TrainerDashboardView: View {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundColor(.gray)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Slutför registrering")
+                    Text(L.t(sv: "Slutför registrering", nb: "Fullfør registrering"))
                         .font(.system(size: 14, weight: .semibold))
-                    Text(stripeStatus?.statusMessage ?? "Fyll i dina uppgifter för att ta emot betalningar")
+                    Text(stripeStatus?.statusMessage ?? L.t(sv: "Fyll i dina uppgifter för att ta emot betalningar", nb: "Fyll inn opplysningene dine for å motta betalinger"))
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -288,7 +288,7 @@ struct TrainerDashboardView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text("Slutför registrering")
+                    Text(L.t(sv: "Slutför registrering", nb: "Fullfør registrering"))
                         .font(.system(size: 14, weight: .bold))
                 }
                 .frame(maxWidth: .infinity)
@@ -310,9 +310,9 @@ struct TrainerDashboardView: View {
                 Image(systemName: "plus.circle.fill")
                     .foregroundColor(.primary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Koppla betalningar")
+                    Text(L.t(sv: "Koppla betalningar", nb: "Koble betalinger"))
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Ta emot betalningar direkt till ditt bankkonto")
+                    Text(L.t(sv: "Ta emot betalningar direkt till ditt bankkonto", nb: "Motta betalinger direkte til bankkontoen din"))
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -328,7 +328,7 @@ struct TrainerDashboardView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text("Kom igång med Stripe")
+                    Text(L.t(sv: "Kom igång med Stripe", nb: "Kom i gang med Stripe"))
                         .font(.system(size: 14, weight: .bold))
                 }
                 .frame(maxWidth: .infinity)
@@ -339,7 +339,7 @@ struct TrainerDashboardView: View {
             }
             .disabled(isLoadingStripe)
             
-            Text("15% går till plattformen, resten till dig")
+            Text(L.t(sv: "15% går till plattformen, resten till dig", nb: "15% går til plattformen, resten til deg"))
                 .font(.caption2)
                 .foregroundColor(.gray)
         }
@@ -442,7 +442,7 @@ struct TrainerDashboardView: View {
         if trainerId == nil {
             // Fetch trainer ID directly
             guard let userId = AuthViewModel.shared.currentUser?.id else {
-                stripeError = "Du måste vara inloggad"
+                stripeError = L.t(sv: "Du måste vara inloggad", nb: "Du må være innlogget")
                 return
             }
             
@@ -464,14 +464,14 @@ struct TrainerDashboardView: View {
                     viewModel.trainerId = response.id
                 }
             } catch {
-                stripeError = "Kunde inte hitta ditt tränarkonto"
+                stripeError = L.t(sv: "Kunde inte hitta ditt tränarkonto", nb: "Kunne ikke finne trenerkontoen din")
                 return
             }
         }
         
         guard let finalTrainerId = trainerId,
               let email = AuthViewModel.shared.currentUser?.email else {
-            stripeError = "Kunde inte hitta användarinformation"
+            stripeError = L.t(sv: "Kunde inte hitta användarinformation", nb: "Kunne ikke finne brukerinformasjon")
             return
         }
         
@@ -505,9 +505,9 @@ struct TrainerDashboardView: View {
                 // Show user-friendly error message
                 let errorMsg = error.localizedDescription
                 if errorMsg.contains("platform profile") || errorMsg.contains("questionnaire") {
-                    stripeError = "Stripe Connect konfigureras just nu. Försök igen om några minuter."
+                    stripeError = L.t(sv: "Stripe Connect konfigureras just nu. Försök igen om några minuter.", nb: "Stripe Connect konfigureres nå. Prøv igjen om noen minutter.")
                 } else {
-                    stripeError = "Kunde inte ansluta till Stripe. Försök igen senare."
+                    stripeError = L.t(sv: "Kunde inte ansluta till Stripe. Försök igen senare.", nb: "Kunne ikke koble til Stripe. Prøv igjen senere.")
                 }
             }
         }
@@ -515,7 +515,7 @@ struct TrainerDashboardView: View {
     
     private func startStripeOnboarding() async {
         guard let accountId = stripeAccountId else {
-            stripeError = "Inget Stripe-konto hittat"
+            stripeError = L.t(sv: "Inget Stripe-konto hittat", nb: "Ingen Stripe-konto funnet")
             return
         }
         
@@ -572,12 +572,12 @@ struct TrainerDashboardView: View {
             HStack {
                 Image(systemName: "megaphone.fill")
                     .foregroundColor(.primary)
-                Text("Hantera annons")
+                Text(L.t(sv: "Hantera annons", nb: "Administrer annonse"))
                     .font(.system(size: 18, weight: .bold))
                 Spacer()
             }
             
-            Text("Redigera din annons och gå igenom hela flödet med din befintliga information förifyld.")
+            Text(L.t(sv: "Redigera din annons och gå igenom hela flödet med din befintliga information förifyld.", nb: "Rediger annonsen din og gå gjennom hele flyten med eksisterende informasjon forhåndsutfylt."))
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -588,7 +588,7 @@ struct TrainerDashboardView: View {
                     Image(systemName: "pencil.circle.fill")
                         .font(.title3)
                     
-                    Text("Redigera annons")
+                    Text(L.t(sv: "Redigera annons", nb: "Rediger annonse"))
                         .font(.system(size: 15, weight: .semibold))
                     
                     Spacer()
@@ -621,11 +621,11 @@ struct TrainerDashboardView: View {
                     .foregroundColor(.white)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Avaktivera tränarkonto")
+                    Text(L.t(sv: "Avaktivera tränarkonto", nb: "Deaktiver trenerkonto"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("Ta bort din annons från kartan")
+                    Text(L.t(sv: "Ta bort din annons från kartan", nb: "Fjern annonsen din fra kartet"))
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -654,21 +654,21 @@ struct TrainerDashboardView: View {
     private var statsOverview: some View {
         HStack(spacing: 16) {
             StatCard(
-                title: "Väntande",
+                title: L.t(sv: "Väntande", nb: "Ventende"),
                 value: "\(viewModel.pendingBookings.count)",
                 icon: "clock.fill",
                 color: .gray
             )
             
             StatCard(
-                title: "Bokade",
+                title: L.t(sv: "Bokade", nb: "Booket"),
                 value: "\(viewModel.acceptedBookings.count)",
                 icon: "checkmark.circle.fill",
                 color: .black
             )
             
             StatCard(
-                title: "Totalt",
+                title: L.t(sv: "Totalt", nb: "Totalt"),
                 value: "\(viewModel.allBookings.count)",
                 icon: "calendar.badge.plus",
                 color: .black
@@ -783,7 +783,7 @@ struct BookingCard: View {
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(booking.studentUsername ?? "Okänd användare")
+                Text(booking.studentUsername ?? L.t(sv: "Okänd användare", nb: "Ukjent bruker"))
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -858,9 +858,9 @@ struct BookingResponseView: View {
                     ProfileImage(url: booking.studentAvatarUrl, size: 60)
                     
                     VStack(alignment: .leading) {
-                        Text(booking.studentUsername ?? "Okänd användare")
+                        Text(booking.studentUsername ?? L.t(sv: "Okänd användare", nb: "Ukjent bruker"))
                             .font(.headline)
-                        Text("Vill boka en lektion")
+                        Text(L.t(sv: "Vill boka en lektion", nb: "Vil booke en leksjon"))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -873,7 +873,7 @@ struct BookingResponseView: View {
                 
                 // Message
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Meddelande")
+                    Text(L.t(sv: "Meddelande", nb: "Melding"))
                         .font(.headline)
                     
                     Text(booking.message)
@@ -887,10 +887,10 @@ struct BookingResponseView: View {
                 
                 // Response
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Ditt svar (valfritt)")
+                    Text(L.t(sv: "Ditt svar (valfritt)", nb: "Ditt svar (valgfritt)"))
                         .font(.headline)
                     
-                    TextField("Skriv ett meddelande...", text: $responseMessage, axis: .vertical)
+                    TextField(L.t(sv: "Skriv ett meddelande...", nb: "Skriv en melding..."), text: $responseMessage, axis: .vertical)
                         .lineLimit(3...5)
                         .padding()
                         .background(Color(.systemGray6))
@@ -907,7 +907,7 @@ struct BookingResponseView: View {
                     } label: {
                         HStack {
                             Image(systemName: "xmark")
-                            Text("Avböj")
+                            Text(L.t(sv: "Avböj", nb: "Avslå"))
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -924,7 +924,7 @@ struct BookingResponseView: View {
                     } label: {
                         HStack {
                             Image(systemName: "checkmark")
-                            Text("Godkänn")
+                            Text(L.t(sv: "Godkänn", nb: "Godkjenn"))
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -937,11 +937,11 @@ struct BookingResponseView: View {
                 }
             }
             .padding()
-            .navigationTitle("Bokningsförfrågan")
+            .navigationTitle(L.t(sv: "Bokningsförfrågan", nb: "Bookingforespørsel"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }

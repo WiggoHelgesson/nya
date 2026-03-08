@@ -103,7 +103,7 @@ struct TrainerOnboardingView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
-                        Text("Laddar din profil...")
+                        Text(L.t(sv: "Laddar din profil...", nb: "Laster profilen din..."))
                             .font(.headline)
                             .foregroundColor(.white)
                     }
@@ -112,11 +112,11 @@ struct TrainerOnboardingView: View {
                     .cornerRadius(16)
                 }
             }
-            .navigationTitle(isEditMode ? "Hantera annons" : "Bli golftränare")
+            .navigationTitle(isEditMode ? L.t(sv: "Hantera annons", nb: "Administrer annonse") : L.t(sv: "Bli golftränare", nb: "Bli golfinstruktør"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
@@ -127,7 +127,7 @@ struct TrainerOnboardingView: View {
                     await loadExistingProfile()
                 }
             }
-            .alert("Fel", isPresented: .init(
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: .init(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
@@ -201,13 +201,13 @@ struct TrainerOnboardingView: View {
                 }
             } else {
                 await MainActor.run {
-                    self.errorMessage = "Kunde inte hitta din tränarprofil"
+                    self.errorMessage = L.t(sv: "Kunde inte hitta din tränarprofil", nb: "Kunne ikke finne trenerprofilen din")
                     self.isLoadingExistingProfile = false
                 }
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Fel vid laddning: \(error.localizedDescription)"
+                self.errorMessage = L.t(sv: "Fel vid laddning: \(error.localizedDescription)", nb: "Feil ved lasting: \(error.localizedDescription)")
                 self.isLoadingExistingProfile = false
             }
         }
@@ -232,10 +232,10 @@ struct TrainerOnboardingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Ditt namn")
+                    Text(L.t(sv: "Ditt namn", nb: "Ditt navn"))
                         .font(.headline)
                     
-                    TextField("Förnamn Efternamn", text: $name)
+                    TextField(L.t(sv: "Förnamn Efternamn", nb: "Fornavn Etternavn"), text: $name)
                         .textFieldStyle(RoundedTextFieldStyle())
                 }
                 
@@ -243,11 +243,11 @@ struct TrainerOnboardingView: View {
                     HStack {
                         Image(systemName: "person.text.rectangle")
                             .foregroundColor(.primary)
-                        Text("Din bakgrund")
+                        Text(L.t(sv: "Din bakgrund", nb: "Din bakgrunn"))
                             .font(.headline)
                     }
                     
-                    Text("Berätta kort om din erfarenhet som golftränare")
+                    Text(L.t(sv: "Berätta kort om din erfarenhet som golftränare", nb: "Fortell kort om din erfaring som golfinstruktør"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -262,7 +262,7 @@ struct TrainerOnboardingView: View {
                         )
                         .overlay(alignment: .topLeading) {
                             if backgroundExperience.isEmpty {
-                                Text("Ex: Jag har tränat golf i 10 år och är PGA-certifierad...")
+                                Text(L.t(sv: "Ex: Jag har tränat golf i 10 år och är PGA-certifierad...", nb: "Eks: Jeg har trent golf i 10 år og er PGA-sertifisert..."))
                                     .font(.body)
                                     .foregroundColor(.gray.opacity(0.5))
                                     .padding(.horizontal, 12)
@@ -276,11 +276,11 @@ struct TrainerOnboardingView: View {
                     HStack {
                         Image(systemName: "lightbulb")
                             .foregroundColor(.primary)
-                        Text("Din träningsfilosofi")
+                        Text(L.t(sv: "Din träningsfilosofi", nb: "Din treningsfilosofi"))
                             .font(.headline)
                     }
                     
-                    Text("Hur brukar du lägga upp träningen?")
+                    Text(L.t(sv: "Hur brukar du lägga upp träningen?", nb: "Hvordan pleier du å legge opp treningen?"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -295,7 +295,7 @@ struct TrainerOnboardingView: View {
                         )
                         .overlay(alignment: .topLeading) {
                             if trainingPhilosophy.isEmpty {
-                                Text("Ex: Jag fokuserar på grundteknik och anpassar mig efter elevens nivå...")
+                                Text(L.t(sv: "Ex: Jag fokuserar på grundteknik och anpassar mig efter elevens nivå...", nb: "Eks: Jeg fokuserer på grunnleggende teknikk og tilpasser meg etter elevens nivå..."))
                                     .font(.body)
                                     .foregroundColor(.gray.opacity(0.5))
                                     .padding(.horizontal, 12)
@@ -316,11 +316,11 @@ struct TrainerOnboardingView: View {
     private var step2Availability: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("När är du tillgänglig?")
+                Text(L.t(sv: "När är du tillgänglig?", nb: "Når er du tilgjengelig?"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Välj vilka dagar och tider du kan ta emot bokningar.")
+                Text(L.t(sv: "Välj vilka dagar och tider du kan ta emot bokningar.", nb: "Velg hvilke dager og tider du kan ta imot bestillinger."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
@@ -335,11 +335,11 @@ struct TrainerOnboardingView: View {
                     HStack {
                         Image(systemName: "lightbulb.fill")
                             .foregroundColor(.yellow)
-                        Text("Tips")
+                        Text(L.t(sv: "Tips", nb: "Tips"))
                             .font(.headline)
                     }
                     
-                    Text("Du kan alltid ändra dina tider senare i inställningarna. Elever kan bara boka under de tider du angivit.")
+                    Text(L.t(sv: "Du kan alltid ändra dina tider senare i inställningarna. Elever kan bara boka under de tider du angivit.", nb: "Du kan alltid endre tidene dine senere i innstillingene. Elever kan bare bestille i de tidene du har oppgitt."))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -359,50 +359,50 @@ struct TrainerOnboardingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Pris per timme")
+                    Text(L.t(sv: "Pris per timme", nb: "Pris per time"))
                         .font(.headline)
                     
                     HStack {
-                        TextField("Ex: 500", text: $hourlyRate)
+                        TextField(L.t(sv: "Ex: 500", nb: "Eks: 500"), text: $hourlyRate)
                             .keyboardType(.numberPad)
                             .textFieldStyle(RoundedTextFieldStyle())
                         
-                        Text("kr/timme")
+                        Text(L.t(sv: "kr/timme", nb: "kr/time"))
                             .foregroundColor(.secondary)
                     }
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Ditt handicap")
+                    Text(L.t(sv: "Ditt handicap", nb: "Ditt handicap"))
                         .font(.headline)
                     
-                    TextField("Ex: 5", text: $handicap)
+                    TextField(L.t(sv: "Ex: 5", nb: "Eks: 5"), text: $handicap)
                         .keyboardType(.numberPad)
                         .textFieldStyle(RoundedTextFieldStyle())
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Års erfarenhet")
+                    Text(L.t(sv: "Års erfarenhet", nb: "Års erfaring"))
                         .font(.headline)
                     
-                    TextField("Ex: 10", text: $experienceYears)
+                    TextField(L.t(sv: "Ex: 10", nb: "Eks: 10"), text: $experienceYears)
                         .keyboardType(.numberPad)
                         .textFieldStyle(RoundedTextFieldStyle())
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Stad")
+                    Text(L.t(sv: "Stad", nb: "By"))
                         .font(.headline)
                     
-                    TextField("Ex: Stockholm", text: $city)
+                    TextField(L.t(sv: "Ex: Stockholm", nb: "Eks: Oslo"), text: $city)
                         .textFieldStyle(RoundedTextFieldStyle())
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Klubbtillhörighet (valfritt)")
+                    Text(L.t(sv: "Klubbtillhörighet (valfritt)", nb: "Klubbtilhørighet (valgfritt)"))
                         .font(.headline)
                     
-                    TextField("Ex: Djursholms GK", text: $clubAffiliation)
+                    TextField(L.t(sv: "Ex: Djursholms GK", nb: "Eks: Oslo GK"), text: $clubAffiliation)
                         .textFieldStyle(RoundedTextFieldStyle())
                 }
                 
@@ -411,11 +411,11 @@ struct TrainerOnboardingView: View {
                     HStack {
                         Image(systemName: "lightbulb.fill")
                             .foregroundColor(.yellow)
-                        Text("Tips")
+                        Text(L.t(sv: "Tips", nb: "Tips"))
                             .font(.headline)
                     }
                     
-                    Text("Genomsnittspriset för en golflektion i Sverige är 400-800 kr/timme. Sätt ett konkurrenskraftigt pris för att få fler bokningar!")
+                    Text(L.t(sv: "Genomsnittspriset för en golflektion i Sverige är 400-800 kr/timme. Sätt ett konkurrenskraftigt pris för att få fler bokningar!", nb: "Gjennomsnittsprisen for en golftime er 400-800 kr/time. Sett en konkurransedyktig pris for å få flere bestillinger!"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -434,11 +434,11 @@ struct TrainerOnboardingView: View {
     private var step4Specialties: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Vad är du bra på?")
+                Text(L.t(sv: "Vad är du bra på?", nb: "Hva er du god på?"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Välj dina specialområden så att elever kan hitta rätt tränare.")
+                Text(L.t(sv: "Välj dina specialområden så att elever kan hitta rätt tränare.", nb: "Velg dine spesialområder slik at elever kan finne riktig trener."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
@@ -471,11 +471,11 @@ struct TrainerOnboardingView: View {
                 }
                 
                 if selectedSpecialties.isEmpty {
-                    Text("Välj minst en specialitet")
+                    Text(L.t(sv: "Välj minst en specialitet", nb: "Velg minst én spesialitet"))
                         .font(.caption)
                         .foregroundColor(.orange)
                 } else {
-                    Text("\(selectedSpecialties.count) specialiteter valda")
+                    Text(L.t(sv: "\(selectedSpecialties.count) specialiteter valda", nb: "\(selectedSpecialties.count) spesialiteter valgt"))
                         .font(.caption)
                         .foregroundColor(.primary)
                 }
@@ -491,11 +491,11 @@ struct TrainerOnboardingView: View {
     private var step5LessonTypes: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Vilka lektioner erbjuder du?")
+                Text(L.t(sv: "Vilka lektioner erbjuder du?", nb: "Hvilke leksjoner tilbyr du?"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Lägg till olika lektionstyper med olika priser och längder.")
+                Text(L.t(sv: "Lägg till olika lektionstyper med olika priser och längder.", nb: "Legg til ulike leksjonstyper med ulike priser og lengder."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
@@ -505,7 +505,7 @@ struct TrainerOnboardingView: View {
                 } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                        Text("Lägg till egen lektionstyp")
+                        Text(L.t(sv: "Lägg till egen lektionstyp", nb: "Legg til egen leksjonstype"))
                     }
                     .font(.headline)
                     .foregroundColor(.white)
@@ -518,7 +518,7 @@ struct TrainerOnboardingView: View {
                 // Added lesson types
                 if !lessonTypes.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Dina lektionstyper:")
+                        Text(L.t(sv: "Dina lektionstyper:", nb: "Dine leksjonstyper:"))
                             .font(.headline)
                         
                         ForEach(lessonTypes) { type in
@@ -527,7 +527,7 @@ struct TrainerOnboardingView: View {
                                     Text(type.name)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                    Text("\(type.duration) min • \(type.price) kr")
+                                    Text(L.t(sv: "\(type.duration) min • \(type.price) kr", nb: "\(type.duration) min • \(type.price) kr"))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -550,7 +550,7 @@ struct TrainerOnboardingView: View {
                 
                 // Default lesson types suggestion
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Förslag på lektionstyper:")
+                    Text(L.t(sv: "Förslag på lektionstyper:", nb: "Forslag til leksjonstyper:"))
                         .font(.headline)
                     
                     ForEach(DefaultLessonTypes.types, id: \.name) { type in
@@ -605,10 +605,10 @@ struct TrainerOnboardingView: View {
     
     private var step6Location: some View {
         VStack(spacing: 16) {
-            Text("Var kan du hålla lektioner?")
+            Text(L.t(sv: "Var kan du hålla lektioner?", nb: "Hvor kan du holde leksjoner?"))
                 .font(.headline)
             
-            Text(isMapLocked ? "Pin placerad! Justera radien nedan." : "Flytta kartan för att välja centrum")
+            Text(isMapLocked ? L.t(sv: "Pin placerad! Justera radien nedan.", nb: "Pin plassert! Juster radiusen nedenfor.") : L.t(sv: "Flytta kartan för att välja centrum", nb: "Flytt kartet for å velge sentrum"))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -658,7 +658,7 @@ struct TrainerOnboardingView: View {
                             Spacer()
                             HStack(spacing: 4) {
                                 Image(systemName: "lock.fill")
-                                Text("Låst")
+                                Text(L.t(sv: "Låst", nb: "Låst"))
                             }
                             .font(.caption)
                             .foregroundColor(.white)
@@ -685,7 +685,7 @@ struct TrainerOnboardingView: View {
                     } label: {
                         HStack {
                             Image(systemName: "pencil")
-                            Text("Ändra")
+                            Text(L.t(sv: "Ändra", nb: "Endre"))
                         }
                         .font(.headline)
                         .foregroundColor(.primary)
@@ -703,7 +703,7 @@ struct TrainerOnboardingView: View {
                     } label: {
                         HStack {
                             Image(systemName: "mappin.and.ellipse")
-                            Text("Sätt ut pin")
+                            Text(L.t(sv: "Sätt ut pin", nb: "Sett ut pin"))
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -718,11 +718,11 @@ struct TrainerOnboardingView: View {
             // Radius slider
             VStack(spacing: 8) {
                 HStack {
-                    Text("Täckningsområde")
+                    Text(L.t(sv: "Täckningsområde", nb: "Dekningsområde"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(Int(serviceRadiusKm)) km radie")
+                    Text(L.t(sv: "\(Int(serviceRadiusKm)) km radie", nb: "\(Int(serviceRadiusKm)) km radius"))
                         .font(.system(size: 16, weight: .bold))
                 }
                 
@@ -752,7 +752,7 @@ struct TrainerOnboardingView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Täckningsområde: \(Int(serviceRadiusKm)) km radie")
+                    Text(L.t(sv: "Täckningsområde: \(Int(serviceRadiusKm)) km radie", nb: "Dekningsområde: \(Int(serviceRadiusKm)) km radius"))
                         .font(.subheadline)
                 }
                 .padding()
@@ -763,7 +763,7 @@ struct TrainerOnboardingView: View {
                 HStack {
                     Image(systemName: "info.circle.fill")
                         .foregroundColor(.orange)
-                    Text("Flytta kartan och tryck \"Sätt ut pin\"")
+                    Text(L.t(sv: "Flytta kartan och tryck \"Sätt ut pin\"", nb: "Flytt kartet og trykk \"Sett ut pin\""))
                         .font(.subheadline)
                 }
                 .padding()
@@ -834,7 +834,7 @@ struct TrainerOnboardingView: View {
     private var step7Review: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("Granska din profil")
+                Text(L.t(sv: "Granska din profil", nb: "Se over profilen din"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -864,16 +864,16 @@ struct TrainerOnboardingView: View {
                     }
                     
                     if !hasProfilePicture {
-                        Text("⚠️ Du måste ha en profilbild")
+                        Text(L.t(sv: "⚠️ Du måste ha en profilbild", nb: "⚠️ Du må ha et profilbilde"))
                             .font(.caption)
                             .foregroundColor(.red)
                     } else {
-                        Text("Tryck för att ändra profilbild")
+                        Text(L.t(sv: "Tryck för att ändra profilbild", nb: "Trykk for å endre profilbilde"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                     
-                    Text(name.isEmpty ? "Ditt namn" : name)
+                    Text(name.isEmpty ? L.t(sv: "Ditt namn", nb: "Ditt navn") : name)
                         .font(.title3)
                         .fontWeight(.semibold)
                     
@@ -882,7 +882,7 @@ struct TrainerOnboardingView: View {
                         StatBadge(icon: "clock", value: "\(hourlyRate.isEmpty ? "?" : hourlyRate) kr/h")
                     }
                     
-                    Text(combinedDescription.isEmpty ? "Din beskrivning..." : combinedDescription)
+                    Text(combinedDescription.isEmpty ? L.t(sv: "Din beskrivning...", nb: "Din beskrivelse...") : combinedDescription)
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -894,14 +894,14 @@ struct TrainerOnboardingView: View {
                 
                 // Checklist
                 VStack(alignment: .leading, spacing: 12) {
-                    ChecklistItem(text: "Profilbild", isComplete: hasProfilePicture)
-                    ChecklistItem(text: "Namn", isComplete: !name.isEmpty)
-                    ChecklistItem(text: "Bakgrund", isComplete: !backgroundExperience.isEmpty)
-                    ChecklistItem(text: "Träningsfilosofi", isComplete: !trainingPhilosophy.isEmpty)
-                    ChecklistItem(text: "Tillgänglighet", isComplete: hasAtLeastOneAvailableDay)
-                    ChecklistItem(text: "Pris", isComplete: !hourlyRate.isEmpty)
-                    ChecklistItem(text: "Handicap", isComplete: !handicap.isEmpty)
-                    ChecklistItem(text: "Plats", isComplete: selectedLocation != nil)
+                    ChecklistItem(text: L.t(sv: "Profilbild", nb: "Profilbilde"), isComplete: hasProfilePicture)
+                    ChecklistItem(text: L.t(sv: "Namn", nb: "Navn"), isComplete: !name.isEmpty)
+                    ChecklistItem(text: L.t(sv: "Bakgrund", nb: "Bakgrunn"), isComplete: !backgroundExperience.isEmpty)
+                    ChecklistItem(text: L.t(sv: "Träningsfilosofi", nb: "Treningsfilosofi"), isComplete: !trainingPhilosophy.isEmpty)
+                    ChecklistItem(text: L.t(sv: "Tillgänglighet", nb: "Tilgjengelighet"), isComplete: hasAtLeastOneAvailableDay)
+                    ChecklistItem(text: L.t(sv: "Pris", nb: "Pris"), isComplete: !hourlyRate.isEmpty)
+                    ChecklistItem(text: L.t(sv: "Handicap", nb: "Handicap"), isComplete: !handicap.isEmpty)
+                    ChecklistItem(text: L.t(sv: "Plats", nb: "Sted"), isComplete: selectedLocation != nil)
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -926,7 +926,7 @@ struct TrainerOnboardingView: View {
                         currentStep -= 1
                     }
                 } label: {
-                    Text("Tillbaka")
+                    Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                         .font(.headline)
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity)
@@ -956,7 +956,7 @@ struct TrainerOnboardingView: View {
                         .background(Color.black)
                         .cornerRadius(12)
                 } else {
-                    Text(currentStep < totalSteps - 1 ? "Nästa" : "Ansök")
+                    Text(currentStep < totalSteps - 1 ? L.t(sv: "Nästa", nb: "Neste") : L.t(sv: "Ansök", nb: "Søk"))
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -974,10 +974,10 @@ struct TrainerOnboardingView: View {
     private var combinedDescription: String {
         var parts: [String] = []
         if !backgroundExperience.isEmpty {
-            parts.append("📋 Bakgrund: \(backgroundExperience)")
+            parts.append(L.t(sv: "📋 Bakgrund: \(backgroundExperience)", nb: "📋 Bakgrunn: \(backgroundExperience)"))
         }
         if !trainingPhilosophy.isEmpty {
-            parts.append("💡 Träningsfilosofi: \(trainingPhilosophy)")
+            parts.append(L.t(sv: "💡 Träningsfilosofi: \(trainingPhilosophy)", nb: "💡 Treningsfilosofi: \(trainingPhilosophy)"))
         }
         return parts.joined(separator: "\n\n")
     }
@@ -1009,7 +1009,7 @@ struct TrainerOnboardingView: View {
         guard let location = selectedLocation,
               let rate = Int(hourlyRate),
               let hcp = Int(handicap) else {
-            errorMessage = "Vänligen fyll i alla fält korrekt"
+            errorMessage = L.t(sv: "Vänligen fyll i alla fält korrekt", nb: "Vennligst fyll inn alle felt riktig")
             return
         }
         
@@ -1133,7 +1133,7 @@ struct WeekDayAvailability: Identifiable {
     var endTime: Date
     
     static func defaultWeek() -> [WeekDayAvailability] {
-        let days = ["Söndag", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"]
+        let days = [L.t(sv: "Söndag", nb: "Søndag"), L.t(sv: "Måndag", nb: "Mandag"), L.t(sv: "Tisdag", nb: "Tirsdag"), L.t(sv: "Onsdag", nb: "Onsdag"), L.t(sv: "Torsdag", nb: "Torsdag"), L.t(sv: "Fredag", nb: "Fredag"), L.t(sv: "Lördag", nb: "Lørdag")]
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let defaultStart = calendar.date(byAdding: .hour, value: 9, to: today)!
@@ -1169,7 +1169,7 @@ struct AvailabilityDayRow: View {
             if day.isEnabled {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Från")
+                        Text(L.t(sv: "Från", nb: "Fra"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         DatePicker("", selection: $day.startTime, displayedComponents: .hourAndMinute)
@@ -1180,7 +1180,7 @@ struct AvailabilityDayRow: View {
                         .foregroundColor(.secondary)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Till")
+                        Text(L.t(sv: "Till", nb: "Til"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         DatePicker("", selection: $day.endTime, displayedComponents: .hourAndMinute)
@@ -1209,7 +1209,7 @@ struct DayAvailability: Identifiable {
     var endTime: Date
     
     static func defaultWeek() -> [DayAvailability] {
-        let days = ["Söndag", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"]
+        let days = [L.t(sv: "Söndag", nb: "Søndag"), L.t(sv: "Måndag", nb: "Mandag"), L.t(sv: "Tisdag", nb: "Tirsdag"), L.t(sv: "Onsdag", nb: "Onsdag"), L.t(sv: "Torsdag", nb: "Torsdag"), L.t(sv: "Fredag", nb: "Fredag"), L.t(sv: "Lördag", nb: "Lørdag")]
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let defaultStart = calendar.date(byAdding: .hour, value: 9, to: today)!
@@ -1242,14 +1242,14 @@ struct AddLessonTypeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Lektionstyp") {
-                    TextField("Namn (ex: 60 min lektion)", text: $name)
-                    TextField("Beskrivning", text: $description)
+                Section(L.t(sv: "Lektionstyp", nb: "Leksjonstype")) {
+                    TextField(L.t(sv: "Namn (ex: 60 min lektion)", nb: "Navn (eks: 60 min leksjon)"), text: $name)
+                    TextField(L.t(sv: "Beskrivning", nb: "Beskrivelse"), text: $description)
                 }
                 
-                Section("Detaljer") {
+                Section(L.t(sv: "Detaljer", nb: "Detaljer")) {
                     HStack {
-                        Text("Längd")
+                        Text(L.t(sv: "Längd", nb: "Lengde"))
                         Spacer()
                         TextField("60", text: $duration)
                             .keyboardType(.numberPad)
@@ -1260,7 +1260,7 @@ struct AddLessonTypeSheet: View {
                     }
                     
                     HStack {
-                        Text("Pris")
+                        Text(L.t(sv: "Pris", nb: "Pris"))
                         Spacer()
                         TextField("\(basePrice)", text: $price)
                             .keyboardType(.numberPad)
@@ -1271,17 +1271,17 @@ struct AddLessonTypeSheet: View {
                     }
                 }
             }
-            .navigationTitle("Ny lektionstyp")
+            .navigationTitle(L.t(sv: "Ny lektionstyp", nb: "Ny leksjonstype"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Lägg till") {
+                    Button(L.t(sv: "Lägg till", nb: "Legg til")) {
                         let newType = NewLessonType(
                             name: name,
                             description: description,
@@ -1310,11 +1310,11 @@ struct TrainerApplicationConfirmationView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 48))
                     .foregroundColor(.primary)
-                Text("Vi behandlar din ansökan")
+                Text(L.t(sv: "Vi behandlar din ansökan", nb: "Vi behandler søknaden din"))
                     .font(.title3)
                     .fontWeight(.semibold)
                     .multilineTextAlignment(.center)
-                Text("Du får ett meddelande när en admin har granskat dina uppgifter.")
+                Text(L.t(sv: "Du får ett meddelande när en admin har granskat dina uppgifter.", nb: "Du får en melding når en admin har gjennomgått opplysningene dine."))
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -1323,7 +1323,7 @@ struct TrainerApplicationConfirmationView: View {
                 Button {
                     onClose()
                 } label: {
-                    Text("Stäng")
+                    Text(L.t(sv: "Stäng", nb: "Lukk"))
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)

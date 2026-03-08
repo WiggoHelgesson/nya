@@ -25,11 +25,11 @@ struct EditPostView: View {
                 VStack(spacing: 20) {
                     // Title Section
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Titel")
+                        Text(L.t(sv: "Titel", nb: "Tittel"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
                         
-                        TextField("Titel", text: $title)
+                        TextField(L.t(sv: "Titel", nb: "Tittel"), text: $title)
                             .font(.system(size: 18, weight: .semibold))
                             .padding(14)
                             .background(Color(.secondarySystemBackground))
@@ -38,7 +38,7 @@ struct EditPostView: View {
                     
                     // Description Section
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Beskrivning")
+                        Text(L.t(sv: "Beskrivning", nb: "Beskrivelse"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
                         
@@ -51,7 +51,7 @@ struct EditPostView: View {
                     
                     // Image Section
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Bild")
+                        Text(L.t(sv: "Bild", nb: "Bilde"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
                         
@@ -97,7 +97,7 @@ struct EditPostView: View {
                         PhotosPicker(selection: $selectedItem, matching: .images) {
                             HStack {
                                 Image(systemName: "photo.on.rectangle")
-                                Text(newImage != nil || post.userImageUrl != nil ? "Byt bild" : "Lägg till bild")
+                                Text(newImage != nil || post.userImageUrl != nil ? L.t(sv: "Byt bild", nb: "Bytt bilde") : L.t(sv: "Lägg till bild", nb: "Legg til bilde"))
                             }
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.primary)
@@ -112,11 +112,11 @@ struct EditPostView: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Redigera inlägg")
+            .navigationTitle(L.t(sv: "Redigera inlägg", nb: "Rediger innlegg"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
@@ -128,7 +128,7 @@ struct EditPostView: View {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text("Spara")
+                            Text(L.t(sv: "Spara", nb: "Lagre"))
                                 .fontWeight(.semibold)
                         }
                     }
@@ -150,7 +150,7 @@ struct EditPostView: View {
                     Image(systemName: "photo")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary)
-                    Text("Ingen bild")
+                    Text(L.t(sv: "Ingen bild", nb: "Intet bilde"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }

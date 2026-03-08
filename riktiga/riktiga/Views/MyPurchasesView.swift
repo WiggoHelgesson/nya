@@ -17,11 +17,11 @@ struct MyPurchasesView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.secondary)
                         
-                        Text("Inga köp än")
+                        Text(L.t(sv: "Inga köp än", nb: "Ingen kjøp ennå"))
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        Text("Dina köpta rabattkoder kommer att visas här")
+                        Text(L.t(sv: "Dina köpta rabattkoder kommer att visas här", nb: "Dine kjøpte rabattkoder vil vises her"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -38,7 +38,7 @@ struct MyPurchasesView: View {
                     }
                 }
             }
-            .navigationTitle("Mina köp")
+            .navigationTitle(L.t(sv: "Mina köp", nb: "Mine kjøp"))
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 if let userId = authViewModel.currentUser?.id {
@@ -85,7 +85,7 @@ struct PurchaseCard: View {
             // Code section
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Rabattkod")
+                    Text(L.t(sv: "Rabattkod", nb: "Rabattkode"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                     

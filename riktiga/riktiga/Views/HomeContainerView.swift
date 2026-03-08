@@ -51,14 +51,14 @@ struct SimpleAppHeader: View {
             ZStack {
                 // Center: Page title or Pro CTA
                 if isPremium {
-                    Text("Hem")
+                    Text(L.t(sv: "Hem", nb: "Hjem"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                 } else {
                     Button {
                         SuperwallService.shared.showPaywall()
                     } label: {
-                        Text("Bli pro medlem")
+                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -167,7 +167,7 @@ struct SimpleAppHeader: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }
@@ -223,6 +223,7 @@ struct SimpleAppHeader: View {
 struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: View where Tab.RawValue == String, Tab.AllCases: RandomAccessCollection {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Binding var selectedTab: Tab
+    var tabDisplayName: ((Tab) -> String)? = nil
     
     @State private var unreadNotifications = 0
     @State private var unreadMessages = 0
@@ -246,14 +247,14 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
             ZStack {
                 // Center: Page title or Pro CTA
                 if isPremium {
-                    Text(selectedTab.rawValue)
+                    Text(tabDisplayName?(selectedTab) ?? selectedTab.rawValue)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                 } else {
                     Button {
                         SuperwallService.shared.showPaywall()
                     } label: {
-                        Text("Bli pro medlem")
+                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -390,7 +391,7 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                             }
                         } label: {
                             VStack(spacing: 10) {
-                                Text(tab.rawValue)
+                                Text(tabDisplayName?(tab) ?? tab.rawValue)
                                     .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
                                     .foregroundColor(selectedTab == tab ? .primary : .gray)
                                 
@@ -417,7 +418,7 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }

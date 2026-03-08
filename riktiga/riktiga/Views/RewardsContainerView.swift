@@ -25,14 +25,14 @@ struct RewardsContainerView: View {
                     ZStack {
                         // Center: Page title or Pro CTA
                         if isPremium {
-                            Text("Belöningar")
+                            Text(L.t(sv: "Belöningar", nb: "Belønninger"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.primary)
                         } else {
                             Button {
                                 SuperwallService.shared.showPaywall()
                             } label: {
-                                Text("Bli pro medlem")
+                                Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 14)
@@ -149,7 +149,7 @@ struct RewardsContainerView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }

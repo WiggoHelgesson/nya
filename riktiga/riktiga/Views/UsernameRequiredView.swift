@@ -16,11 +16,11 @@ struct UsernameRequiredView: View {
             
             // Title
             VStack(spacing: 8) {
-                Text("Användarnamn krävs")
+                Text(L.t(sv: "Användarnamn krävs", nb: "Brukernavn kreves"))
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.primary)
                 
-                Text("Välj ett användarnamn för att fortsätta")
+                Text(L.t(sv: "Välj ett användarnamn för att fortsätta", nb: "Velg et brukernavn for å fortsette"))
                     .font(.system(size: 16))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -29,11 +29,11 @@ struct UsernameRequiredView: View {
             
             // Username input
             VStack(alignment: .leading, spacing: 8) {
-                Text("Användarnamn")
+                Text(L.t(sv: "Användarnamn", nb: "Brukernavn"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                TextField("Användarnamn", text: $username)
+                TextField(L.t(sv: "Användarnamn", nb: "Brukernavn"), text: $username)
                     .padding(12)
                     .background(Color(.systemGray6))
                     .cornerRadius(8)
@@ -60,7 +60,7 @@ struct UsernameRequiredView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Uppdatera")
+                        Text(L.t(sv: "Uppdatera", nb: "Oppdater"))
                             .font(.system(size: 16, weight: .bold))
                     }
                 }
@@ -86,7 +86,7 @@ struct UsernameRequiredView: View {
         Task {
             do {
                 guard let userId = authViewModel.currentUser?.id else {
-                    errorMessage = "Fel: Användare inte hittad"
+                    errorMessage = L.t(sv: "Fel: Användare inte hittad", nb: "Feil: Bruker ikke funnet")
                     isUpdating = false
                     return
                 }
@@ -103,7 +103,7 @@ struct UsernameRequiredView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Fel: \(error.localizedDescription)"
+                    errorMessage = L.t(sv: "Fel: \(error.localizedDescription)", nb: "Feil: \(error.localizedDescription)")
                     isUpdating = false
                 }
             }

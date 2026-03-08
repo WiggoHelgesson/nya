@@ -19,8 +19,8 @@ struct MyBookingsView: View {
                     let paidRequests = viewModel.paidRequests
                     if !paidRequests.isEmpty {
                         bookingsSection(
-                            title: "Betalda förfrågningar",
-                            subtitle: "Väntar på tränarens bekräftelse",
+                            title: L.t(sv: "Betalda förfrågningar", nb: "Betalte forespørsler"),
+                            subtitle: L.t(sv: "Väntar på tränarens bekräftelse", nb: "Venter på trenerens bekreftelse"),
                             bookings: paidRequests
                         )
                     }
@@ -29,7 +29,7 @@ struct MyBookingsView: View {
                     let upcomingBookings = viewModel.upcomingBookings
                     if !upcomingBookings.isEmpty {
                         bookingsSection(
-                            title: "Kommande bokningar",
+                            title: L.t(sv: "Kommande bokningar", nb: "Kommende bookinger"),
                             subtitle: nil,
                             bookings: upcomingBookings
                         )
@@ -39,7 +39,7 @@ struct MyBookingsView: View {
                     let pastBookings = viewModel.pastBookings
                     if !pastBookings.isEmpty {
                         bookingsSection(
-                            title: "Tidigare",
+                            title: L.t(sv: "Tidigare", nb: "Tidligere"),
                             subtitle: nil,
                             bookings: pastBookings
                         )
@@ -48,7 +48,7 @@ struct MyBookingsView: View {
             }
             .padding()
         }
-        .navigationTitle("Mina bokningar")
+        .navigationTitle(L.t(sv: "Mina bokningar", nb: "Mine bookinger"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadBookings()
@@ -74,11 +74,11 @@ struct MyBookingsView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.gray.opacity(0.5))
             
-            Text("Inga bokningar ännu")
+            Text(L.t(sv: "Inga bokningar ännu", nb: "Ingen bookinger ennå"))
                 .font(.title2)
                 .fontWeight(.semibold)
             
-            Text("Hitta en golftränare i Lektioner-fliken och boka din första lektion!")
+            Text(L.t(sv: "Hitta en golftränare i Lektioner-fliken och boka din första lektion!", nb: "Finn en golftrener i Leksjoner-fanen og book din første leksjon!"))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -140,7 +140,7 @@ struct StudentBookingCard: View {
             Button(action: onChatTap) {
                 HStack(spacing: 8) {
                     Image(systemName: "message.fill")
-                    Text("Chatta med \(booking.trainerName ?? "tränaren")")
+                    Text(L.t(sv: "Chatta med \(booking.trainerName ?? "tränaren")", nb: "Chat med \(booking.trainerName ?? "treneren")"))
                         .fontWeight(.semibold)
                 }
                 .font(.subheadline)
@@ -179,7 +179,7 @@ struct StudentBookingCard: View {
         VStack(alignment: .leading, spacing: 6) {
             // Header row
             HStack {
-                Text(booking.trainerName ?? "Tränare")
+                Text(booking.trainerName ?? L.t(sv: "Tränare", nb: "Trener"))
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -215,7 +215,7 @@ struct StudentBookingCard: View {
             
             // Booked date
             if let date = booking.createdAt {
-                Text("Bokad \(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))")
+                Text(L.t(sv: "Bokad \(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))", nb: "Booket \(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))"))
                     .font(.caption2)
                     .foregroundColor(.gray)
             }
@@ -241,10 +241,10 @@ struct StudentStatusBadge: View {
     
     private var statusText: String {
         switch status {
-        case .pending: return "Betald"
-        case .accepted: return "Bekräftad"
-        case .declined: return "Nekad"
-        case .cancelled: return "Avbokad"
+        case .pending: return L.t(sv: "Betald", nb: "Betalt")
+        case .accepted: return L.t(sv: "Bekräftad", nb: "Bekreftet")
+        case .declined: return L.t(sv: "Nekad", nb: "Avslått")
+        case .cancelled: return L.t(sv: "Avbokad", nb: "Avbooket")
         }
     }
     

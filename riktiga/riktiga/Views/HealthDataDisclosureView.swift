@@ -62,7 +62,7 @@ struct HealthDataDisclosureView: View {
             if showsManageButton {
                 Button(action: handleManageButtonTap) {
                     HStack(spacing: 8) {
-                        Text(isAuthorized ? "Hantera Apple Health" : "Aktivera Apple Health")
+                        Text(isAuthorized ? L.t(sv: "Hantera Apple Health", nb: "Administrer Apple Health") : L.t(sv: "Aktivera Apple Health", nb: "Aktiver Apple Health"))
                             .font(.system(size: 13, weight: .semibold))
                         Image(systemName: isAuthorized ? "chevron.right" : "bolt.heart.fill")
                             .font(.system(size: 12, weight: .semibold))
@@ -73,7 +73,7 @@ struct HealthDataDisclosureView: View {
                     .background(isAuthorized ? Color(.systemGray5) : Color.black.opacity(0.08))
                     .cornerRadius(10)
                 }
-                .accessibilityLabel(isAuthorized ? "Hantera Apple Health-behörighet" : "Aktivera Apple Health")
+                .accessibilityLabel(isAuthorized ? L.t(sv: "Hantera Apple Health-behörighet", nb: "Administrer Apple Health-tilgang") : L.t(sv: "Aktivera Apple Health", nb: "Aktiver Apple Health"))
             }
         }
     }

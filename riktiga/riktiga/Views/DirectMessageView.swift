@@ -214,7 +214,7 @@ struct DirectMessageView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showUserProfile = false
                                 }
                                 .foregroundColor(.primary)
@@ -233,7 +233,7 @@ struct DirectMessageView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     profileUserIdToShow = nil
                                 }
                                 .foregroundColor(.primary)
@@ -338,11 +338,11 @@ struct DirectMessageView: View {
         let days = Int(interval / 86400)
         
         if minutes < 60 {
-            return "Sågs senast för \(minutes) min sedan"
+            return L.t(sv: "Sågs senast för \(minutes) min sedan", nb: "Sist sett for \(minutes) min siden")
         } else if hours < 24 {
-            return "Sågs senast för \(hours) \(hours == 1 ? "timme" : "timmar") sedan"
+            return L.t(sv: "Sågs senast för \(hours) \(hours == 1 ? "timme" : "timmar") sedan", nb: "Sist sett for \(hours) \(hours == 1 ? "time" : "timer") siden")
         } else {
-            return "Sågs senast för \(days) \(days == 1 ? "dag" : "dagar") sedan"
+            return L.t(sv: "Sågs senast för \(days) \(days == 1 ? "dag" : "dagar") sedan", nb: "Sist sett for \(days) \(days == 1 ? "dag" : "dager") siden")
         }
     }
     
@@ -541,7 +541,7 @@ struct DirectMessageView: View {
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.primary)
             
-            Text("Starta en konversation med \(otherUsername)")
+            Text(L.t(sv: "Starta en konversation med \(otherUsername)", nb: "Start en samtale med \(otherUsername)"))
                 .font(.system(size: 16))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -558,7 +558,7 @@ struct DirectMessageView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text("Skickar bild...")
+                    Text(L.t(sv: "Skickar bild...", nb: "Sender bilde..."))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -574,7 +574,7 @@ struct DirectMessageView: View {
                         Button {
                             photoPickerPresented = true
                         } label: {
-                            Label("Foto", systemImage: "photo")
+                            Label(L.t(sv: "Foto", nb: "Foto"), systemImage: "photo")
                         }
                         
                         Button {
@@ -587,7 +587,7 @@ struct DirectMessageView: View {
                         Button {
                             showGymInviteSheet = true
                         } label: {
-                            Label("Skicka träningsförslag", systemImage: "figure.run")
+                            Label(L.t(sv: "Skicka träningsförslag", nb: "Send treningsforslag"), systemImage: "figure.run")
                         }
                     }
                 } label: {
@@ -599,7 +599,7 @@ struct DirectMessageView: View {
                 
                 // Text field
                 HStack(alignment: .bottom, spacing: 0) {
-                    TextField("Skriv ett meddelande...", text: $messageText, axis: .vertical)
+                    TextField(L.t(sv: "Skriv ett meddelande...", nb: "Skriv en melding..."), text: $messageText, axis: .vertical)
                         .font(.system(size: 17))
                         .lineLimit(1...6)
                         .focused($isInputFocused)
@@ -922,7 +922,7 @@ struct SwipeToDeleteMessage<Content: View>: View {
                     VStack(spacing: 2) {
                         Image(systemName: "trash.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Radera")
+                        Text(L.t(sv: "Radera", nb: "Slett"))
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -971,13 +971,13 @@ struct SwipeToDeleteMessage<Content: View>: View {
                 )
         }
         .clipped()
-        .alert("Radera meddelande?", isPresented: $showDeleteConfirmation) {
-            Button("Avbryt", role: .cancel) { }
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Radera meddelande?", nb: "Slette melding?"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 onDelete()
             }
         } message: {
-            Text("Det här meddelandet kommer att tas bort permanent.")
+            Text(L.t(sv: "Det här meddelandet kommer att tas bort permanent.", nb: "Denne meldingen vil bli slettet permanent."))
         }
     }
 }
@@ -1075,7 +1075,7 @@ struct MessageBubble: View {
                 
                 // Read status
                 if isFromMe && showReadStatus {
-                    Text(message.isRead ? "Läst" : "Levererat")
+                    Text(message.isRead ? L.t(sv: "Läst", nb: "Lest") : L.t(sv: "Levererat", nb: "Levert"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(.systemGray))
                         .padding(.horizontal, 6)
@@ -1195,7 +1195,7 @@ struct ImageMessageBubble: View {
                 
                 // Read status
                 if isFromMe && showReadStatus {
-                    Text(message.isRead ? "Läst" : "Levererat")
+                    Text(message.isRead ? L.t(sv: "Läst", nb: "Lest") : L.t(sv: "Levererat", nb: "Levert"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(.systemGray))
                         .padding(.horizontal, 6)
@@ -1317,9 +1317,9 @@ struct DateSeparator: View {
         formatter.locale = Locale(identifier: "sv_SE")
         
         if calendar.isDateInToday(date) {
-            return "Idag"
+            return L.t(sv: "Idag", nb: "I dag")
         } else if calendar.isDateInYesterday(date) {
-            return "Igår"
+            return L.t(sv: "Igår", nb: "I går")
         } else if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
             formatter.dateFormat = "EEEE"
             return formatter.string(from: date).capitalized
@@ -1405,17 +1405,17 @@ struct GymInviteProposalSheet: View {
     
     private var locationPlaceholder: String {
         switch selectedActivityType {
-        case .gym: return "Nordic Wellness, SATS..."
-        case .running: return "Slottsskogen, Stadsparken..."
-        case .golf: return "Kungsbacka GK, Hovås GK..."
+        case .gym: return L.t(sv: "Nordic Wellness, SATS...", nb: "SATS, Evo Fitness...")
+        case .running: return L.t(sv: "Slottsskogen, Stadsparken...", nb: "Frognerparken, Sognsvann...")
+        case .golf: return L.t(sv: "Kungsbacka GK, Hovås GK...", nb: "Oslo GK, Bogstad GK...")
         }
     }
     
     private var locationLabel: String {
         switch selectedActivityType {
-        case .gym: return "Gym / Plats"
-        case .running: return "Plats / Rutt"
-        case .golf: return "Golfklubb / Bana"
+        case .gym: return L.t(sv: "Gym / Plats", nb: "Gym / Sted")
+        case .running: return L.t(sv: "Plats / Rutt", nb: "Sted / Rute")
+        case .golf: return L.t(sv: "Golfklubb / Bana", nb: "Golfklubb / Bane")
         }
     }
     
@@ -1429,7 +1429,7 @@ struct GymInviteProposalSheet: View {
                 VStack(spacing: 20) {
                     // MARK: Activity type selector
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Välj träningstyp")
+                        Text(L.t(sv: "Välj träningstyp", nb: "Velg treningstype"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
                             .textCase(.uppercase)
@@ -1445,7 +1445,7 @@ struct GymInviteProposalSheet: View {
                     
                     // MARK: Date & Time row
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Datum & tid")
+                        Text(L.t(sv: "Datum & tid", nb: "Dato & tid"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
                             .textCase(.uppercase)
@@ -1532,7 +1532,7 @@ struct GymInviteProposalSheet: View {
                                 Image(systemName: "paperplane.fill")
                                     .font(.system(size: 15))
                             }
-                            Text("Skicka förslag")
+                            Text(L.t(sv: "Skicka förslag", nb: "Send forslag"))
                                 .font(.system(size: 17, weight: .bold))
                         }
                         .foregroundColor(.white)
@@ -1548,7 +1548,7 @@ struct GymInviteProposalSheet: View {
                 }
                 .background(Color(.systemBackground))
             }
-            .navigationTitle("Träningsförslag")
+            .navigationTitle(L.t(sv: "Träningsförslag", nb: "Treningsforslag"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1690,13 +1690,13 @@ struct GymInviteCard: View {
     private var statusBadgeText: String {
         if isGroup {
             if acceptedCount > 0 {
-                return "\(acceptedCount) KOMMER"
+                return L.t(sv: "\(acceptedCount) KOMMER", nb: "\(acceptedCount) KOMMER")
             } else if declinedCount > 0 {
-                return "\(declinedCount) KAN EJ"
+                return L.t(sv: "\(declinedCount) KAN EJ", nb: "\(declinedCount) KAN IKKE")
             }
             return ""
         } else {
-            return overallStatus == .accepted ? "GODKÄND" : "AVBÖJD"
+            return overallStatus == .accepted ? L.t(sv: "GODKÄND", nb: "GODKJENT") : L.t(sv: "AVBÖJD", nb: "AVSLÅTT")
         }
     }
     
@@ -1717,11 +1717,11 @@ struct GymInviteCard: View {
                         .cornerRadius(8)
                     
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Träningsförslag – \(inviteData?.resolvedActivityType.displayName ?? "Gympass")")
+                        Text(L.t(sv: "Träningsförslag – \(inviteData?.resolvedActivityType.displayName ?? "Gympass")", nb: "Treningsforslag – \(inviteData?.resolvedActivityType.displayName ?? "Gymøkt")"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.primary)
                         
-                        Text(isGroup ? "\(senderName) vill att alla \(inviteData?.resolvedActivityType.notificationVerb ?? "tränar")" : "\(senderName) vill \(inviteData?.resolvedActivityType.notificationVerb ?? "träna")")
+                        Text(L.t(sv: isGroup ? "\(senderName) vill att alla \(inviteData?.resolvedActivityType.notificationVerb ?? "tränar")" : "\(senderName) vill \(inviteData?.resolvedActivityType.notificationVerb ?? "träna")", nb: isGroup ? "\(senderName) vil at alle \(inviteData?.resolvedActivityType.notificationVerb ?? "trener")" : "\(senderName) vil \(inviteData?.resolvedActivityType.notificationVerb ?? "trene")"))
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
@@ -1790,7 +1790,7 @@ struct GymInviteCard: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 13))
                                     .foregroundColor(.green)
-                                Text("\(acceptedCount)/\(expectedResponders) kommer")
+                                Text(L.t(sv: "\(acceptedCount)/\(expectedResponders) kommer", nb: "\(acceptedCount)/\(expectedResponders) kommer"))
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.green)
                             }
@@ -1800,7 +1800,7 @@ struct GymInviteCard: View {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 13))
                                     .foregroundColor(.red)
-                                Text("\(declinedCount) kan ej")
+                                Text(L.t(sv: "\(declinedCount) kan ej", nb: "\(declinedCount) kan ikke"))
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.red)
                             }
@@ -1828,7 +1828,7 @@ struct GymInviteCard: View {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 13, weight: .bold))
                                 }
-                                Text("Godkänn")
+                                Text(L.t(sv: "Godkänn", nb: "Godkjenn"))
                                     .font(.system(size: 14, weight: .bold))
                             }
                             .foregroundColor(.white)
@@ -1845,7 +1845,7 @@ struct GymInviteCard: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "xmark")
                                     .font(.system(size: 13, weight: .bold))
-                                Text("Kan ej")
+                                Text(L.t(sv: "Kan ej", nb: "Kan ikke"))
                                     .font(.system(size: 14, weight: .bold))
                             }
                             .foregroundColor(.red)
@@ -1867,7 +1867,7 @@ struct GymInviteCard: View {
                         Image(systemName: myResp == "accepted" ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(.system(size: 16))
                             .foregroundColor(myResp == "accepted" ? .green : .red)
-                        Text(myResp == "accepted" ? "Du har godkänt" : "Du kan inte")
+                        Text(myResp == "accepted" ? L.t(sv: "Du har godkänt", nb: "Du har godkjent") : L.t(sv: "Du kan inte", nb: "Du kan ikke"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(myResp == "accepted" ? .green : .red)
                     }
@@ -1889,10 +1889,10 @@ struct GymInviteCard: View {
                                     Image(systemName: resp.isAccepted ? "checkmark.circle.fill" : "xmark.circle.fill")
                                         .font(.system(size: 14))
                                         .foregroundColor(resp.isAccepted ? .green : .red)
-                                    Text(resp.username ?? "Användare")
+                                    Text(resp.username ?? L.t(sv: "Användare", nb: "Bruker"))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundColor(.primary)
-                                    Text(resp.isAccepted ? "kommer!" : "kan ej")
+                                    Text(resp.isAccepted ? L.t(sv: "kommer!", nb: "kommer!") : L.t(sv: "kan ej", nb: "kan ikke"))
                                         .font(.system(size: 13))
                                         .foregroundColor(resp.isAccepted ? .green : .red)
                                 }
@@ -2007,18 +2007,18 @@ struct GifPickerView: View {
         
         var label: String {
             switch self {
-            case .funny: return "Roligt"
-            case .reactions: return "Reaktioner"
-            case .love: return "Kärlek"
-            case .happy: return "Glad"
-            case .sad: return "Ledsen"
-            case .angry: return "Arg"
-            case .celebrate: return "Fira"
-            case .thumbsUp: return "Tummen upp"
-            case .facepalm: return "Facepalm"
-            case .dance: return "Dans"
-            case .sports: return "Sport"
-            case .animals: return "Djur"
+            case .funny: return L.t(sv: "Roligt", nb: "Morsomt")
+            case .reactions: return L.t(sv: "Reaktioner", nb: "Reaksjoner")
+            case .love: return L.t(sv: "Kärlek", nb: "Kjærlighet")
+            case .happy: return L.t(sv: "Glad", nb: "Glad")
+            case .sad: return L.t(sv: "Ledsen", nb: "Trist")
+            case .angry: return L.t(sv: "Arg", nb: "Sint")
+            case .celebrate: return L.t(sv: "Fira", nb: "Feire")
+            case .thumbsUp: return L.t(sv: "Tummen upp", nb: "Tommel opp")
+            case .facepalm: return L.t(sv: "Facepalm", nb: "Facepalm")
+            case .dance: return L.t(sv: "Dans", nb: "Dans")
+            case .sports: return L.t(sv: "Sport", nb: "Sport")
+            case .animals: return L.t(sv: "Djur", nb: "Dyr")
             }
         }
         
@@ -2049,7 +2049,7 @@ struct GifPickerView: View {
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                     
-                    TextField("Sök GIF...", text: $searchText)
+                    TextField(L.t(sv: "Sök GIF...", nb: "Søk GIF..."), text: $searchText)
                         .font(.system(size: 16))
                         .autocorrectionDisabled()
                     
@@ -2085,7 +2085,7 @@ struct GifPickerView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "flame.fill")
                                     .font(.system(size: 11))
-                                Text("Trendande")
+                                Text(L.t(sv: "Trendande", nb: "Trender"))
                                     .font(.system(size: 13, weight: .medium))
                             }
                             .padding(.horizontal, 12)
@@ -2133,7 +2133,7 @@ struct GifPickerView: View {
                         Image(systemName: "photo.on.rectangle.angled")
                             .font(.system(size: 40))
                             .foregroundColor(.secondary)
-                        Text("Inga GIFs hittades")
+                        Text(L.t(sv: "Inga GIFs hittades", nb: "Ingen GIF-er funnet"))
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
                     }
@@ -2184,18 +2184,18 @@ struct GifPickerView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                             .scaleEffect(0.8)
-                        Text("Skickar GIF...")
+                        Text(L.t(sv: "Skickar GIF...", nb: "Sender GIF..."))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 8)
                 }
             }
-            .navigationTitle("Välj GIF")
+            .navigationTitle(L.t(sv: "Välj GIF", nb: "Velg GIF"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Stäng") { dismiss() }
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) { dismiss() }
                         .foregroundColor(.primary)
                 }
             }
@@ -2356,14 +2356,14 @@ struct GymInviteReminderManager {
         
         switch activityType {
         case .gym:
-            content.title = "Gympass snart!"
-            content.body = "Gympass med \(otherUsername) om 1 timme på \(gym)"
+            content.title = L.t(sv: "Gympass snart!", nb: "Gymøkt snart!")
+            content.body = L.t(sv: "Gympass med \(otherUsername) om 1 timme på \(gym)", nb: "Gymøkt med \(otherUsername) om 1 time på \(gym)")
         case .running:
-            content.title = "Löppass snart!"
-            content.body = "Löppass med \(otherUsername) om 1 timme vid \(gym)"
+            content.title = L.t(sv: "Löppass snart!", nb: "Løpetur snart!")
+            content.body = L.t(sv: "Löppass med \(otherUsername) om 1 timme vid \(gym)", nb: "Løpetur med \(otherUsername) om 1 time ved \(gym)")
         case .golf:
-            content.title = "Golfrunda snart!"
-            content.body = "Golfrunda med \(otherUsername) om 1 timme på \(gym)"
+            content.title = L.t(sv: "Golfrunda snart!", nb: "Golfrunde snart!")
+            content.body = L.t(sv: "Golfrunda med \(otherUsername) om 1 timme på \(gym)", nb: "Golfrunde med \(otherUsername) om 1 time på \(gym)")
         }
         
         content.sound = .default

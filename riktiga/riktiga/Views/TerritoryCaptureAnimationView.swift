@@ -89,7 +89,7 @@ struct TerritoryCaptureAnimationView: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Nytt territorium!")
+                    Text(L.t(sv: "Nytt territorium!", nb: "Nytt territorium!"))
                         .font(.system(size: 28, weight: .black))
                         .foregroundColor(.primary)
                 }
@@ -197,7 +197,7 @@ struct TerritoryCaptureAnimationView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 20, weight: .bold))
                         
-                        Text("Skapa inlägg")
+                        Text(L.t(sv: "Skapa inlägg", nb: "Opprett innlegg"))
                             .font(.system(size: 18, weight: .bold))
                     }
                     .foregroundColor(.white)

@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import Supabase
 
 struct UserProfileView: View {
     let userId: String
@@ -6,6 +8,11 @@ struct UserProfileView: View {
     @State private var username: String = ""
     @State private var avatarUrl: String? = nil
     @State private var bannerUrl: String? = nil
+    
+    @State private var avatarPickerItem: PhotosPickerItem?
+    @State private var bannerPickerItem: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+    @State private var isUploadingBanner = false
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
     @State private var workoutsCount: Int = 0
@@ -14,6 +21,18 @@ struct UserProfileView: View {
     @State private var followToggleInProgress: Bool = false
     @State private var isPro: Bool = false
     @State private var showPersonalRecords: Bool = false
+    @State private var pinnedPostIds: [String] = []
+    @State private var profileBio: String? = nil
+    @State private var profileHomeGym: String? = nil
+    @State private var profileTrainingGoal: String? = nil
+    @State private var profileTrainingIdentity: String? = nil
+    @State private var profileGymPbs: [GymPB] = []
+    @State private var profilePb5km: Int? = nil
+    @State private var profilePb10kmH: Int? = nil
+    @State private var profilePb10kmM: Int? = nil
+    @State private var profilePbMarathonH: Int? = nil
+    @State private var profilePbMarathonM: Int? = nil
+    @State private var profileCompletedRaces: [String] = []
     @StateObject private var profilePostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
     @State private var selectedLivePhotoPost: SocialWorkoutPost?
@@ -37,6 +56,13 @@ struct UserProfileView: View {
     @State private var isCreatingConversation: Bool = false
     @State private var navigateToConversation: UUID? = nil
     
+    // Mutual friends
+    @State private var mutualFriends: [UserSearchResult] = []
+    
+    private var isOwnProfile: Bool {
+        authViewModel.currentUser?.id == userId
+    }
+    
     // Filter posts with Up&Down Live photos
     private var livePhotoPosts: [SocialWorkoutPost] {
         profilePostsViewModel.posts.filter { post in
@@ -47,138 +73,298 @@ struct UserProfileView: View {
         }
     }
     
+    private var pinnedPosts: [SocialWorkoutPost] {
+        guard !pinnedPostIds.isEmpty else { return [] }
+        return pinnedPostIds.compactMap { id in
+            profilePostsViewModel.posts.first(where: { $0.id == id })
+        }
+    }
+    
+    private var hasAboutData: Bool {
+        (profileBio != nil && !(profileBio?.isEmpty ?? true)) ||
+        (profileHomeGym != nil && !(profileHomeGym?.isEmpty ?? true)) ||
+        (profileTrainingGoal != nil && !(profileTrainingGoal?.isEmpty ?? true)) ||
+        (profileTrainingIdentity != nil && !(profileTrainingIdentity?.isEmpty ?? true)) ||
+        !profileGymPbs.isEmpty ||
+        profilePb5km != nil || profilePb10kmM != nil || profilePbMarathonM != nil ||
+        !profileCompletedRaces.isEmpty
+    }
+    
+    private var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L.t(sv: "Om \(username)", nb: "Om \(username)"))
+                .font(.system(size: 18, weight: .bold))
+                .padding(.bottom, 2)
+            
+            Group {
+                if let bio = profileBio, !bio.isEmpty {
+                    aboutRow(icon: "text.quote", text: bio)
+                }
+                
+                if let gym = profileHomeGym, !gym.isEmpty {
+                    aboutRow(icon: "house.fill", label: L.t(sv: "Hemmagym", nb: "Hjemmegym"), text: gym)
+                }
+                
+                if let goal = profileTrainingGoal, !goal.isEmpty {
+                    aboutRow(icon: "target", label: L.t(sv: "Tränar inför", nb: "Trener mot"), text: goal)
+                }
+                
+                if let identity = profileTrainingIdentity, !identity.isEmpty {
+                    aboutRow(icon: "person.fill", label: L.t(sv: "Träningsidentitet", nb: "Treningsidentitet"), text: identity)
+                }
+            }
+            
+            if !profileGymPbs.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "dumbbell.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(width: 22)
+                        Text(L.t(sv: "PB Gym", nb: "PB Gym"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    ForEach(Array(profileGymPbs.enumerated()), id: \.offset) { _, pb in
+                        HStack(spacing: 4) {
+                            Text(pb.name)
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            Text("\(String(format: "%.0f", pb.kg)) kg × \(pb.reps) reps")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 28)
+                    }
+                }
+            }
+            
+            if profilePb5km != nil || profilePb10kmM != nil || profilePbMarathonM != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.run")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(width: 22)
+                        Text(L.t(sv: "PB Löpning", nb: "PB Løping"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    if let m = profilePb5km {
+                        HStack {
+                            Text("5 km")
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            Text("\(m) min")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 28)
+                    }
+                    if let h = profilePb10kmH, let m = profilePb10kmM {
+                        HStack {
+                            Text("10 km")
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            Text("\(h)h \(m)min")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 28)
+                    }
+                    if let h = profilePbMarathonH, let m = profilePbMarathonM {
+                        HStack {
+                            Text(L.t(sv: "Maraton", nb: "Maraton"))
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            Text("\(h)h \(m)min")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 28)
+                    }
+                }
+            }
+            
+            if !profileCompletedRaces.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(width: 22)
+                        Text(L.t(sv: "Genomförda lopp", nb: "Gjennomførte løp"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    ForEach(profileCompletedRaces, id: \.self) { race in
+                        Text(race)
+                            .font(.system(size: 14))
+                            .padding(.leading, 28)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+    
+    private func aboutRow(icon: String, label: String? = nil, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .frame(width: 22)
+                .padding(.top, 2)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                if let label = label {
+                    Text(label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                Text(text)
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+            }
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Fixed Header Section
             ScrollView {
                 VStack(spacing: 0) {
-                    // MARK: - Banner Section (if user has custom banner)
-                    if let bannerUrl = bannerUrl, !bannerUrl.isEmpty {
-                        ZStack(alignment: .bottom) {
-                            LocalAsyncImage(path: bannerUrl)
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: UIScreen.main.bounds.width, height: 200)
-                                .clipped()
+                    // MARK: - Facebook-style Banner + Avatar
+                    ZStack(alignment: .bottom) {
+                        // Banner
+                        ZStack(alignment: .bottomTrailing) {
+                            if let bannerUrl = bannerUrl, !bannerUrl.isEmpty {
+                                LocalAsyncImage(path: bannerUrl)
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: UIScreen.main.bounds.width, height: 200)
+                                    .clipped()
+                            } else {
+                                Color(.systemGray4)
+                                    .frame(width: UIScreen.main.bounds.width, height: 200)
+                            }
                             
-                            // Bottom gradient for smooth transition
-                            LinearGradient(
-                                colors: [Color.clear, Color(.systemBackground).opacity(0.8), Color(.systemBackground)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 60)
+                            if isOwnProfile {
+                                PhotosPicker(selection: $bannerPickerItem, matching: .images) {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white)
+                                        .frame(width: 32, height: 32)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .padding(12)
+                            }
                         }
-                        .frame(width: UIScreen.main.bounds.width, height: 200)
-                    }
-                    
-                    // MARK: - Up&Down Live Gallery Slider (only if has live photos)
-                    if !livePhotoPosts.isEmpty {
-                        PublicProfileLiveGallery(
-                            posts: livePhotoPosts,
-                            selectedPost: $selectedLivePhotoPost
-                        )
+                        .frame(height: 200)
+                        
+                        // Avatar overlapping the banner
+                        ZStack(alignment: .bottomTrailing) {
+                            ProfileAvatarView(path: avatarUrl ?? "", size: 100)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(.systemBackground), lineWidth: 4)
+                                )
+                            
+                            if isOwnProfile {
+                                PhotosPicker(selection: $avatarPickerItem, matching: .images) {
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.white)
+                                        .frame(width: 28, height: 28)
+                                        .background(Color.black.opacity(0.7))
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                }
+                            }
+                        }
+                        .offset(y: 50)
                         .opacity(showHeader ? 1 : 0)
                     }
                     
-                    // Header
-                    VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            ProfileAvatarView(path: avatarUrl ?? "", size: 72)
-                                .overlay(Circle().stroke(Color(.systemGray5), lineWidth: 1))
-                                .opacity(showHeader ? 1 : 0)
+                    // Spacer for the overlapping avatar
+                    Spacer().frame(height: 56)
+                    
+                    // MARK: - Name + Stats (centered)
+                    VStack(spacing: 10) {
+                        // Username + Pro badge
+                        HStack(spacing: 6) {
+                            Text(username.isEmpty ? L.t(sv: "Användare", nb: "Bruker") : username)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.primary)
                             
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    Text(username.isEmpty ? "Användare" : username)
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                    
-                                    if isPro {
-                                        Image(systemName: "checkmark.seal.fill")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.blue)
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                .opacity(showHeader ? 1 : 0)
-                                .offset(x: showHeader ? 0 : 20)
-                                
-                                HStack(spacing: 0) {
-                                    VStack(spacing: 2) {
-                                        Text("\(workoutsCount)")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .contentTransition(.numericText())
-                                        Text("Pass")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    
-                                    // Followers - tappable
-                                    Button {
-                                        showFollowersList = true
-                                    } label: {
-                                        VStack(spacing: 2) {
-                                            Text("\(followersCount)")
-                                                .font(.system(size: 16, weight: .bold))
-                                                .contentTransition(.numericText())
-                                            Text("Följare")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(.gray)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    // Following - tappable
-                                    Button {
-                                        showFollowingList = true
-                                    } label: {
-                                        VStack(spacing: 2) {
-                                            Text("\(followingCount)")
-                                                .font(.system(size: 16, weight: .bold))
-                                                .contentTransition(.numericText())
-                                            Text("Följer")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(.gray)
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .opacity(showStats ? 1 : 0)
-                                
-                                // Personal Records button
-                                HStack {
-                                    Spacer()
-                                    Button(action: {
-                                        showPersonalRecords = true
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "trophy.fill")
-                                                .font(.system(size: 12))
-                                            Text("Personliga rekord")
-                                                .font(.system(size: 12, weight: .medium))
-                                        }
-                                        .foregroundColor(.primary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color(.systemGray6))
-                                        .cornerRadius(8)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.top, 4)
-                                .opacity(showStats ? 1 : 0)
+                            if isPro {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .opacity(showHeader ? 1 : 0)
+                        
+                        // Stats row
+                        HStack(spacing: 0) {
+                            VStack(spacing: 2) {
+                                Text("\(workoutsCount)")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .contentTransition(.numericText())
+                                Text(L.t(sv: "Pass", nb: "Økter"))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.gray)
                             }
                             .frame(maxWidth: .infinity)
+                            
+                            Button { showFollowersList = true } label: {
+                                VStack(spacing: 2) {
+                                    Text("\(followersCount)")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .contentTransition(.numericText())
+                                    Text(L.t(sv: "Följare", nb: "Følgere"))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Button { showFollowingList = true } label: {
+                                VStack(spacing: 2) {
+                                    Text("\(followingCount)")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .contentTransition(.numericText())
+                                    Text(L.t(sv: "Följer", nb: "Følger"))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
+                        .opacity(showStats ? 1 : 0)
                         
-                        // Follow + Message buttons on their own row
+                        // Personal Records button
+                        Button(action: { showPersonalRecords = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 12))
+                                Text(L.t(sv: "Personliga rekord", nb: "Personlige rekorder"))
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                        }
+                        .opacity(showStats ? 1 : 0)
+                        
+                        // Follow + Message buttons (other users)
                         if let currentUser = authViewModel.currentUser, currentUser.id != userId {
                             HStack(spacing: 8) {
                                 Button(action: toggleFollow) {
@@ -188,7 +374,7 @@ struct UserProfileView: View {
                                                 .scaleEffect(0.8)
                                                 .tint(.white)
                                         }
-                                        Text(isFollowingUser ? "Följer" : "Följ")
+                                        Text(isFollowingUser ? L.t(sv: "Följer", nb: "Følger") : L.t(sv: "Följ", nb: "Følg"))
                                             .font(.system(size: 14, weight: .semibold))
                                     }
                                     .frame(maxWidth: .infinity)
@@ -209,7 +395,7 @@ struct UserProfileView: View {
                                             Image(systemName: "paperplane.fill")
                                                 .font(.system(size: 13))
                                         }
-                                        Text("Meddelande")
+                                        Text(L.t(sv: "Meddelande", nb: "Melding"))
                                             .font(.system(size: 14, weight: .semibold))
                                     }
                                     .frame(maxWidth: .infinity)
@@ -220,34 +406,114 @@ struct UserProfileView: View {
                                 }
                                 .disabled(isCreatingConversation)
                             }
-                            .padding(.horizontal, 16)
                             .opacity(showStats ? 1 : 0)
                         }
                     }
-                    .padding(.bottom, 12)
-                    .background(Color(.secondarySystemBackground))
-                    
-                    // MARK: - Weekly Activity Chart
-                    WeeklyHoursChart(
-                        weeklyHours: weeklyHours,
-                        dailyData: dailyActivityData
-                    )
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .opacity(showChart ? 1 : 0)
+                    .padding(.bottom, 12)
                     
-                    // MARK: - Compare Button
-                    if let currentUser = authViewModel.currentUser, currentUser.id != userId {
-                        CompareButton(
-                            myAvatarUrl: currentUser.avatarUrl,
-                            theirAvatarUrl: avatarUrl,
-                            action: {
-                                showComparison = true
+                    // MARK: - Mutual Friends
+                    if !isOwnProfile && !mutualFriends.isEmpty {
+                        HStack(spacing: 6) {
+                            HStack(spacing: -8) {
+                                ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { _, friend in
+                                    ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
+                                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                }
                             }
+                            
+                            if mutualFriends.count == 1, let friend = mutualFriends.first {
+                                Text(L.t(
+                                    sv: "Vän med \(friend.name)",
+                                    nb: "Venn med \(friend.name)"
+                                ))
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            } else {
+                                Text(L.t(
+                                    sv: "\(mutualFriends.count) gemensamma vänner",
+                                    nb: "\(mutualFriends.count) felles venner"
+                                ))
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                        .opacity(showStats ? 1 : 0)
+                    }
+                    
+                    // MARK: - Up&Down Live Gallery Slider
+                    if !livePhotoPosts.isEmpty {
+                        PublicProfileLiveGallery(
+                            posts: livePhotoPosts,
+                            selectedPost: $selectedLivePhotoPost
+                        )
+                        .opacity(showHeader ? 1 : 0)
+                    }
+                    
+                    // MARK: - Om {username} + Chart + Compare
+                    Group {
+                        if hasAboutData {
+                            aboutSection
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .opacity(showHeader ? 1 : 0)
+                        }
+                        
+                        WeeklyHoursChart(
+                            weeklyHours: weeklyHours,
+                            dailyData: dailyActivityData
                         )
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
+                        .padding(.vertical, 12)
                         .opacity(showChart ? 1 : 0)
+                        
+                        if let currentUser = authViewModel.currentUser, currentUser.id != userId {
+                            CompareButton(
+                                myAvatarUrl: currentUser.avatarUrl,
+                                theirAvatarUrl: avatarUrl,
+                                action: {
+                                    showComparison = true
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                            .opacity(showChart ? 1 : 0)
+                        }
+                    }
+                    
+                    // MARK: - Pinned Posts Slider
+                    if !pinnedPosts.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                                Text(L.t(
+                                    sv: "\(username) pinnade pass",
+                                    nb: "\(username) festede økter"
+                                ))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(pinnedPosts) { post in
+                                        PinnedPostCard(
+                                            post: post,
+                                            onTap: { selectedPost = post }
+                                        )
+                                        .frame(width: UIScreen.main.bounds.width * 0.85)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .opacity(showPosts ? 1 : 0)
                     }
                     
                     Divider()
@@ -257,7 +523,7 @@ struct UserProfileView: View {
                     if isLoading {
                         VStack(spacing: 16) {
                             ProgressView().tint(AppColors.brandBlue)
-                            Text("Laddar profil...")
+                            Text(L.t(sv: "Laddar profil...", nb: "Laster profil..."))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                         }
@@ -267,7 +533,7 @@ struct UserProfileView: View {
                         if profilePostsViewModel.isLoading && profilePostsViewModel.posts.isEmpty {
                             VStack(spacing: 12) {
                                 ProgressView().tint(AppColors.brandBlue)
-                                Text("Hämtar inlägg...")
+                                Text(L.t(sv: "Hämtar inlägg...", nb: "Henter innlegg..."))
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
                             }
@@ -279,9 +545,9 @@ struct UserProfileView: View {
                                 Image(systemName: "figure.run")
                                     .font(.system(size: 48))
                                     .foregroundColor(.gray)
-                                Text("Inga inlägg än")
+                                Text(L.t(sv: "Inga inlägg än", nb: "Ingen innlegg ennå"))
                                     .font(.headline)
-                                Text("När användaren sparar pass visas de här.")
+                                Text(L.t(sv: "När användaren sparar pass visas de här.", nb: "Når brukeren lagrer økter vises de her."))
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
@@ -315,12 +581,29 @@ struct UserProfileView: View {
                 }
             }
         }
-        .navigationTitle("Profil")
+        .navigationTitle(L.t(sv: "Profil", nb: "Profil"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadData()
-            // Trigger staggered animations
             triggerAnimations()
+        }
+        .onChange(of: avatarPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await uploadAvatar(image)
+                }
+            }
+        }
+        .onChange(of: bannerPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await uploadBanner(image)
+                }
+            }
         }
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
@@ -329,7 +612,7 @@ struct UserProfileView: View {
             DirectMessageView(
                 conversationId: conversationId,
                 otherUserId: userId,
-                otherUsername: username.isEmpty ? "Användare" : username,
+                otherUsername: username.isEmpty ? L.t(sv: "Användare", nb: "Bruker") : username,
                 otherAvatarUrl: avatarUrl
             )
             .environmentObject(authViewModel)
@@ -388,6 +671,18 @@ struct UserProfileView: View {
                 self.avatarUrl = profile.avatarUrl
                 self.bannerUrl = profile.bannerUrl
                 self.isPro = profile.isProMember
+                self.pinnedPostIds = profile.pinnedPostIds
+                self.profileBio = profile.bio
+                self.profileHomeGym = profile.homeGym
+                self.profileTrainingGoal = profile.trainingGoal
+                self.profileTrainingIdentity = profile.trainingIdentity
+                self.profileGymPbs = profile.gymPbs
+                self.profilePb5km = profile.pb5kmMinutes
+                self.profilePb10kmH = profile.pb10kmHours
+                self.profilePb10kmM = profile.pb10kmMinutes
+                self.profilePbMarathonH = profile.pbMarathonHours
+                self.profilePbMarathonM = profile.pbMarathonMinutes
+                self.profileCompletedRaces = profile.completedRaces
             }
             
             self.followersCount = followersIds.count
@@ -411,6 +706,14 @@ struct UserProfileView: View {
         await MainActor.run {
             workoutsCount = profilePostsViewModel.posts.count
             calculateWeeklyActivity()
+        }
+        
+        // Load mutual friends (only for other users' profiles)
+        if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
+            let mutual = try? await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
+            await MainActor.run {
+                self.mutualFriends = mutual ?? []
+            }
         }
     }
     
@@ -519,6 +822,56 @@ struct UserProfileView: View {
         }
     }
     
+    private func uploadAvatar(_ image: UIImage) async {
+        guard let imageData = image.jpegData(compressionQuality: 0.85) else { return }
+        await MainActor.run { isUploadingAvatar = true }
+        do {
+            let url = try await ProfileService.shared.uploadAvatarImageData(imageData, userId: userId)
+            try await SupabaseConfig.supabase
+                .from("profiles")
+                .update(["avatar_url": url])
+                .eq("id", value: userId)
+                .execute()
+            await MainActor.run {
+                avatarUrl = url
+                authViewModel.currentUser?.avatarUrl = url
+                isUploadingAvatar = false
+            }
+        } catch {
+            print("❌ Failed to upload avatar: \(error)")
+            await MainActor.run { isUploadingAvatar = false }
+        }
+    }
+    
+    private func uploadBanner(_ image: UIImage) async {
+        guard let imageData = image.jpegData(compressionQuality: 0.85) else { return }
+        await MainActor.run { isUploadingBanner = true }
+        do {
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let fileName = "\(userId)_banner_\(timestamp).jpg"
+            try await SupabaseConfig.supabase.storage
+                .from("avatars")
+                .upload(fileName, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
+            let publicURL = try SupabaseConfig.supabase.storage
+                .from("avatars")
+                .getPublicURL(path: fileName)
+            let urlString = publicURL.absoluteString
+            try await SupabaseConfig.supabase
+                .from("profiles")
+                .update(["banner_url": urlString])
+                .eq("id", value: userId)
+                .execute()
+            await MainActor.run {
+                bannerUrl = urlString
+                authViewModel.currentUser?.bannerUrl = urlString
+                isUploadingBanner = false
+            }
+        } catch {
+            print("❌ Failed to upload banner: \(error)")
+            await MainActor.run { isUploadingBanner = false }
+        }
+    }
+    
     private func triggerAnimations() {
         // Staggered animations for smooth loading appearance
         withAnimation(.smooth(duration: 0.4)) {
@@ -574,9 +927,9 @@ struct WeeklyHoursChart: View {
     
     private var hoursUnit: String {
         if weeklyHours >= 1 {
-            return weeklyHours == 1 ? "timme" : "timmar"
+            return weeklyHours == 1 ? L.t(sv: "timme", nb: "time") : L.t(sv: "timmar", nb: "timer")
         }
-        return "min"
+        return L.t(sv: "min", nb: "min")
     }
     
     var body: some View {
@@ -589,7 +942,7 @@ struct WeeklyHoursChart: View {
                 Text(hoursUnit)
                     .font(.system(size: 20, weight: .regular))
                     .foregroundColor(.primary)
-                Text("denna vecka")
+                Text(L.t(sv: "denna vecka", nb: "denne uken"))
                     .font(.system(size: 20, weight: .regular))
                     .foregroundColor(.primary)
             }
@@ -691,6 +1044,140 @@ struct ActivityBarChart: View {
     }
 }
 
+// MARK: - Pinned Post Card (compact card for horizontal slider)
+
+struct PinnedPostCard: View {
+    let post: SocialWorkoutPost
+    let onTap: () -> Void
+    
+    private var activityIcon: String {
+        switch post.activityType {
+        case "Gym": return "dumbbell.fill"
+        case "Löpning": return "figure.run"
+        case "Golf": return "figure.golf"
+        case "Skidor": return "figure.skiing.downhill"
+        case "Simning": return "figure.pool.swim"
+        case "Cykling": return "figure.outdoor.cycle"
+        default: return "figure.walk"
+        }
+    }
+    
+    private var formattedDate: String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoNoMs = ISO8601DateFormatter()
+        isoNoMs.formatOptions = [.withInternetDateTime]
+        guard let date = iso.date(from: post.createdAt) ?? isoNoMs.date(from: post.createdAt) else { return "" }
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .none
+        df.locale = Locale(identifier: "sv_SE")
+        return df.string(from: date)
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Top row: activity icon + title + date
+                HStack(spacing: 10) {
+                    Image(systemName: activityIcon)
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black)
+                        .clipShape(Circle())
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(post.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Text(formattedDate)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                }
+                
+                // Stats row
+                HStack(spacing: 16) {
+                    if let duration = post.duration, duration > 0 {
+                        statPill(icon: "clock", value: formatDuration(duration))
+                    }
+                    if let distance = post.distance, distance > 0 {
+                        statPill(icon: "location", value: String(format: "%.1f km", distance))
+                    }
+                    if let exercises = post.exercises, !exercises.isEmpty {
+                        statPill(icon: "dumbbell", value: "\(exercises.count) \(L.t(sv: "övningar", nb: "øvelser"))")
+                    }
+                }
+                
+                // Gym exercises preview
+                if let exercises = post.exercises, !exercises.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(exercises.prefix(3), id: \.name) { exercise in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 6, height: 6)
+                                Text(exercise.name)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text("\(exercise.sets)×\(exercise.reps.first ?? 0) • \(String(format: "%.0f", exercise.kg.max() ?? 0)) kg")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        if exercises.count > 3 {
+                            Text(L.t(sv: "+\(exercises.count - 3) övningar till", nb: "+\(exercises.count - 3) øvelser til"))
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color(.systemBackground))
+            .cornerRadius(14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color(.systemGray4), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func statPill(icon: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.systemGray6))
+        .cornerRadius(6)
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m) min"
+    }
+}
+
 // MARK: - Public Profile Live Gallery
 
 struct PublicProfileLiveGallery: View {
@@ -771,7 +1258,7 @@ struct CompareButton: View {
                         .overlay(Circle().stroke(Color.white, lineWidth: 2))
                 }
                 
-                Text("Jämför")
+                Text(L.t(sv: "Jämför", nb: "Sammenlign"))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.primary)
                 
@@ -818,11 +1305,20 @@ struct UserComparisonView: View {
         case thisYear = "Detta året"
         case allTime = "All time"
         
+        var displayName: String {
+            switch self {
+            case .last30Days: return L.t(sv: "Senaste 30 dagarna", nb: "Siste 30 dagene")
+            case .last90Days: return L.t(sv: "Senaste 90 dagarna", nb: "Siste 90 dagene")
+            case .thisYear: return L.t(sv: "Detta året", nb: "Dette året")
+            case .allTime: return L.t(sv: "All time", nb: "All time")
+            }
+        }
+        
         var days: Int? {
             switch self {
             case .last30Days: return 30
             case .last90Days: return 90
-            case .thisYear: return nil // Special handling
+            case .thisYear: return nil
             case .allTime: return nil
             }
         }
@@ -840,7 +1336,7 @@ struct UserComparisonView: View {
                                 Task { await loadComparisonData() }
                             } label: {
                                 HStack {
-                                    Text(period.rawValue)
+                                    Text(period.displayName)
                                     if period == selectedPeriod {
                                         Image(systemName: "checkmark")
                                     }
@@ -849,7 +1345,7 @@ struct UserComparisonView: View {
                         }
                     } label: {
                         HStack {
-                            Text(selectedPeriod.rawValue)
+                            Text(selectedPeriod.displayName)
                                 .font(.system(size: 16, weight: .medium))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 12))
@@ -908,14 +1404,14 @@ struct UserComparisonView: View {
                     } else {
                         // Stats comparison
                         VStack(alignment: .leading, spacing: 20) {
-                            Text("Stats - \(selectedPeriod.rawValue)")
+                            Text("\(L.t(sv: "Stats", nb: "Stats")) - \(selectedPeriod.displayName)")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.gray)
                                 .padding(.horizontal, 20)
                             
                             // Workout Count
                             ComparisonStatRow(
-                                title: "Antal pass",
+                                title: L.t(sv: "Antal pass", nb: "Antall økter"),
                                 myValue: myWorkoutCount,
                                 theirValue: theirWorkoutCount,
                                 myAvatarUrl: myAvatarUrl,
@@ -924,7 +1420,7 @@ struct UserComparisonView: View {
                             
                             // Workout Time
                             ComparisonTimeRow(
-                                title: "Träningstid",
+                                title: L.t(sv: "Träningstid", nb: "Treningstid"),
                                 mySeconds: myTotalTime,
                                 theirSeconds: theirTotalTime,
                                 myAvatarUrl: myAvatarUrl,
@@ -933,7 +1429,7 @@ struct UserComparisonView: View {
                             
                             // Total Volume
                             ComparisonVolumeRow(
-                                title: "Total volym",
+                                title: L.t(sv: "Total volym", nb: "Total volum"),
                                 myVolume: myTotalVolume,
                                 theirVolume: theirTotalVolume,
                                 myAvatarUrl: myAvatarUrl,
@@ -946,7 +1442,7 @@ struct UserComparisonView: View {
                         if !commonExercises.isEmpty {
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack(spacing: 8) {
-                                    Text("Jämför övningar")
+                                    Text(L.t(sv: "Jämför övningar", nb: "Sammenlign øvelser"))
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundColor(.gray)
                                     
@@ -977,7 +1473,7 @@ struct UserComparisonView: View {
                     Spacer(minLength: 50)
                 }
             }
-            .navigationTitle("Jämförelse")
+            .navigationTitle(L.t(sv: "Jämförelse", nb: "Sammenligning"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1497,7 +1993,7 @@ struct CommonExerciseRow: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("Tryck för att jämföra")
+                Text(L.t(sv: "Tryck för att jämföra", nb: "Trykk for å sammenligne"))
                     .font(.system(size: 13))
                     .foregroundColor(.gray)
             }
@@ -1554,7 +2050,7 @@ struct ExerciseComparisonView: View {
                                 .lineLimit(1)
                             
                             if amIStronger {
-                                Text("STARKARE")
+                                Text(L.t(sv: "STARKARE", nb: "STERKERE"))
                                     .font(.system(size: 12, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 12)
@@ -1585,7 +2081,7 @@ struct ExerciseComparisonView: View {
                                 .lineLimit(1)
                             
                             if !amIStronger {
-                                Text("STARKARE")
+                                Text(L.t(sv: "STARKARE", nb: "STERKERE"))
                                     .font(.system(size: 12, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 12)
@@ -1601,7 +2097,7 @@ struct ExerciseComparisonView: View {
                     
                     // Exercise info
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Övning")
+                        Text(L.t(sv: "Övning", nb: "Øvelse"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                         
@@ -1625,7 +2121,7 @@ struct ExerciseComparisonView: View {
                     
                     // Comparison stats
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Jämförelse")
+                        Text(L.t(sv: "Jämförelse", nb: "Sammenligning"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                             .padding(.horizontal, 20)
@@ -1643,7 +2139,7 @@ struct ExerciseComparisonView: View {
                             
                             // Heaviest Weight
                             ExerciseStatCompareRow(
-                                title: "Tyngsta vikt",
+                                title: L.t(sv: "Tyngsta vikt", nb: "Tyngste vekt"),
                                 myValue: exercise.myStats.heaviestWeight,
                                 theirValue: exercise.theirStats.heaviestWeight,
                                 unit: "kg",
@@ -1653,7 +2149,7 @@ struct ExerciseComparisonView: View {
                             
                             // Best Set Volume
                             ExerciseStatCompareRow(
-                                title: "Bästa set (volym)",
+                                title: L.t(sv: "Bästa set (volym)", nb: "Beste sett (volum)"),
                                 myValue: exercise.myStats.bestSetVolume,
                                 theirValue: exercise.theirStats.bestSetVolume,
                                 unit: "kg",
@@ -1667,7 +2163,7 @@ struct ExerciseComparisonView: View {
                     Spacer(minLength: 50)
                 }
             }
-            .navigationTitle("Jämförelse")
+            .navigationTitle(L.t(sv: "Jämförelse", nb: "Sammenligning"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

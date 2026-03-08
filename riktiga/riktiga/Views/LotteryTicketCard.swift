@@ -23,7 +23,7 @@ struct LotteryTicketCard: View {
                     Text("\(myTickets)")
                         .font(.system(size: 28, weight: .black))
                         .foregroundColor(.white)
-                    Text("lotter")
+                    Text(L.t(sv: "lotter", nb: "lodd"))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.gray)
                         .padding(.top, 8)
@@ -59,18 +59,18 @@ struct LotteryTicketCard: View {
                     
                     // Percentage text
                     HStack(spacing: 4) {
-                        Text("Du äger")
+                        Text(L.t(sv: "Du eier", nb: "Du eier"))
                             .foregroundColor(.gray)
                         Text(String(format: "%.1f%%", percentage))
                             .foregroundColor(.yellow)
                             .fontWeight(.bold)
-                        Text("av alla")
+                        Text(L.t(sv: "av alla", nb: "av alle"))
                             .foregroundColor(.gray)
                     }
                     .font(.system(size: 10))
                     
                     // Total count
-                    Text("\(myTickets) av \(formatNumber(totalTickets)) totalt")
+                    Text(L.t(sv: "\(myTickets) av \(formatNumber(totalTickets)) totalt", nb: "\(myTickets) av \(formatNumber(totalTickets)) totalt"))
                         .font(.system(size: 9))
                         .foregroundColor(.gray.opacity(0.6))
                 }
@@ -86,13 +86,13 @@ struct LotteryTicketCard: View {
                     HStack(spacing: 3) {
                         Text("📅")
                             .font(.system(size: 9))
-                        Text("Dragning: \(drawDate)")
+                        Text(L.t(sv: "Dragning: \(drawDate)", nb: "Trekning: \(drawDate)"))
                             .font(.system(size: 9, weight: .medium))
                             .foregroundColor(.gray)
                     }
                     
                     // Info text
-                    Text("Desto fler lotter du har desto större chans har du att vinna priserna")
+                    Text(L.t(sv: "Desto fler lotter du har desto större chans har du att vinna priserna", nb: "Jo flere lodd du har, jo større sjanse har du til å vinne premiene"))
                         .font(.system(size: 8, weight: .medium))
                         .foregroundColor(.yellow.opacity(0.8))
                         .multilineTextAlignment(.center)

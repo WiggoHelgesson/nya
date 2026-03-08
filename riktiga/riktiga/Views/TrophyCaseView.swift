@@ -1,9 +1,9 @@
 import SwiftUI
 
 private let trophyCatalog: [Trophy] = [
-    Trophy(id: "bench-60kg", title: "Bänkpress 60 kg", requirement: .benchPress(60)),
-    Trophy(id: "bench-100kg", title: "Bänkpress 100 kg", requirement: .benchPress(100)),
-    Trophy(id: "bench-140kg", title: "Bänkpress 140 kg", requirement: .benchPress(140))
+    Trophy(id: "bench-60kg", title: L.t(sv: "Bänkpress 60 kg", nb: "Benkpress 60 kg"), requirement: .benchPress(60)),
+    Trophy(id: "bench-100kg", title: L.t(sv: "Bänkpress 100 kg", nb: "Benkpress 100 kg"), requirement: .benchPress(100)),
+    Trophy(id: "bench-140kg", title: L.t(sv: "Bänkpress 140 kg", nb: "Benkpress 140 kg"), requirement: .benchPress(140))
 ]
 
 struct PersonalBestInfo: Equatable {
@@ -71,7 +71,7 @@ struct TrophyCaseView: View, Equatable {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Pokaler")
+                Text(L.t(sv: "Pokaler", nb: "Pokaler"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -97,7 +97,7 @@ struct TrophyCaseView: View, Equatable {
                 showAllTrophies = true
             }) {
                 HStack {
-                    Text("Alla pokaler")
+                    Text(L.t(sv: "Alla pokaler", nb: "Alle pokaler"))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.primary)
                     Spacer()
@@ -219,11 +219,11 @@ struct AllTrophiesView: View {
                 }
                 .padding(16)
             }
-            .navigationTitle("Alla pokaler")
+            .navigationTitle(L.t(sv: "Alla pokaler", nb: "Alle pokaler"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         dismiss()
                     }
                 }
@@ -253,46 +253,46 @@ private func detailText(for trophy: Trophy, activityCount: Int, personalBests: P
     switch trophy.requirement {
     case .activities(let count):
         if unlocked {
-            return "Upplåst!"
+            return L.t(sv: "Upplåst!", nb: "Låst opp!")
         }
         let remaining = max(count - activityCount, 0)
-        return "\(remaining) aktiviteter kvar"
+        return L.t(sv: "\(remaining) aktiviteter kvar", nb: "\(remaining) aktiviteter igjen")
     case .fiveKmUnder(let target):
         let current = personalBests.formattedFiveKm
         if unlocked {
             if let current {
-                return "Upplåst! Bästa tid: \(current)"
+                return L.t(sv: "Upplåst! Bästa tid: \(current)", nb: "Låst opp! Beste tid: \(current)")
             }
-            return "Upplåst!"
+            return L.t(sv: "Upplåst!", nb: "Låst opp!")
         }
         if let current {
-            return "Spring 5 km under \(target) min (nu: \(current))"
+            return L.t(sv: "Spring 5 km under \(target) min (nu: \(current))", nb: "Løp 5 km under \(target) min (nå: \(current))")
         }
-        return "Spring 5 km under \(target) min"
+        return L.t(sv: "Spring 5 km under \(target) min", nb: "Løp 5 km under \(target) min")
     case .tenKmUnder(let target):
         let current = personalBests.formattedTenKm
         if unlocked {
             if let current {
-                return "Upplåst! Bästa tid: \(current)"
+                return L.t(sv: "Upplåst! Bästa tid: \(current)", nb: "Låst opp! Beste tid: \(current)")
             }
-            return "Upplåst!"
+            return L.t(sv: "Upplåst!", nb: "Låst opp!")
         }
         if let current {
-            return "Spring 10 km under \(target) min (nu: \(current))"
+            return L.t(sv: "Spring 10 km under \(target) min (nu: \(current))", nb: "Løp 10 km under \(target) min (nå: \(current))")
         }
-        return "Spring 10 km under \(target) min"
+        return L.t(sv: "Spring 10 km under \(target) min", nb: "Løp 10 km under \(target) min")
     case .benchPress(let target):
         let current = personalBests.formattedBench
         if unlocked {
             if let current {
-                return "Upplåst! Bästa lyft: \(current)"
+                return L.t(sv: "Upplåst! Bästa lyft: \(current)", nb: "Låst opp! Beste løft: \(current)")
             }
-            return "Upplåst!"
+            return L.t(sv: "Upplåst!", nb: "Låst opp!")
         }
         if let current {
-            return "Bänkpress \(Int(target)) kg eller mer (nu: \(current))"
+            return L.t(sv: "Bänkpress \(Int(target)) kg eller mer (nu: \(current))", nb: "Benkpress \(Int(target)) kg eller mer (nå: \(current))")
         }
-        return "Bänkpress \(Int(target)) kg eller mer"
+        return L.t(sv: "Bänkpress \(Int(target)) kg eller mer", nb: "Benkpress \(Int(target)) kg eller mer")
     }
 }
 

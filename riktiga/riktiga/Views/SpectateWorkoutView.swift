@@ -123,7 +123,7 @@ struct SpectateWorkoutView: View {
             Text("•")
                 .foregroundColor(.gray)
             
-            Text("\(realtimeService.spectatedExercises.count) övningar")
+            Text(L.t(sv: "\(realtimeService.spectatedExercises.count) övningar", nb: "\(realtimeService.spectatedExercises.count) øvelser"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.gray)
         }
@@ -140,11 +140,11 @@ struct SpectateWorkoutView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.gray.opacity(0.5))
             
-            Text("Väntar på övningar...")
+            Text(L.t(sv: "Väntar på övningar...", nb: "Venter på øvelser..."))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.secondary)
             
-            Text("\(session.userName) har inte lagt till några övningar än")
+            Text(L.t(sv: "\(session.userName) har inte lagt till några övningar än", nb: "\(session.userName) har ikke lagt til noen øvelser ennå"))
                 .font(.system(size: 14))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -177,7 +177,7 @@ struct SpectateWorkoutView: View {
             HStack(spacing: 10) {
                 Text("💪")
                     .font(.system(size: 24))
-                Text("Heja på!")
+                Text(L.t(sv: "Heja på!", nb: "Hei på!"))
                     .font(.system(size: 17, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -201,7 +201,7 @@ struct SpectateWorkoutView: View {
     private var cheerSelectionSheet: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text("Välj en emoji för att heja!")
+                Text(L.t(sv: "Välj en emoji för att heja!", nb: "Velg en emoji for å heie!"))
                     .font(.system(size: 18, weight: .semibold))
                     .padding(.top, 20)
                 
@@ -223,11 +223,11 @@ struct SpectateWorkoutView: View {
                 
                 Spacer()
             }
-            .navigationTitle("Heja på")
+            .navigationTitle(L.t(sv: "Heja på", nb: "Hei på"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         showCheerSheet = false
                     }
                 }

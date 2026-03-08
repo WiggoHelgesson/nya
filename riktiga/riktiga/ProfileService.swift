@@ -8,6 +8,7 @@ class ProfileService {
     private let supabase = SupabaseConfig.supabase
     private var personalBestColumnsAvailable: Bool?
     private var onboardingColumnAvailable: Bool?
+    private var editProfileColumnsAvailable: Bool?
     private let avatarBucket = "profile-images"
     
     private struct UsernameRow: Decodable { let id: String }
@@ -44,18 +45,20 @@ class ProfileService {
             
             // Försök att dekoda - Email finns INTE i profiles tabellen
             do {
-                let coreColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races"
+                let coreColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races, bio"
                 let onboardingColumn = ", onboarding_completed"
                 let personalBestColumns = ", pb_5km_minutes, pb_10km_hours, pb_10km_minutes, pb_marathon_hours, pb_marathon_minutes"
+                let editProfileColumns = ", pinned_post_ids, gym_pbs, home_gym, training_goal, training_identity"
                 var profiles: [User]
                 let shouldAttemptPBColumns = personalBestColumnsAvailable ?? true
                 let shouldAttemptOnboardingColumn = onboardingColumnAvailable ?? true
+                let shouldAttemptEditProfileColumns = editProfileColumnsAvailable ?? true
 
-                // Build the best SELECT we can, falling back if columns are missing
                 func buildSelect() -> String {
                     var cols = coreColumns
                     if shouldAttemptOnboardingColumn { cols += onboardingColumn }
                     if shouldAttemptPBColumns { cols += personalBestColumns }
+                    if shouldAttemptEditProfileColumns { cols += editProfileColumns }
                     return cols
                 }
                 
@@ -69,37 +72,56 @@ class ProfileService {
                     // If we got here, all attempted columns exist
                     if shouldAttemptPBColumns { personalBestColumnsAvailable = true }
                     if shouldAttemptOnboardingColumn { onboardingColumnAvailable = true }
+                    if shouldAttemptEditProfileColumns { editProfileColumnsAvailable = true }
                 } catch {
                     if isMissingColumnError(error) {
-                        // Try without optional columns one by one
                         print("ℹ️ Some columns missing, trying fallback selects...")
                         
-                        // Try without PB columns first
-                        if shouldAttemptPBColumns {
-                            personalBestColumnsAvailable = false
+                        // Try without edit profile columns first
+                        if shouldAttemptEditProfileColumns {
+                            editProfileColumnsAvailable = false
                         }
                         
-                        // Try core + onboarding (no PB)
                         do {
-                            let fallbackCols = shouldAttemptOnboardingColumn ? (coreColumns + onboardingColumn) : coreColumns
+                            var fallback1 = coreColumns
+                            if shouldAttemptOnboardingColumn { fallback1 += onboardingColumn }
+                            if shouldAttemptPBColumns { fallback1 += personalBestColumns }
                             profiles = try await supabase
                                 .from("profiles")
-                                .select(fallbackCols)
+                                .select(fallback1)
                                 .eq("id", value: userId)
                                 .execute()
                                 .value
+                            if shouldAttemptPBColumns { personalBestColumnsAvailable = true }
                             if shouldAttemptOnboardingColumn { onboardingColumnAvailable = true }
                         } catch {
-                            if isMissingColumnError(error) && shouldAttemptOnboardingColumn {
-                                // onboarding_completed column doesn't exist yet
-                                onboardingColumnAvailable = false
-                                print("ℹ️ onboarding_completed column not found, falling back to core columns only.")
-                                profiles = try await supabase
-                                    .from("profiles")
-                                    .select(coreColumns)
-                                    .eq("id", value: userId)
-                                    .execute()
-                                    .value
+                            if isMissingColumnError(error) {
+                                // Try without PB columns
+                                if shouldAttemptPBColumns { personalBestColumnsAvailable = false }
+                                
+                                do {
+                                    let fallback2 = shouldAttemptOnboardingColumn ? (coreColumns + onboardingColumn) : coreColumns
+                                    profiles = try await supabase
+                                        .from("profiles")
+                                        .select(fallback2)
+                                        .eq("id", value: userId)
+                                        .execute()
+                                        .value
+                                    if shouldAttemptOnboardingColumn { onboardingColumnAvailable = true }
+                                } catch {
+                                    if isMissingColumnError(error) && shouldAttemptOnboardingColumn {
+                                        onboardingColumnAvailable = false
+                                        print("ℹ️ onboarding_completed column not found, falling back to core columns only.")
+                                        profiles = try await supabase
+                                            .from("profiles")
+                                            .select(coreColumns)
+                                            .eq("id", value: userId)
+                                            .execute()
+                                            .value
+                                    } else {
+                                        throw error
+                                    }
+                                }
                             } else {
                                 throw error
                             }

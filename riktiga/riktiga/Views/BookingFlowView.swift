@@ -41,11 +41,11 @@ struct BookingFlowView: View {
                 // Navigation
                 navigationButtons
             }
-            .navigationTitle("Boka lektion")
+            .navigationTitle(L.t(sv: "Boka lektion", nb: "Book leksjon"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
@@ -88,10 +88,10 @@ struct BookingFlowView: View {
                     }
                 )
             }
-            .alert("Fel", isPresented: $viewModel.showError) {
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: $viewModel.showError) {
                 Button("OK") {}
             } message: {
-                Text(viewModel.errorMessage ?? "Ett fel uppstod")
+                Text(viewModel.errorMessage ?? L.t(sv: "Ett fel uppstod", nb: "En feil oppstod"))
             }
         }
     }
@@ -127,10 +127,10 @@ struct BookingFlowView: View {
     
     private func stepTitle(for step: Int) -> String {
         switch step {
-        case 0: return "Lektion"
-        case 1: return "Tid"
-        case 2: return "Plats"
-        case 3: return "Betala"
+        case 0: return L.t(sv: "Lektion", nb: "Leksjon")
+        case 1: return L.t(sv: "Tid", nb: "Tid")
+        case 2: return L.t(sv: "Plats", nb: "Sted")
+        case 3: return L.t(sv: "Betala", nb: "Betal")
         default: return ""
         }
     }
@@ -140,7 +140,7 @@ struct BookingFlowView: View {
     private var step1LessonType: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Välj typ av lektion")
+                Text(L.t(sv: "Välj typ av lektion", nb: "Velg type leksjon"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -150,8 +150,8 @@ struct BookingFlowView: View {
                 } else if viewModel.lessonTypes.isEmpty {
                     // Default lesson type based on hourly rate
                     LessonTypeCard(
-                        name: "60 min lektion",
-                        description: "Individuell lektion med \(trainer.name)",
+                        name: L.t(sv: "60 min lektion", nb: "60 min leksjon"),
+                        description: L.t(sv: "Individuell lektion med \(trainer.name)", nb: "Individuell leksjon med \(trainer.name)"),
                         duration: 60,
                         price: trainer.hourlyRate,
                         isSelected: viewModel.selectedLessonType == nil
@@ -183,17 +183,17 @@ struct BookingFlowView: View {
     private var step2DateTime: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Välj datum och tid")
+                Text(L.t(sv: "Välj datum och tid", nb: "Velg dato og tid"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
                 // Date picker
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Datum")
+                    Text(L.t(sv: "Datum", nb: "Dato"))
                         .font(.headline)
                     
                     DatePicker(
-                        "Välj datum",
+                        L.t(sv: "Välj datum", nb: "Velg dato"),
                         selection: $viewModel.selectedDate,
                         in: Date()...,
                         displayedComponents: .date
@@ -207,13 +207,13 @@ struct BookingFlowView: View {
                 
                 // Time picker
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Tid")
+                    Text(L.t(sv: "Tid", nb: "Tid"))
                         .font(.headline)
                     
                     if viewModel.isLoadingSlots {
                         HStack {
                             ProgressView()
-                            Text("Laddar lediga tider...")
+                            Text(L.t(sv: "Laddar lediga tider...", nb: "Laster ledige tider..."))
                                 .foregroundColor(.secondary)
                         }
                         .padding()
@@ -223,12 +223,12 @@ struct BookingFlowView: View {
                                 .font(.largeTitle)
                                 .foregroundColor(.orange)
                             
-                            Text("Tränaren är inte tillgänglig denna dag")
+                            Text(L.t(sv: "Tränaren är inte tillgänglig denna dag", nb: "Treneren er ikke tilgjengelig denne dagen"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                             
-                            Text("Välj en annan dag i kalendern ovan")
+                            Text(L.t(sv: "Välj en annan dag i kalendern ovan", nb: "Velg en annen dag i kalenderen ovenfor"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -259,7 +259,7 @@ struct BookingFlowView: View {
                 
                 // Message to trainer
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Meddelande till tränaren (valfritt)")
+                    Text(L.t(sv: "Meddelande till tränaren (valfritt)", nb: "Melding til treneren (valgfritt)"))
                         .font(.headline)
                     
                     TextEditor(text: $viewModel.messageToTrainer)
@@ -288,11 +288,11 @@ struct BookingFlowView: View {
     private var step3Location: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Välj plats för lektionen")
+                Text(L.t(sv: "Välj plats för lektionen", nb: "Velg sted for leksjonen"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Placera pinen inom tränarens täckningsområde")
+                Text(L.t(sv: "Placera pinen inom tränarens täckningsområde", nb: "Plasser pinnen innenfor trenerens dekningsområde"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
@@ -312,11 +312,11 @@ struct BookingFlowView: View {
             HStack {
                 Image(systemName: "mappin.and.ellipse")
                     .foregroundColor(.primary)
-                Text("Tränarens täckningsområde (\(Int(trainer.serviceRadiusKm ?? 10)) km)")
+                Text(L.t(sv: "Tränarens täckningsområde (\(Int(trainer.serviceRadiusKm ?? 10)) km)", nb: "Trenerens dekningsområde (\(Int(trainer.serviceRadiusKm ?? 10)) km)"))
                     .font(.headline)
             }
             
-            Text("Flytta kartan för att välja var du vill ha lektionen")
+            Text(L.t(sv: "Flytta kartan för att välja var du vill ha lektionen", nb: "Flytt kartet for å velge hvor du vil ha leksjonen"))
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -352,7 +352,7 @@ struct BookingFlowView: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Perfekt! Platsen är inom tränarens område")
+                    Text(L.t(sv: "Perfekt! Platsen är inom tränarens område", nb: "Perfekt! Stedet er innenfor trenerens område"))
                         .font(.subheadline)
                         .foregroundColor(.green)
                 }
@@ -364,7 +364,7 @@ struct BookingFlowView: View {
                 HStack {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.red)
-                    Text("Flytta pinen innanför cirkeln")
+                    Text(L.t(sv: "Flytta pinen innanför cirkeln", nb: "Flytt pinnen innenfor sirkelen"))
                         .font(.subheadline)
                         .foregroundColor(.red)
                 }
@@ -398,7 +398,7 @@ struct BookingFlowView: View {
     private var step4Summary: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Sammanfattning")
+                Text(L.t(sv: "Sammanfattning", nb: "Sammendrag"))
                     .font(.title2)
                     .fontWeight(.bold)
                 
@@ -415,7 +415,7 @@ struct BookingFlowView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(trainer.name)
                             .font(.headline)
-                        Text("Golftränare")
+                        Text(L.t(sv: "Golftränare", nb: "Golftrener"))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -428,13 +428,13 @@ struct BookingFlowView: View {
                 
                 // Booking details
                 VStack(spacing: 0) {
-                    SummaryRow(icon: "book.fill", title: "Lektion", value: viewModel.selectedLessonType?.name ?? "60 min lektion")
+                    SummaryRow(icon: "book.fill", title: L.t(sv: "Lektion", nb: "Leksjon"), value: viewModel.selectedLessonType?.name ?? L.t(sv: "60 min lektion", nb: "60 min leksjon"))
                     Divider()
-                    SummaryRow(icon: "calendar", title: "Datum", value: viewModel.formattedDate)
+                    SummaryRow(icon: "calendar", title: L.t(sv: "Datum", nb: "Dato"), value: viewModel.formattedDate)
                     Divider()
-                    SummaryRow(icon: "clock.fill", title: "Tid", value: viewModel.formattedTime)
+                    SummaryRow(icon: "clock.fill", title: L.t(sv: "Tid", nb: "Tid"), value: viewModel.formattedTime)
                     Divider()
-                    SummaryRow(icon: "mappin.circle.fill", title: "Plats", value: viewModel.locationDescription)
+                    SummaryRow(icon: "mappin.circle.fill", title: L.t(sv: "Plats", nb: "Sted"), value: viewModel.locationDescription)
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -443,7 +443,7 @@ struct BookingFlowView: View {
                 // Price
                 VStack(spacing: 12) {
                     HStack {
-                        Text("Lektionsavgift")
+                        Text(L.t(sv: "Lektionsavgift", nb: "Leksjonsavgift"))
                             .foregroundColor(.secondary)
                         Spacer()
                         Text("\(viewModel.totalPrice) kr")
@@ -452,7 +452,7 @@ struct BookingFlowView: View {
                     Divider()
                     
                     HStack {
-                        Text("Totalt att betala")
+                        Text(L.t(sv: "Totalt att betala", nb: "Totalt å betale"))
                             .font(.headline)
                         Spacer()
                         Text("\(viewModel.totalPrice) kr")
@@ -466,7 +466,7 @@ struct BookingFlowView: View {
                 .cornerRadius(12)
                 
                 // Terms
-                Text("Genom att boka godkänner du våra villkor. Avbokning kan ske senast 24 timmar innan lektionen.")
+                Text(L.t(sv: "Genom att boka godkänner du våra villkor. Avbokning kan ske senast 24 timmar innan lektionen.", nb: "Ved å booke godtar du våre vilkår. Avbestilling kan skje senest 24 timer før leksjonen."))
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -486,7 +486,7 @@ struct BookingFlowView: View {
                 } label: {
                     HStack {
                         Image(systemName: "chevron.left")
-                        Text("Tillbaka")
+                        Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                     }
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -505,7 +505,7 @@ struct BookingFlowView: View {
                 }
             } label: {
                 HStack {
-                    Text(currentStep == 3 ? "Betala \(viewModel.totalPrice) kr" : "Nästa")
+                    Text(currentStep == 3 ? L.t(sv: "Betala \(viewModel.totalPrice) kr", nb: "Betal \(viewModel.totalPrice) kr") : L.t(sv: "Nästa", nb: "Neste"))
                     if currentStep < 3 {
                         Image(systemName: "chevron.right")
                     } else {
@@ -729,7 +729,7 @@ class BookingFlowViewModel: ObservableObject {
         if let city = trainer.city {
             return "Inom \(city)-området"
         }
-        return "Inom tränarens område"
+        return L.t(sv: "Inom tränarens område", nb: "Innenfor trenerens område")
     }
     
     var hasValidLocation: Bool {
@@ -853,7 +853,7 @@ class BookingFlowViewModel: ObservableObject {
             } else if locationType == .trainerLocation {
                 locationLat = serviceAreaRegion.center.latitude
                 locationLng = serviceAreaRegion.center.longitude
-                locationName = "Inom tränarens område"
+                locationName = L.t(sv: "Inom tränarens område", nb: "Innenfor trenerens område")
             }
             
             _ = try await TrainerService.shared.createExtendedBooking(

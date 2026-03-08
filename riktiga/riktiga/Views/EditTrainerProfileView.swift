@@ -29,15 +29,15 @@ struct EditTrainerProfileView: View {
         NavigationStack {
             Group {
                 if isLoading {
-                    ProgressView("Laddar profil...")
+                    ProgressView(L.t(sv: "Laddar profil...", nb: "Laster profil..."))
                 } else {
                     Form {
                         // Basic Info
-                        Section("Grundinfo") {
-                            TextField("Namn", text: $name)
+                        Section(L.t(sv: "Grundinfo", nb: "Grunninfo")) {
+                            TextField(L.t(sv: "Namn", nb: "Navn"), text: $name)
                             
                             VStack(alignment: .leading) {
-                                Text("Beskrivning")
+                                Text(L.t(sv: "Beskrivning", nb: "Beskrivelse"))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 TextEditor(text: $description)
@@ -46,16 +46,16 @@ struct EditTrainerProfileView: View {
                         }
                         
                         // Pricing
-                        Section("Prissattning") {
+                        Section(L.t(sv: "Prissättning", nb: "Prissetting")) {
                             HStack {
-                                TextField("Pris per timme", text: $hourlyRate)
+                                TextField(L.t(sv: "Pris per timme", nb: "Pris per time"), text: $hourlyRate)
                                     .keyboardType(.numberPad)
-                                Text("kr/h")
+                                Text(L.t(sv: "kr/h", nb: "kr/t"))
                                     .foregroundColor(.secondary)
                             }
                             
                             HStack {
-                                TextField("Handicap", text: $handicap)
+                                TextField(L.t(sv: "Handicap", nb: "Handicap"), text: $handicap)
                                     .keyboardType(.numberPad)
                                 Text("HCP")
                                     .foregroundColor(.secondary)
@@ -63,9 +63,9 @@ struct EditTrainerProfileView: View {
                         }
                         
                         // Location
-                        Section("Plats") {
+                        Section(L.t(sv: "Plats", nb: "Sted")) {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Tryck och hall for att valja plats. Zooma och panorera fritt.")
+                                Text(L.t(sv: "Tryck och håll för att välja plats. Zooma och panorera fritt.", nb: "Trykk og hold for å velge sted. Zoom og panorer fritt."))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                 
@@ -114,7 +114,7 @@ struct EditTrainerProfileView: View {
                                     HStack {
                                         Image(systemName: "mappin.circle.fill")
                                             .foregroundColor(.primary)
-                                        Text("Vald plats: \(String(format: "%.4f", loc.latitude)), \(String(format: "%.4f", loc.longitude))")
+                                        Text(L.t(sv: "Vald plats: \(String(format: "%.4f", loc.latitude)), \(String(format: "%.4f", loc.longitude))", nb: "Valgt sted: \(String(format: "%.4f", loc.latitude)), \(String(format: "%.4f", loc.longitude))"))
                                             .font(.caption)
                                             .foregroundColor(.primary)
                                     }
@@ -128,7 +128,7 @@ struct EditTrainerProfileView: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "location.fill")
-                                        Text("Anvand min nuvarande plats")
+                                        Text(L.t(sv: "Använd min nuvarande plats", nb: "Bruk min nåværende posisjon"))
                                     }
                                     .font(.subheadline)
                                 }
@@ -136,11 +136,11 @@ struct EditTrainerProfileView: View {
                         }
                         
                         // Status
-                        Section("Status") {
-                            Toggle("Annons aktiv", isOn: $isActive)
+                        Section(L.t(sv: "Status", nb: "Status")) {
+                            Toggle(L.t(sv: "Annons aktiv", nb: "Annonse aktiv"), isOn: $isActive)
                             
                             if !isActive {
-                                Text("Din annons visas inte for andra användare")
+                                Text(L.t(sv: "Din annons visas inte för andra användare", nb: "Annonsen din vises ikke for andre brukere"))
                                     .font(.caption)
                                     .foregroundColor(.orange)
                             }
@@ -148,11 +148,11 @@ struct EditTrainerProfileView: View {
                     }
                 }
             }
-            .navigationTitle("Hantera annons")
+            .navigationTitle(L.t(sv: "Hantera annons", nb: "Administrer annonse"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
@@ -164,7 +164,7 @@ struct EditTrainerProfileView: View {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text("Spara")
+                            Text(L.t(sv: "Spara", nb: "Lagre"))
                                 .fontWeight(.semibold)
                         }
                     }
@@ -174,17 +174,17 @@ struct EditTrainerProfileView: View {
             .task {
                 await loadProfile()
             }
-            .alert("Sparat!", isPresented: $showSuccess) {
+            .alert(L.t(sv: "Sparat!", nb: "Lagret!"), isPresented: $showSuccess) {
                 Button("OK") {
                     dismiss()
                 }
             } message: {
-                Text("Dina andringar har sparats.")
+                Text(L.t(sv: "Dina ändringar har sparats.", nb: "Endringene dine har blitt lagret."))
             }
-            .alert("Fel", isPresented: $showError) {
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: $showError) {
                 Button("OK") { }
             } message: {
-                Text(errorMessage ?? "Ett fel uppstod")
+                Text(errorMessage ?? L.t(sv: "Ett fel uppstod", nb: "En feil oppstod"))
             }
         }
     }
@@ -242,7 +242,7 @@ struct EditTrainerProfileView: View {
                 }
             } else {
                 await MainActor.run {
-                    self.errorMessage = "Kunde inte hitta din tranarprofil"
+                    self.errorMessage = L.t(sv: "Kunde inte hitta din tränarprofil", nb: "Kunne ikke finne trenerprofilen din")
                     self.showError = true
                     self.isLoading = false
                 }
@@ -354,7 +354,7 @@ struct InteractiveMapView: UIViewRepresentable {
         if let location = selectedLocation {
             let annotation = MKPointAnnotation()
             annotation.coordinate = location
-            annotation.title = "Vald plats"
+            annotation.title = L.t(sv: "Vald plats", nb: "Valgt sted")
             mapView.addAnnotation(annotation)
         }
     }

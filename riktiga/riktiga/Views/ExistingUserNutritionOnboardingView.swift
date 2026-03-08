@@ -131,7 +131,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 Button {
                     continueToNextStep()
                 } label: {
-                    Text("Fortsätt")
+                    Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(canContinue ? buttonTextColor : .gray)
                         .frame(maxWidth: .infinity)
@@ -152,24 +152,24 @@ struct ExistingUserNutritionOnboardingView: View {
     
     private var stepTitle: String {
         switch currentStep {
-        case 0: return "Välj ditt kön"
-        case 1: return "Hur ofta tränar du?"
-        case 2: return "Längd & vikt"
-        case 3: return "När är du född?"
-        case 4: return "Vad är ditt mål?"
-        case 5: return "Vad är din målvikt?"
+        case 0: return L.t(sv: "Välj ditt kön", nb: "Velg ditt kjønn")
+        case 1: return L.t(sv: "Hur ofta tränar du?", nb: "Hvor ofte trener du?")
+        case 2: return L.t(sv: "Längd & vikt", nb: "Høyde & vekt")
+        case 3: return L.t(sv: "När är du född?", nb: "Når er du født?")
+        case 4: return L.t(sv: "Vad är ditt mål?", nb: "Hva er målet ditt?")
+        case 5: return L.t(sv: "Vad är din målvikt?", nb: "Hva er målvekten din?")
         default: return ""
         }
     }
     
     private var stepSubtitle: String {
         switch currentStep {
-        case 0: return "Detta används för att kalibrera din personliga plan."
-        case 1: return "Detta används för att kalibrera din personliga plan."
-        case 2: return "Detta används för att kalibrera din personliga plan."
-        case 3: return "Detta används för att kalibrera din personliga plan."
-        case 4: return "Detta hjälper oss skapa en plan för ditt kaloriintag."
-        case 5: return "Välj den vikt du vill uppnå."
+        case 0: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case 1: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case 2: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case 3: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case 4: return L.t(sv: "Detta hjälper oss skapa en plan för ditt kaloriintag.", nb: "Dette hjelper oss å lage en plan for kaloriinntaket ditt.")
+        case 5: return L.t(sv: "Välj den vikt du vill uppnå.", nb: "Velg vekten du vil oppnå.")
         default: return ""
         }
     }
@@ -203,9 +203,9 @@ struct ExistingUserNutritionOnboardingView: View {
     private var genderStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 40)
-            genderButton(title: "Man", value: "male")
-            genderButton(title: "Kvinna", value: "female")
-            genderButton(title: "Annat", value: "other")
+            genderButton(title: L.t(sv: "Man", nb: "Mann"), value: "male")
+            genderButton(title: L.t(sv: "Kvinna", nb: "Kvinne"), value: "female")
+            genderButton(title: L.t(sv: "Annat", nb: "Annet"), value: "other")
         }
     }
     
@@ -228,9 +228,9 @@ struct ExistingUserNutritionOnboardingView: View {
     private var workoutsStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 20)
-            workoutButton(range: "0-2", description: "Tränar då och då", icon: "circle.fill", value: "0-2")
-            workoutButton(range: "3-5", description: "Några pass i veckan", icon: "circle.grid.2x1.fill", value: "3-5")
-            workoutButton(range: "6+", description: "Dedikerad atlet", icon: "circle.grid.3x3.fill", value: "6+")
+            workoutButton(range: "0-2", description: L.t(sv: "Tränar då och då", nb: "Trener av og til"), icon: "circle.fill", value: "0-2")
+            workoutButton(range: "3-5", description: L.t(sv: "Några pass i veckan", nb: "Noen økter i uken"), icon: "circle.grid.2x1.fill", value: "3-5")
+            workoutButton(range: "6+", description: L.t(sv: "Dedikerad atlet", nb: "Dedikert atlet"), icon: "circle.grid.3x3.fill", value: "6+")
         }
     }
     
@@ -268,8 +268,8 @@ struct ExistingUserNutritionOnboardingView: View {
             
             HStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text("Längd").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
-                    Picker("Längd", selection: $heightCm) {
+                    Text(L.t(sv: "Längd", nb: "Høyde")).font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
+                    Picker(L.t(sv: "Längd", nb: "Høyde"), selection: $heightCm) {
                         ForEach(140...220, id: \.self) { cm in
                             Text("\(cm) cm").tag(cm)
                         }
@@ -280,8 +280,8 @@ struct ExistingUserNutritionOnboardingView: View {
                 .frame(maxWidth: .infinity)
                 
                 VStack(spacing: 8) {
-                    Text("Vikt").font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
-                    Picker("Vikt", selection: Binding(
+                    Text(L.t(sv: "Vikt", nb: "Vekt")).font(.system(size: 16, weight: .semibold)).foregroundColor(primaryTextColor)
+                    Picker(L.t(sv: "Vikt", nb: "Vekt"), selection: Binding(
                         get: { Int(weightKg) },
                         set: { weightKg = Double($0) }
                     )) {
@@ -310,9 +310,9 @@ struct ExistingUserNutritionOnboardingView: View {
     private var goalStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 40)
-            goalButton(title: "Gå ner i vikt", value: "lose")
-            goalButton(title: "Behålla vikt", value: "maintain")
-            goalButton(title: "Gå upp i vikt", value: "gain")
+            goalButton(title: L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt"), value: "lose")
+            goalButton(title: L.t(sv: "Behålla vikt", nb: "Beholde vekt"), value: "maintain")
+            goalButton(title: L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt"), value: "gain")
         }
     }
     
@@ -337,16 +337,16 @@ struct ExistingUserNutritionOnboardingView: View {
         VStack(spacing: 24) {
             Spacer().frame(height: 20)
             
-            Text(goal == "lose" ? "Gå ner i vikt" : goal == "gain" ? "Gå upp i vikt" : "Behåll vikt")
+            Text(goal == "lose" ? L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt") : goal == "gain" ? L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt") : L.t(sv: "Behåll vikt", nb: "Behold vekt"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.gray)
             
             HStack {
-                Text("Nuvarande vikt:").font(.system(size: 14)).foregroundColor(.gray)
+                Text(L.t(sv: "Nuvarande vikt:", nb: "Nåværende vekt:")).font(.system(size: 14)).foregroundColor(.gray)
                 Text("\(Int(weightKg)) kg").font(.system(size: 14, weight: .semibold)).foregroundColor(primaryTextColor)
             }
             
-            Picker("Målvikt", selection: Binding(
+            Picker(L.t(sv: "Målvikt", nb: "Målvekt"), selection: Binding(
                 get: { Int(targetWeightKg) },
                 set: { targetWeightKg = Double($0) }
             )) {
@@ -362,7 +362,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 HStack(spacing: 8) {
                     Image(systemName: diff < 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
                         .foregroundColor(diff < 0 ? .green : .orange)
-                    Text("\(abs(diff)) kg \(diff < 0 ? "att gå ner" : "att gå upp")")
+                    Text("\(abs(diff)) kg \(diff < 0 ? L.t(sv: "att gå ner", nb: "å gå ned") : L.t(sv: "att gå upp", nb: "å gå opp"))")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(primaryTextColor)
                 }
@@ -385,7 +385,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 .contentTransition(.numericText())
                 .animation(.easeOut(duration: 0.1), value: calculationProgress)
             
-            Text("Vi skapar allt\nåt dig")
+            Text(L.t(sv: "Vi skapar allt\nåt dig", nb: "Vi lager alt\nfor deg"))
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(primaryTextColor)
                 .multilineTextAlignment(.center)
@@ -409,15 +409,15 @@ struct ExistingUserNutritionOnboardingView: View {
             Spacer()
             
             VStack(alignment: .leading, spacing: 12) {
-                Text("Daglig rekommendation för")
+                Text(L.t(sv: "Daglig rekommendation för", nb: "Daglig anbefaling for"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(primaryTextColor)
                 
-                checklistItem(text: "Kalorier", isChecked: calculationProgress >= 20)
-                checklistItem(text: "Kolhydrater", isChecked: calculationProgress >= 40)
-                checklistItem(text: "Protein", isChecked: calculationProgress >= 60)
-                checklistItem(text: "Fett", isChecked: calculationProgress >= 80)
-                checklistItem(text: "Hälsopoäng", isChecked: calculationProgress >= 100)
+                checklistItem(text: L.t(sv: "Kalorier", nb: "Kalorier"), isChecked: calculationProgress >= 20)
+                checklistItem(text: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), isChecked: calculationProgress >= 40)
+                checklistItem(text: L.t(sv: "Protein", nb: "Protein"), isChecked: calculationProgress >= 60)
+                checklistItem(text: L.t(sv: "Fett", nb: "Fett"), isChecked: calculationProgress >= 80)
+                checklistItem(text: L.t(sv: "Hälsopoäng", nb: "Helsepoeng"), isChecked: calculationProgress >= 100)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 60)
@@ -459,17 +459,17 @@ struct ExistingUserNutritionOnboardingView: View {
                         .font(.system(size: 50))
                         .foregroundColor(primaryTextColor)
                     
-                    Text("Grattis")
+                    Text(L.t(sv: "Grattis", nb: "Gratulerer"))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(primaryTextColor)
                     
-                    Text("din personliga plan är klar!")
+                    Text(L.t(sv: "din personliga plan är klar!", nb: "din personlige plan er klar!"))
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(primaryTextColor)
                 }
                 
                 VStack(spacing: 12) {
-                    Text("Du bör:")
+                    Text(L.t(sv: "Du bör:", nb: "Du bør:"))
                         .font(.system(size: 16))
                         .foregroundColor(.gray)
                     
@@ -484,20 +484,20 @@ struct ExistingUserNutritionOnboardingView: View {
                 
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Daglig rekommendation")
+                        Text(L.t(sv: "Daglig rekommendation", nb: "Daglig anbefaling"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(primaryTextColor)
-                        Text("Du kan ändra detta när som helst")
+                        Text(L.t(sv: "Du kan ändra detta när som helst", nb: "Du kan endre dette når som helst"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                     }
                     .padding(.horizontal, 24)
                     
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        MacroResultCard(emoji: "🔥", title: "Kalorier", value: $dailyCalories, unit: "", progress: 0.75)
-                        MacroResultCard(emoji: "🌾", title: "Kolhydrater", value: $dailyCarbs, unit: "g", progress: 0.65)
-                        MacroResultCard(emoji: "🍗", title: "Protein", value: $dailyProtein, unit: "g", progress: 0.70)
-                        MacroResultCard(emoji: "🥑", title: "Fett", value: $dailyFat, unit: "g", progress: 0.55)
+                        MacroResultCard(emoji: "🔥", title: L.t(sv: "Kalorier", nb: "Kalorier"), value: $dailyCalories, unit: "", progress: 0.75)
+                        MacroResultCard(emoji: "🌾", title: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), value: $dailyCarbs, unit: "g", progress: 0.65)
+                        MacroResultCard(emoji: "🍗", title: L.t(sv: "Protein", nb: "Protein"), value: $dailyProtein, unit: "g", progress: 0.70)
+                        MacroResultCard(emoji: "🥑", title: L.t(sv: "Fett", nb: "Fett"), value: $dailyFat, unit: "g", progress: 0.55)
                     }
                     .padding(.horizontal, 24)
                 }
@@ -507,7 +507,7 @@ struct ExistingUserNutritionOnboardingView: View {
                 Button {
                     saveAndComplete()
                 } label: {
-                    Text("Kom igång!")
+                    Text(L.t(sv: "Kom igång!", nb: "Kom i gang!"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(buttonTextColor)
                         .frame(maxWidth: .infinity)
@@ -530,8 +530,8 @@ struct ExistingUserNutritionOnboardingView: View {
         dateFormatter.locale = Locale(identifier: "sv_SE")
         dateFormatter.dateFormat = "d MMMM"
         
-        let action = goal == "lose" ? "Gå ner" : goal == "gain" ? "Gå upp" : "Behåll"
-        return "\(action) \(Int(weightDiff)) kg till \(dateFormatter.string(from: targetDate))"
+        let action = goal == "lose" ? L.t(sv: "Gå ner", nb: "Gå ned") : goal == "gain" ? L.t(sv: "Gå upp", nb: "Gå opp") : L.t(sv: "Behåll", nb: "Behold")
+        return "\(action) \(Int(weightDiff)) kg \(L.t(sv: "till", nb: "til")) \(dateFormatter.string(from: targetDate))"
     }
     
     // MARK: - Helper Functions
@@ -567,11 +567,11 @@ struct ExistingUserNutritionOnboardingView: View {
         }
         
         let steps = [
-            "Beräknar BMR...",
-            "Tillämpar aktivitetsnivå...",
-            "Optimerar makrofördelning...",
-            "Anpassar efter mål...",
-            "Färdigställer plan..."
+            L.t(sv: "Beräknar BMR...", nb: "Beregner BMR..."),
+            L.t(sv: "Tillämpar aktivitetsnivå...", nb: "Bruker aktivitetsnivå..."),
+            L.t(sv: "Optimerar makrofördelning...", nb: "Optimerer makrofordeling..."),
+            L.t(sv: "Anpassar efter mål...", nb: "Tilpasser etter mål..."),
+            L.t(sv: "Färdigställer plan...", nb: "Ferdigstiller plan...")
         ]
         
         var currentStepIndex = 0

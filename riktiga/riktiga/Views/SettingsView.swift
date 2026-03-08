@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var hasLoadedOnce = false
     @State private var showReferralView = false
     @StateObject private var stravaService = StravaService.shared
+    @ObservedObject private var languageManager = LanguageManager.shared
     @State private var showStravaDisconnectConfirmation = false
     @State private var showNutritionOnboarding = false
     @State private var showPersonalDetails = false
@@ -29,6 +30,7 @@ struct SettingsView: View {
                     bjudInVannerSection
                     dittKontoSection
                     kopplingarSection
+                    sprakSection
                     naringOchMalSection
                     kundtjanstSection
                     foljOssSection
@@ -54,11 +56,11 @@ struct SettingsView: View {
                 .ignoresSafeArea()
             )
             .scrollIndicators(.hidden)
-            .navigationTitle("Inställningar")
+            .navigationTitle(L.t(sv: "Inställningar", nb: "Innstillinger"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         dismiss()
                     }
                     .fontWeight(.medium)
@@ -103,23 +105,23 @@ struct SettingsView: View {
             .onReceive(RevenueCatManager.shared.$isLoading) { newValue in
                 isLoadingPremium = newValue
             }
-            .confirmationDialog("Radera konto", isPresented: $showDeleteAccountConfirmation, titleVisibility: .visible) {
-                Button("Radera konto", role: .destructive) {
+            .confirmationDialog(L.t(sv: "Radera konto", nb: "Slett konto"), isPresented: $showDeleteAccountConfirmation, titleVisibility: .visible) {
+                Button(L.t(sv: "Radera konto", nb: "Slett konto"), role: .destructive) {
                     Task {
                         await deleteAccount()
                     }
                 }
-                Button("Avbryt", role: .cancel) {}
+                Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
             } message: {
-                Text("Är du säker på att du vill radera ditt konto? Denna åtgärd kan inte ångras.")
+                Text(L.t(sv: "Är du säker på att du vill radera ditt konto? Denna åtgärd kan inte ångras.", nb: "Er du sikker på at du vil slette kontoen din? Denne handlingen kan ikke angres."))
             }
-            .confirmationDialog("Koppla bort Strava", isPresented: $showStravaDisconnectConfirmation, titleVisibility: .visible) {
-                Button("Koppla bort", role: .destructive) {
+            .confirmationDialog(L.t(sv: "Koppla bort Strava", nb: "Koble fra Strava"), isPresented: $showStravaDisconnectConfirmation, titleVisibility: .visible) {
+                Button(L.t(sv: "Koppla bort", nb: "Koble fra"), role: .destructive) {
                     stravaService.disconnect()
                 }
-                Button("Avbryt", role: .cancel) {}
+                Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
             } message: {
-                Text("Vill du koppla bort ditt Strava-konto? Dina pass kommer inte längre synkas automatiskt.")
+                Text(L.t(sv: "Vill du koppla bort ditt Strava-konto? Dina pass kommer inte längre synkas automatiskt.", nb: "Vil du koble fra Strava-kontoen din? Øktene dine vil ikke lenger synkroniseres automatisk."))
             }
         }
     }
@@ -128,7 +130,7 @@ struct SettingsView: View {
     
     private var prenumerationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Prenumeration")
+            Text(L.t(sv: "Prenumeration", nb: "Abonnement"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
@@ -150,7 +152,7 @@ struct SettingsView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.primary)
                             
-                            Text(isLoadingPremium ? "Laddar..." : (isPremium ? "Aktiv prenumeration" : "Inaktiv"))
+                            Text(isLoadingPremium ? L.t(sv: "Laddar...", nb: "Laster...") : (isPremium ? L.t(sv: "Aktiv prenumeration", nb: "Aktivt abonnement") : L.t(sv: "Inaktiv", nb: "Inaktiv")))
                                 .font(.system(size: 13))
                                 .foregroundColor(isPremium ? .green : .secondary)
                         }
@@ -174,7 +176,7 @@ struct SettingsView: View {
                 SettingsItemDivider()
                 
                 Button(action: openSubscriptionManagement) {
-                    NewSettingsRow(icon: "creditcard", title: "Hantera prenumeration")
+                    NewSettingsRow(icon: "creditcard", title: L.t(sv: "Hantera prenumeration", nb: "Administrer abonnement"))
                 }
             }
             .background(Color(.systemBackground))
@@ -184,7 +186,7 @@ struct SettingsView: View {
     
     private var bjudInVannerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Bjud in vänner")
+            Text(L.t(sv: "Bjud in vänner", nb: "Inviter venner"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
@@ -197,11 +199,11 @@ struct SettingsView: View {
                         .frame(width: 24)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Referera en vän och tjäna")
+                        Text(L.t(sv: "Referera en vän och tjäna", nb: "Refer en venn og tjen"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.primary)
                         
-                        Text("Tjäna 40% på alla köp din vän gör")
+                        Text(L.t(sv: "Tjäna 40% på alla köp din vän gör", nb: "Tjen 40% på alle kjøp vennen din gjør"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -221,14 +223,14 @@ struct SettingsView: View {
     
     private var dittKontoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ditt konto")
+            Text(L.t(sv: "Ditt konto", nb: "Din konto"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 0) {
                 Button(action: { showPersonalDetails = true }) {
-                    NewSettingsRow(icon: "person.text.rectangle", title: "Personliga detaljer")
+                    NewSettingsRow(icon: "person.text.rectangle", title: L.t(sv: "Personliga detaljer", nb: "Personlige detaljer"))
                 }
                 
                 SettingsItemDivider()
@@ -244,7 +246,7 @@ struct SettingsView: View {
     
     private var kopplingarSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Kopplingar")
+            Text(L.t(sv: "Kopplingar", nb: "Koblinger"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
@@ -273,7 +275,7 @@ struct SettingsView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.primary)
                             
-                            Text(stravaService.isConnected ? "Ansluten" : "Inte ansluten")
+                            Text(stravaService.isConnected ? L.t(sv: "Ansluten", nb: "Tilkoblet") : L.t(sv: "Inte ansluten", nb: "Ikke tilkoblet"))
                                 .font(.system(size: 13))
                                 .foregroundColor(stravaService.isConnected ? .green : .secondary)
                         }
@@ -288,7 +290,7 @@ struct SettingsView: View {
                                 .font(.system(size: 18))
                                 .foregroundColor(.green)
                         } else {
-                            Text("Anslut")
+                            Text(L.t(sv: "Anslut", nb: "Koble til"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.orange)
                         }
@@ -302,22 +304,68 @@ struct SettingsView: View {
         }
     }
     
+    private var sprakSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.t(sv: "Språk", nb: "Språk"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 0) {
+                ForEach(AppLanguage.allCases, id: \.self) { language in
+                    Button(action: {
+                        withAnimation(.smooth(duration: 0.3)) {
+                            languageManager.currentLanguage = language
+                        }
+                    }) {
+                        HStack(spacing: 14) {
+                            Text(language.flag)
+                                .font(.system(size: 22))
+                                .frame(width: 24)
+                            
+                            Text(language.displayName)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                            
+                            if languageManager.currentLanguage == language {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.green)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if language != AppLanguage.allCases.last {
+                        SettingsItemDivider()
+                    }
+                }
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
+    }
+    
     private var naringOchMalSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Näring & mål")
+            Text(L.t(sv: "Näring & mål", nb: "Ernæring og mål"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 0) {
                 Button(action: { showNutritionOnboarding = true }) {
-                    NewSettingsRow(icon: "target", title: "Uppdatera näringsinställningar")
+                    NewSettingsRow(icon: "target", title: L.t(sv: "Uppdatera näringsinställningar", nb: "Oppdater ernæringsinnstillinger"))
                 }
                 
                 SettingsItemDivider()
                 
                 Button(action: { showPersonalDetails = true }) {
-                    NewSettingsRow(icon: "flag", title: "Mål & nuvarande vikt")
+                    NewSettingsRow(icon: "flag", title: L.t(sv: "Mål & nuvarande vikt", nb: "Mål og nåværende vekt"))
                 }
             }
             .background(Color(.systemBackground))
@@ -327,26 +375,26 @@ struct SettingsView: View {
     
     private var kundtjanstSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Kundtjänst & legalt")
+            Text(L.t(sv: "Kundtjänst & legalt", nb: "Kundeservice og juridisk"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 0) {
                 Button(action: { openMailTo() }) {
-                    NewSettingsRow(icon: "envelope", title: "Skicka ett mail")
+                    NewSettingsRow(icon: "envelope", title: L.t(sv: "Skicka ett mail", nb: "Send en e-post"))
                 }
                 
                 SettingsItemDivider()
                 
                 Button(action: { openURL("https://www.upanddownapp.com/privacy") }) {
-                    NewSettingsRow(icon: "lock.shield", title: "Privacy Policy")
+                    NewSettingsRow(icon: "lock.shield", title: L.t(sv: "Integritetspolicy", nb: "Personvernerklæring"))
                 }
                 
                 SettingsItemDivider()
                 
                 Button(action: { openURL("https://www.upanddownapp.com/terms") }) {
-                    NewSettingsRow(icon: "doc.text", title: "Våra Villkor")
+                    NewSettingsRow(icon: "doc.text", title: L.t(sv: "Våra Villkor", nb: "Våre vilkår"))
                 }
             }
             .background(Color(.systemBackground))
@@ -356,7 +404,7 @@ struct SettingsView: View {
     
     private var foljOssSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Följ oss")
+            Text(L.t(sv: "Följ oss", nb: "Følg oss"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
@@ -415,20 +463,20 @@ struct SettingsView: View {
     private var adminSection: some View {
         if isAdmin {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Admin")
+                Text(L.t(sv: "Admin", nb: "Admin"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
                 
                 VStack(spacing: 0) {
                     Button(action: { showAdmin = true }) {
-                        NewSettingsRow(icon: "person.badge.key", title: "Admin (ansökningar)")
+                        NewSettingsRow(icon: "person.badge.key", title: L.t(sv: "Admin (ansökningar)", nb: "Admin (søknader)"))
                     }
                     
                     SettingsItemDivider()
                     
                     Button(action: { showAnnouncement = true }) {
-                        NewSettingsRow(icon: "megaphone", title: "Skicka notis till alla")
+                        NewSettingsRow(icon: "megaphone", title: L.t(sv: "Skicka notis till alla", nb: "Send varsel til alle"))
                     }
                 }
                 .background(Color(.systemBackground))
@@ -446,7 +494,7 @@ struct SettingsView: View {
                         .foregroundColor(.red)
                         .frame(width: 24)
                     
-                    Text("Radera konto")
+                    Text(L.t(sv: "Radera konto", nb: "Slett konto"))
                         .font(.system(size: 16))
                         .foregroundColor(.red)
                     
@@ -468,7 +516,7 @@ struct SettingsView: View {
                         .foregroundColor(.red)
                         .frame(width: 24)
                     
-                    Text("Logga ut")
+                    Text(L.t(sv: "Logga ut", nb: "Logg ut"))
                         .font(.system(size: 16))
                         .foregroundColor(.red)
                     
@@ -597,7 +645,7 @@ struct PersonalDetailsView: View {
                 VStack(spacing: 0) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Målvikt")
+                            Text(L.t(sv: "Målvikt", nb: "Målvekt"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                             Text("\(Int(goalWeight)) kg")
@@ -606,7 +654,7 @@ struct PersonalDetailsView: View {
                         
                         Spacer()
                         
-                        Button("Ändra mål") {
+                        Button(L.t(sv: "Ändra mål", nb: "Endre mål")) {
                             showGoalWeightPicker = true
                         }
                         .font(.system(size: 14, weight: .semibold))
@@ -628,35 +676,35 @@ struct PersonalDetailsView: View {
                 // Personal Details Card
                 VStack(spacing: 0) {
                     // Current Weight
-                    detailRow(title: "Nuvarande vikt", value: "\(Int(currentWeight)) kg") {
+                    detailRow(title: L.t(sv: "Nuvarande vikt", nb: "Nåværende vekt"), value: "\(Int(currentWeight)) kg") {
                         showCurrentWeightPicker = true
                     }
                     
                     Divider().padding(.leading, 16)
                     
                     // Height
-                    detailRow(title: "Längd", value: "\(height) cm") {
+                    detailRow(title: L.t(sv: "Längd", nb: "Høyde"), value: "\(height) cm") {
                         showHeightPicker = true
                     }
                     
                     Divider().padding(.leading, 16)
                     
                     // Birth Date
-                    detailRow(title: "Födelsedatum", value: formatDate(birthDate)) {
+                    detailRow(title: L.t(sv: "Födelsedatum", nb: "Fødselsdato"), value: formatDate(birthDate)) {
                         showBirthDatePicker = true
                     }
                     
                     Divider().padding(.leading, 16)
                     
                     // Gender
-                    detailRow(title: "Kön", value: genderDisplayName) {
+                    detailRow(title: L.t(sv: "Kön", nb: "Kjønn"), value: genderDisplayName) {
                         showGenderPicker = true
                     }
                     
                     Divider().padding(.leading, 16)
                     
                     // Daily Step Goal
-                    detailRow(title: "Dagligt stegmål", value: "\(dailyStepGoal) steg") {
+                    detailRow(title: L.t(sv: "Dagligt stegmål", nb: "Daglig skrittmål"), value: L.t(sv: "\(dailyStepGoal) steg", nb: "\(dailyStepGoal) skritt")) {
                         showStepGoalPicker = true
                     }
                 }
@@ -673,7 +721,7 @@ struct PersonalDetailsView: View {
             .padding(.top, 20)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("Personliga detaljer")
+        .navigationTitle(L.t(sv: "Personliga detaljer", nb: "Personlige detaljer"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -694,10 +742,10 @@ struct PersonalDetailsView: View {
             await loadUserData()
         }
         .sheet(isPresented: $showGoalWeightPicker) {
-            weightPickerSheet(title: "Målvikt", weight: $goalWeight, onSave: saveGoalWeight)
+            weightPickerSheet(title: L.t(sv: "Målvikt", nb: "Målvekt"), weight: $goalWeight, onSave: saveGoalWeight)
         }
         .sheet(isPresented: $showCurrentWeightPicker) {
-            weightPickerSheet(title: "Nuvarande vikt", weight: $currentWeight, onSave: saveCurrentWeight)
+            weightPickerSheet(title: L.t(sv: "Nuvarande vikt", nb: "Nåværende vekt"), weight: $currentWeight, onSave: saveCurrentWeight)
         }
         .sheet(isPresented: $showHeightPicker) {
             heightPickerSheet()
@@ -715,9 +763,9 @@ struct PersonalDetailsView: View {
     
     private var genderDisplayName: String {
         switch gender.lowercased() {
-        case "male": return "Man"
-        case "female": return "Kvinna"
-        default: return "Annat"
+        case "male": return L.t(sv: "Man", nb: "Mann")
+        case "female": return L.t(sv: "Kvinna", nb: "Kvinne")
+        default: return L.t(sv: "Annat", nb: "Annet")
         }
     }
     
@@ -865,13 +913,13 @@ struct PersonalDetailsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         showGoalWeightPicker = false
                         showCurrentWeightPicker = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         onSave()
                         showGoalWeightPicker = false
                         showCurrentWeightPicker = false
@@ -893,14 +941,14 @@ struct PersonalDetailsView: View {
                 }
                 .pickerStyle(.wheel)
             }
-            .navigationTitle("Längd")
+            .navigationTitle(L.t(sv: "Längd", nb: "Høyde"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { showHeightPicker = false }
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) { showHeightPicker = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         saveHeight()
                         showHeightPicker = false
                     }
@@ -918,14 +966,14 @@ struct PersonalDetailsView: View {
                     .datePickerStyle(.wheel)
                     .labelsHidden()
             }
-            .navigationTitle("Födelsedatum")
+            .navigationTitle(L.t(sv: "Födelsedatum", nb: "Fødselsdato"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { showBirthDatePicker = false }
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) { showBirthDatePicker = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         saveBirthDate()
                         showBirthDatePicker = false
                     }
@@ -940,20 +988,20 @@ struct PersonalDetailsView: View {
         NavigationStack {
             VStack {
                 Picker("", selection: $gender) {
-                    Text("Man").tag("male")
-                    Text("Kvinna").tag("female")
-                    Text("Annat").tag("other")
+                    Text(L.t(sv: "Man", nb: "Mann")).tag("male")
+                    Text(L.t(sv: "Kvinna", nb: "Kvinne")).tag("female")
+                    Text(L.t(sv: "Annat", nb: "Annet")).tag("other")
                 }
                 .pickerStyle(.wheel)
             }
-            .navigationTitle("Kön")
+            .navigationTitle(L.t(sv: "Kön", nb: "Kjønn"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { showGenderPicker = false }
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) { showGenderPicker = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         saveGender()
                         showGenderPicker = false
                     }
@@ -969,19 +1017,19 @@ struct PersonalDetailsView: View {
             VStack {
                 Picker("", selection: $dailyStepGoal) {
                     ForEach([5000, 6000, 7000, 7500, 8000, 10000, 12000, 15000, 20000], id: \.self) { steps in
-                        Text("\(steps) steg").tag(steps)
+                        Text(L.t(sv: "\(steps) steg", nb: "\(steps) skritt")).tag(steps)
                     }
                 }
                 .pickerStyle(.wheel)
             }
-            .navigationTitle("Dagligt stegmål")
+            .navigationTitle(L.t(sv: "Dagligt stegmål", nb: "Daglig skrittmål"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") { showStepGoalPicker = false }
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) { showStepGoalPicker = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         saveStepGoal()
                         showStepGoalPicker = false
                     }
@@ -1073,7 +1121,7 @@ struct PresentPaywallView: View {
                 VStack(spacing: 20) {
                     ProgressView()
                         .scaleEffect(1.5)
-                    Text("Laddar...")
+                    Text(L.t(sv: "Laddar...", nb: "Laster..."))
                         .font(.headline)
                         .foregroundColor(.gray)
                 }

@@ -113,7 +113,7 @@ struct CoachTabView: View {
                                 
                                 // MARK: - Dagens träning
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Dagens träning")
+                                    Text(L.t(sv: "Dagens träning", nb: "Dagens trening"))
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundColor(.black)
                                         .padding(.horizontal, 20)
@@ -132,7 +132,7 @@ struct CoachTabView: View {
                                 // MARK: - Meddelande från tränaren
                                 if let tip = tipForSelectedDay, !tip.isEmpty {
                                     VStack(alignment: .leading, spacing: 12) {
-                                        Text("Dagens meddelande")
+                                        Text(L.t(sv: "Dagens meddelande", nb: "Dagens melding"))
                                             .font(.system(size: 18, weight: .bold))
                                             .foregroundColor(.black)
                                             .padding(.horizontal, 20)
@@ -144,7 +144,7 @@ struct CoachTabView: View {
                                 
                                 // MARK: - Mitt program
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Mitt program")
+                                    Text(L.t(sv: "Mitt program", nb: "Mitt program"))
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundColor(.black)
                                         .padding(.horizontal, 20)
@@ -183,11 +183,11 @@ struct CoachTabView: View {
                                             }
                                             
                                             VStack(alignment: .leading, spacing: 4) {
-                                                Text(coach.username ?? "Din tränare")
+                                                Text(coach.username ?? L.t(sv: "Din tränare", nb: "Din trener"))
                                                     .font(.system(size: 17, weight: .semibold))
                                                     .foregroundColor(.black)
                                                 
-                                                Text("Din personliga tränare")
+                                                Text(L.t(sv: "Din personliga tränare", nb: "Din personlige trener"))
                                                     .font(.system(size: 14))
                                                     .foregroundColor(.secondary)
                                             }
@@ -217,7 +217,7 @@ struct CoachTabView: View {
                                             HStack(spacing: 8) {
                                                 Image(systemName: "bubble.left.and.bubble.right.fill")
                                                     .font(.system(size: 16))
-                                                Text("Skriv med tränaren")
+                                                Text(L.t(sv: "Skriv med tränaren", nb: "Skriv til treneren"))
                                                     .font(.system(size: 16, weight: .semibold))
                                             }
                                             .foregroundColor(.white)
@@ -275,7 +275,7 @@ struct CoachTabView: View {
                     TrainerChatView(trainer: trainer)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showChat = false
                                 }
                                 .foregroundColor(.black)
@@ -385,7 +385,7 @@ struct CoachTabView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.black)
                 
-                Text("\(routine.exercises.count) övningar")
+                Text("\(routine.exercises.count) \(L.t(sv: "övningar", nb: "øvelser"))")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
@@ -402,7 +402,7 @@ struct CoachTabView: View {
             Button {
                 startCoachWorkout(routine: routine, program: program, coachName: coachName)
             } label: {
-                Text("Starta pass")
+                Text(L.t(sv: "Starta pass", nb: "Start økt"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -458,7 +458,7 @@ struct CoachTabView: View {
                         )
                 }
                 
-                Text("Meddelande från \(coachRelation?.coach?.username ?? "tränaren")")
+                Text(L.t(sv: "Meddelande från \(coachRelation?.coach?.username ?? "tränaren")", nb: "Melding fra \(coachRelation?.coach?.username ?? "treneren")"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.secondary)
             }
@@ -500,7 +500,7 @@ struct CoachTabView: View {
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.black)
                     
-                    Text("pass")
+                    Text(L.t(sv: "pass", nb: "økter"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -519,11 +519,11 @@ struct CoachTabView: View {
                 .font(.system(size: 36))
                 .foregroundColor(.gray.opacity(0.5))
             
-            Text("Vilodag")
+            Text(L.t(sv: "Vilodag", nb: "Hviledag"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.primary)
             
-            Text("Inga pass schemalagda för denna dag")
+            Text(L.t(sv: "Inga pass schemalagda för denna dag", nb: "Ingen økter planlagt for denne dagen"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }
@@ -541,10 +541,10 @@ struct CoachTabView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
             
-            Text("Ingen aktiv tränare")
+            Text(L.t(sv: "Ingen aktiv tränare", nb: "Ingen aktiv trener"))
                 .font(.system(size: 18, weight: .semibold))
             
-            Text("Du har ingen aktiv tränare just nu. När en tränare bjuder in dig och du accepterar kommer du se dem här.")
+            Text(L.t(sv: "Du har ingen aktiv tränare just nu. När en tränare bjuder in dig och du accepterar kommer du se dem här.", nb: "Du har ingen aktiv trener akkurat nå. Når en trener inviterer deg og du aksepterer, vil du se dem her."))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -580,7 +580,11 @@ struct CoachTabView: View {
         guard let mondayOfCurrentWeek = calendar.date(byAdding: .day, value: -daysFromMonday, to: today) else { return }
         
         var allWeeks: [WeekInfo] = []
-        let dayLetters = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
+        let dayLetters = [
+            L.t(sv: "Mån", nb: "Man"), L.t(sv: "Tis", nb: "Tir"), L.t(sv: "Ons", nb: "Ons"),
+            L.t(sv: "Tor", nb: "Tor"), L.t(sv: "Fre", nb: "Fre"), L.t(sv: "Lör", nb: "Lør"),
+            L.t(sv: "Sön", nb: "Søn")
+        ]
         
         for weekOffset in -4...3 {
             guard let weekStart = calendar.date(byAdding: .weekOfYear, value: weekOffset, to: mondayOfCurrentWeek) else { continue }
@@ -820,14 +824,14 @@ struct CoachHeaderView: View {
             ZStack {
                 // Center: Page title or Pro CTA
                 if isPremium {
-                    Text("Coach")
+                    Text(L.t(sv: "Coach", nb: "Coach"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                 } else {
                     Button {
                         SuperwallService.shared.showPaywall()
                     } label: {
-                        Text("Bli pro medlem")
+                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -915,7 +919,7 @@ struct CoachHeaderView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }
@@ -958,11 +962,11 @@ struct CoachChatPlaceholderView: View {
                     .font(.system(size: 60))
                     .foregroundColor(.black.opacity(0.3))
                 
-                Text("Chatt kommer snart")
+                Text(L.t(sv: "Chatt kommer snart", nb: "Chat kommer snart"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.black)
                 
-                Text("Här kommer du kunna chatta direkt med din tränare")
+                Text(L.t(sv: "Här kommer du kunna chatta direkt med din tränare", nb: "Her kan du chatte direkte med treneren din"))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -970,11 +974,11 @@ struct CoachChatPlaceholderView: View {
                 
                 Spacer()
             }
-            .navigationTitle("Chatt")
+            .navigationTitle(L.t(sv: "Chatt", nb: "Chat"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                     .foregroundColor(.black)

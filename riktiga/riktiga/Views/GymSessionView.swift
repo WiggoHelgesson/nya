@@ -52,7 +52,7 @@ struct GymSessionView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.green)
                     
-                    Text("\(viewModel.spectatorCount) tittar på ditt pass")
+                    Text(L.t(sv: "\(viewModel.spectatorCount) tittar på ditt pass", nb: "\(viewModel.spectatorCount) ser på økten din"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.green)
                     
@@ -74,15 +74,15 @@ struct GymSessionView: View {
             
             // Stats row
             HStack(spacing: 0) {
-                metricView(title: "Tid", value: viewModel.formattedDuration)
+                metricView(title: L.t(sv: "Tid", nb: "Tid"), value: viewModel.formattedDuration)
                     .frame(maxWidth: .infinity)
                 Divider()
                     .frame(height: 40)
-                metricView(title: "Volym", value: viewModel.formattedVolume)
+                metricView(title: L.t(sv: "Volym", nb: "Volum"), value: viewModel.formattedVolume)
                     .frame(maxWidth: .infinity)
                 Divider()
                     .frame(height: 40)
-                metricView(title: "Sets", value: "\(viewModel.completedSetsCount)")
+                metricView(title: L.t(sv: "Sets", nb: "Sett"), value: "\(viewModel.completedSetsCount)")
                     .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 16)
@@ -104,7 +104,7 @@ struct GymSessionView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.secondary)
             
-            Text("Lägg till övningar för att börja")
+            Text(L.t(sv: "Lägg till övningar för att börja", nb: "Legg til øvelser for å begynne"))
                 .font(.headline)
                 .foregroundColor(.secondary)
             
@@ -117,7 +117,7 @@ struct GymSessionView: View {
                 HStack {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Lägg till övning")
+                    Text(L.t(sv: "Lägg till övning", nb: "Legg til øvelse"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(Color(.systemBackground))
@@ -142,7 +142,7 @@ struct GymSessionView: View {
                 HStack {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Gym rutiner")
+                    Text(L.t(sv: "Gym rutiner", nb: "Treningsrutiner"))
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundColor(.primary)
@@ -172,7 +172,7 @@ struct GymSessionView: View {
                 Button(action: {
                     showCancelConfirmation = true
                 }) {
-                    Text("Avbryt pass")
+                    Text(L.t(sv: "Avbryt pass", nb: "Avbryt økt"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.red)
                         .frame(maxWidth: .infinity)
@@ -246,7 +246,7 @@ struct GymSessionView: View {
                         HStack {
                             Image(systemName: "plus")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Lägg till övning")
+                            Text(L.t(sv: "Lägg till övning", nb: "Legg til øvelse"))
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(Color(.systemBackground))
@@ -267,7 +267,7 @@ struct GymSessionView: View {
                     Button(action: {
                         showCancelConfirmation = true
                     }) {
-                        Text("Avbryt pass")
+                        Text(L.t(sv: "Avbryt pass", nb: "Avbryt økt"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
@@ -362,7 +362,7 @@ struct GymSessionView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewWorkoutCheer"))) { notification in
                 handleCheerNotification(notification)
             }
-            .navigationTitle("Logga pass")
+            .navigationTitle(L.t(sv: "Logga pass", nb: "Logg økt"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -384,7 +384,7 @@ struct GymSessionView: View {
                                     isReorderMode = false
                                 }
                             } label: {
-                                Text("Klar")
+                                Text(L.t(sv: "Klar", nb: "Ferdig"))
                                     .font(.system(size: 16, weight: .semibold))
                             }
                         } else {
@@ -408,7 +408,7 @@ struct GymSessionView: View {
                                     }
                                 }
                             } label: {
-                                Text("Avsluta")
+                                Text(L.t(sv: "Avsluta", nb: "Avslutt"))
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                             }
@@ -425,36 +425,36 @@ struct GymSessionView: View {
                         focusedField = nil
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     } label: {
-                        Text("Klar")
+                        Text(L.t(sv: "Klar", nb: "Ferdig"))
                             .font(.system(size: 17, weight: .bold))
                             .foregroundColor(.blue)
                     }
                 }
             }
-            .alert("Vill du verkligen avsluta?", isPresented: $showCancelConfirmation) {
-                Button("Fortsätt", role: .cancel) {
+            .alert(L.t(sv: "Vill du verkligen avsluta?", nb: "Vil du virkelig avslutte?"), isPresented: $showCancelConfirmation) {
+                Button(L.t(sv: "Fortsätt", nb: "Fortsett"), role: .cancel) {
                     // Do nothing, just dismiss the alert
                 }
-                Button("Avsluta", role: .destructive) {
+                Button(L.t(sv: "Avsluta", nb: "Avslutt"), role: .destructive) {
                     viewModel.stopTimer()
                     finalizeSessionAndDismiss()
                 }
             } message: {
-                Text("Ditt pass kommer inte att sparas om du avbryter nu.")
+                Text(L.t(sv: "Ditt pass kommer inte att sparas om du avbryter nu.", nb: "Økten din vil ikke bli lagret hvis du avbryter nå."))
             }
-            .alert("Lägg till en övning", isPresented: $showNoExercisesAlert) {
+            .alert(L.t(sv: "Lägg till en övning", nb: "Legg til en øvelse"), isPresented: $showNoExercisesAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Du behöver lägga till minst en övning innan du kan avsluta passet.")
+                Text(L.t(sv: "Du behöver lägga till minst en övning innan du kan avsluta passet.", nb: "Du må legge til minst én øvelse før du kan avslutte økten."))
             }
-            .alert("Din övning saknar info", isPresented: $showMissingInfoAlert) {
+            .alert(L.t(sv: "Din övning saknar info", nb: "Øvelsen mangler info"), isPresented: $showMissingInfoAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Alla övningar behöver ha minst ett set med kg och reps ifyllt, eller en avslutad timer för konditionsövningar.")
+                Text(L.t(sv: "Alla övningar behöver ha minst ett set med kg och reps ifyllt, eller en avslutad timer för konditionsövningar.", nb: "Alle øvelser må ha minst ett sett med kg og reps fylt inn, eller en fullført timer for kondisøvelser."))
             }
-            .alert("Är du klar?", isPresented: $showFinishConfirmation) {
-                Button("Nej", role: .cancel) { }
-                Button("Jag är klar") {
+            .alert(L.t(sv: "Är du klar?", nb: "Er du ferdig?"), isPresented: $showFinishConfirmation) {
+                Button(L.t(sv: "Nej", nb: "Nei"), role: .cancel) { }
+                Button(L.t(sv: "Jag är klar", nb: "Jeg er ferdig")) {
                     saveWorkoutTapped()
                 }
             }
@@ -624,7 +624,7 @@ struct GymSessionView: View {
     private var uppyProgressSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Title
-            Text("Få tre Uppys från dina vänner och få 10+ poäng")
+            Text(L.t(sv: "Få tre Uppys från dina vänner och få 10+ poäng", nb: "Få tre Uppys fra vennene dine og få 10+ poeng"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.primary)
             
@@ -724,7 +724,7 @@ struct GymSessionView: View {
                     Text(cheerFromUsername)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                    Text("hejar på dig!")
+                    Text(L.t(sv: "hejar på dig!", nb: "heier på deg!"))
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.9))
                 }
@@ -1163,7 +1163,7 @@ struct CardioTimerView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.counterclockwise")
-                            Text("Återställ")
+                            Text(L.t(sv: "Återställ", nb: "Tilbakestill"))
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
@@ -1184,7 +1184,7 @@ struct CardioTimerView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: isRunning ? "pause.fill" : "play.fill")
-                            Text(isRunning ? "Pausa" : (displaySeconds > 0 ? "Fortsätt" : "Starta"))
+                            Text(isRunning ? L.t(sv: "Pausa", nb: "Pause") : (displaySeconds > 0 ? L.t(sv: "Fortsätt", nb: "Fortsett") : L.t(sv: "Starta", nb: "Start")))
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
@@ -1200,7 +1200,7 @@ struct CardioTimerView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "stop.fill")
-                                Text("Avsluta")
+                                Text(L.t(sv: "Avsluta", nb: "Avslutt"))
                             }
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
@@ -1337,7 +1337,7 @@ struct ExerciseCard: View {
             .padding(.top, 12)
             
             // Notes TextField
-            TextField("Skriv anteckningar här...", text: $notesText)
+            TextField(L.t(sv: "Skriv anteckningar här...", nb: "Skriv notater her..."), text: $notesText)
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 16)
@@ -1354,12 +1354,12 @@ struct ExerciseCard: View {
                 }
             
             // Mode picker: Vikt / Kondition
-            Picker("Typ", selection: Binding<Bool>(
+            Picker(L.t(sv: "Typ", nb: "Type"), selection: Binding<Bool>(
                 get: { exercise.isCardio },
                 set: { _ in onToggleMode() }
             )) {
-                Text("Vikt").tag(false)
-                Text("Kondition").tag(true)
+                Text(L.t(sv: "Vikt", nb: "Vekt")).tag(false)
+                Text(L.t(sv: "Kondition", nb: "Kondisjon")).tag(true)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -1376,11 +1376,11 @@ struct ExerciseCard: View {
             } else {
                 // Sets header
                 HStack(spacing: 8) {
-                    Text("SET")
+                    Text(L.t(sv: "SET", nb: "SETT"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 32, alignment: .center)
-                    Text("FÖRRA")
+                    Text(L.t(sv: "FÖRRA", nb: "FORRIGE"))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
@@ -1428,7 +1428,7 @@ struct ExerciseCard: View {
                 Button(action: onAddSet) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                        Text("Lägg till set")
+                        Text(L.t(sv: "Lägg till set", nb: "Legg til sett"))
                     }
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.primary)
@@ -1446,11 +1446,11 @@ struct ExerciseCard: View {
                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal, 16)
-        .confirmationDialog("Ta bort övning?", isPresented: $showDeleteConfirmation) {
-            Button("Ta bort", role: .destructive) {
+        .confirmationDialog(L.t(sv: "Ta bort övning?", nb: "Fjerne øvelse?"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Ta bort", nb: "Fjern"), role: .destructive) {
                 onDelete()
             }
-            Button("Avbryt", role: .cancel) {}
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         }
     }
     
@@ -1647,16 +1647,18 @@ struct ExercisePickerView: View {
     @State private var popularityRanking: [String: Int] = [:] // exerciseId -> rank (lower = more popular)
     
     // Muscle categories for the slider menu
-    private let muscleCategories: [(name: String, apiValue: String)] = [
-        ("Alla", "all"),
-        ("Bröst", "chest"),
-        ("Ben", "upper legs"),
-        ("Armar", "upper arms"),
-        ("Rygg", "back"),
-        ("Axlar", "shoulders"),
-        ("Mage", "waist"),
-        ("Kondition", "cardio")
-    ]
+    private var muscleCategories: [(name: String, apiValue: String)] {
+        [
+            (L.t(sv: "Alla", nb: "Alle"), "all"),
+            (L.t(sv: "Bröst", nb: "Bryst"), "chest"),
+            (L.t(sv: "Ben", nb: "Ben"), "upper legs"),
+            (L.t(sv: "Armar", nb: "Armer"), "upper arms"),
+            (L.t(sv: "Rygg", nb: "Rygg"), "back"),
+            (L.t(sv: "Axlar", nb: "Skuldre"), "shoulders"),
+            (L.t(sv: "Mage", nb: "Mage"), "waist"),
+            (L.t(sv: "Kondition", nb: "Kondisjon"), "cardio")
+        ]
+    }
     
     // Fallback popular exercises (used when no database data exists yet)
     private let fallbackPopularIds: Set<String> = [
@@ -1740,14 +1742,14 @@ struct ExercisePickerView: View {
         if let filter = quickFilter {
             switch filter {
             case .recentlyUsed:
-                return "Senast använda"
+                return L.t(sv: "Senast använda", nb: "Sist brukt")
             case .previouslyUsed:
-                return "Tidigare använt"
+                return L.t(sv: "Tidigare använt", nb: "Tidligere brukt")
             }
         }
         
-        guard let selected = selectedCategory else { return "Alla övningar" }
-        return muscleCategories.first(where: { $0.apiValue == selected })?.name ?? "Alla övningar"
+        guard let selected = selectedCategory else { return L.t(sv: "Alla övningar", nb: "Alle øvelser") }
+        return muscleCategories.first(where: { $0.apiValue == selected })?.name ?? L.t(sv: "Alla övningar", nb: "Alle øvelser")
     }
     
     var body: some View {
@@ -1762,7 +1764,7 @@ struct ExercisePickerView: View {
                         .foregroundColor(.black)
                 }
                 
-                Text("Lägg till övningar")
+                Text(L.t(sv: "Lägg till övningar", nb: "Legg til øvelser"))
                     .font(.system(size: 19, weight: .bold, design: .rounded))
                     .foregroundColor(.black)
                 
@@ -1785,7 +1787,7 @@ struct ExercisePickerView: View {
                     .font(.system(size: 16))
                             .foregroundColor(.gray)
                 
-                TextField("Sök övning", text: $searchText)
+                TextField(L.t(sv: "Sök övning", nb: "Søk øvelse"), text: $searchText)
                     .font(.system(size: 16, weight: .regular, design: .rounded))
                 
                 if !searchText.isEmpty {
@@ -1862,7 +1864,7 @@ struct ExercisePickerView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 13, weight: .medium))
-                        Text("Senast använda")
+                        Text(L.t(sv: "Senast använda", nb: "Sist brukt"))
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                     }
                     .foregroundColor(quickFilter == .recentlyUsed ? .white : .black)
@@ -1894,7 +1896,7 @@ struct ExercisePickerView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "list.bullet.clipboard")
                             .font(.system(size: 13, weight: .medium))
-                        Text("Tidigare använt")
+                        Text(L.t(sv: "Tidigare använt", nb: "Tidligere brukt"))
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                     }
                     .foregroundColor(quickFilter == .previouslyUsed ? .white : .black)
@@ -1962,14 +1964,14 @@ struct ExercisePickerView: View {
                                     .foregroundColor(.gray)
                                 
                                 Text(quickFilter == .recentlyUsed ?
-                                     "Inga senaste övningar" :
-                                     "Inga tidigare använda övningar")
+                                     L.t(sv: "Inga senaste övningar", nb: "Ingen nylige øvelser") :
+                                     L.t(sv: "Inga tidigare använda övningar", nb: "Ingen tidligere brukte øvelser"))
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.gray)
                                 
                                 Text(quickFilter == .recentlyUsed ?
-                                     "Börja logga övningar så visas de här" :
-                                     "Övningar du loggar i dina pass visas här")
+                                     L.t(sv: "Börja logga övningar så visas de här", nb: "Begynn å logge øvelser så vises de her") :
+                                     L.t(sv: "Övningar du loggar i dina pass visas här", nb: "Øvelser du logger i øktene dine vises her"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
@@ -2016,7 +2018,7 @@ struct ExercisePickerView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Lägg till \(selectedExercises.count) övning\(selectedExercises.count > 1 ? "ar" : "")")
+                        Text(L.t(sv: "Lägg till \(selectedExercises.count) övning\(selectedExercises.count > 1 ? "ar" : "")", nb: "Legg til \(selectedExercises.count) øvelse\(selectedExercises.count > 1 ? "r" : "")"))
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                     }
                     .foregroundColor(.white)
@@ -2060,25 +2062,25 @@ struct ExercisePickerView: View {
     
     private func translateEquipment(_ equipment: String) -> String {
         switch equipment.lowercased() {
-        case "barbell": return "Skivstång"
-        case "dumbbell": return "Hantlar"
-        case "cable": return "Kabel"
-        case "machine": return "Maskin"
-        case "body weight": return "Kroppsvikt"
+        case "barbell": return L.t(sv: "Skivstång", nb: "Vektstang")
+        case "dumbbell": return L.t(sv: "Hantlar", nb: "Manualer")
+        case "cable": return L.t(sv: "Kabel", nb: "Kabel")
+        case "machine": return L.t(sv: "Maskin", nb: "Maskin")
+        case "body weight": return L.t(sv: "Kroppsvikt", nb: "Kroppsvekt")
         case "kettlebell": return "Kettlebell"
-        case "band": return "Band"
-        case "ez barbell": return "EZ-stång"
-        case "smith machine": return "Smithmaskin"
-        case "medicine ball": return "Medicinboll"
-        case "stability ball": return "Balansboll"
-        case "rope": return "Rep"
-        case "assisted": return "Assisterad"
-        case "leverage machine": return "Hävstångsmaskin"
-        case "weighted": return "Med vikt"
-        case "bosu ball": return "Bosuboll"
-        case "resistance band": return "Motståndsband"
-        case "olympic barbell": return "Olympisk stång"
-        case "trap bar": return "Trapstång"
+        case "band": return L.t(sv: "Band", nb: "Bånd")
+        case "ez barbell": return L.t(sv: "EZ-stång", nb: "EZ-stang")
+        case "smith machine": return L.t(sv: "Smithmaskin", nb: "Smithmaskin")
+        case "medicine ball": return L.t(sv: "Medicinboll", nb: "Medisinball")
+        case "stability ball": return L.t(sv: "Balansboll", nb: "Balanseball")
+        case "rope": return L.t(sv: "Rep", nb: "Tau")
+        case "assisted": return L.t(sv: "Assisterad", nb: "Assistert")
+        case "leverage machine": return L.t(sv: "Hävstångsmaskin", nb: "Spakmaskin")
+        case "weighted": return L.t(sv: "Med vikt", nb: "Med vekt")
+        case "bosu ball": return L.t(sv: "Bosuboll", nb: "Bosuball")
+        case "resistance band": return L.t(sv: "Motståndsband", nb: "Motstandsbånd")
+        case "olympic barbell": return L.t(sv: "Olympisk stång", nb: "Olympisk stang")
+        case "trap bar": return L.t(sv: "Trapstång", nb: "Trapstang")
         default: return equipment.prefix(1).capitalized + equipment.dropFirst()
         }
     }
@@ -2117,12 +2119,12 @@ struct ExercisePickerView: View {
     
     private func translateBodyPart(_ part: String) -> String {
         switch part.lowercased() {
-        case "chest": return "Bröst"
-        case "back": return "Rygg"
-        case "shoulders": return "Axlar"
-        case "upper arms": return "Armar"
-        case "upper legs": return "Ben"
-        case "waist": return "Mage"
+        case "chest": return L.t(sv: "Bröst", nb: "Bryst")
+        case "back": return L.t(sv: "Rygg", nb: "Rygg")
+        case "shoulders": return L.t(sv: "Axlar", nb: "Skuldre")
+        case "upper arms": return L.t(sv: "Armar", nb: "Armer")
+        case "upper legs": return L.t(sv: "Ben", nb: "Ben")
+        case "waist": return L.t(sv: "Mage", nb: "Mage")
         default: return part.capitalized
         }
     }
@@ -2599,10 +2601,10 @@ struct SavedWorkoutsSheet: View {
                         Image(systemName: "folder")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Du har inga gym rutiner ännu")
+                        Text(L.t(sv: "Du har inga gym rutiner ännu", nb: "Du har ingen treningsrutiner ennå"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
-                        Text("Spara ditt nästa pass som mall för att använda det igen")
+                        Text(L.t(sv: "Spara ditt nästa pass som mall för att använda det igen", nb: "Lagre neste økt som mal for å bruke den igjen"))
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -2623,7 +2625,7 @@ struct SavedWorkoutsSheet: View {
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(.primary)
                                             
-                                            Text("\(workout.exercises.count) övningar")
+                                            Text(L.t(sv: "\(workout.exercises.count) övningar", nb: "\(workout.exercises.count) øvelser"))
                                                 .font(.system(size: 14))
                                                 .foregroundColor(.secondary)
                                         }
@@ -2654,11 +2656,11 @@ struct SavedWorkoutsSheet: View {
                     .listStyle(.insetGrouped)
                 }
             }
-            .navigationTitle("Gym rutiner")
+            .navigationTitle(L.t(sv: "Gym rutiner", nb: "Treningsrutiner"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         isPresented = false
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -2677,25 +2679,25 @@ struct EquipmentFilterSheet: View {
     
     private func translateEquipment(_ equipment: String) -> String {
         switch equipment.lowercased() {
-        case "barbell": return "Skivstång"
-        case "dumbbell": return "Hantlar"
-        case "cable": return "Kabel"
-        case "machine": return "Maskin"
-        case "body weight": return "Kroppsvikt"
+        case "barbell": return L.t(sv: "Skivstång", nb: "Vektstang")
+        case "dumbbell": return L.t(sv: "Hantlar", nb: "Manualer")
+        case "cable": return L.t(sv: "Kabel", nb: "Kabel")
+        case "machine": return L.t(sv: "Maskin", nb: "Maskin")
+        case "body weight": return L.t(sv: "Kroppsvikt", nb: "Kroppsvekt")
         case "kettlebell": return "Kettlebell"
-        case "band": return "Band"
-        case "ez barbell": return "EZ-stång"
-        case "smith machine": return "Smithmaskin"
-        case "medicine ball": return "Medicinboll"
-        case "stability ball": return "Balansboll"
-        case "rope": return "Rep"
-        case "assisted": return "Assisterad"
-        case "leverage machine": return "Hävstångsmaskin"
-        case "weighted": return "Med vikt"
-        case "bosu ball": return "Bosuboll"
-        case "resistance band": return "Motståndsband"
-        case "olympic barbell": return "Olympisk stång"
-        case "trap bar": return "Trapstång"
+        case "band": return L.t(sv: "Band", nb: "Bånd")
+        case "ez barbell": return L.t(sv: "EZ-stång", nb: "EZ-stang")
+        case "smith machine": return L.t(sv: "Smithmaskin", nb: "Smithmaskin")
+        case "medicine ball": return L.t(sv: "Medicinboll", nb: "Medisinball")
+        case "stability ball": return L.t(sv: "Balansboll", nb: "Balanseball")
+        case "rope": return L.t(sv: "Rep", nb: "Tau")
+        case "assisted": return L.t(sv: "Assisterad", nb: "Assistert")
+        case "leverage machine": return L.t(sv: "Hävstångsmaskin", nb: "Spakmaskin")
+        case "weighted": return L.t(sv: "Med vikt", nb: "Med vekt")
+        case "bosu ball": return L.t(sv: "Bosuboll", nb: "Bosuball")
+        case "resistance band": return L.t(sv: "Motståndsband", nb: "Motstandsbånd")
+        case "olympic barbell": return L.t(sv: "Olympisk stång", nb: "Olympisk stang")
+        case "trap bar": return L.t(sv: "Trapstång", nb: "Trapstang")
         default: return equipment.prefix(1).capitalized + equipment.dropFirst()
         }
     }
@@ -2709,7 +2711,7 @@ struct EquipmentFilterSheet: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Text("All utrustning")
+                        Text(L.t(sv: "All utrustning", nb: "Alt utstyr"))
                             .font(.system(size: 16, weight: .regular, design: .rounded))
                             .foregroundColor(.primary)
                         Spacer()
@@ -2739,11 +2741,11 @@ struct EquipmentFilterSheet: View {
                     }
                 }
             }
-            .navigationTitle("Välj utrustning")
+            .navigationTitle(L.t(sv: "Välj utrustning", nb: "Velg utstyr"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .regular, design: .rounded))
@@ -2763,35 +2765,35 @@ struct MuscleFilterSheet: View {
     
     private func translateMuscle(_ muscle: String) -> String {
         switch muscle.lowercased() {
-        case "abductors": return "Abduktorer"
-        case "abs": return "Mage"
-        case "adductors": return "Adduktorer"
+        case "abductors": return L.t(sv: "Abduktorer", nb: "Abduktorer")
+        case "abs": return L.t(sv: "Mage", nb: "Mage")
+        case "adductors": return L.t(sv: "Adduktorer", nb: "Adduktorer")
         case "biceps": return "Biceps"
-        case "calves": return "Vader"
-        case "cardiovascular system": return "Kardio"
-        case "delts": return "Axlar"
-        case "forearms": return "Underarmar"
-        case "glutes": return "Rumpa"
-        case "hamstrings": return "Baksida lår"
+        case "calves": return L.t(sv: "Vader", nb: "Legger")
+        case "cardiovascular system": return L.t(sv: "Kardio", nb: "Kardio")
+        case "delts": return L.t(sv: "Axlar", nb: "Skuldre")
+        case "forearms": return L.t(sv: "Underarmar", nb: "Underarmer")
+        case "glutes": return L.t(sv: "Rumpa", nb: "Sete")
+        case "hamstrings": return L.t(sv: "Baksida lår", nb: "Bakside lår")
         case "lats": return "Latissimus"
-        case "levator scapulae": return "Skulderbladshöjare"
-        case "pectorals": return "Bröst"
-        case "quads": return "Framsida lår"
+        case "levator scapulae": return L.t(sv: "Skulderbladshöjare", nb: "Skulderbladsløfter")
+        case "pectorals": return L.t(sv: "Bröst", nb: "Bryst")
+        case "quads": return L.t(sv: "Framsida lår", nb: "Framside lår")
         case "serratus anterior": return "Serratus"
-        case "spine": return "Rygg"
+        case "spine": return L.t(sv: "Rygg", nb: "Rygg")
         case "traps": return "Trapezius"
         case "triceps": return "Triceps"
-        case "upper back": return "Övre rygg"
-        case "chest": return "Bröst"
-        case "back": return "Rygg"
-        case "shoulders": return "Axlar"
-        case "upper arms": return "Armar"
-        case "lower arms": return "Underarmar"
-        case "upper legs": return "Övre ben"
-        case "lower legs": return "Vader"
-        case "waist": return "Mage"
-        case "cardio": return "Kondition"
-        case "neck": return "Nacke"
+        case "upper back": return L.t(sv: "Övre rygg", nb: "Øvre rygg")
+        case "chest": return L.t(sv: "Bröst", nb: "Bryst")
+        case "back": return L.t(sv: "Rygg", nb: "Rygg")
+        case "shoulders": return L.t(sv: "Axlar", nb: "Skuldre")
+        case "upper arms": return L.t(sv: "Armar", nb: "Armer")
+        case "lower arms": return L.t(sv: "Underarmar", nb: "Underarmer")
+        case "upper legs": return L.t(sv: "Övre ben", nb: "Øvre ben")
+        case "lower legs": return L.t(sv: "Vader", nb: "Legger")
+        case "waist": return L.t(sv: "Mage", nb: "Mage")
+        case "cardio": return L.t(sv: "Kondition", nb: "Kondisjon")
+        case "neck": return L.t(sv: "Nacke", nb: "Nakke")
         default: return muscle.prefix(1).capitalized + muscle.dropFirst()
         }
     }
@@ -2805,7 +2807,7 @@ struct MuscleFilterSheet: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Text("Alla muskler")
+                        Text(L.t(sv: "Alla muskler", nb: "Alle muskler"))
                             .font(.system(size: 16, weight: .regular, design: .rounded))
                             .foregroundColor(.primary)
                         Spacer()
@@ -2835,11 +2837,11 @@ struct MuscleFilterSheet: View {
                     }
                 }
             }
-            .navigationTitle("Välj muskelgrupp")
+            .navigationTitle(L.t(sv: "Välj muskelgrupp", nb: "Velg muskelgruppe"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .regular, design: .rounded))

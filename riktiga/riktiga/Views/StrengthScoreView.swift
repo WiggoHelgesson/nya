@@ -114,7 +114,7 @@ struct StrengthScoreView: View {
                                 .padding(.horizontal, 24)
                             
                             HStack(spacing: 12) {
-                                Text("\(score.pointsToNextLevel) poäng till Level \(nextLevelName(score.level))")
+                                Text(L.t(sv: "\(score.pointsToNextLevel) poäng till Level \(nextLevelName(score.level))", nb: "\(score.pointsToNextLevel) poeng til Level \(nextLevelName(score.level))"))
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.white)
                                 
@@ -188,10 +188,10 @@ struct StrengthScoreView: View {
     
     private func nextLevelName(_ level: StrengthLevel) -> String {
         switch level {
-        case .beginner: return "Grundnivå"
-        case .novice: return "Medel"
-        case .intermediate: return "Avancerad"
-        case .advanced: return "Expert"
+        case .beginner: return L.t(sv: "Grundnivå", nb: "Grunnivå")
+        case .novice: return L.t(sv: "Medel", nb: "Middels")
+        case .intermediate: return L.t(sv: "Avancerad", nb: "Avansert")
+        case .advanced: return L.t(sv: "Expert", nb: "Ekspert")
         case .expert: return "Max"
         }
     }
@@ -258,12 +258,12 @@ struct StrengthScoreDetailView: View {
                             
                             // Total XP
                             VStack(spacing: 4) {
-                                Text("\(Int(score.totalXP)) totalt XP")
+                                Text(L.t(sv: "\(Int(score.totalXP)) totalt XP", nb: "\(Int(score.totalXP)) totalt XP"))
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                                 
                                 let totalLevels = score.muscleProgress.reduce(0) { $0 + $1.currentLevel }
-                                Text("\(totalLevels) totala muskelnivåer")
+                                Text(L.t(sv: "\(totalLevels) totala muskelnivåer", nb: "\(totalLevels) totale muskelnivåer"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.gray)
                             }
@@ -273,7 +273,7 @@ struct StrengthScoreDetailView: View {
                     
                     // Muskelnivåer lista
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Muskelnivåer")
+                        Text(L.t(sv: "Muskelnivåer", nb: "Muskelnivåer"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.white)
                         
@@ -286,7 +286,7 @@ struct StrengthScoreDetailView: View {
                                     
                                     Spacer()
                                     
-                                    Text("Nivå \(muscle.currentLevel)")
+                                    Text(L.t(sv: "Nivå \(muscle.currentLevel)", nb: "Nivå \(muscle.currentLevel)"))
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(Color(
                                             red: muscle.color.red,
@@ -320,7 +320,7 @@ struct StrengthScoreDetailView: View {
                                     Spacer()
                                     
                                     if muscle.currentLevel < 100 {
-                                        Text("\(Int(muscle.nextLevelXP - muscle.currentXP)) XP till nästa")
+                                        Text(L.t(sv: "\(Int(muscle.nextLevelXP - muscle.currentXP)) XP till nästa", nb: "\(Int(muscle.nextLevelXP - muscle.currentXP)) XP til neste"))
                                             .font(.system(size: 12))
                                             .foregroundColor(.gray)
                                     } else {
@@ -340,7 +340,7 @@ struct StrengthScoreDetailView: View {
                     // Achievements
                     if !score.achievements.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Prestationer")
+                            Text(L.t(sv: "Prestationer", nb: "Prestasjoner"))
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.white)
                             
@@ -576,7 +576,7 @@ struct BodyIllustrationView: View {
         HStack(spacing: 40) {
             // Front view
             VStack {
-                Text("Framsida")
+                Text(L.t(sv: "Framsida", nb: "Forside"))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.gray)
                     .padding(.bottom, 8)
@@ -587,7 +587,7 @@ struct BodyIllustrationView: View {
             
             // Back view
             VStack {
-                Text("Baksida")
+                Text(L.t(sv: "Baksida", nb: "Bakside"))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.gray)
                     .padding(.bottom, 8)

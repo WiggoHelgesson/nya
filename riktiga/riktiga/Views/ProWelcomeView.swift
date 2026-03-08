@@ -95,7 +95,7 @@ struct ProWelcomeView: View {
                 .padding(.bottom, 40)
                 
                 // Title
-                Text("Välkommen!")
+                Text(L.t(sv: "Välkommen!", nb: "Velkommen!"))
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
@@ -112,7 +112,7 @@ struct ProWelcomeView: View {
                     .padding(.bottom, 12)
                 
                 // Subtitle
-                Text("Du är nu Pro-medlem")
+                Text(L.t(sv: "Du är nu Pro-medlem", nb: "Du er nå Pro-medlem"))
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(Color(hex: "A0A0A0"))
                     .opacity(showSubtitle ? 1 : 0)
@@ -136,7 +136,7 @@ struct ProWelcomeView: View {
                     }
                 } label: {
                     HStack(spacing: 10) {
-                        Text("Kom igång")
+                        Text(L.t(sv: "Kom igång", nb: "Kom i gang"))
                             .font(.system(size: 18, weight: .semibold))
                         
                         Image(systemName: "arrow.right")

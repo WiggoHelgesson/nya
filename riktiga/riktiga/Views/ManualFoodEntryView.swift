@@ -36,11 +36,11 @@ struct ManualFoodEntryView: View {
                                 .font(.system(size: 50))
                                 .foregroundColor(.black)
                             
-                            Text("Lägg till manuellt")
+                            Text(L.t(sv: "Lägg till manuellt", nb: "Legg til manuelt"))
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(.black)
                             
-                            Text("Fyll i näringsvärden för din mat")
+                            Text(L.t(sv: "Fyll i näringsvärden för din mat", nb: "Fyll inn næringsverdier for maten din"))
                                 .font(.system(size: 15))
                                 .foregroundColor(.gray)
                         }
@@ -51,16 +51,16 @@ struct ManualFoodEntryView: View {
                         VStack(spacing: 16) {
                             // Food name
                             inputField(
-                                title: "Namn på maten",
-                                placeholder: "T.ex. Hemlagad pasta",
+                                title: L.t(sv: "Namn på maten", nb: "Navn på maten"),
+                                placeholder: L.t(sv: "T.ex. Hemlagad pasta", nb: "F.eks. Hjemmelaget pasta"),
                                 text: $foodName,
                                 keyboardType: .default
                             )
                             
                             // Serving size
                             inputField(
-                                title: "Portionsstorlek",
-                                placeholder: "T.ex. 1 portion, 100g",
+                                title: L.t(sv: "Portionsstorlek", nb: "Porsjonsstørrelse"),
+                                placeholder: L.t(sv: "T.ex. 1 portion, 100g", nb: "F.eks. 1 porsjon, 100g"),
                                 text: $servingSize,
                                 keyboardType: .default
                             )
@@ -70,7 +70,7 @@ struct ManualFoodEntryView: View {
                             
                             // Calories
                             inputField(
-                                title: "Kalorier",
+                                title: L.t(sv: "Kalorier", nb: "Kalorier"),
                                 placeholder: "0",
                                 text: $calories,
                                 keyboardType: .numberPad,
@@ -80,7 +80,7 @@ struct ManualFoodEntryView: View {
                             
                             // Protein
                             inputField(
-                                title: "Protein",
+                                title: L.t(sv: "Protein", nb: "Protein"),
                                 placeholder: "0",
                                 text: $protein,
                                 keyboardType: .numberPad,
@@ -90,7 +90,7 @@ struct ManualFoodEntryView: View {
                             
                             // Carbs
                             inputField(
-                                title: "Kolhydrater",
+                                title: L.t(sv: "Kolhydrater", nb: "Karbohydrater"),
                                 placeholder: "0",
                                 text: $carbs,
                                 keyboardType: .numberPad,
@@ -100,7 +100,7 @@ struct ManualFoodEntryView: View {
                             
                             // Fat
                             inputField(
-                                title: "Fett",
+                                title: L.t(sv: "Fett", nb: "Fett"),
                                 placeholder: "0",
                                 text: $fat,
                                 keyboardType: .numberPad,
@@ -130,7 +130,7 @@ struct ManualFoodEntryView: View {
                                 } else {
                                     Image(systemName: "plus.circle.fill")
                                         .font(.system(size: 16))
-                                    Text("Lägg till")
+                                    Text(L.t(sv: "Lägg till", nb: "Legg til"))
                                         .font(.system(size: 15, weight: .semibold))
                                 }
                             }
@@ -161,12 +161,12 @@ struct ManualFoodEntryView: View {
                     }
                 }
             }
-            .alert("Tillagt!", isPresented: $showSuccess) {
+            .alert(L.t(sv: "Tillagt!", nb: "Lagt til!"), isPresented: $showSuccess) {
                 Button("OK") {
                     dismiss()
                 }
             } message: {
-                Text("\(foodName) har lagts till i din dagbok.")
+                Text(L.t(sv: "\(foodName) har lagts till i din dagbok.", nb: "\(foodName) er lagt til i dagboken din."))
             }
             .sheet(isPresented: $showAISheet) {
                 aiDescriptionSheet
@@ -194,11 +194,11 @@ struct ManualFoodEntryView: View {
                                 .foregroundColor(.black)
                         }
                         
-                        Text("Beskriv din måltid")
+                        Text(L.t(sv: "Beskriv din måltid", nb: "Beskriv måltidet ditt"))
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.black)
                         
-                        Text("AI analyserar och uppskattar näringsvärden")
+                        Text(L.t(sv: "AI analyserar och uppskattar näringsvärden", nb: "AI analyserer og estimerer næringsverdier"))
                             .font(.system(size: 15))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -207,7 +207,7 @@ struct ManualFoodEntryView: View {
                     
                     // Text input
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Beskriv vad du åt")
+                        Text(L.t(sv: "Beskriv vad du åt", nb: "Beskriv hva du spiste"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                         
@@ -224,7 +224,7 @@ struct ManualFoodEntryView: View {
                             .overlay(
                                 Group {
                                     if aiDescription.isEmpty {
-                                        Text("T.ex. En stor portion kyckling med ris och grönsaker, lite sås på...")
+                                        Text(L.t(sv: "T.ex. En stor portion kyckling med ris och grönsaker, lite sås på...", nb: "F.eks. En stor porsjon kylling med ris og grønnsaker, litt saus på..."))
                                             .font(.system(size: 16))
                                             .foregroundColor(.gray.opacity(0.5))
                                             .padding(16)
@@ -246,15 +246,15 @@ struct ManualFoodEntryView: View {
                     
                     // Examples
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Exempel:")
+                        Text(L.t(sv: "Exempel:", nb: "Eksempler:"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                         
                         VStack(spacing: 8) {
-                            exampleChip("🍝 Pasta carbonara med bacon")
-                            exampleChip("🥗 Stor salladsskål med kyckling")
-                            exampleChip("🍔 Hamburgare med pommes")
-                            exampleChip("🥣 Overnight oats med bär")
+                            exampleChip(L.t(sv: "🍝 Pasta carbonara med bacon", nb: "🍝 Pasta carbonara med bacon"))
+                            exampleChip(L.t(sv: "🥗 Stor salladsskål med kyckling", nb: "🥗 Stor salatbolle med kylling"))
+                            exampleChip(L.t(sv: "🍔 Hamburgare med pommes", nb: "🍔 Hamburger med pommes frites"))
+                            exampleChip(L.t(sv: "🥣 Overnight oats med bär", nb: "🥣 Overnight oats med bær"))
                         }
                     }
                     .padding(.horizontal, 20)
@@ -269,12 +269,12 @@ struct ManualFoodEntryView: View {
                             if isAnalyzing {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                Text("Analyserar...")
+                                Text(L.t(sv: "Analyserar...", nb: "Analyserer..."))
                                     .font(.system(size: 17, weight: .semibold))
                             } else {
                                 Image(systemName: "sparkles")
                                     .font(.system(size: 18))
-                                Text("Analysera med AI")
+                                Text(L.t(sv: "Analysera med AI", nb: "Analyser med AI"))
                                     .font(.system(size: 17, weight: .semibold))
                             }
                         }
@@ -353,7 +353,7 @@ struct ManualFoodEntryView: View {
                 }
             } catch {
                 await MainActor.run {
-                    aiError = "Kunde inte analysera: \(error.localizedDescription)"
+                    aiError = L.t(sv: "Kunde inte analysera: \(error.localizedDescription)", nb: "Kunne ikke analysere: \(error.localizedDescription)")
                     isAnalyzing = false
                 }
             }

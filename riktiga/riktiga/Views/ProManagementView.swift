@@ -37,19 +37,19 @@ struct ProManagementView: View {
                                 }
                             } else if isPremium {
                                 VStack(spacing: 8) {
-                                    Text("Aktiv prenumeration")
+                                    Text(L.t(sv: "Aktiv prenumeration", nb: "Aktivt abonnement"))
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundColor(.green)
                                     
                                     if let customerInfo = customerInfo,
                                        let entitlement = customerInfo.entitlements["premium"] {
-                                        Text("Förnyas: \(formatDate(entitlement.expirationDate))")
+                                        Text(L.t(sv: "Förnyas: \(formatDate(entitlement.expirationDate))", nb: "Fornyes: \(formatDate(entitlement.expirationDate))"))
                                             .font(.system(size: 14))
                                             .foregroundColor(.gray)
                                     }
                                 }
                             } else {
-                                Text("Ingen aktiv prenumeration")
+                                Text(L.t(sv: "Ingen aktiv prenumeration", nb: "Ingen aktivt abonnement"))
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.red)
                             }
@@ -58,33 +58,33 @@ struct ProManagementView: View {
                         
                         // MARK: - PRO Benefits
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("PRO fördelar")
+                            Text(L.t(sv: "PRO fördelar", nb: "PRO-fordeler"))
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.primary)
                             
                             VStack(spacing: 12) {
                                 BenefitRow(
                                     icon: "bolt.fill",
-                                    title: "1.5x Poäng Boost",
-                                    description: "Få 50% fler poäng för varje träningspass"
+                                    title: L.t(sv: "1.5x Poäng Boost", nb: "1.5x Poeng Boost"),
+                                    description: L.t(sv: "Få 50% fler poäng för varje träningspass", nb: "Få 50% flere poeng for hver treningsøkt")
                                 )
                                 
                                 BenefitRow(
                                     icon: "tag.fill",
-                                    title: "Obegränsade rabattkoder",
-                                    description: "Köp så många rabattkoder du vill"
+                                    title: L.t(sv: "Obegränsade rabattkoder", nb: "Ubegrensede rabattkoder"),
+                                    description: L.t(sv: "Köp så många rabattkoder du vill", nb: "Kjøp så mange rabattkoder du vil")
                                 )
                                 
                                 BenefitRow(
                                     icon: "star.fill",
-                                    title: "Exklusiva erbjudanden",
-                                    description: "Få tillgång till specialrabatter"
+                                    title: L.t(sv: "Exklusiva erbjudanden", nb: "Eksklusive tilbud"),
+                                    description: L.t(sv: "Få tillgång till specialrabatter", nb: "Få tilgang til spesialrabatter")
                                 )
                                 
                                 BenefitRow(
                                     icon: "heart.fill",
-                                    title: "Stöd utvecklingen",
-                                    description: "Hjälp oss att förbättra appen"
+                                    title: L.t(sv: "Stöd utvecklingen", nb: "Støtt utviklingen"),
+                                    description: L.t(sv: "Hjälp oss att förbättra appen", nb: "Hjelp oss med å forbedre appen")
                                 )
                             }
                         }
@@ -100,7 +100,7 @@ struct ProManagementView: View {
                                         UIApplication.shared.open(url)
                                     }
                                 }) {
-                                    Text("Hantera i App Store")
+                                    Text(L.t(sv: "Hantera i App Store", nb: "Administrer i App Store"))
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(maxWidth: .infinity)
@@ -120,7 +120,7 @@ struct ProManagementView: View {
                                                 .progressViewStyle(CircularProgressViewStyle(tint: .black))
                                                 .scaleEffect(0.8)
                                         }
-                                        Text(isRestoring ? "Återställer..." : "Återställ köp")
+                                        Text(isRestoring ? L.t(sv: "Återställer...", nb: "Gjenoppretter...") : L.t(sv: "Återställ köp", nb: "Gjenopprett kjøp"))
                                             .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(.primary)
                                     }
@@ -139,7 +139,7 @@ struct ProManagementView: View {
                                 Button(action: {
                                     showSubscriptionView = true
                                 }) {
-                                    Text("Uppgradera till PRO")
+                                    Text(L.t(sv: "Uppgradera till PRO", nb: "Oppgrader til PRO"))
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(maxWidth: .infinity)
@@ -159,7 +159,7 @@ struct ProManagementView: View {
                                                 .progressViewStyle(CircularProgressViewStyle(tint: .black))
                                                 .scaleEffect(0.8)
                                         }
-                                        Text(isRestoring ? "Återställer..." : "Återställ köp")
+                                        Text(isRestoring ? L.t(sv: "Återställer...", nb: "Gjenoppretter...") : L.t(sv: "Återställ köp", nb: "Gjenopprett kjøp"))
                                             .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(.primary)
                                     }
@@ -181,11 +181,11 @@ struct ProManagementView: View {
                     }
                 }
             }
-            .navigationTitle("PRO Management")
+            .navigationTitle(L.t(sv: "PRO Management", nb: "PRO-administrasjon"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
@@ -193,7 +193,7 @@ struct ProManagementView: View {
             .sheet(isPresented: $showSubscriptionView) {
                 SubscriptionView()
             }
-            .alert("Information", isPresented: $showAlert) {
+            .alert(L.t(sv: "Information", nb: "Informasjon"), isPresented: $showAlert) {
                 Button("OK") { }
             } message: {
                 Text(alertMessage)
@@ -225,9 +225,9 @@ struct ProManagementView: View {
         
         await MainActor.run {
             if success {
-                alertMessage = "Köp återställda framgångsrikt!"
+                alertMessage = L.t(sv: "Köp återställda framgångsrikt!", nb: "Kjøp gjenopprettet!")
             } else {
-                alertMessage = "Inga köp att återställa eller återställning misslyckades."
+                alertMessage = L.t(sv: "Inga köp att återställa eller återställning misslyckades.", nb: "Ingen kjøp å gjenopprette, eller gjenopprettingen mislyktes.")
             }
             showAlert = true
             isRestoring = false
@@ -235,7 +235,7 @@ struct ProManagementView: View {
     }
     
     private func formatDate(_ date: Date?) -> String {
-        guard let date = date else { return "Okänt" }
+        guard let date = date else { return L.t(sv: "Okänt", nb: "Ukjent") }
         
         let formatter = DateFormatter()
         formatter.dateStyle = .medium

@@ -11,6 +11,16 @@ enum SportType: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     
+    var displayName: String {
+        switch self {
+        case .gym: return L.t(sv: "Gym", nb: "Gym")
+        case .running: return L.t(sv: "Löpning", nb: "Løping")
+        case .skiing: return L.t(sv: "Skidåkning", nb: "Skiløping")
+        case .golf: return L.t(sv: "Golf", nb: "Golf")
+        case .mountaineering: return L.t(sv: "Bergsklättring", nb: "Fjellklatring")
+        }
+    }
+    
     var icon: String {
         switch self {
         case .gym: return "dumbbell.fill"
@@ -166,7 +176,7 @@ struct StatisticsView: View {
         .opacity(showSkeleton ? 0 : 1)
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Statistik")
+        .navigationTitle(L.t(sv: "Statistik", nb: "Statistikk"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadData()
@@ -213,7 +223,7 @@ struct StatisticsView: View {
                         HStack(spacing: 8) {
                             Image(systemName: sport.icon)
                                 .font(.system(size: 14, weight: .medium))
-                            Text(sport.rawValue)
+                            Text(sport.displayName)
                                 .font(.system(size: 14, weight: .medium))
                         }
                         .padding(.horizontal, 16)
@@ -233,23 +243,23 @@ struct StatisticsView: View {
     // MARK: - This Week Section
     private var thisWeekSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Denna vecka")
+            Text(L.t(sv: "Denna vecka", nb: "Denne uken"))
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.primary)
             
             HStack(spacing: 0) {
                 if selectedSport == .gym {
-                    StatColumn(label: "Volym", value: "\(Int(progressStats.distance)) kg", isAnimated: true, delay: 0.1)
-                    StatColumn(label: "Set", value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.2)
-                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
+                    StatColumn(label: L.t(sv: "Volym", nb: "Volum"), value: "\(Int(progressStats.distance)) kg", isAnimated: true, delay: 0.1)
+                    StatColumn(label: L.t(sv: "Set", nb: "Sett"), value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.2)
+                    StatColumn(label: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
                 } else if selectedSport == .golf {
-                    StatColumn(label: "Rundor", value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.1)
-                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.2)
-                    StatColumn(label: "Pass", value: "\(Int(progressStats.distance))", isAnimated: true, delay: 0.3)
+                    StatColumn(label: L.t(sv: "Rundor", nb: "Runder"), value: "\(Int(progressStats.elevation))", isAnimated: true, delay: 0.1)
+                    StatColumn(label: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.2)
+                    StatColumn(label: L.t(sv: "Pass", nb: "Økter"), value: "\(Int(progressStats.distance))", isAnimated: true, delay: 0.3)
                 } else {
-                    StatColumn(label: "Distans", value: String(format: "%.2f km", progressStats.distance), isAnimated: true, delay: 0.1)
-                    StatColumn(label: "Höjdmeter", value: "\(Int(progressStats.elevation)) m", isAnimated: true, delay: 0.2)
-                    StatColumn(label: "Tid", value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
+                    StatColumn(label: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", progressStats.distance), isAnimated: true, delay: 0.1)
+                    StatColumn(label: L.t(sv: "Höjdmeter", nb: "Høydemeter"), value: "\(Int(progressStats.elevation)) m", isAnimated: true, delay: 0.2)
+                    StatColumn(label: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(progressStats.duration), isAnimated: true, delay: 0.3)
                 }
             }
         }
@@ -259,7 +269,7 @@ struct StatisticsView: View {
     // MARK: - Past 12 Weeks Chart
     private var past12WeeksChart: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Senaste 12 veckorna")
+            Text(L.t(sv: "Senaste 12 veckorna", nb: "Siste 12 ukene"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.gray)
             
@@ -419,7 +429,7 @@ struct StatisticsView: View {
             
             // View recap button
             NavigationLink(destination: MonthlyReportView()) {
-                Text("Se din månadsrapport")
+                Text(L.t(sv: "Se din månadsrapport", nb: "Se din månedsrapport"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -439,7 +449,7 @@ struct StatisticsView: View {
         
         return VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Prestationer")
+                Text(L.t(sv: "Prestationer", nb: "Prestasjoner"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -498,7 +508,7 @@ struct StatisticsView: View {
                                         .offset(y: -2)
                                 }
                                 
-                                Text("\(milestone) pass")
+                                Text(L.t(sv: "\(milestone) pass", nb: "\(milestone) økter"))
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.primary)
                                     .multilineTextAlignment(.center)
@@ -516,7 +526,7 @@ struct StatisticsView: View {
                 showTrophyDetail = true
             }) {
                 HStack {
-                    Text("Alla prestationer")
+                    Text(L.t(sv: "Alla prestationer", nb: "Alle prestasjoner"))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.primary)
                     Spacer()
@@ -695,16 +705,16 @@ struct StatisticsView: View {
             // Header
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("UTVECKLING")
+                    Text(L.t(sv: "UTVECKLING", nb: "UTVIKLING"))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.secondary)
                         .tracking(1.5)
                     
-                    Text("Progressive Overload")
+                    Text(L.t(sv: "Progressiv överbelastning", nb: "Progressiv overbelastning"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Följ din styrkeutveckling")
+                    Text(L.t(sv: "Följ din styrkeutveckling", nb: "Følg din styrkeutvikling"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -716,7 +726,7 @@ struct StatisticsView: View {
                         AllExercisesListView(exerciseHistories: exerciseHistories)
                     } label: {
                         HStack(spacing: 4) {
-                            Text("Se alla")
+                            Text(L.t(sv: "Se alla", nb: "Se alle"))
                                 .font(.system(size: 14, weight: .semibold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .semibold))
@@ -733,11 +743,11 @@ struct StatisticsView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.gray.opacity(0.4))
                     
-                    Text("Inga gympass ännu")
+                    Text(L.t(sv: "Inga gympass ännu", nb: "Ingen treningsøkter ennå"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    Text("Kör ditt första gympass för att se din utveckling")
+                    Text(L.t(sv: "Kör ditt första gympass för att se din utveckling", nb: "Kjør din første treningsøkt for å se din utvikling"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -775,7 +785,7 @@ struct StatisticsView: View {
                         AllExercisesListView(exerciseHistories: exerciseHistories)
                     } label: {
                         HStack {
-                            Text("Se alla \(exerciseHistories.count) övningar")
+                            Text(L.t(sv: "Se alla \(exerciseHistories.count) övningar", nb: "Se alle \(exerciseHistories.count) øvelser"))
                                 .font(.system(size: 15, weight: .semibold))
                             
                             Image(systemName: "arrow.right")
@@ -806,11 +816,11 @@ struct StatisticsView: View {
                         .scaledToFit()
                         .frame(height: 56)
                     
-                    Text("1 Rep Max")
+                    Text(L.t(sv: "1 Rep Max", nb: "1 Rep Maks"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("AI-analyserad maxstyrka per övning")
+                    Text(L.t(sv: "AI-analyserad maxstyrka per övning", nb: "AI-analysert maksstyrke per øvelse"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -822,7 +832,7 @@ struct StatisticsView: View {
                         All1RMPredictionsView(exerciseHistories: exerciseHistories, aiPredictions: aiPredictions)
                     } label: {
                         HStack(spacing: 4) {
-                            Text("Se alla")
+                            Text(L.t(sv: "Se alla", nb: "Se alle"))
                                 .font(.system(size: 14, weight: .semibold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .semibold))
@@ -839,11 +849,11 @@ struct StatisticsView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.gray.opacity(0.4))
                     
-                    Text("Inga gympass ännu")
+                    Text(L.t(sv: "Inga gympass ännu", nb: "Ingen treningsøkter ennå"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    Text("Kör ditt första gympass för att se dina 1RM prediktioner")
+                    Text(L.t(sv: "Kör ditt första gympass för att se dina 1RM prediktioner", nb: "Kjør din første treningsøkt for å se dine 1RM-prediksjoner"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -858,7 +868,7 @@ struct StatisticsView: View {
                     ProgressView()
                         .scaleEffect(1.2)
                     
-                    Text("AI analyserar din träningsdata...")
+                    Text(L.t(sv: "AI analyserar din träningsdata...", nb: "AI analyserer treningsdataene dine..."))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -883,7 +893,7 @@ struct StatisticsView: View {
                             await loadAIPredictions()
                         }
                     } label: {
-                        Text("Försök igen")
+                        Text(L.t(sv: "Försök igen", nb: "Prøv igjen"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.green)
                     }
@@ -918,7 +928,7 @@ struct StatisticsView: View {
                         All1RMPredictionsView(exerciseHistories: exerciseHistories, aiPredictions: aiPredictions)
                     } label: {
                         HStack {
-                            Text("Se alla \(exerciseHistories.count) övningar")
+                            Text(L.t(sv: "Se alla \(exerciseHistories.count) övningar", nb: "Se alle \(exerciseHistories.count) øvelser"))
                                 .font(.system(size: 15, weight: .semibold))
                             
                             Image(systemName: "arrow.right")
@@ -976,12 +986,12 @@ struct StatisticsView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                Text("Har du tips på någon funktion du tycker vi saknar?")
+                Text(L.t(sv: "Har du tips på någon funktion du tycker vi saknar?", nb: "Har du tips til funksjoner du synes vi mangler?"))
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                 
-                Text("Ge feedback här")
+                Text(L.t(sv: "Ge feedback här", nb: "Gi tilbakemelding her"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
                     .underline()
@@ -1001,16 +1011,16 @@ struct StatisticsView: View {
         return VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("KONTINUERLIGHET")
+                    Text(L.t(sv: "KONTINUERLIGHET", nb: "KONTINUITET"))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.secondary)
                         .tracking(1.5)
                     
-                    Text("Din vana")
+                    Text(L.t(sv: "Din vana", nb: "Din vane"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Hur regelbunden du är")
+                    Text(L.t(sv: "Hur regelbunden du är", nb: "Hvor regelmessig du er"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -1024,11 +1034,11 @@ struct StatisticsView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.gray.opacity(0.4))
                     
-                    Text("Ingen data ännu")
+                    Text(L.t(sv: "Ingen data ännu", nb: "Ingen data ennå"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    Text("Logga dina pass för att se din kontinuerlighet")
+                    Text(L.t(sv: "Logga dina pass för att se din kontinuerlighet", nb: "Logg øktene dine for å se din kontinuitet"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -1046,26 +1056,26 @@ struct StatisticsView: View {
                     consistencyStatCard(
                         icon: "calendar",
                         iconColor: Color(red: 0.30, green: 0.55, blue: 0.95),
-                        title: "Snitt pass per vecka",
+                        title: L.t(sv: "Snitt pass per vecka", nb: "Snitt økter per uke"),
                         value: String(format: "%.1f", stats.avgSessionsPerWeek),
-                        subtitle: stats.totalWeeks > 0 ? "Senaste \(stats.totalWeeks) veckor" : nil
+                        subtitle: stats.totalWeeks > 0 ? L.t(sv: "Senaste \(stats.totalWeeks) veckor", nb: "Siste \(stats.totalWeeks) uker") : nil
                     )
                     
                     HStack(spacing: 10) {
                         consistencyStatCard(
                             icon: "flame.fill",
                             iconColor: .orange,
-                            title: "Längsta streak",
+                            title: L.t(sv: "Längsta streak", nb: "Lengste streak"),
                             value: "\(stats.longestStreakDays)",
-                            subtitle: "dagar i rad"
+                            subtitle: L.t(sv: "dagar i rad", nb: "dager på rad")
                         )
                         
                         consistencyStatCard(
                             icon: "repeat",
                             iconColor: Color(red: 0.55, green: 0.40, blue: 0.85),
-                            title: "Längsta streak",
+                            title: L.t(sv: "Längsta streak", nb: "Lengste streak"),
                             value: "\(stats.longestStreakWeeks)",
-                            subtitle: "veckor i rad"
+                            subtitle: L.t(sv: "veckor i rad", nb: "uker på rad")
                         )
                     }
                 }
@@ -1202,7 +1212,7 @@ struct StatisticsView: View {
         return VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
-                Text("Muskeldistribution")
+                Text(L.t(sv: "Muskeldistribution", nb: "Muskeldistribusjon"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
                 
@@ -1219,7 +1229,7 @@ struct StatisticsView: View {
                         }
                     } label: {
                         HStack {
-                            Text("Senaste 30 dagarna")
+                            Text(L.t(sv: "Senaste 30 dagarna", nb: "Siste 30 dagene"))
                             if muscleTimePeriod == .last30Days {
                                 Image(systemName: "checkmark")
                             }
@@ -1232,7 +1242,7 @@ struct StatisticsView: View {
                         }
                     } label: {
                         HStack {
-                            Text("Senaste 90 dagarna")
+                            Text(L.t(sv: "Senaste 90 dagarna", nb: "Siste 90 dagene"))
                             if muscleTimePeriod == .last90Days {
                                 Image(systemName: "checkmark")
                             }
@@ -1245,7 +1255,7 @@ struct StatisticsView: View {
                         }
                     } label: {
                         HStack {
-                            Text("Totalt")
+                            Text(L.t(sv: "Totalt", nb: "Totalt"))
                             if muscleTimePeriod == .total {
                                 Image(systemName: "checkmark")
                             }
@@ -1283,7 +1293,7 @@ struct StatisticsView: View {
                     
                     Spacer()
                     
-                    Text("\(topMuscle.value) sets")
+                    Text(L.t(sv: "\(topMuscle.value) sets", nb: "\(topMuscle.value) sett"))
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.6))
                     
@@ -1315,16 +1325,16 @@ struct StatisticsView: View {
             // Header (same style as Progressive Overload)
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("RANKING")
+                    Text(L.t(sv: "RANKING", nb: "RANGERING"))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.secondary)
                         .tracking(1.5)
                     
-                    Text("Top Övningar")
+                    Text(L.t(sv: "Top Övningar", nb: "Topp øvelser"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("Dina mest tränade övningar")
+                    Text(L.t(sv: "Dina mest tränade övningar", nb: "Dine mest trente øvelser"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -1336,7 +1346,7 @@ struct StatisticsView: View {
                         AllTopExercisesView(exercises: topExercises, exerciseHistories: exerciseHistories)
                     } label: {
                         HStack(spacing: 4) {
-                            Text("Se alla")
+                            Text(L.t(sv: "Se alla", nb: "Se alle"))
                                 .font(.system(size: 14, weight: .semibold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .semibold))
@@ -1353,11 +1363,11 @@ struct StatisticsView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.gray.opacity(0.4))
                     
-                    Text("Inga övningar ännu")
+                    Text(L.t(sv: "Inga övningar ännu", nb: "Ingen øvelser ennå"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    Text("Kör ditt första gympass för att se din ranking")
+                    Text(L.t(sv: "Kör ditt första gympass för att se din ranking", nb: "Kjør din første treningsøkt for å se din rangering"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -1386,7 +1396,7 @@ struct StatisticsView: View {
                         AllTopExercisesView(exercises: topExercises, exerciseHistories: exerciseHistories)
                     } label: {
                         HStack {
-                            Text("Se alla \(topExercises.count) övningar")
+                            Text(L.t(sv: "Se alla \(topExercises.count) övningar", nb: "Se alle \(topExercises.count) øvelser"))
                                 .font(.system(size: 15, weight: .semibold))
                             
                             Image(systemName: "arrow.right")
@@ -1810,6 +1820,14 @@ private enum CalendarMode: String, CaseIterable, Identifiable {
     case multiYear = "Flera år"
     
     var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .month: return L.t(sv: "Månad", nb: "Måned")
+        case .year: return L.t(sv: "År", nb: "År")
+        case .multiYear: return L.t(sv: "Flera år", nb: "Flere år")
+        }
+    }
 }
 
 private struct CalendarOverviewView: View {
@@ -1851,21 +1869,21 @@ private struct CalendarOverviewView: View {
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundColor(.primary)
                         
-                        Text("Träningskalender")
+                        Text(L.t(sv: "Träningskalender", nb: "Treningskalender"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.primary)
                         
                         Spacer()
                     }
                     
-                    Text("Visualisera dina träningsdagar och håll koll på din kontinuitet.")
+                    Text(L.t(sv: "Visualisera dina träningsdagar och håll koll på din kontinuitet.", nb: "Visualiser treningsdagene dine og hold oversikt over kontinuiteten din."))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
                     // Stats row
                     HStack(spacing: 12) {
-                        CalendarStatItem(value: "\(workoutDates.count)", label: "Pass", color: .primary)
-                        CalendarStatItem(value: "\(workoutSet.count)", label: "Dagar", color: .secondary)
+                        CalendarStatItem(value: "\(workoutDates.count)", label: L.t(sv: "Pass", nb: "Økter"), color: .primary)
+                        CalendarStatItem(value: "\(workoutSet.count)", label: L.t(sv: "Dagar", nb: "Dager"), color: .secondary)
                     }
                     .padding(.top, 8)
                 }
@@ -1910,7 +1928,7 @@ private struct CalendarOverviewView: View {
             .padding(16)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle("Kalender")
+        .navigationTitle(L.t(sv: "Kalender", nb: "Kalender"))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: reload) {
@@ -1921,7 +1939,7 @@ private struct CalendarOverviewView: View {
         }
         .overlay(alignment: .center) {
             if isLoading {
-                ProgressView("Hämtar träningsdagar…")
+                ProgressView(L.t(sv: "Hämtar träningsdagar…", nb: "Henter treningsdager…"))
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
                     .background(Color(.systemBackground))
@@ -1932,7 +1950,7 @@ private struct CalendarOverviewView: View {
                     Text(errorMessage)
                         .font(.callout)
                         .multilineTextAlignment(.center)
-                    Button("Försök igen") {
+                    Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                         reload()
                     }
                     .font(.system(size: 14, weight: .semibold))
@@ -1984,9 +2002,9 @@ private struct CalendarOverviewView: View {
     
     private var modePicker: some View {
         VStack(spacing: 12) {
-            Picker("Vy", selection: $mode) {
+            Picker(L.t(sv: "Vy", nb: "Visning"), selection: $mode) {
                 ForEach(CalendarMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+                    Text(mode.displayName).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -2011,7 +2029,7 @@ private struct CalendarOverviewView: View {
     private func loadWorkoutDates(force: Bool = false) async {
         guard let userId = authViewModel.currentUser?.id else {
             await MainActor.run {
-                self.errorMessage = "Logga in för att se kalendern."
+                self.errorMessage = L.t(sv: "Logga in för att se kalendern.", nb: "Logg inn for å se kalenderen.")
                 self.isLoading = false
             }
             return
@@ -2045,7 +2063,7 @@ private struct CalendarOverviewView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta kalenderdata just nu."
+                self.errorMessage = L.t(sv: "Kunde inte hämta kalenderdata just nu.", nb: "Kunne ikke hente kalenderdata akkurat nå.")
                 self.isLoading = false
             }
         }
@@ -2201,7 +2219,7 @@ private struct MonthCalendarView: View {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.green)
-                    Text("\(workoutCountThisMonth) pass")
+                    Text(L.t(sv: "\(workoutCountThisMonth) pass", nb: "\(workoutCountThisMonth) økter"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.green)
                 }
@@ -2299,7 +2317,7 @@ private struct YearCalendarView: View {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.green)
-                    Text("\(totalWorkoutsThisYear) pass totalt")
+                    Text(L.t(sv: "\(totalWorkoutsThisYear) pass totalt", nb: "\(totalWorkoutsThisYear) økter totalt"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.green)
                 }
@@ -2410,7 +2428,7 @@ private struct MultiYearCalendarView: View {
         VStack(alignment: .leading, spacing: 20) {
             // Header
             HStack {
-                Text("Historik")
+                Text(L.t(sv: "Historik", nb: "Historikk"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -2420,7 +2438,7 @@ private struct MultiYearCalendarView: View {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.green)
-                    Text("\(totalWorkouts) pass totalt")
+                    Text(L.t(sv: "\(totalWorkouts) pass totalt", nb: "\(totalWorkouts) økter totalt"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.green)
                 }
@@ -2436,7 +2454,7 @@ private struct MultiYearCalendarView: View {
                         .font(.system(size: 24))
                         .foregroundColor(.secondary)
                     
-                    Text("Inga registrerade pass ännu.")
+                    Text(L.t(sv: "Inga registrerade pass ännu.", nb: "Ingen registrerte økter ennå."))
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                 }
@@ -2486,7 +2504,7 @@ private struct YearHeatRow: View {
                 
                 Spacer()
                 
-                Text("\(workoutsThisYear) pass")
+                Text(L.t(sv: "\(workoutsThisYear) pass", nb: "\(workoutsThisYear) økter"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -2693,9 +2711,9 @@ private struct StepStatisticsSectionView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Din aktivitet")
+                    Text(L.t(sv: "Din aktivitet", nb: "Din aktivitet"))
                         .font(.system(size: 17, weight: .semibold))
-                    Text("Synkas från Apple Hälsa")
+                    Text(L.t(sv: "Synkas från Apple Hälsa", nb: "Synkroniseres fra Apple Helse"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -2711,18 +2729,18 @@ private struct StepStatisticsSectionView: View {
                             .clipShape(Circle())
                     }
                     .disabled(isLoading)
-                    .accessibilityLabel("Uppdatera stegstatistik")
+                    .accessibilityLabel(L.t(sv: "Uppdatera stegstatistik", nb: "Oppdater skrittstatistikk"))
                 }
             }
             
             if !isAuthorized {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("För att se din stegstatistik behöver du ge appen tillgång till stegdata i Apple Hälsa.")
+                    Text(L.t(sv: "För att se din stegstatistik behöver du ge appen tillgång till stegdata i Apple Hälsa.", nb: "For å se skrittstatistikken din må du gi appen tilgang til skrittdata i Apple Helse."))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     HStack {
                         Button(action: requestAuthorization) {
-                            Text("Tillåt stegdata")
+                            Text(L.t(sv: "Tillåt stegdata", nb: "Tillat skrittdata"))
                                 .font(.system(size: 14, weight: .semibold))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
@@ -2731,7 +2749,7 @@ private struct StepStatisticsSectionView: View {
                                 .clipShape(Capsule())
                         }
                         Button(action: HealthKitManager.shared.handleManageAuthorizationButton) {
-                            Text("Öppna inställningar")
+                            Text(L.t(sv: "Öppna inställningar", nb: "Åpne innstillinger"))
                                 .font(.system(size: 14, weight: .medium))
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
@@ -2743,18 +2761,18 @@ private struct StepStatisticsSectionView: View {
             } else if isLoading {
                 HStack(spacing: 12) {
                     ProgressView()
-                    Text("Hämtar stegdata…")
+                    Text(L.t(sv: "Hämtar stegdata…", nb: "Henter skrittdata…"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(spacing: 12) {
-                    StepStatRow(title: "Idag", steps: todaySteps)
+                    StepStatRow(title: L.t(sv: "Idag", nb: "I dag"), steps: todaySteps)
                     Divider()
-                    StepStatRow(title: "Förra veckan", steps: lastWeekSteps, subtitle: "Mån–Sön föregående vecka")
+                    StepStatRow(title: L.t(sv: "Förra veckan", nb: "Forrige uke"), steps: lastWeekSteps, subtitle: L.t(sv: "Mån–Sön föregående vecka", nb: "Man–Søn forrige uke"))
                     Divider()
-                    StepStatRow(title: "Förra månaden", steps: lastMonthSteps)
+                    StepStatRow(title: L.t(sv: "Förra månaden", nb: "Forrige måned"), steps: lastMonthSteps)
                 }
             }
         }
@@ -2863,7 +2881,7 @@ private struct StepStatRow: View {
     }
     
     private var kilometerText: String {
-        guard let steps = steps, steps > 0 else { return "Ingen data" }
+        guard let steps = steps, steps > 0 else { return L.t(sv: "Ingen data", nb: "Ingen data") }
         let kilometers = StepSyncService.convertStepsToKilometers(steps)
         return String(format: "≈ %.1f km", kilometers)
     }
@@ -3017,7 +3035,7 @@ struct MonthlyReportView: View {
     }
     
     private var topSport: String {
-        sportBreakdown.first?.type ?? "Träning"
+        sportBreakdown.first?.type ?? L.t(sv: "Träning", nb: "Trening")
     }
     
     private var top5Exercises: [(name: String, count: Int)] {
@@ -3090,7 +3108,7 @@ struct MonthlyReportView: View {
             }
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Månadsrapport")
+        .navigationTitle(L.t(sv: "Månadsrapport", nb: "Månedsrapport"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if !hasLoaded {
@@ -3189,7 +3207,7 @@ struct MonthlyReportView: View {
                                 Circle()
                                     .fill(Color.orange)
                                     .frame(width: 6, height: 6)
-                                Text("\(Int(data.hours)) TIM")
+                                Text(L.t(sv: "\(Int(data.hours)) TIM", nb: "\(Int(data.hours)) TIM"))
                                     .font(.system(size: 8, weight: .bold))
                                     .foregroundColor(.white)
                             }
@@ -3217,7 +3235,7 @@ struct MonthlyReportView: View {
     // MARK: - Month Totals Section
     private func monthTotalsSection(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("SAMMANFATTNING")
+            Text(L.t(sv: "SAMMANFATTNING", nb: "SAMMENDRAG"))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.primary)
                 .tracking(1)
@@ -3232,7 +3250,7 @@ struct MonthlyReportView: View {
                     
                     HStack {
                         Spacer()
-                        Text("DAGAR")
+                        Text(L.t(sv: "DAGAR", nb: "DAGER"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.gray)
                     }
@@ -3259,7 +3277,7 @@ struct MonthlyReportView: View {
                             .font(.system(size: 24, weight: .regular))
                             .foregroundColor(.primary)
                         Spacer()
-                        Text("TIM")
+                        Text(L.t(sv: "TIM", nb: "TIM"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.gray)
                     }
@@ -3278,7 +3296,7 @@ struct MonthlyReportView: View {
                             .font(.system(size: 24, weight: .regular))
                             .foregroundColor(.primary)
                         Spacer()
-                        Text("KM")
+                        Text(L.t(sv: "KM", nb: "KM"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.gray)
                     }
@@ -3296,7 +3314,7 @@ struct MonthlyReportView: View {
                             .font(.system(size: 24, weight: .regular))
                             .foregroundColor(.primary)
                         Spacer()
-                        Text("KG")
+                        Text(L.t(sv: "KG", nb: "KG"))
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.gray)
                     }
@@ -3352,7 +3370,7 @@ struct MonthlyReportView: View {
     // MARK: - Top 5 Exercises Section
     private func topExercisesSection(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("TOPP 5 ÖVNINGAR")
+            Text(L.t(sv: "TOPP 5 ÖVNINGAR", nb: "TOPP 5 ØVELSER"))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.primary)
                 .tracking(1)
@@ -3370,7 +3388,7 @@ struct MonthlyReportView: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
-                            Text("\(exercise.count) \(exercise.count == 1 ? "gång" : "gånger")")
+                            Text(L.t(sv: "\(exercise.count) \(exercise.count == 1 ? "gång" : "gånger")", nb: "\(exercise.count) \(exercise.count == 1 ? "gang" : "ganger")"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.gray)
                         }
@@ -3460,7 +3478,7 @@ struct MonthlyReportView: View {
     // MARK: - Top Sports Section
     private func topSportsSection(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("DINA SPORTER")
+            Text(L.t(sv: "DINA SPORTER", nb: "DINE IDRETTER"))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.primary)
                 .tracking(1)
@@ -3515,7 +3533,7 @@ struct MonthlyReportView: View {
     private func longestActivitySection(geometry: GeometryProxy) -> some View {
         if let post = longestActivity {
             VStack(alignment: .leading, spacing: 16) {
-                Text("LÄNGSTA AKTIVITET")
+                Text(L.t(sv: "LÄNGSTA AKTIVITET", nb: "LENGSTE AKTIVITET"))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.primary)
                     .tracking(1)
@@ -3591,13 +3609,13 @@ struct MonthlyReportView: View {
         VStack(alignment: .leading, spacing: 20) {
             Spacer()
             
-            Text("Bra jobbat, \(authViewModel.currentUser?.name ?? "du")!")
+            Text(L.t(sv: "Bra jobbat, \(authViewModel.currentUser?.name ?? "du")!", nb: "Bra jobbet, \(authViewModel.currentUser?.name ?? "du")!"))
                 .font(.system(size: min(geometry.size.width * 0.11, 44), weight: .light))
                 .foregroundColor(.primary)
                 .minimumScaleFactor(0.6)
                 .lineLimit(2)
             
-            Text("Du har tränat \(totalDays) \(totalDays == 1 ? "dag" : "dagar") denna \(currentMonth.lowercased()).")
+            Text(L.t(sv: "Du har tränat \(totalDays) \(totalDays == 1 ? "dag" : "dagar") denna \(currentMonth.lowercased()).", nb: "Du har trent \(totalDays) \(totalDays == 1 ? "dag" : "dager") denne \(currentMonth.lowercased())."))
                 .font(.system(size: 17))
                 .foregroundColor(.gray)
             
@@ -3738,7 +3756,7 @@ struct MonthlyReportView: View {
             Button(action: {
                 Task { await loadData() }
             }) {
-                Text("Försök igen")
+                Text(L.t(sv: "Försök igen", nb: "Prøv igjen"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
@@ -3755,7 +3773,7 @@ struct MonthlyReportView: View {
     private func loadData() async {
         guard let userId = authViewModel.currentUser?.id else {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta användaruppgifter."
+                self.errorMessage = L.t(sv: "Kunde inte hämta användaruppgifter.", nb: "Kunne ikke hente brukeropplysninger.")
                 self.isLoading = false
             }
             return
@@ -3816,7 +3834,7 @@ struct MonthlyReportView: View {
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte hämta statistik just nu."
+                self.errorMessage = L.t(sv: "Kunde inte hämta statistik just nu.", nb: "Kunne ikke hente statistikk akkurat nå.")
                 self.isLoading = false
             }
         }
@@ -4090,7 +4108,7 @@ struct StatExerciseHistory: Identifiable {
         } else if change < 0 {
             return "\(String(format: "%.1f", change))%"
         } else {
-            return "Platå"
+            return L.t(sv: "Platå", nb: "Platå")
         }
     }
     
@@ -4233,7 +4251,7 @@ struct StatExerciseRow: View {
                             .font(.system(size: 8))
                             .foregroundColor(.secondary.opacity(0.4))
                         
-                        Text("\(history.history.count) pass")
+                        Text(L.t(sv: "\(history.history.count) pass", nb: "\(history.history.count) økter"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -4276,7 +4294,7 @@ struct StatExerciseRow: View {
     private var trendBadge: some View {
         let change = history.trendPercentage
         if change == 0 {
-            Text("Platå")
+            Text(L.t(sv: "Platå", nb: "Platå"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
@@ -4316,6 +4334,15 @@ struct AllExercisesListView: View {
         case okar = "Ökar"
         case minskar = "Minskar"
         case plata = "Platåat"
+        
+        var displayName: String {
+            switch self {
+            case .alla: return L.t(sv: "Alla", nb: "Alle")
+            case .okar: return L.t(sv: "Ökar", nb: "Øker")
+            case .minskar: return L.t(sv: "Minskar", nb: "Minker")
+            case .plata: return L.t(sv: "Platåat", nb: "Platå")
+            }
+        }
     }
     
     // Initialize with provided histories (from StatisticsView)
@@ -4361,7 +4388,7 @@ struct AllExercisesListView: View {
             if isLoading && exerciseHistories.isEmpty {
                 VStack(spacing: 16) {
                     ProgressView()
-                    Text("Laddar övningar...")
+                    Text(L.t(sv: "Laddar övningar...", nb: "Laster øvelser..."))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
@@ -4374,7 +4401,7 @@ struct AllExercisesListView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.secondary)
                             
-                            TextField("Sök övning...", text: $searchText)
+                            TextField(L.t(sv: "Sök övning...", nb: "Søk øvelse..."), text: $searchText)
                                 .font(.system(size: 16))
                                 .foregroundColor(.primary)
                         }
@@ -4397,7 +4424,7 @@ struct AllExercisesListView: View {
                                         selectedFilter = filter
                                     }
                                 } label: {
-                                    Text(filter.rawValue)
+                                    Text(filter.displayName)
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundColor(selectedFilter == filter ? .white : .primary)
                                         .padding(.horizontal, 14)
@@ -4443,7 +4470,7 @@ struct AllExercisesListView: View {
             }
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Alla övningar")
+        .navigationTitle(L.t(sv: "Alla övningar", nb: "Alle øvelser"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             // Only load if no histories were provided
@@ -4592,7 +4619,7 @@ private struct CleanExerciseRow: View {
                             .font(.system(size: 8))
                             .foregroundColor(.secondary.opacity(0.5))
                         
-                        Text("\(history.history.count) pass")
+                        Text(L.t(sv: "\(history.history.count) pass", nb: "\(history.history.count) økter"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -4637,7 +4664,7 @@ private struct CleanExerciseRow: View {
     private var cleanTrendBadge: some View {
         let change = history.trendPercentage
         if change == 0 {
-            Text("Platå")
+            Text(L.t(sv: "Platå", nb: "Platå"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
@@ -4777,27 +4804,27 @@ struct StatExerciseDetailView: View {
             CleanStatCard(
                 value: "\(String(format: "%.0f", history.latestSnapshot?.bestSet.weight ?? 0))",
                 unit: "kg",
-                label: "Senaste"
+                label: L.t(sv: "Senaste", nb: "Siste")
             )
             
             CleanStatCard(
                 value: "\(String(format: "%.0f", history.personalBestWeight ?? 0))",
                 unit: "kg",
-                label: "Personbästa",
+                label: L.t(sv: "Personbästa", nb: "Personlig rekord"),
                 isHighlighted: true
             )
             
             CleanStatCard(
                 value: "\(history.history.count)",
                 unit: "",
-                label: "Pass"
+                label: L.t(sv: "Pass", nb: "Økter")
             )
         }
     }
     
     private var chartCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Utvecklingskurva")
+            Text(L.t(sv: "Utvecklingskurva", nb: "Utviklingskurve"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(.primary)
             
@@ -4911,13 +4938,13 @@ struct StatExerciseDetailView: View {
     private var historyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Historik")
+                Text(L.t(sv: "Historik", nb: "Historikk"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
-                Text("\(history.history.count) pass")
+                Text(L.t(sv: "\(history.history.count) pass", nb: "\(history.history.count) økter"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -5066,7 +5093,7 @@ struct OneRMPredictionRow: View {
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
-                    Text("Nu: \(String(format: "%.0f", current1RM)) kg")
+                    Text(L.t(sv: "Nu: \(String(format: "%.0f", current1RM)) kg", nb: "Nå: \(String(format: "%.0f", current1RM)) kg"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -5167,7 +5194,7 @@ struct All1RMPredictionsView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    TextField("Sök övning...", text: $searchText)
+                    TextField(L.t(sv: "Sök övning...", nb: "Søk øvelse..."), text: $searchText)
                         .font(.system(size: 16))
                         .foregroundColor(.primary)
                 }
@@ -5201,7 +5228,7 @@ struct All1RMPredictionsView: View {
             .opacity(showContent ? 1 : 0)
         }
         .background(Color(.systemBackground))
-        .navigationTitle("1RM Prediktioner")
+        .navigationTitle(L.t(sv: "1RM Prediktioner", nb: "1RM Prediksjoner"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             withAnimation(.smooth(duration: 0.4)) {
@@ -5348,7 +5375,7 @@ struct OneRepMaxDetailView: View {
         VStack(spacing: 20) {
             // Current max weight
             VStack(spacing: 4) {
-                Text("Nuvarande Max")
+                Text(L.t(sv: "Nuvarande Max", nb: "Nåværende maks"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                     .textCase(.uppercase)
@@ -5368,7 +5395,7 @@ struct OneRepMaxDetailView: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 12, weight: .semibold))
-                Text("+\(String(format: "%.1f", max(monthlyRate, 0))) kg/månad")
+                Text(L.t(sv: "+\(String(format: "%.1f", max(monthlyRate, 0))) kg/månad", nb: "+\(String(format: "%.1f", max(monthlyRate, 0))) kg/måned"))
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundColor(.green)
@@ -5378,7 +5405,7 @@ struct OneRepMaxDetailView: View {
             .cornerRadius(20)
             
             // Info
-            Text("Baserat på \(history.history.count) träningspass")
+            Text(L.t(sv: "Baserat på \(history.history.count) träningspass", nb: "Basert på \(history.history.count) treningsøkter"))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
         }
@@ -5393,7 +5420,7 @@ struct OneRepMaxDetailView: View {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
-                Text("Tips")
+                Text(L.t(sv: "Tips", nb: "Tips"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
             }
@@ -5416,7 +5443,7 @@ struct OneRepMaxDetailView: View {
     private var futurePredictionsCard: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("Prediktioner")
+                Text(L.t(sv: "Prediktioner", nb: "Prediksjoner"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
                 Spacer()
@@ -5425,7 +5452,7 @@ struct OneRepMaxDetailView: View {
             // Prediction timeline with cleaner Apple style
             VStack(spacing: 12) {
                 PredictionTimelineRow(
-                    timeLabel: "3 månader",
+                    timeLabel: L.t(sv: "3 månader", nb: "3 måneder"),
                     prediction: prediction3M,
                     current: current1RM,
                     color: .green.opacity(0.6),
@@ -5433,7 +5460,7 @@ struct OneRepMaxDetailView: View {
                 )
                 
                 PredictionTimelineRow(
-                    timeLabel: "6 månader",
+                    timeLabel: L.t(sv: "6 månader", nb: "6 måneder"),
                     prediction: prediction6M,
                     current: current1RM,
                     color: .green.opacity(0.8),
@@ -5441,7 +5468,7 @@ struct OneRepMaxDetailView: View {
                 )
                 
                 PredictionTimelineRow(
-                    timeLabel: "1 år",
+                    timeLabel: L.t(sv: "1 år", nb: "1 år"),
                     prediction: prediction1Y,
                     current: current1RM,
                     color: .green,
@@ -5456,7 +5483,7 @@ struct OneRepMaxDetailView: View {
     
     private var oneRMChartCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("1RM utveckling")
+            Text(L.t(sv: "1RM utveckling", nb: "1RM utvikling"))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(.primary)
             
@@ -5637,9 +5664,9 @@ enum MuscleTimePeriod: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .last30Days: return "Senaste 30 dagarna"
-        case .last90Days: return "Senaste 90 dagarna"
-        case .total: return "Totalt"
+        case .last30Days: return L.t(sv: "Senaste 30 dagarna", nb: "Siste 30 dagene")
+        case .last90Days: return L.t(sv: "Senaste 90 dagarna", nb: "Siste 90 dagene")
+        case .total: return L.t(sv: "Totalt", nb: "Totalt")
         }
     }
 }
@@ -5810,7 +5837,7 @@ struct TopExerciseRow: View {
                         .lineLimit(1)
                     
                     HStack(spacing: 6) {
-                        Text("\(exercise.totalSets) sets")
+                        Text(L.t(sv: "\(exercise.totalSets) sets", nb: "\(exercise.totalSets) sett"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                         
@@ -5818,7 +5845,7 @@ struct TopExerciseRow: View {
                             .font(.system(size: 8))
                             .foregroundColor(.secondary.opacity(0.4))
                         
-                        Text("\(exercise.sessionCount) pass")
+                        Text(L.t(sv: "\(exercise.sessionCount) pass", nb: "\(exercise.sessionCount) økter"))
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -5879,7 +5906,7 @@ struct AllTopExercisesView: View {
             .opacity(showContent ? 1 : 0)
         }
         .background(Color(.systemBackground))
-        .navigationTitle("Top Övningar")
+        .navigationTitle(L.t(sv: "Top Övningar", nb: "Topp øvelser"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             withAnimation(.smooth(duration: 0.4)) {
@@ -5903,12 +5930,12 @@ struct TrophyDetailView: View {
                 VStack(spacing: 16) {
                     // Milstolpar Section
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Milstolpar")
+                        Text(L.t(sv: "Milstolpar", nb: "Milepæler"))
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.primary)
                             .padding(.horizontal, 20)
                         
-                        Text("Se alla dina prestationer baserat på antal genomförda pass.")
+                        Text(L.t(sv: "Se alla dina prestationer baserat på antal genomförda pass.", nb: "Se alle prestasjonene dine basert på antall gjennomførte økter."))
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 20)
@@ -5964,7 +5991,7 @@ struct TrophyDetailView: View {
                                         .offset(y: -2)
                                 }
                                 
-                                Text("\(milestone) pass")
+                                Text(L.t(sv: "\(milestone) pass", nb: "\(milestone) økter"))
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.primary)
                                     .multilineTextAlignment(.center)
@@ -5977,7 +6004,7 @@ struct TrophyDetailView: View {
                 .opacity(showContent ? 1 : 0)
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Prestationer")
+            .navigationTitle(L.t(sv: "Prestationer", nb: "Prestasjoner"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -5987,7 +6014,7 @@ struct TrophyDetailView: View {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
-                        Text("Statistik")
+                        Text(L.t(sv: "Statistik", nb: "Statistikk"))
                             .font(.system(size: 17))
                             .foregroundColor(.primary)
                     }

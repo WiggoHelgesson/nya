@@ -222,6 +222,15 @@ struct RewardCatalog {
     ]
 }
 
+private func localizedCategoryName(_ category: String) -> String {
+    switch category {
+    case "Energidryck": return L.t(sv: "Energidryck", nb: "Energidrikk")
+    case "Löpning": return L.t(sv: "Löpning", nb: "Løping")
+    case "Skidåkning": return L.t(sv: "Skidåkning", nb: "Ski")
+    default: return category
+    }
+}
+
 struct HeroBannerAsset: Identifiable {
     let id = UUID()
     let imageName: String
@@ -431,7 +440,7 @@ struct RewardsView: View {
                         
                         HStack {
                             Spacer()
-                            Text("Annons")
+                            Text(L.t(sv: "Annons", nb: "Annonse"))
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                                 .padding(.horizontal, 8)
@@ -456,7 +465,7 @@ struct RewardsView: View {
     
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Kategorier")
+            Text(L.t(sv: "Kategorier", nb: "Kategorier"))
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(primaryTextColor)
                 .padding(.horizontal, 16)
@@ -503,7 +512,7 @@ struct RewardsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Section header with "Se alla"
                 HStack {
-                    Text(title)
+                    Text(localizedCategoryName(title))
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(primaryTextColor)
                     
@@ -517,7 +526,7 @@ struct RewardsView: View {
                         )
                     } label: {
                         HStack(spacing: 4) {
-                            Text("Se alla")
+                            Text(L.t(sv: "Se alla", nb: "Se alle"))
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(.gray)
                             Image(systemName: "chevron.right")
@@ -606,7 +615,7 @@ struct RewardsView: View {
                                         .foregroundColor(secondaryTextColor)
                                         .font(.system(size: 16))
                                     
-                                    Text("Sök")
+                                    Text(L.t(sv: "Sök", nb: "Søk"))
                                         .font(.system(size: 16))
                                         .foregroundColor(secondaryTextColor)
                                     
@@ -882,7 +891,7 @@ struct CategoryButton: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(isSelected ? (colorScheme == .dark ? .black : .white) : .gray)
             
-            Text(category)
+            Text(localizedCategoryName(category))
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(isSelected ? (colorScheme == .dark ? .black : .white) : .gray)
         }
@@ -1235,7 +1244,7 @@ struct CategoryRewardsListView: View {
             .padding(.horizontal, 16)
         }
         .background(pageBackgroundColor.ignoresSafeArea())
-        .navigationTitle(category)
+        .navigationTitle(localizedCategoryName(category))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
         .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
@@ -1276,7 +1285,7 @@ struct RewardDetailView: View {
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.primary)
                             
-                            Text("för \(reward.brandName)")
+                            Text(L.t(sv: "för \(reward.brandName)", nb: "for \(reward.brandName)"))
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(.gray)
                         }
@@ -1329,7 +1338,7 @@ struct RewardDetailView: View {
                             Button(action: {
                                 openCompanyWebsite(for: reward.brandName)
                             }) {
-                                Text("BESÖK HEMSIDA")
+                                Text(L.t(sv: "BESÖK HEMSIDA", nb: "BESØK NETTSIDE"))
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.primary)
                                     .frame(width: 280) // Shorter width
@@ -1348,7 +1357,7 @@ struct RewardDetailView: View {
                                     showCheckout = true
                                 }
                             }) {
-                                Text(hasEnoughPoints ? "HÄMTA BELÖNING" : "INTE TILLRÄCKLIGT MED POÄNG")
+                                Text(hasEnoughPoints ? L.t(sv: "HÄMTA BELÖNING", nb: "HENT BELØNNING") : L.t(sv: "INTE TILLRÄCKLIGT MED POÄNG", nb: "IKKE NOK POENG"))
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(.white)
                                     .frame(width: 280) // Shorter width
@@ -1378,43 +1387,43 @@ struct RewardDetailView: View {
     private func getCompanyDescription(for brandName: String) -> String {
         switch brandName {
         case "PLIKTGOLF":
-            return "Pliktgolf startade hösten 2023 med målet att göra golf mer tillgängligt och hållbart genom att sälja återvunna premiumbollar till ett lägre pris. Tillsammans med golfklubbar samlar de in bortslagna bollar från vatten och natur, rengör och sorterar dem, och erbjuder sedan golfare ett cirkulärt alternativ kompletterat med träningstillbehör och teknik."
+            return L.t(sv: "Pliktgolf startade hösten 2023 med målet att göra golf mer tillgängligt och hållbart genom att sälja återvunna premiumbollar till ett lägre pris. Tillsammans med golfklubbar samlar de in bortslagna bollar från vatten och natur, rengör och sorterar dem, och erbjuder sedan golfare ett cirkulärt alternativ kompletterat med träningstillbehör och teknik.", nb: "Pliktgolf startet høsten 2023 med målet om å gjøre golf mer tilgjengelig og bærekraftig gjennom å selge resirkulerte premiumballer til en lavere pris. Sammen med golfklubber samler de inn bortslåtte baller fra vann og natur, rengjør og sorterer dem, og tilbyr deretter golfere et sirkulært alternativ supplert med treningsutstyr og teknikk.")
         case "PEGMATE":
-            return "Pegmate är en svensk uppfinning från Karlshamn/Mörrum i Blekinge. En extra peg-hållare med elastiskt fäste som sitter kvar i marken och gör att peggen inte flyger iväg vid utslag eller på rangen. Produkten är lokalproducerad, giftfri och fungerar lika bra på gräs som konstgräs."
+            return L.t(sv: "Pegmate är en svensk uppfinning från Karlshamn/Mörrum i Blekinge. En extra peg-hållare med elastiskt fäste som sitter kvar i marken och gör att peggen inte flyger iväg vid utslag eller på rangen. Produkten är lokalproducerad, giftfri och fungerar lika bra på gräs som konstgräs.", nb: "Pegmate er en svensk oppfinnelse fra Karlshamn/Mörrum i Blekinge. En ekstra peg-holder med elastisk feste som sitter igjen i bakken og gjør at peggen ikke flyr av gårde ved utslag eller på rangen. Produktet er lokalprodusert, giftfritt og fungerer like godt på gress som kunstgress.")
         case "LONEGOLF":
-            return "Lone Golf är ett svenskt startup-varumärke som designar och säljer egna golfklubbor med ambitionen att ge premiumkänsla till ett mer tillgängligt pris. Fokus ligger på egen design, teknik och en rak dialog med golfare."
+            return L.t(sv: "Lone Golf är ett svenskt startup-varumärke som designar och säljer egna golfklubbor med ambitionen att ge premiumkänsla till ett mer tillgängligt pris. Fokus ligger på egen design, teknik och en rak dialog med golfare.", nb: "Lone Golf er et svensk startup-merke som designer og selger egne golfkøller med ambisjonen om å gi premiumfølelse til en mer tilgjengelig pris. Fokus ligger på egen design, teknikk og en rett fram dialog med golfere.")
         case "WINWIZE":
-            return "WINWIZE är en innovativ golfbutik som kombinerar traditionell kvalitet med moderna lösningar för att ge dig det bästa golfupplevelsen."
+            return L.t(sv: "WINWIZE är en innovativ golfbutik som kombinerar traditionell kvalitet med moderna lösningar för att ge dig det bästa golfupplevelsen.", nb: "WINWIZE er en innovativ golfbutikk som kombinerer tradisjonell kvalitet med moderne løsninger for å gi deg den beste golfopplevelsen.")
         case "SCANDIGOLF":
-            return "SCANDIGOLF är en nordisk golfbutik som erbjuder högkvalitativ utrustning från Skandinaviens bästa märken."
+            return L.t(sv: "SCANDIGOLF är en nordisk golfbutik som erbjuder högkvalitativ utrustning från Skandinaviens bästa märken.", nb: "SCANDIGOLF er en nordisk golfbutikk som tilbyr utstyr av høy kvalitet fra Skandinavias beste merker.")
         case "Exotic Golf":
-            return "Exotic Golf specialiserar sig på unika och exklusiva golfprodukter från världens alla hörn."
+            return L.t(sv: "Exotic Golf specialiserar sig på unika och exklusiva golfprodukter från världens alla hörn.", nb: "Exotic Golf spesialiserer seg på unike og eksklusive golfprodukter fra hele verden.")
         case "HAPPYALBA":
-            return "HAPPYALBA fokuserar på golfkläder och accessoarer som kombinerar stil med funktionalitet för den moderna golfaren."
+            return L.t(sv: "HAPPYALBA fokuserar på golfkläder och accessoarer som kombinerar stil med funktionalitet för den moderna golfaren.", nb: "HAPPYALBA fokuserer på golfklær og tilbehør som kombinerer stil med funksjonalitet for den moderne golferen.")
         case "ALTURA":
-            return "Vår vision är att golf inte ska vara en limiterad sport utan en sport som kan spridas och älskas av vem som helst vare sig bakgrund eller ekonomi. Vi vill förändra den uråldriga golfklädes-marknaden genom vårt koncept där vi blandar stil från utanför golfbanan med den på banan därför levererar vi en golf-hoodie som blandar både stil och prestation. Se ut och spela som proffsen med Altura idag."
+            return L.t(sv: "Vår vision är att golf inte ska vara en limiterad sport utan en sport som kan spridas och älskas av vem som helst vare sig bakgrund eller ekonomi. Vi vill förändra den uråldriga golfklädes-marknaden genom vårt koncept där vi blandar stil från utanför golfbanan med den på banan därför levererar vi en golf-hoodie som blandar både stil och prestation. Se ut och spela som proffsen med Altura idag.", nb: "Vår visjon er at golf ikke skal være en begrenset sport, men en sport som kan spres og elskes av hvem som helst uavhengig av bakgrunn eller økonomi. Vi ønsker å forandre det urgamle golfklesmarkedet gjennom vårt konsept der vi blander stil fra utenfor golfbanen med den på banen, og leverer derfor en golf-hoodie som blander både stil og prestasjon. Se ut og spill som proffene med Altura i dag.")
         case "RETROGOLF":
-            return "RETROGOLF erbjuder klassisk golfutrustning med en modern twist, perfekt för golfare som uppskattar både tradition och innovation."
+            return L.t(sv: "RETROGOLF erbjuder klassisk golfutrustning med en modern twist, perfekt för golfare som uppskattar både tradition och innovation.", nb: "RETROGOLF tilbyr klassisk golfutstyr med et moderne twist, perfekt for golfere som setter pris på både tradisjon og innovasjon.")
         case "PUMPLABS":
-            return "PumpLab tar fram högkvalitativa kosttillskott utvecklade och producerade i Sverige. Fokus ligger på rena ingredienser, tydliga doser och produkter som faktiskt levererar resultat – bättre prestation, snabbare återhämtning och god smak för dig som vill ta träningen till nästa nivå."
+            return L.t(sv: "PumpLab tar fram högkvalitativa kosttillskott utvecklade och producerade i Sverige. Fokus ligger på rena ingredienser, tydliga doser och produkter som faktiskt levererar resultat – bättre prestation, snabbare återhämtning och god smak för dig som vill ta träningen till nästa nivå.", nb: "PumpLab utvikler høykvalitets kosttilskudd utviklet og produsert i Sverige. Fokus ligger på rene ingredienser, tydelige doser og produkter som faktisk leverer resultater – bedre prestasjon, raskere restitusjon og god smak for deg som vil ta treningen til neste nivå.")
         case "ZEN ENERGY":
-            return "Zen Energy är energidrycken för dig som vill ta både kroppen och hjärnan till nästa nivå. Varje burk innehåller 10 g veganskt protein, 165 mg naturligt koffein och 300 mg ekologiskt Lion’s Mane för skärpa och fokus – plus ett komplett vitaminkomplex utan artificiella tillsatser."
+            return L.t(sv: "Zen Energy är energidrycken för dig som vill ta både kroppen och hjärnan till nästa nivå. Varje burk innehåller 10 g veganskt protein, 165 mg naturligt koffein och 300 mg ekologiskt Lion’s Mane för skärpa och fokus – plus ett komplett vitaminkomplex utan artificiella tillsatser.", nb: "Zen Energy er energidrikken for deg som vil ta både kroppen og hjernen til neste nivå. Hver boks inneholder 10 g vegansk protein, 165 mg naturlig koffein og 300 mg økologisk Lion’s Mane for skarphet og fokus – pluss et komplett vitaminkompleks uten kunstige tilsetningsstoffer.")
         case "CAPSTONE":
-            return "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa."
+            return L.t(sv: "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa.", nb: "Capstone fokuserer på skibriller og tilbehør med magnetiske linser som enkelt tilpasses etter lysforhold. Målet er å kombinere stil, komfort og funksjon for skiløpere som vil ha premiumfølelse uten å kompromisse.")
         case "FUSE ENERGY":
-            return "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft."
+            return L.t(sv: "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft.", nb: "Fuse Energy gir deg smart energi på en ny måte. I stedet for bokser får du en brusetablett – med koffein, L-teanin og vitaminer – som du løser i vann. Resultatet er ren, effektiv energi og skjerpet fokus uten sukker, krasj eller unødvendig motstand. Perfekt for trening, studier eller dager når du trenger et ekstra løft.")
         case "J.LINDEBERG":
-            return "J.Lindeberg är ett svenskt modevarumärke som grundades 1996 av Johan Lindeberg i Stockholm. Varumärket kombinerar mode, sport och livsstil och är särskilt känt för att blanda skräddat herrmode med influenser från golf, skidåkning och streetwear.\n\nJ.Lindeberg har ett modernt och internationellt uttryck där designen ofta präglas av rena linjer, hög kvalitet och en sportig elegans. Märket riktar sig till personer som vill ha stilrena plagg som fungerar både i vardagen och i mer aktiva sammanhang. I dag säljs J.Lindeberg globalt och är ett välkänt namn inom både mode- och sportsegmentet."
+            return L.t(sv: "J.Lindeberg är ett svenskt modevarumärke som grundades 1996 av Johan Lindeberg i Stockholm. Varumärket kombinerar mode, sport och livsstil och är särskilt känt för att blanda skräddat herrmode med influenser från golf, skidåkning och streetwear.\n\nJ.Lindeberg har ett modernt och internationellt uttryck där designen ofta präglas av rena linjer, hög kvalitet och en sportig elegans. Märket riktar sig till personer som vill ha stilrena plagg som fungerar både i vardagen och i mer aktiva sammanhang. I dag säljs J.Lindeberg globalt och är ett välkänt namn inom både mode- och sportsegmentet.", nb: "J.Lindeberg er et svensk motemerke som ble grunnlagt i 1996 av Johan Lindeberg i Stockholm. Merket kombinerer mote, sport og livsstil og er særlig kjent for å blande skreddersydd herremote med påvirkning fra golf, ski og streetwear.\n\nJ.Lindeberg har et moderne og internasjonalt uttrykk der designen ofte preges av rene linjer, høy kvalitet og en sporty eleganse. Merket retter seg mot personer som ønsker stilrene plagg som fungerer både i hverdagen og i mer aktive sammenhenger. I dag selges J.Lindeberg globalt og er et velkjent navn innen både mote- og sportssegmentet.")
         case "CLYRO":
-            return "Clyro tillverkar energidrycker med 20 gram protein och hög kvalitet så att du kan kombinera boost och återhämtning i samma burk. Perfekt före eller efter gymmet – utan att kompromissa på smak eller innehåll."
+            return L.t(sv: "Clyro tillverkar energidrycker med 20 gram protein och hög kvalitet så att du kan kombinera boost och återhämtning i samma burk. Perfekt före eller efter gymmet – utan att kompromissa på smak eller innehåll.", nb: "Clyro produserer energidrikker med 20 gram protein og høy kvalitet slik at du kan kombinere boost og restitusjon i samme boks. Perfekt før eller etter trening – uten å kompromisse på smak eller innhold.")
         case "Fjällsyn UF":
-            return "Fjällsyn tillverkar moderna och stilrena skidglasögon till schyssta priser – designade i svensk fjällmiljö för att du ska få bästa sikt på berget."
+            return L.t(sv: "Fjällsyn tillverkar moderna och stilrena skidglasögon till schyssta priser – designade i svensk fjällmiljö för att du ska få bästa sikt på berget.", nb: "Fjällsyn produserer moderne og stilrene skibriller til greie priser – designet i svensk fjellmiljø for at du skal få best mulig sikt på fjellet.")
         case "Powerwell":
-            return "Powerwell tillverkar PWO och kosttillskott av hög kvalitet för dig som vill prestera varje pass. Svenska recept, rena ingredienser och brutalt fokus på effekt utan onödiga tillsatser."
+            return L.t(sv: "Powerwell tillverkar PWO och kosttillskott av hög kvalitet för dig som vill prestera varje pass. Svenska recept, rena ingredienser och brutalt fokus på effekt utan onödiga tillsatser.", nb: "Powerwell produserer PWO og kosttilskudd av høy kvalitet for deg som vil prestere hver økt. Svenske oppskrifter, rene ingredienser og brutalt fokus på effekt uten unødvendige tilsetningsstoffer.")
         case "XEEIL":
-            return "XEEIL är ett innovativt doftstift utvecklat utifrån aromaterapeutiska principer. Vi kombinerar uppfriskande mentol med noggrant utvalda naturliga eteriska oljor för att skapa en balanserad och effektiv doftupplevelse."
+            return L.t(sv: "XEEIL är ett innovativt doftstift utvecklat utifrån aromaterapeutiska principer. Vi kombinerar uppfriskande mentol med noggrant utvalda naturliga eteriska oljor för att skapa en balanserad och effektiv doftupplevelse.", nb: "XEEIL er en innovativ duftstift utviklet ut fra aromaterapeutiske prinsipper. Vi kombinerer oppfriskende mentol med nøye utvalgte naturlige eteriske oljer for å skape en balansert og effektiv duftopplevelse.")
         default:
-            return "Ett företag som erbjuder högkvalitativa produkter för din aktivitet."
+            return L.t(sv: "Ett företag som erbjuder högkvalitativa produkter för din aktivitet.", nb: "Et selskap som tilbyr produkter av høy kvalitet for din aktivitet.")
         }
     }
     
@@ -1549,29 +1558,29 @@ struct CheckoutView: View {
                     // Form fields
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Förnamn")
+                            Text(L.t(sv: "Förnamn", nb: "Fornavn"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            TextField("Ange ditt förnamn", text: $firstName)
+                            TextField(L.t(sv: "Ange ditt förnamn", nb: "Skriv inn fornavnet ditt"), text: $firstName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Efternamn")
+                            Text(L.t(sv: "Efternamn", nb: "Etternavn"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            TextField("Ange ditt efternamn", text: $lastName)
+                            TextField(L.t(sv: "Ange ditt efternamn", nb: "Skriv inn etternavnet ditt"), text: $lastName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("E-post")
+                            Text(L.t(sv: "E-post", nb: "E-post"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            TextField("Ange din e-post", text: $email)
+                            TextField(L.t(sv: "Ange din e-post", nb: "Skriv inn e-posten din"), text: $email)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
@@ -1581,18 +1590,18 @@ struct CheckoutView: View {
                                 )
                             
                             if !email.isEmpty && (!email.contains("@") || !email.contains(".")) {
-                                Text("Ange en giltig e-postadress")
+                                Text(L.t(sv: "Ange en giltig e-postadress", nb: "Skriv inn en gyldig e-postadresse"))
                                     .font(.system(size: 12))
                                     .foregroundColor(.red)
                             }
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Stad")
+                            Text(L.t(sv: "Stad", nb: "By"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            TextField("Ange din stad", text: $city)
+                            TextField(L.t(sv: "Ange din stad", nb: "Skriv inn byen din"), text: $city)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                         }
                     }
@@ -1612,7 +1621,7 @@ struct CheckoutView: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             }
-                            Text(isProcessingPurchase ? "Bearbetar..." : "Bekräfta köp")
+                            Text(isProcessingPurchase ? L.t(sv: "Bearbetar...", nb: "Behandler...") : L.t(sv: "Bekräfta köp", nb: "Bekreft kjøp"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                         }
@@ -1626,11 +1635,11 @@ struct CheckoutView: View {
                     .disabled(firstName.isEmpty || lastName.isEmpty || email.isEmpty || city.isEmpty || isProcessingPurchase || !email.contains("@") || !email.contains("."))
                 }
             }
-            .navigationTitle("Checkout")
+            .navigationTitle(L.t(sv: "Kassan", nb: "Kassen"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
@@ -1724,21 +1733,21 @@ struct ConfirmationView: View {
                 VStack(spacing: 24) {
                     // Confirmation message
                     VStack(spacing: 16) {
-                        Text("Tack för din beställning!")
+                        Text(L.t(sv: "Tack för din beställning!", nb: "Takk for bestillingen din!"))
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("För att ta del av erbjudandet:")
+                            Text(L.t(sv: "För att ta del av erbjudandet:", nb: "For å benytte tilbudet:"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.primary)
                             
-                            Text("1. Kopiera koden nedan")
+                            Text(L.t(sv: "1. Kopiera koden nedan", nb: "1. Kopier koden nedenfor"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                             
-                            Text("2. Använd den på erbjudandets hemsida")
+                            Text(L.t(sv: "2. Använd den på erbjudandets hemsida", nb: "2. Bruk den på tilbudets nettside"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                         }
@@ -1776,7 +1785,7 @@ struct ConfirmationView: View {
                     }
                     
                     // Additional information
-                    Text("Du hittar information om din beställning i 'Mina köp'")
+                    Text(L.t(sv: "Du hittar information om din beställning i 'Mina köp'", nb: "Du finner informasjon om bestillingen din i 'Mine kjøp'"))
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -1788,7 +1797,7 @@ struct ConfirmationView: View {
                         Button(action: {
                             openCompanyWebsite(for: reward.brandName)
                         }) {
-                            Text("BESÖK HEMSIDA")
+                            Text(L.t(sv: "BESÖK HEMSIDA", nb: "BESØK NETTSIDE"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -1800,7 +1809,7 @@ struct ConfirmationView: View {
                         Button(action: {
                             dismiss()
                         }) {
-                            Text("INTE NU")
+                            Text(L.t(sv: "INTE NU", nb: "IKKE NÅ"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity)
@@ -2028,7 +2037,7 @@ private struct ProBannerView: View {
                 // Content
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Skaffa Up&Down Pro och lås upp alla förmåner")
+                        Text(L.t(sv: "Skaffa Up&Down Pro och lås upp alla förmåner", nb: "Skaff deg Up&Down Pro og lås opp alle fordeler"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .lineLimit(2)
@@ -2036,7 +2045,7 @@ private struct ProBannerView: View {
                         
                         // CTA Button (White)
                         HStack(spacing: 4) {
-                            Text("Prenumerera nu")
+                            Text(L.t(sv: "Prenumerera nu", nb: "Abonner nå"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.black)
                             

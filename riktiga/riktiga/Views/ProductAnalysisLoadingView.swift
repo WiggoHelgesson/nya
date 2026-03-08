@@ -14,14 +14,16 @@ struct ProductAnalysisLoadingView: View {
     @State private var pulseAnimation = false
     @State private var showResult = false
     
-    private let steps: [(icon: String, text: String)] = [
-        ("barcode.viewfinder", "Läser streckkod"),
-        ("magnifyingglass", "Söker i databaser"),
-        ("flask", "Analyserar ingredienser"),
-        ("exclamationmark.triangle", "Upptäcker tillsatser"),
-        ("chart.bar", "Bygger hälsobetyg"),
-        ("doc.text.magnifyingglass", "Förbereder rapport")
-    ]
+    private var steps: [(icon: String, text: String)] {
+        [
+            ("barcode.viewfinder", L.t(sv: "Läser streckkod", nb: "Leser strekkode")),
+            ("magnifyingglass", L.t(sv: "Söker i databaser", nb: "Søker i databaser")),
+            ("flask", L.t(sv: "Analyserar ingredienser", nb: "Analyserer ingredienser")),
+            ("exclamationmark.triangle", L.t(sv: "Upptäcker tillsatser", nb: "Oppdager tilsetningsstoffer")),
+            ("chart.bar", L.t(sv: "Bygger hälsobetyg", nb: "Bygger helsekarakter")),
+            ("doc.text.magnifyingglass", L.t(sv: "Förbereder rapport", nb: "Forbereder rapport"))
+        ]
+    }
     
     var body: some View {
         ZStack {
@@ -72,7 +74,7 @@ struct ProductAnalysisLoadingView: View {
                 }
                 .padding(.bottom, 16)
                 
-                Text("Analyserar produkt")
+                Text(L.t(sv: "Analyserar produkt", nb: "Analyserer produkt"))
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.bottom, 50)
@@ -101,7 +103,7 @@ struct ProductAnalysisLoadingView: View {
                     .font(.system(size: 32))
                     .foregroundColor(.red)
                 
-                Text("Något gick fel")
+                Text(L.t(sv: "Något gick fel", nb: "Noe gikk galt"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                 
@@ -110,7 +112,7 @@ struct ProductAnalysisLoadingView: View {
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                 
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     onDismissScanner()
                 }
                 .font(.system(size: 16, weight: .semibold))
@@ -130,17 +132,17 @@ struct ProductAnalysisLoadingView: View {
                         .scaleEffect(1.2)
                         .padding(.bottom, 8)
                     
-                    Text("Slutför analys...")
+                    Text(L.t(sv: "Slutför analys...", nb: "Fullfører analyse..."))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
                         .opacity(pulseAnimation ? 1.0 : 0.5)
                         .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: pulseAnimation)
                 } else {
-                    Text("Identifierar din produkt...")
+                    Text(L.t(sv: "Identifierar din produkt...", nb: "Identifiserer produktet ditt..."))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.white)
                     
-                    Text("Vänligen vänta")
+                    Text(L.t(sv: "Vänligen vänta", nb: "Vennligst vent"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 }

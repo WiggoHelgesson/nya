@@ -840,6 +840,27 @@ class SocialService {
         }
     }
     
+    func getMutualFriends(currentUserId: String, otherUserId: String) async throws -> [UserSearchResult] {
+        do {
+            let myFollowing = try await getFollowing(userId: currentUserId)
+            let theirFollowing = try await getFollowing(userId: otherUserId)
+            let mutualIds = Array(Set(myFollowing).intersection(Set(theirFollowing)))
+            guard !mutualIds.isEmpty else { return [] }
+            
+            let profiles: [UserSearchResult] = try await supabase
+                .from("profiles")
+                .select("id, username, avatar_url")
+                .in("id", values: mutualIds)
+                .limit(3)
+                .execute()
+                .value
+            return profiles
+        } catch {
+            print("❌ Error getting mutual friends: \(error)")
+            return []
+        }
+    }
+    
     func searchUsers(query: String, currentUserId: String) async throws -> [UserSearchResult] {
         do {
             try await AuthSessionManager.shared.ensureValidSession()

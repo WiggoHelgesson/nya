@@ -157,7 +157,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways else {
             print("❌ Location permission not granted. Current status: \(authorizationStatus.rawValue)")
             Task { @MainActor in
-                self.locationError = "Platstillstånd krävs för att spåra din aktivitet"
+                self.locationError = L.t(sv: "Platstillstånd krävs för att spåra din aktivitet", nb: "Posisjonstillatelse kreves for å spore aktiviteten din")
             }
             return
         }
@@ -201,7 +201,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // Start Live Activity
         if !preserveData {
-            let type = activityType ?? currentActivityType ?? "Löppass"
+            let type = activityType ?? currentActivityType ?? L.t(sv: "Löppass", nb: "Løpeøkt")
             
             // Starta endast Live Activity för löpning/golf/skidåkning etc.
             // Gympass sköter sin egen Live Activity
@@ -497,14 +497,14 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 locationManager.requestAlwaysAuthorization()
             }
             Task { @MainActor in
-                self.locationError = "Välj 'Tillåt alltid' för att appen ska fungera i bakgrunden."
+                self.locationError = L.t(sv: "Välj 'Tillåt alltid' för att appen ska fungera i bakgrunden.", nb: "Velg 'Tillat alltid' for at appen skal fungere i bakgrunnen.")
                 self.showLocationDeniedAlert = true
             }
             
         case .restricted, .denied:
             print("⚠️ Location permission insufficient - showing warning")
             Task { @MainActor in
-                self.locationError = "Platsåtkomst i bakgrunden krävs för att spåra din rutt när appen är stängd. Välj 'Tillåt alltid' i Inställningar."
+                self.locationError = L.t(sv: "Platsåtkomst i bakgrunden krävs för att spåra din rutt när appen är stängd. Välj 'Tillåt alltid' i Inställningar.", nb: "Bakgrunnsposisjon kreves for å spore ruten din når appen er lukket. Velg 'Tillat alltid' i Innstillinger.")
                 self.showLocationDeniedAlert = true
             }
             

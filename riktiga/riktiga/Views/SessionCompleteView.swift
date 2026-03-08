@@ -80,11 +80,11 @@ struct SessionCompleteView: View {
     // Default titles based on activity
     private var defaultTitle: String {
         switch activity {
-        case .running: return "Löppass"
-        case .golf: return "Golfrunda"
-        case .skiing: return "Skidpass"
-        case .walking: return "Gympass"  // walking is actually gym
-        case .hiking: return "Bergsbestigning"
+        case .running: return L.t(sv: "Löppass", nb: "Løpetur")
+        case .golf: return L.t(sv: "Golfrunda", nb: "Golfrunde")
+        case .skiing: return L.t(sv: "Skidpass", nb: "Skitur")
+        case .walking: return L.t(sv: "Gympass", nb: "Treningsøkt")
+        case .hiking: return L.t(sv: "Bergsbestigning", nb: "Fjellbestigning")
         }
     }
     
@@ -236,11 +236,11 @@ struct SessionCompleteView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(String(format: "%.0f", capturedTerritory * 1000))
                         .font(.system(size: 32, weight: .bold))
-                    Text("KM²")
+                    Text(L.t(sv: "KM²", nb: "KM²"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
-                Text("Erövrat område")
+                Text(L.t(sv: "Erövrat område", nb: "Erobret område"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
@@ -254,11 +254,11 @@ struct SessionCompleteView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(earnedPoints)")
                         .font(.system(size: 32, weight: .bold))
-                    Text("XP")
+                    Text(L.t(sv: "XP", nb: "XP"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
-                Text("Intjänat")
+                Text(L.t(sv: "Intjänat", nb: "Opptjent"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
@@ -313,7 +313,7 @@ struct SessionCompleteView: View {
     // MARK: - Gym Title Field
     private var gymTitleField: some View {
         VStack(spacing: 0) {
-            TextField("Morgonpass", text: $title)
+            TextField(L.t(sv: "Morgonpass", nb: "Morgenøkt"), text: $title)
                 .font(.system(size: 17))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
@@ -331,7 +331,7 @@ struct SessionCompleteView: View {
     private var gymDescriptionField: some View {
         ZStack(alignment: .topLeading) {
             if description.isEmpty {
-                Text("Berätta om ditt pass för dina vänner!")
+                Text(L.t(sv: "Berätta om ditt pass för dina vänner!", nb: "Fortell vennene dine om økten!"))
                     .font(.system(size: 17))
                     .foregroundColor(Color(.placeholderText))
                     .padding(.horizontal, 20)
@@ -361,7 +361,7 @@ struct SessionCompleteView: View {
                 .font(.system(size: 18))
                 .foregroundColor(.primary)
             
-            Text("Gympass")
+            Text(L.t(sv: "Gympass", nb: "Treningsøkt"))
                 .font(.system(size: 17))
                 .foregroundColor(.primary)
             
@@ -393,7 +393,7 @@ struct SessionCompleteView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
-                    Text("\(gymExercises?.count ?? 0) övningar")
+                    Text(L.t(sv: "\(gymExercises?.count ?? 0) övningar", nb: "\(gymExercises?.count ?? 0) øvelser"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                 }
@@ -403,7 +403,7 @@ struct SessionCompleteView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(formatDuration(duration))
                             .font(.system(size: 22, weight: .bold))
-                        Text("Tid")
+                        Text(L.t(sv: "Tid", nb: "Tid"))
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
                     }
@@ -411,7 +411,7 @@ struct SessionCompleteView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(formatVolume(gymVolume))
                             .font(.system(size: 22, weight: .bold))
-                        Text("Volym")
+                        Text(L.t(sv: "Volym", nb: "Volum"))
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
                     }
@@ -434,7 +434,7 @@ struct SessionCompleteView: View {
                                 .font(.system(size: 18))
                                 .foregroundColor(.gray)
                             
-                            Text("Lägg till bild")
+                            Text(L.t(sv: "Lägg till bild", nb: "Legg til bilde"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.gray)
                         }
@@ -525,7 +525,7 @@ struct SessionCompleteView: View {
                             .font(.system(size: 22))
                             .foregroundColor(isSelected ? .green : .gray)
                         
-                        Text("Tränade du med \(friend.username)?")
+                        Text(L.t(sv: "Tränade du med \(friend.username)?", nb: "Trente du med \(friend.username)?"))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.primary)
                         
@@ -540,7 +540,7 @@ struct SessionCompleteView: View {
                 .buttonStyle(.plain)
             } else {
                 VStack(spacing: 0) {
-                    Text("Tränade du med dessa vänner?")
+                    Text(L.t(sv: "Tränade du med dessa vänner?", nb: "Trente du med disse vennene?"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -598,7 +598,7 @@ struct SessionCompleteView: View {
                     .foregroundColor(.black)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Plats")
+                    Text(L.t(sv: "Plats", nb: "Sted"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                     
@@ -607,7 +607,7 @@ struct SessionCompleteView: View {
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.primary)
                     } else {
-                        Text("Ingen plats detekterad")
+                        Text(L.t(sv: "Ingen plats detekterad", nb: "Ingen sted oppdaget"))
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
                     }
@@ -618,7 +618,7 @@ struct SessionCompleteView: View {
                 Button(action: {
                     showGymSearchSheet = true
                 }) {
-                    Text("Ändra")
+                    Text(L.t(sv: "Ändra", nb: "Endre"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.black)
                 }
@@ -638,14 +638,14 @@ struct SessionCompleteView: View {
         NavigationView {
             VStack(spacing: 0) {
                 if isSearchingGyms {
-                    ProgressView("Söker efter gym...")
+                    ProgressView(L.t(sv: "Söker efter gym...", nb: "Søker etter gym..."))
                         .padding()
                 } else if gymSearchResults.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "mappin.slash")
                             .font(.system(size: 50))
                             .foregroundColor(.secondary)
-                        Text("Inga gym hittades i närheten")
+                        Text(L.t(sv: "Inga gym hittades i närheten", nb: "Ingen gym funnet i nærheten"))
                             .font(.system(size: 17))
                             .foregroundColor(.secondary)
                     }
@@ -662,7 +662,7 @@ struct SessionCompleteView: View {
                                     .foregroundColor(.black)
                                 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(mapItem.name ?? "Okänt gym")
+                                    Text(mapItem.name ?? L.t(sv: "Okänt gym", nb: "Ukjent gym"))
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundColor(.primary)
                                     
@@ -678,7 +678,7 @@ struct SessionCompleteView: View {
                                             latitude: mapItem.placemark.coordinate.latitude,
                                             longitude: mapItem.placemark.coordinate.longitude
                                         ))
-                                        Text("\(Int(distance))m bort")
+                                        Text(L.t(sv: "\(Int(distance))m bort", nb: "\(Int(distance))m unna"))
                                             .font(.system(size: 12))
                                             .foregroundColor(.secondary)
                                     }
@@ -696,11 +696,11 @@ struct SessionCompleteView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Välj gym")
+            .navigationTitle(L.t(sv: "Välj gym", nb: "Velg gym"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         showGymSearchSheet = false
                     }
                 }
@@ -716,7 +716,7 @@ struct SessionCompleteView: View {
     // MARK: - Gym Details Section
     private var gymDetailsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Detaljer")
+            Text(L.t(sv: "Detaljer", nb: "Detaljer"))
                 .font(.system(size: 20, weight: .bold))
                 .padding(.horizontal, 16)
                 .padding(.top, 24)
@@ -733,7 +733,7 @@ struct SessionCompleteView: View {
                     
                     if hasPB {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Nytt PB!")
+                            Text(L.t(sv: "Nytt PB!", nb: "Ny PB!"))
                                 .font(.system(size: 17))
                                 .foregroundColor(.primary)
                             Text("\(pbExerciseName): \(pbValue)")
@@ -741,7 +741,7 @@ struct SessionCompleteView: View {
                                 .foregroundColor(.gray)
                         }
                     } else {
-                        Text("Tog du ett PB idag?")
+                        Text(L.t(sv: "Tog du ett PB idag?", nb: "Tok du en PB i dag?"))
                             .font(.system(size: 17))
                             .foregroundColor(.primary)
                     }
@@ -770,7 +770,7 @@ struct SessionCompleteView: View {
                         .font(.system(size: 18))
                         .foregroundColor(.primary)
                     
-                    Text("Hur kändes passet?")
+                    Text(L.t(sv: "Hur kändes passet?", nb: "Hvordan føltes økten?"))
                         .font(.system(size: 17))
                         .foregroundColor(.primary)
                     
@@ -806,11 +806,11 @@ struct SessionCompleteView: View {
                     .frame(height: 24)
                     
                     HStack {
-                        Text("Lätt")
+                        Text(L.t(sv: "Lätt", nb: "Lett"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text("Svårt")
+                        Text(L.t(sv: "Svårt", nb: "Hardt"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -833,7 +833,7 @@ struct SessionCompleteView: View {
                         .font(.system(size: 18))
                         .foregroundColor(.primary)
                     
-                    Text("Spara som mall")
+                    Text(L.t(sv: "Spara som mall", nb: "Lagre som mal"))
                         .font(.system(size: 17))
                         .foregroundColor(.primary)
                     
@@ -886,7 +886,7 @@ struct SessionCompleteView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Spara pass")
+                    Text(L.t(sv: "Spara pass", nb: "Lagre økt"))
                         .font(.system(size: 17, weight: .semibold))
                 }
                 Spacer()
@@ -920,7 +920,7 @@ struct SessionCompleteView: View {
                         .foregroundColor(.yellow)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Nytt PB!")
+                        Text(L.t(sv: "Nytt PB!", nb: "Ny PB!"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.yellow)
                         Text("\(pbExerciseName): \(pbValue)")
@@ -954,7 +954,7 @@ struct SessionCompleteView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "trophy")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Tog du ett PB idag?")
+                        Text(L.t(sv: "Tog du ett PB idag?", nb: "Tok du en PB i dag?"))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.black)
@@ -995,7 +995,7 @@ struct SessionCompleteView: View {
                                             
                                             // Show best set from this workout
                                             if let bestSet = exercise.sets.max(by: { $0.kg < $1.kg }) {
-                                                Text("Bästa set: \(String(format: "%.1f", bestSet.kg)) kg x \(bestSet.reps)")
+                                                Text(L.t(sv: "Bästa set: \(String(format: "%.1f", bestSet.kg)) kg x \(bestSet.reps)", nb: "Beste sett: \(String(format: "%.1f", bestSet.kg)) kg x \(bestSet.reps)"))
                                                     .font(.system(size: 13))
                                                     .foregroundColor(.secondary)
                                             }
@@ -1017,14 +1017,14 @@ struct SessionCompleteView: View {
                                 }
                             }
                         } header: {
-                            Text("Välj övning")
+                            Text(L.t(sv: "Välj övning", nb: "Velg øvelse"))
                         }
                         
                         if selectedPBExercise != nil {
                             Section {
                                 HStack(spacing: 16) {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("Vikt (kg)")
+                                        Text(L.t(sv: "Vikt (kg)", nb: "Vekt (kg)"))
                                             .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(.secondary)
                                         TextField("0", text: $pbWeight)
@@ -1036,7 +1036,7 @@ struct SessionCompleteView: View {
                                     }
                                     
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("Reps")
+                                        Text(L.t(sv: "Reps", nb: "Reps"))
                                             .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(.secondary)
                                         TextField("0", text: $pbReps)
@@ -1048,7 +1048,7 @@ struct SessionCompleteView: View {
                                     }
                                 }
                             } header: {
-                                Text("Ditt nya PB")
+                                Text(L.t(sv: "Ditt nya PB", nb: "Din nye PB"))
                             }
                         }
                     }
@@ -1058,23 +1058,23 @@ struct SessionCompleteView: View {
                         Image(systemName: "dumbbell")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Inga övningar i detta pass")
+                        Text(L.t(sv: "Inga övningar i detta pass", nb: "Ingen øvelser i denne økten"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle("Nytt PB")
+            .navigationTitle(L.t(sv: "Nytt PB", nb: "Ny PB"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         showPBSheet = false
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         savePB()
                     }
                     .disabled(selectedPBExercise == nil || pbWeight.isEmpty || pbReps.isEmpty)
@@ -1104,7 +1104,7 @@ struct SessionCompleteView: View {
         VStack(spacing: 12) {
             HStack {
                 if isEditingTitle {
-                    TextField("Titel", text: $title)
+                    TextField(L.t(sv: "Titel", nb: "Tittel"), text: $title)
                         .font(.system(size: 32, weight: .black))
                         .multilineTextAlignment(.center)
                         .onSubmit {
@@ -1148,7 +1148,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 4) {
                 Text(duration > 0 ? formatDuration(duration) : "0:00")
                     .font(.system(size: 28, weight: .black))
-                Text("Tid")
+                Text(L.t(sv: "Tid", nb: "Tid"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1161,7 +1161,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 4) {
                 Text(formatVolume(gymVolume))
                     .font(.system(size: 28, weight: .black))
-                Text("Volym")
+                Text(L.t(sv: "Volym", nb: "Volum"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1176,7 +1176,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 4) {
                 Text(distance > 0 ? String(format: "%.2f", distance) : "N/A")
                     .font(.system(size: 24, weight: .black))
-                Text("Distans (km)")
+                Text(L.t(sv: "Distans (km)", nb: "Distanse (km)"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1184,7 +1184,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 4) {
                 Text(duration > 0 ? formatDuration(duration) : "N/A")
                     .font(.system(size: 24, weight: .black))
-                Text("Tid")
+                Text(L.t(sv: "Tid", nb: "Tid"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1192,7 +1192,7 @@ struct SessionCompleteView: View {
             VStack(spacing: 4) {
                 Text(distance > 0 && duration > 0 ? formatPace(distance: distance, duration: duration) : "0:00")
                     .font(.system(size: 24, weight: .black))
-                Text("Tempo (min/km)")
+                Text(L.t(sv: "Tempo (min/km)", nb: "Tempo (min/km)"))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -1203,7 +1203,7 @@ struct SessionCompleteView: View {
     // MARK: - Difficulty Slider Section
     private var difficultySliderSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hur tufft var passet")
+            Text(L.t(sv: "Hur tufft var passet", nb: "Hvor tøff var økten"))
                 .font(.system(size: 16, weight: .bold))
             
             VStack(spacing: 8) {
@@ -1233,19 +1233,19 @@ struct SessionCompleteView: View {
                 }
                 .frame(height: 40)
                 
-                HStack {
-                    Text("Lätt")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("Svårt")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
+                    HStack {
+                        Text(L.t(sv: "Lätt", nb: "Lett"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(L.t(sv: "Svårt", nb: "Hardt"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 16)
-    }
     
     // MARK: - Description Section
     private var descriptionSection: some View {
@@ -1258,7 +1258,7 @@ struct SessionCompleteView: View {
                 .overlay(
                     Group {
                         if description.isEmpty {
-                            Text("Berätta om ditt pass för dina vänner!")
+                            Text(L.t(sv: "Berätta om ditt pass för dina vänner!", nb: "Fortell vennene dine om økten!"))
                                 .foregroundColor(.gray)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 20)
@@ -1290,7 +1290,7 @@ struct SessionCompleteView: View {
                         .scaledToFit()
                         .frame(width: 20, height: 20)
                     
-                    Text("Synkar automatiskt med Strava")
+                    Text(L.t(sv: "Synkar automatiskt med Strava", nb: "Synkroniserer automatisk med Strava"))
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
@@ -1385,7 +1385,7 @@ struct SessionCompleteView: View {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 28))
                         .foregroundColor(.gray)
-                    Text("Lägg till bilder")
+                    Text(L.t(sv: "Lägg till bilder", nb: "Legg til bilder"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
                 }
@@ -1441,7 +1441,7 @@ struct SessionCompleteView: View {
                     }
                 }
             )) {
-                Text("Spara som mall")
+                Text(L.t(sv: "Spara som mall", nb: "Lagre som mal"))
                     .font(.system(size: 16, weight: .medium))
             }
             .padding(.horizontal, 16)
@@ -1456,7 +1456,7 @@ struct SessionCompleteView: View {
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 15))
                     .foregroundColor(.primary)
-                Text("Lägg upp inlägget till det sociala flödet")
+                Text(L.t(sv: "Lägg upp inlägget till det sociala flödet", nb: "Legg ut innlegget til den sosiale feeden"))
                     .font(.system(size: 15))
                     .foregroundColor(.primary)
             }
@@ -1482,7 +1482,7 @@ struct SessionCompleteView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Text("Spara pass")
+                    Text(L.t(sv: "Spara pass", nb: "Lagre økt"))
                         .font(.system(size: 17, weight: .semibold))
                 }
                 Spacer()
@@ -1513,11 +1513,11 @@ struct SessionCompleteView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 20) {
-                    Text("Vill du verkligen radera passet?")
+                    Text(L.t(sv: "Vill du verkligen radera passet?", nb: "Vil du virkelig slette økten?"))
                         .font(.system(size: 18, weight: .bold))
                         .multilineTextAlignment(.center)
                     
-                    Text("Alla data kommer att försvinna")
+                    Text(L.t(sv: "Alla data kommer att försvinna", nb: "All data vil forsvinne"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
@@ -1525,7 +1525,7 @@ struct SessionCompleteView: View {
                         Button(action: {
                             showDeleteConfirmation = false
                         }) {
-                            Text("Avbryt")
+                            Text(L.t(sv: "Avbryt", nb: "Avbryt"))
                                 .font(.system(size: 16, weight: .medium))
                                 .frame(maxWidth: .infinity)
                                 .padding(12)
@@ -1539,7 +1539,7 @@ struct SessionCompleteView: View {
                             isPresented = false
                             onDelete()
                         }) {
-                            Text("Radera")
+                            Text(L.t(sv: "Radera", nb: "Slett"))
                                 .font(.system(size: 16, weight: .bold))
                                 .frame(maxWidth: .infinity)
                                 .padding(12)
@@ -1562,9 +1562,9 @@ struct SessionCompleteView: View {
     private var templateNameSheet: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                Text("Namn på passet")
+                Text(L.t(sv: "Namn på passet", nb: "Navn på økten"))
                     .font(.headline)
-                TextField("Till exempel: Överkropp A", text: $templateName)
+                TextField(L.t(sv: "Till exempel: Överkropp A", nb: "For eksempel: Overkropp A"), text: $templateName)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
                 Spacer()
@@ -1572,14 +1572,14 @@ struct SessionCompleteView: View {
             .padding(.top, 32)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         templateName = ""
                         shouldSaveTemplate = false
                         showSaveTemplateSheet = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         if !templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             shouldSaveTemplate = true
                             showSaveTemplateSheet = false
@@ -1824,21 +1824,21 @@ struct SessionCompleteView: View {
                 Button(action: {
                     showDeleteConfirmation = true
                 }) {
-                    Text("Avbryt")
+                    Text(L.t(sv: "Avbryt", nb: "Avbryt"))
                         .font(.system(size: 17, weight: .regular))
                         .foregroundColor(.primary)
                 }
                 
                 Spacer()
                 
-                Text("Spara pass")
+                Text(L.t(sv: "Spara pass", nb: "Lagre økt"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.primary)
                 
                 Spacer()
                 
                 // Invisible placeholder for balance
-                Text("Avbryt")
+                Text(L.t(sv: "Avbryt", nb: "Avbryt"))
                     .font(.system(size: 17, weight: .regular))
                     .foregroundColor(.clear)
             }
@@ -2166,7 +2166,7 @@ struct RouteMapView: UIViewRepresentable {
             if let startCoord = coordinates.first {
                 let startAnnotation = MKPointAnnotation()
                 startAnnotation.coordinate = startCoord
-                startAnnotation.title = "Start"
+                startAnnotation.title = L.t(sv: "Start", nb: "Start")
                 mapView.addAnnotation(startAnnotation)
             }
             
@@ -2174,7 +2174,7 @@ struct RouteMapView: UIViewRepresentable {
             if let endCoord = coordinates.last, coordinates.count > 1 {
                 let endAnnotation = MKPointAnnotation()
                 endAnnotation.coordinate = endCoord
-                endAnnotation.title = "Slut"
+                endAnnotation.title = L.t(sv: "Slut", nb: "Slutt")
                 mapView.addAnnotation(endAnnotation)
             }
         }

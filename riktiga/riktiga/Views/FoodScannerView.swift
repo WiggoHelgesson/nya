@@ -8,9 +8,17 @@ import SuperwallKit
 
 // MARK: - Scan Mode
 enum FoodScanMode: String, CaseIterable {
-    case ai = "Scanna mat"
+    case ai = "Scanna mat" // rawValue used internally
     case barcode = "Streckkod"
     case foodLabel = "Näringstabell"
+    
+    var localizedName: String {
+        switch self {
+        case .ai: return L.t(sv: "Scanna mat", nb: "Skann mat")
+        case .barcode: return L.t(sv: "Streckkod", nb: "Strekkode")
+        case .foodLabel: return L.t(sv: "Näringstabell", nb: "Næringstabell")
+        }
+    }
     
     var icon: String {
         switch self {
@@ -179,11 +187,11 @@ struct FoodScannerView: View {
     private var barcodeChoiceSheet: some View {
         VStack(spacing: 16) {
             VStack(spacing: 4) {
-                Text("Produkt skannad")
+                Text(L.t(sv: "Produkt skannad", nb: "Produkt skannet"))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
                 
-                Text("Vad vill du göra?")
+                Text(L.t(sv: "Vad vill du göra?", nb: "Hva vil du gjøre?"))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
             }
@@ -200,9 +208,9 @@ struct FoodScannerView: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 22))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Lägg till produkt")
+                            Text(L.t(sv: "Lägg till produkt", nb: "Legg til produkt"))
                                 .font(.system(size: 17, weight: .semibold))
-                            Text("Spara till din matdagbok")
+                            Text(L.t(sv: "Spara till din matdagbok", nb: "Lagre til matdagboken din"))
                                 .font(.system(size: 13))
                                 .opacity(0.8)
                         }
@@ -226,9 +234,9 @@ struct FoodScannerView: View {
                         Image(systemName: "heart.text.clipboard")
                             .font(.system(size: 22))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Få en hälsoanalys")
+                            Text(L.t(sv: "Få en hälsoanalys", nb: "Få en helseanalyse"))
                                 .font(.system(size: 17, weight: .semibold))
-                            Text("AI-driven djupanalys av produkten")
+                            Text(L.t(sv: "AI-driven djupanalys av produkten", nb: "AI-drevet dybdeanalyse av produktet"))
                                 .font(.system(size: 13))
                                 .opacity(0.7)
                         }
@@ -382,7 +390,7 @@ struct FoodScannerView: View {
                 } label: {
                     VStack(spacing: 6) {
                         modeIcon(for: mode)
-                        Text(mode.rawValue)
+                        Text(mode.localizedName)
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(selectedMode == mode ? .black : .white)
@@ -491,7 +499,7 @@ struct FoodScannerView: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.5)
                 
-                Text("Analyserar...")
+                Text(L.t(sv: "Analyserar...", nb: "Analyserer..."))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                 
@@ -551,7 +559,7 @@ struct FoodScannerView: View {
                     
                     // Amount input section with unit selector
                     VStack(spacing: 12) {
-                        Text("Hur mycket äter du?")
+                        Text(L.t(sv: "Hur mycket äter du?", nb: "Hvor mye spiser du?"))
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.7))
                         
@@ -634,20 +642,20 @@ struct FoodScannerView: View {
                     
                     // Nutrition info (adjusted)
                     VStack(spacing: 8) {
-                        Text("Näringsvärden för \(amountValue)\(unitLabel)")
+                        Text(L.t(sv: "Näringsvärden för \(amountValue)\(unitLabel)", nb: "Næringsverdier for \(amountValue)\(unitLabel)"))
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.5))
                         
                         HStack(spacing: 20) {
                             NutritionBadge(value: "\(adjustedCalories)", label: "kcal", color: .orange)
                             NutritionBadge(value: "\(adjustedProtein)g", label: "Protein", color: .red)
-                            NutritionBadge(value: "\(adjustedCarbs)g", label: "Kolhydrat", color: .yellow)
-                            NutritionBadge(value: "\(adjustedFat)g", label: "Fett", color: .blue)
+                            NutritionBadge(value: "\(adjustedCarbs)g", label: L.t(sv: "Kolhydrat", nb: "Karbohydrat"), color: .yellow)
+                            NutritionBadge(value: "\(adjustedFat)g", label: L.t(sv: "Fett", nb: "Fett"), color: .blue)
                         }
                     }
                     
                     // Base info
-                    Text("Värden per 100\(selectedUnit == .milliliter ? "ml" : "g"): \(result.calories) kcal")
+                    Text(L.t(sv: "Värden per 100\(selectedUnit == .milliliter ? "ml" : "g"): \(result.calories) kcal", nb: "Verdier per 100\(selectedUnit == .milliliter ? "ml" : "g"): \(result.calories) kcal"))
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.4))
                 
@@ -656,7 +664,7 @@ struct FoodScannerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 12))
-                        Text("AI-konfidens: \(Int(confidence * 100))%")
+                        Text(L.t(sv: "AI-konfidens: \(Int(confidence * 100))%", nb: "AI-konfidens: \(Int(confidence * 100))%"))
                             .font(.system(size: 12))
                     }
                     .foregroundColor(.white.opacity(0.5))
@@ -670,7 +678,7 @@ struct FoodScannerView: View {
                             selectedUnit = .gram
                             showUnitPicker = false
                     } label: {
-                        Text("Skanna igen")
+                        Text(L.t(sv: "Skanna igen", nb: "Skann igjen"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 140, height: 50)
@@ -699,7 +707,7 @@ struct FoodScannerView: View {
                             selectedUnit = .gram
                         dismiss()
                     } label: {
-                        Text("Lägg till")
+                        Text(L.t(sv: "Lägg till", nb: "Legg til"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.black)
                             .frame(width: 140, height: 50)
@@ -719,9 +727,9 @@ struct FoodScannerView: View {
     // Helper function for unit label text
     private func unitLabelText(for unit: FoodUnitType) -> String {
         switch unit {
-        case .gram: return "gram"
-        case .milliliter: return "ml"
-        case .piece: return "styck"
+        case .gram: return L.t(sv: "gram", nb: "gram")
+        case .milliliter: return L.t(sv: "ml", nb: "ml")
+        case .piece: return L.t(sv: "styck", nb: "stk")
         }
     }
     
@@ -771,11 +779,11 @@ struct ScannerNutriScoreBadge: View {
     
     private var gradeDescription: String {
         switch grade.uppercased() {
-        case "A": return "Utmärkt näringsprofil"
-        case "B": return "Bra näringsprofil"
-        case "C": return "Medel näringsprofil"
-        case "D": return "Dålig näringsprofil"
-        case "E": return "Ohälsosam näringsprofil"
+        case "A": return L.t(sv: "Utmärkt näringsprofil", nb: "Utmerket ernæringsprofil")
+        case "B": return L.t(sv: "Bra näringsprofil", nb: "Bra ernæringsprofil")
+        case "C": return L.t(sv: "Medel näringsprofil", nb: "Middels ernæringsprofil")
+        case "D": return L.t(sv: "Dålig näringsprofil", nb: "Dårlig ernæringsprofil")
+        case "E": return L.t(sv: "Ohälsosam näringsprofil", nb: "Usunn ernæringsprofil")
         default: return ""
         }
     }
@@ -1143,7 +1151,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     // MARK: - AI Food Analysis
     private func analyzeWithAI(_ image: UIImage) {
         isAnalyzing = true
-        analysisStatus = "Skickar till AI..."
+        analysisStatus = L.t(sv: "Skickar till AI...", nb: "Sender til AI...")
         
         Task {
             do {
@@ -1154,7 +1162,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 let base64Image = imageData.base64EncodedString()
                 
                 await MainActor.run {
-                    analysisStatus = "AI analyserar maten..."
+                    analysisStatus = L.t(sv: "AI analyserar maten...", nb: "AI analyserer maten...")
                 }
                 
                 let result = try await sendToGPTVision(base64Image: base64Image, analysisType: .food)
@@ -1178,7 +1186,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    analysisStatus = "Fel: \(error.localizedDescription)"
+                    analysisStatus = L.t(sv: "Fel: \(error.localizedDescription)", nb: "Feil: \(error.localizedDescription)")
                     isAnalyzing = false
                 }
             }
@@ -1188,7 +1196,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     // MARK: - Nutrition Label Analysis
     private func analyzeNutritionLabel(_ image: UIImage) {
         isAnalyzing = true
-        analysisStatus = "Läser näringstabell..."
+        analysisStatus = L.t(sv: "Läser näringstabell...", nb: "Leser næringstabell...")
         
         Task {
             do {
@@ -1199,7 +1207,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 let base64Image = imageData.base64EncodedString()
                 
                 await MainActor.run {
-                    analysisStatus = "AI analyserar näringstabellen..."
+                    analysisStatus = L.t(sv: "AI analyserar näringstabellen...", nb: "AI analyserer næringstabellen...")
                 }
                 
                 let result = try await sendToGPTVision(base64Image: base64Image, analysisType: .nutritionLabel)
@@ -1223,7 +1231,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    analysisStatus = "Fel: \(error.localizedDescription)"
+                    analysisStatus = L.t(sv: "Fel: \(error.localizedDescription)", nb: "Feil: \(error.localizedDescription)")
                     isAnalyzing = false
                 }
             }
@@ -1242,7 +1250,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         Task {
             await MainActor.run {
                 isAnalyzing = true
-                analysisStatus = "Söker produkt..."
+                analysisStatus = L.t(sv: "Söker produkt...", nb: "Søker produkt...")
             }
             if let result = await searchOpenFoodFacts(barcode: barcode) {
                 await MainActor.run {
@@ -1252,7 +1260,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             } else {
                 await MainActor.run {
                     isAnalyzing = false
-                    analysisStatus = "Produkten hittades inte"
+                    analysisStatus = L.t(sv: "Produkten hittades inte", nb: "Produktet ble ikke funnet")
                 }
             }
         }
@@ -1328,7 +1336,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 return nil
             }
             
-            let name = product["product_name"] as? String ?? "Okänd produkt"
+            let name = product["product_name"] as? String ?? L.t(sv: "Okänd produkt", nb: "Ukjent produkt")
             let brand = product["brands"] as? String
             let servingSize = product["serving_size"] as? String
             let servingQuantityRaw = product["serving_quantity"] as? Double
@@ -1430,7 +1438,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                   let barcode = results.first,
                   let payload = barcode.payloadStringValue else {
                 DispatchQueue.main.async {
-                    self?.analysisStatus = "Ingen streckkod hittades"
+                    self?.analysisStatus = L.t(sv: "Ingen streckkod hittades", nb: "Ingen strekkode funnet")
                 }
                 return
             }
@@ -1567,7 +1575,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         }
         
         return GPTAnalysisResult(
-            name: result["name"] as? String ?? "Okänd mat",
+            name: result["name"] as? String ?? L.t(sv: "Okänd mat", nb: "Ukjent mat"),
             calories: result["calories"] as? Int ?? 0,
             protein: result["protein"] as? Int ?? 0,
             carbs: result["carbs"] as? Int ?? 0,

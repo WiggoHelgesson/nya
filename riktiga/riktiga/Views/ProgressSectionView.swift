@@ -218,7 +218,7 @@ struct BadgesCardView: View {
                     .foregroundColor(.white)
             }
             
-            Text("Utmärkelser")
+            Text(L.t(sv: "Utmärkelser", nb: "Utmerkelser"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.secondary)
             

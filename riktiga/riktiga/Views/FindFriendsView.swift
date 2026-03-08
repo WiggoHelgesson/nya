@@ -38,7 +38,7 @@ struct FindFriendsView: View {
             VStack(spacing: 0) {
             // Main tab - Vänner (always selected, single tab)
             HStack {
-                Text("Vänner")
+                Text(L.t(sv: "Vänner", nb: "Venner"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.black)
                 
@@ -62,7 +62,7 @@ struct FindFriendsView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
                     
-                TextField("Sök efter personer...", text: $searchText)
+                TextField(L.t(sv: "Sök efter personer...", nb: "Søk etter personer..."), text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
@@ -110,7 +110,7 @@ struct FindFriendsView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "person.2")
                             .font(.system(size: 20))
-                        Text("Gemensamma")
+                        Text(L.t(sv: "Gemensamma", nb: "Felles"))
                             .font(.system(size: 11))
                     }
                     .foregroundColor(selectedTab == .suggested ? .black : .gray)
@@ -137,7 +137,7 @@ struct FindFriendsView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "person.crop.rectangle.stack")
                             .font(.system(size: 20))
-                        Text("Kontakter")
+                        Text(L.t(sv: "Kontakter", nb: "Kontakter"))
                             .font(.system(size: 11))
                     }
                     .foregroundColor(selectedTab == .contacts ? .black : .gray)
@@ -177,7 +177,7 @@ struct FindFriendsView: View {
             VStack(spacing: 12) {
                 Divider()
                 
-                Text("Bjud in vänner som inte är med ännu")
+                Text(L.t(sv: "Bjud in vänner som inte är med ännu", nb: "Inviter venner som ikke er med ennå"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                 
@@ -186,7 +186,7 @@ struct FindFriendsView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "square.and.arrow.up")
-                        Text("Bjud in")
+                        Text(L.t(sv: "Bjud in", nb: "Inviter"))
                     }
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
@@ -199,7 +199,7 @@ struct FindFriendsView: View {
                 .padding(.bottom, 16)
             }
         }
-        .navigationTitle("Sök")
+        .navigationTitle(L.t(sv: "Sök", nb: "Søk"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -210,7 +210,7 @@ struct FindFriendsView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Tillbaka")
+                        Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                             .font(.system(size: 17))
                     }
                     .foregroundColor(.black)
@@ -236,7 +236,7 @@ struct FindFriendsView: View {
                     if findFriendsViewModel.isLoading && findFriendsViewModel.searchResults.isEmpty {
                 VStack {
                         Spacer()
-                        ProgressView("Söker...")
+                        ProgressView(L.t(sv: "Söker...", nb: "Søker..."))
                             .foregroundColor(.gray)
                         Spacer()
                 }
@@ -247,9 +247,9 @@ struct FindFriendsView: View {
                             Image(systemName: "person.crop.circle.badge.questionmark")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
-                            Text("Inga användare hittades")
+                            Text(L.t(sv: "Inga användare hittades", nb: "Ingen brukere funnet"))
                                 .font(.headline)
-                            Text("Prova att söka efter ett annat namn")
+                            Text(L.t(sv: "Prova att söka efter ett annat namn", nb: "Prøv å søke etter et annet navn"))
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
@@ -286,7 +286,7 @@ struct FindFriendsView: View {
                     if isLoadingRecommended && recommendedUsers.isEmpty {
                 VStack {
                         Spacer()
-                    ProgressView("Laddar förslag...")
+                    ProgressView(L.t(sv: "Laddar förslag...", nb: "Laster forslag..."))
                             .foregroundColor(.gray)
                         Spacer()
                 }
@@ -297,9 +297,9 @@ struct FindFriendsView: View {
                         Image(systemName: "person.2")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
-                        Text("Inga förslag just nu")
+                        Text(L.t(sv: "Inga förslag just nu", nb: "Ingen forslag akkurat nå"))
                                 .font(.headline)
-                        Text("Följ fler personer för att få förslag")
+                        Text(L.t(sv: "Följ fler personer för att få förslag", nb: "Følg flere personer for å få forslag"))
                                 .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -310,7 +310,7 @@ struct FindFriendsView: View {
                     LazyVStack(spacing: 0) {
                         // Header
                         HStack {
-                            Text("\(recommendedUsers.count) PERSONER ATT FÖLJA")
+                            Text(L.t(sv: "\(recommendedUsers.count) PERSONER ATT FÖLJA", nb: "\(recommendedUsers.count) PERSONER Å FØLGE"))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.gray)
                             
@@ -319,7 +319,7 @@ struct FindFriendsView: View {
                             Button {
                                 followAllRecommended()
                             } label: {
-                                Text("Följ alla")
+                                Text(L.t(sv: "Följ alla", nb: "Følg alle"))
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.black)
                                     .padding(.horizontal, 12)
@@ -368,10 +368,10 @@ struct FindFriendsView: View {
                         .font(.system(size: 60))
                         .foregroundColor(.black)
                     
-                    Text("Anslut kontakter")
+                    Text(L.t(sv: "Anslut kontakter", nb: "Koble kontakter"))
                         .font(.system(size: 22, weight: .bold))
                     
-                    Text("Dina vänner finns här. Se vad de gör genom att ansluta dina telefonkontakter.")
+                    Text(L.t(sv: "Dina vänner finns här. Se vad de gör genom att ansluta dina telefonkontakter.", nb: "Vennene dine er her. Se hva de gjør ved å koble til telefonkontaktene dine."))
                         .font(.system(size: 15))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -380,7 +380,7 @@ struct FindFriendsView: View {
                     Button {
                         requestContactsPermission()
                     } label: {
-                        Text("Anslut säkert")
+                        Text(L.t(sv: "Anslut säkert", nb: "Koble til sikkert"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 24)
@@ -396,7 +396,7 @@ struct FindFriendsView: View {
             } else if isLoadingContacts {
                 VStack {
                     Spacer()
-                    ProgressView("Söker efter vänner...")
+                    ProgressView(L.t(sv: "Söker efter vänner...", nb: "Søker etter venner..."))
                         .foregroundColor(.gray)
                     Spacer()
                 }
@@ -407,7 +407,7 @@ struct FindFriendsView: View {
                         // Contacts on app section
                         if !contactsOnApp.isEmpty {
                             HStack {
-                                Text("\(contactsOnApp.count) KONTAKTER PÅ APPEN")
+                                Text(L.t(sv: "\(contactsOnApp.count) KONTAKTER PÅ APPEN", nb: "\(contactsOnApp.count) KONTAKTER PÅ APPEN"))
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.gray)
                                 
@@ -452,7 +452,7 @@ struct FindFriendsView: View {
                         // Contacts to invite section
                         if !contactsToInvite.isEmpty {
                             HStack {
-                                Text("BJUD IN KONTAKTER")
+                                Text(L.t(sv: "BJUD IN KONTAKTER", nb: "INVITER KONTAKTER"))
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.gray)
                                 
@@ -461,7 +461,7 @@ struct FindFriendsView: View {
                                 Button {
                                     shareApp()
                                 } label: {
-                                    Text("Bjud in alla")
+                                    Text(L.t(sv: "Bjud in alla", nb: "Inviter alle"))
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(.black)
                                         .padding(.horizontal, 12)
@@ -497,7 +497,7 @@ struct FindFriendsView: View {
                                     Button {
                                         inviteContact(name: contact.name)
                                     } label: {
-                                        Text("Bjud in")
+                                        Text(L.t(sv: "Bjud in", nb: "Inviter"))
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundColor(.black)
                                             .frame(width: 70, height: 32)
@@ -521,9 +521,9 @@ struct FindFriendsView: View {
                                 Image(systemName: "person.2.slash")
                                     .font(.system(size: 48))
                                     .foregroundColor(.gray)
-                                Text("Inga kontakter hittades")
+                                Text(L.t(sv: "Inga kontakter hittades", nb: "Ingen kontakter funnet"))
                                     .font(.headline)
-                                Text("Lägg till kontakter i din telefon för att hitta vänner")
+                                Text(L.t(sv: "Lägg till kontakter i din telefon för att hitta vänner", nb: "Legg til kontakter i telefonen din for å finne venner"))
                                     .font(.caption)
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)
@@ -783,9 +783,9 @@ struct FindFriendsView: View {
         }
         
         if count == 1 {
-            return "1 gemensam vän"
+            return L.t(sv: "1 gemensam vän", nb: "1 felles venn")
         } else {
-            return "\(count) gemensamma vänner"
+            return L.t(sv: "\(count) gemensamma vänner", nb: "\(count) felles venner")
         }
     }
     
@@ -873,7 +873,7 @@ struct FriendSearchRow: View {
                         .scaleEffect(0.8)
                         .frame(width: 70, height: 32)
                 } else {
-                    Text(isFollowing ? "Följer" : "Följ")
+                    Text(isFollowing ? L.t(sv: "Följer", nb: "Følger") : L.t(sv: "Följ", nb: "Følg"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(isFollowing ? .gray : .black)
                         .frame(width: 70, height: 32)

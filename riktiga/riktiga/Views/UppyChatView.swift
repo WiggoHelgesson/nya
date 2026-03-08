@@ -49,16 +49,16 @@ struct UppyChatView: View {
         self._messages = State(initialValue: [
             UppyChatMessage(
                 role: .assistant,
-                content: "Hej! Jag är UPPY 🤖 Din personliga träningscoach. Vad vill du prata om idag?"
+                content: L.t(sv: "Hej! Jag är UPPY 🤖 Din personliga träningscoach. Vad vill du prata om idag?", nb: "Hei! Jeg er UPPY 🤖 Din personlige treningscoach. Hva vil du snakke om i dag?")
             )
         ])
     }
     
     private let quickPrompts = [
-        "Utveckla mitt träningsschema",
-        "Vad är mitt bästa pass hittils?",
-        "Tränar jag för mycket/lite?",
-        "Vilken övning kör jag mest på gymmet?"
+        L.t(sv: "Utveckla mitt träningsschema", nb: "Utvikle treningsplanen min"),
+        L.t(sv: "Vad är mitt bästa pass hittils?", nb: "Hva er mitt beste pass hittil?"),
+        L.t(sv: "Tränar jag för mycket/lite?", nb: "Trener jeg for mye/lite?"),
+        L.t(sv: "Vilken övning kör jag mest på gymmet?", nb: "Hvilken øvelse gjør jeg mest på treningssenteret?")
     ]
     
     private let systemPrompt = UppyChatMessage(
@@ -108,7 +108,7 @@ struct UppyChatView: View {
                 Button {
                     SuperwallService.shared.showPaywall()
                 } label: {
-                    Text("Uppgradera till PRO")
+                    Text(L.t(sv: "Uppgradera till PRO", nb: "Oppgrader til PRO"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -132,9 +132,9 @@ struct UppyChatView: View {
                         .frame(width: 28, height: 28)
                         .clipShape(Circle())
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Prata med UPPY")
+                        Text(L.t(sv: "Prata med UPPY", nb: "Snakk med UPPY"))
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Din träningsassistent")
+                        Text(L.t(sv: "Din träningsassistent", nb: "Din treningsassistent"))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.gray)
                     }
@@ -144,7 +144,7 @@ struct UppyChatView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Klart") {
+                Button(L.t(sv: "Klart", nb: "Ferdig")) {
                     isInputFocused = false
                 }
             }
@@ -216,7 +216,7 @@ struct UppyChatView: View {
         VStack {
             Divider()
             HStack(alignment: .bottom, spacing: 12) {
-                TextField("Skriv ett meddelande…", text: $inputText, axis: .vertical)
+                TextField(L.t(sv: "Skriv ett meddelande…", nb: "Skriv en melding…"), text: $inputText, axis: .vertical)
                     .lineLimit(1...5)
                     .padding(12)
                     .background(Color(.systemGray6))

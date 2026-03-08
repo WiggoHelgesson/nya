@@ -61,11 +61,11 @@ struct ProductHealthResultView: View {
                 .padding(.top, 8)
             }
             .background(Color(UIColor.systemBackground))
-            .navigationTitle("Resultat")
+            .navigationTitle(L.t(sv: "Resultat", nb: "Resultat"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         onDismiss?()
                     }
                     .fontWeight(.semibold)
@@ -131,7 +131,7 @@ struct ProductHealthResultView: View {
                         .font(.system(size: 46, weight: .bold, design: .rounded))
                         .foregroundColor(scoreColor)
                     
-                    Text("av 100")
+                    Text(L.t(sv: "av 100", nb: "av 100"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                 }
@@ -152,12 +152,12 @@ struct ProductHealthResultView: View {
     
     private var quickOverviewSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionTitle("Snabb översikt")
+            sectionTitle(L.t(sv: "Snabb översikt", nb: "Rask oversikt"))
             
             VStack(spacing: 0) {
                 overviewRow(
                     icon: "exclamationmark.triangle.fill",
-                    label: "Skadliga tillsatser",
+                    label: L.t(sv: "Skadliga tillsatser", nb: "Skadelige tilsetningsstoffer"),
                     value: "\(analysis.harmfulAdditives)",
                     valueColor: analysis.harmfulAdditives > 0 ? badRed : goodGreen
                 )
@@ -165,15 +165,15 @@ struct ProductHealthResultView: View {
                 
                 overviewRow(
                     icon: "drop.fill",
-                    label: "Fröolja",
-                    value: analysis.hasSeedOil ? "Ja" : "Nej",
+                    label: L.t(sv: "Fröolja", nb: "Frøolje"),
+                    value: analysis.hasSeedOil ? L.t(sv: "Ja", nb: "Ja") : L.t(sv: "Nej", nb: "Nei"),
                     valueColor: analysis.hasSeedOil ? badRed : goodGreen
                 )
                 Divider().padding(.horizontal, 16)
                 
                 overviewRow(
                     icon: "list.bullet",
-                    label: "Antal ingredienser",
+                    label: L.t(sv: "Antal ingredienser", nb: "Antall ingredienser"),
                     value: "\(analysis.totalIngredients)",
                     valueColor: .primary
                 )
@@ -181,8 +181,8 @@ struct ProductHealthResultView: View {
                 
                 overviewRow(
                     icon: "gearshape.2.fill",
-                    label: "Ultraprocessad",
-                    value: analysis.isUltraProcessed ? "Ja" : "Nej",
+                    label: L.t(sv: "Ultraprocessad", nb: "Ultraprosessert"),
+                    value: analysis.isUltraProcessed ? L.t(sv: "Ja", nb: "Ja") : L.t(sv: "Nej", nb: "Nei"),
                     valueColor: analysis.isUltraProcessed ? badRed : goodGreen
                 )
                 
@@ -226,13 +226,13 @@ struct ProductHealthResultView: View {
     
     private var naturalVsProcessedSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Naturligt vs Bearbetat")
+            sectionTitle(L.t(sv: "Naturligt vs Bearbetat", nb: "Naturlig vs Bearbeidet"))
             
             VStack(spacing: 16) {
                 // Percentage bar
                 VStack(spacing: 8) {
                     HStack {
-                        Text("Naturligt")
+                        Text(L.t(sv: "Naturligt", nb: "Naturlig"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(goodGreen)
                         Spacer()
@@ -257,7 +257,7 @@ struct ProductHealthResultView: View {
                 
                 VStack(spacing: 8) {
                     HStack {
-                        Text("Bearbetat")
+                        Text(L.t(sv: "Bearbetat", nb: "Bearbeidet"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(badRed)
                         Spacer()
@@ -286,7 +286,7 @@ struct ProductHealthResultView: View {
                         withAnimation { showIngredients.toggle() }
                     } label: {
                         HStack {
-                            Text(showIngredients ? "Dölj ingredienser" : "Visa ingredienser")
+                            Text(showIngredients ? L.t(sv: "Dölj ingredienser", nb: "Skjul ingredienser") : L.t(sv: "Visa ingredienser", nb: "Vis ingredienser"))
                                 .font(.system(size: 14, weight: .semibold))
                             Image(systemName: showIngredients ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 12))
@@ -336,7 +336,7 @@ struct ProductHealthResultView: View {
     
     private var brandTrustSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Varumärkesförtroende")
+            sectionTitle(L.t(sv: "Varumärkesförtroende", nb: "Merkevaretillit"))
             
             HStack(spacing: 14) {
                 ZStack {
@@ -371,7 +371,7 @@ struct ProductHealthResultView: View {
     
     private var additivesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Tillsatser")
+            sectionTitle(L.t(sv: "Tillsatser", nb: "Tilsetningsstoffer"))
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -427,7 +427,7 @@ struct ProductHealthResultView: View {
     
     private var microplasticSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Mikroplastrisk")
+            sectionTitle(L.t(sv: "Mikroplastrisk", nb: "Mikroplastrisiko"))
             
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -459,12 +459,12 @@ struct ProductHealthResultView: View {
     
     private var heavyMetalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Tungmetallrisk")
+            sectionTitle(L.t(sv: "Tungmetallrisk", nb: "Tungmetallrisiko"))
             
             VStack(alignment: .leading, spacing: 16) {
                 // Risk score
                 HStack {
-                    Text("Riskpoäng")
+                    Text(L.t(sv: "Riskpoäng", nb: "Risikopoeng"))
                         .font(.system(size: 15, weight: .medium))
                     Spacer()
                     Text("\(analysis.heavyMetalRiskScore)/100")
@@ -490,7 +490,7 @@ struct ProductHealthResultView: View {
                     withAnimation { expandedHeavyMetal.toggle() }
                 } label: {
                     HStack {
-                        Text(expandedHeavyMetal ? "Dölj detaljer" : "Visa detaljer")
+                        Text(expandedHeavyMetal ? L.t(sv: "Dölj detaljer", nb: "Skjul detaljer") : L.t(sv: "Visa detaljer", nb: "Vis detaljer"))
                             .font(.system(size: 14, weight: .semibold))
                         Image(systemName: expandedHeavyMetal ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12))
@@ -504,19 +504,19 @@ struct ProductHealthResultView: View {
                 
                 if expandedHeavyMetal {
                     VStack(spacing: 12) {
-                        metalRow(name: "Bly (Pb)", level: analysis.metalBreakdown.lead)
-                        metalRow(name: "Kadmium (Cd)", level: analysis.metalBreakdown.cadmium)
-                        metalRow(name: "Arsenik (As)", level: analysis.metalBreakdown.arsenic)
-                        metalRow(name: "Kvicksilver (Hg)", level: analysis.metalBreakdown.mercury)
+                        metalRow(name: L.t(sv: "Bly (Pb)", nb: "Bly (Pb)"), level: analysis.metalBreakdown.lead)
+                        metalRow(name: L.t(sv: "Kadmium (Cd)", nb: "Kadmium (Cd)"), level: analysis.metalBreakdown.cadmium)
+                        metalRow(name: L.t(sv: "Arsenik (As)", nb: "Arsen (As)"), level: analysis.metalBreakdown.arsenic)
+                        metalRow(name: L.t(sv: "Kvicksilver (Hg)", nb: "Kvikksølv (Hg)"), level: analysis.metalBreakdown.mercury)
                         
                         Divider()
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Källor: \(analysis.metalBreakdown.primarySources)")
+                            Text(L.t(sv: "Källor: \(analysis.metalBreakdown.primarySources)", nb: "Kilder: \(analysis.metalBreakdown.primarySources)"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                             
-                            Text("Datatäckning: \(analysis.metalBreakdown.dataCoverage)%")
+                            Text(L.t(sv: "Datatäckning: \(analysis.metalBreakdown.dataCoverage)%", nb: "Datadekning: \(analysis.metalBreakdown.dataCoverage)%"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
@@ -555,7 +555,7 @@ struct ProductHealthResultView: View {
                 } label: {
                     HStack {
                         Image(systemName: "barcode.viewfinder")
-                        Text("Scanna en till produkt")
+                        Text(L.t(sv: "Scanna en till produkt", nb: "Skann et nytt produkt"))
                     }
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
@@ -616,10 +616,10 @@ struct ProductHealthResultView: View {
     
     private var brandLabel: String {
         switch analysis.brandTrustScore.lowercased() {
-        case "clear": return "Pålitligt"
-        case "warning": return "Varning"
-        case "danger": return "Fara"
-        default: return "Okänt"
+        case "clear": return L.t(sv: "Pålitligt", nb: "Pålitelig")
+        case "warning": return L.t(sv: "Varning", nb: "Advarsel")
+        case "danger": return L.t(sv: "Fara", nb: "Fare")
+        default: return L.t(sv: "Okänt", nb: "Ukjent")
         }
     }
     
@@ -635,10 +635,10 @@ struct ProductHealthResultView: View {
     
     private var localizedMicroplasticRisk: String {
         switch analysis.microplasticRisk.lowercased() {
-        case "ingen", "none": return "Ingen risk"
-        case "låg", "low": return "Låg risk"
-        case "måttlig", "moderate": return "Måttlig risk"
-        case "hög", "high": return "Hög risk"
+        case "ingen", "none": return L.t(sv: "Ingen risk", nb: "Ingen risiko")
+        case "låg", "low": return L.t(sv: "Låg risk", nb: "Lav risiko")
+        case "måttlig", "moderate": return L.t(sv: "Måttlig risk", nb: "Moderat risiko")
+        case "hög", "high": return L.t(sv: "Hög risk", nb: "Høy risiko")
         default: return analysis.microplasticRisk
         }
     }
@@ -662,9 +662,9 @@ struct ProductHealthResultView: View {
     
     private func localizedRiskLevel(_ riskLevel: String) -> String {
         switch riskLevel.lowercased() {
-        case "low risk": return "Låg risk"
-        case "moderate risk": return "Måttlig risk"
-        case "high risk": return "Hög risk"
+        case "low risk": return L.t(sv: "Låg risk", nb: "Lav risiko")
+        case "moderate risk": return L.t(sv: "Måttlig risk", nb: "Moderat risiko")
+        case "high risk": return L.t(sv: "Hög risk", nb: "Høy risiko")
         default: return riskLevel
         }
     }
@@ -680,10 +680,10 @@ struct ProductHealthResultView: View {
     
     private func localizedMetalLevel(_ level: String) -> String {
         switch level.lowercased() {
-        case "undetected": return "Ej påvisad"
-        case "low": return "Låg"
-        case "moderate": return "Måttlig"
-        case "high": return "Hög"
+        case "undetected": return L.t(sv: "Ej påvisad", nb: "Ikke påvist")
+        case "low": return L.t(sv: "Låg", nb: "Lav")
+        case "moderate": return L.t(sv: "Måttlig", nb: "Moderat")
+        case "high": return L.t(sv: "Hög", nb: "Høy")
         default: return level
         }
     }

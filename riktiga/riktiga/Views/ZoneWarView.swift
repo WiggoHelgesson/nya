@@ -75,7 +75,7 @@ struct ZoneWarView: View {
     private static var hasInitiallyLoaded = false
     
     // Area tracking
-    @State private var currentAreaName: String = "Området"
+    @State private var currentAreaName: String = L.t(sv: "Området", nb: "Området")
     @State private var areaLeader: TerritoryLeader?
     @State private var allLeaders: [TerritoryLeader] = []
     @State private var localLeaders: [TerritoryLeader] = [] // Calculated from city bounds, not just visible tiles
@@ -367,7 +367,7 @@ struct ZoneWarView: View {
                                 showLotteryInfoPopup = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    Text("Hur får jag lotter?")
+                                    Text(L.t(sv: "Hur får jag lotter?", nb: "Hvordan får jeg lodd?"))
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(.white)
                                     Image(systemName: "questionmark.circle.fill")
@@ -395,10 +395,10 @@ struct ZoneWarView: View {
                 bottomMenuBar
                     .padding(.bottom, 8)
             }
-            .alert("Så får du lotter 🎰", isPresented: $showLotteryInfoPopup) {
-                Button("Förstått!", role: .cancel) { }
+            .alert(L.t(sv: "Så får du lotter 🎰", nb: "Slik får du lodd 🎰"), isPresented: $showLotteryInfoPopup) {
+                Button(L.t(sv: "Förstått!", nb: "Forstått!"), role: .cancel) { }
             } message: {
-                Text("• 1 km² = 1 lott\n• Gympass med 5000kg+ = 1 lott\n• Boka en lektion = 5 lotter\n• Bli PRO-medlem för 2x lotter\n\nDet mest effektiva sättet är att ta över områden via Zonkriget!\n\n— Så funkar det —\n\nGenom att utföra olika handlingar i Up&Down får du lotter som ökar dina chanser att vinna priserna som visas på Zonkriget-sidan. Vill du ha större chans att vinna? Skaffa så mycket lotter du bara kan!")
+                Text(L.t(sv: "• 1 km² = 1 lott\n• Gympass med 5000kg+ = 1 lott\n• Boka en lektion = 5 lotter\n• Bli PRO-medlem för 2x lotter\n\nDet mest effektiva sättet är att ta över områden via Zonkriget!\n\n— Så funkar det —\n\nGenom att utföra olika handlingar i Up&Down får du lotter som ökar dina chanser att vinna priserna som visas på Zonkriget-sidan. Vill du ha större chans att vinna? Skaffa så mycket lotter du bara kan!", nb: "• 1 km² = 1 lodd\n• Gymøkt med 5000kg+ = 1 lodd\n• Book en leksjon = 5 lodd\n• Bli PRO-medlem for 2x lodd\n\nDen mest effektive måten er å ta over områder via Sonekrigen!\n\n— Slik fungerer det —\n\nVed å utføre ulike handlinger i Up&Down får du lodd som øker sjansene dine for å vinne premiene som vises på Sonekrigen-siden. Vil du ha større sjanse for å vinne? Skaff deg så mange lodd du bare kan!"))
             }
             .sheet(item: $selectedTerritory) { territory in
                 TerritoryDetailView(territory: territory)
@@ -511,7 +511,7 @@ struct ZoneWarView: View {
                         HStack {
                             Image(systemName: "crown.fill")
                                 .foregroundColor(.yellow)
-                            Text("Ingen kung än")
+                            Text(L.t(sv: "Ingen kung än", nb: "Ingen konge ennå"))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white)
                             Spacer()
@@ -519,7 +519,7 @@ struct ZoneWarView: View {
                     }
                     
                     // Area name subtitle
-                    Text("Kungen av \(currentAreaName)")
+                    Text(L.t(sv: "Kungen av \(currentAreaName)", nb: "Kongen av \(currentAreaName)"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -549,7 +549,7 @@ struct ZoneWarView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Text("🏆 PRISER")
+                    Text(L.t(sv: "🏆 PRISER", nb: "🏆 PREMIER"))
                         .font(.system(size: 11, weight: .black))
                         .foregroundColor(.yellow)
                     
@@ -592,7 +592,7 @@ struct ZoneWarView: View {
             
             // "Show more" hint when collapsed
             if !isPrizeListExpanded {
-                Text("Tryck för att se alla")
+                Text(L.t(sv: "Tryck för att se alla", nb: "Trykk for å se alle"))
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(.gray)
             }
@@ -691,7 +691,7 @@ struct ZoneWarView: View {
                 selectedMenuTab = 0
                 showBottomMenu = true
             } label: {
-                Text("TOPPLISTA")
+                Text(L.t(sv: "TOPPLISTA", nb: "TOPPLISTE"))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 28)
@@ -728,16 +728,16 @@ struct ZoneWarView: View {
         let interval = Date().timeIntervalSince(date)
         
         if interval < 60 {
-            return "Just nu"
+            return L.t(sv: "Just nu", nb: "Akkurat nå")
         } else if interval < 3600 {
             let minutes = Int(interval / 60)
-            return "\(minutes) min sedan"
+            return L.t(sv: "\(minutes) min sedan", nb: "\(minutes) min siden")
         } else if interval < 86400 {
             let hours = Int(interval / 3600)
-            return "\(hours) tim sedan"
+            return L.t(sv: "\(hours) tim sedan", nb: "\(hours) timer siden")
         } else {
             let days = Int(interval / 86400)
-            return "\(days) dagar sedan"
+            return L.t(sv: "\(days) dagar sedan", nb: "\(days) dager siden")
         }
     }
     
@@ -948,7 +948,7 @@ struct ZoneWarView: View {
                 if leaderDict[odwnerId] == nil {
                     leaderDict[odwnerId] = TerritoryLeader(
                         id: odwnerId,
-                        name: row.username ?? "Användare",
+                        name: row.username ?? L.t(sv: "Användare", nb: "Bruker"),
                         avatarUrl: row.avatar_url,
                         totalArea: row.area_m2,
                         tileCount: row.tile_count,
@@ -1026,9 +1026,9 @@ struct ZoneWarView: View {
     
     private func formatTileCount(_ count: Int) -> String {
         if count >= 1000 {
-            return "\(count / 1000)k rutor"
+            return L.t(sv: "\(count / 1000)k rutor", nb: "\(count / 1000)k ruter")
         } else {
-            return "\(count) rutor"
+            return L.t(sv: "\(count) rutor", nb: "\(count) ruter")
         }
     }
     
@@ -1077,7 +1077,7 @@ struct ZoneWarView: View {
                     // Fall back to administrative area (county)
                     areaName = admin
                 } else {
-                    areaName = "Området"
+                    areaName = L.t(sv: "Området", nb: "Området")
                 }
                 
                 DispatchQueue.main.async {
@@ -1226,7 +1226,7 @@ struct ZoneWarView: View {
                 // Add with placeholder name if profile not found
                 leaders.append(TerritoryLeader(
                     id: ownerId,
-                    name: "Okänd",
+                    name: L.t(sv: "Okänd", nb: "Ukjent"),
                     avatarUrl: nil,
                     totalArea: area,
                     tileCount: tileCount,
@@ -1274,7 +1274,7 @@ struct TerritoryOwnerProfile: Decodable {
     }
     
     var name: String {
-        username ?? "Okänd användare"
+        username ?? L.t(sv: "Okänd användare", nb: "Ukjent bruker")
     }
 }
 
@@ -1965,7 +1965,7 @@ struct ZoneWarMenuView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: index == 0 ? "trophy.fill" : "bell.fill")
                                         .font(.system(size: 14))
-                                    Text(tab)
+                                    Text(index == 0 ? L.t(sv: "Topplista", nb: "Toppliste") : L.t(sv: "Övertaganden", nb: "Overtakelser"))
                                         .font(.system(size: 16, weight: .semibold))
                                     
                                     // Badge for events
@@ -2007,7 +2007,7 @@ struct ZoneWarMenuView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(selectedTab == 0 ? "Topplista" : "Övertaganden")
+                    Text(selectedTab == 0 ? L.t(sv: "Topplista", nb: "Toppliste") : L.t(sv: "Övertaganden", nb: "Overtakelser"))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -2087,7 +2087,7 @@ struct ZoneWarMenuView: View {
                         HStack(spacing: 4) {
                             Text("🇸🇪")
                                 .font(.system(size: 12))
-                            Text("Sverige")
+                            Text(L.t(sv: "Sverige", nb: "Sverige"))
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(leaderboardTab == 1 ? .black : .gray)
@@ -2107,7 +2107,7 @@ struct ZoneWarMenuView: View {
                         HStack(spacing: 4) {
                             Text("🎰")
                                 .font(.system(size: 12))
-                            Text("Lotter")
+                            Text(L.t(sv: "Lotter", nb: "Lodd"))
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(leaderboardTab == 2 ? .black : .gray)
@@ -2181,10 +2181,10 @@ struct ZoneWarMenuView: View {
                             Image(systemName: "trophy")
                                 .font(.system(size: 48))
                                 .foregroundColor(.gray)
-                            Text("Ingen topplista än")
+                            Text(L.t(sv: "Ingen topplista än", nb: "Ingen toppliste ennå"))
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
-                            Text("Var först med att erövra ett område!")
+                            Text(L.t(sv: "Var först med att erövra ett område!", nb: "Vær først med å erobre et område!"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                         }
@@ -2208,10 +2208,10 @@ struct ZoneWarMenuView: View {
                     Image(systemName: "ticket")
                         .font(.system(size: 48))
                         .foregroundColor(.gray)
-                    Text("Ingen lottlista än")
+                    Text(L.t(sv: "Ingen lottlista än", nb: "Ingen loddliste ennå"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("Samla lotter genom att erövra områden!")
+                    Text(L.t(sv: "Samla lotter genom att erövra områden!", nb: "Samle lodd ved å erobre områder!"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 }
@@ -2285,7 +2285,7 @@ struct ZoneWarMenuView: View {
                 
                 // Crown for #1
                 if index == 0 {
-                    Text("LOTTMÄSTARE")
+                    Text(L.t(sv: "LOTTMÄSTARE", nb: "LODDMESTER"))
                         .font(.system(size: 10, weight: .black))
                         .foregroundColor(.yellow)
                 }
@@ -2387,7 +2387,7 @@ struct ZoneWarMenuView: View {
                     HStack(spacing: 4) {
                         Text("👑")
                             .font(.system(size: 10))
-                        Text(leaderboardTab == 1 ? "KUNG AV SVERIGE" : "KUNG AV OMRÅDET")
+                        Text(leaderboardTab == 1 ? L.t(sv: "KUNG AV SVERIGE", nb: "KONGE AV SVERIGE") : L.t(sv: "KUNG AV OMRÅDET", nb: "KONGE AV OMRÅDET"))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.yellow)
                     }
@@ -2408,9 +2408,9 @@ struct ZoneWarMenuView: View {
     
     private func formatTileCount(_ count: Int) -> String {
         if count >= 1000 {
-            return "\(count / 1000)k rutor"
+            return L.t(sv: "\(count / 1000)k rutor", nb: "\(count / 1000)k ruter")
         } else {
-            return "\(count) rutor"
+            return L.t(sv: "\(count) rutor", nb: "\(count) ruter")
         }
     }
     
@@ -2464,7 +2464,7 @@ struct ZoneWarMenuView: View {
                     let retryLeaders = retryResult.map { entry in
                         TerritoryLeader(
                             id: entry.owner_id.uuidString.lowercased(),
-                            name: entry.username ?? "Användare",
+                            name: entry.username ?? L.t(sv: "Användare", nb: "Bruker"),
                             avatarUrl: entry.avatar_url,
                             totalArea: entry.area_m2,
                             tileCount: entry.tile_count,
@@ -2482,7 +2482,7 @@ struct ZoneWarMenuView: View {
                 let newLeaders = result.map { entry in
                     TerritoryLeader(
                         id: entry.owner_id.uuidString.lowercased(),
-                        name: entry.username ?? "Användare", // Better fallback than "Okänd"
+                        name: entry.username ?? L.t(sv: "Användare", nb: "Bruker"), // Better fallback than "Okänd"
                         avatarUrl: entry.avatar_url,
                         totalArea: entry.area_m2,
                         tileCount: entry.tile_count,
@@ -2520,10 +2520,10 @@ struct ZoneWarMenuView: View {
                         Image(systemName: "bell.slash.fill")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Inga händelser än")
+                        Text(L.t(sv: "Inga händelser än", nb: "Ingen hendelser ennå"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
-                        Text("Här ser du när någon tar över dina områden")
+                        Text(L.t(sv: "Här ser du när någon tar över dina områden", nb: "Her ser du når noen tar over dine områder"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -2555,7 +2555,7 @@ struct ZoneWarMenuView: View {
                                         .font(.system(size: 15, weight: .semibold))
                                         .foregroundColor(.white)
                                     
-                                    Text("tog över ditt område!")
+                                    Text(L.t(sv: "tog över ditt område!", nb: "tok over ditt område!"))
                                         .font(.system(size: 15))
                                         .foregroundColor(.gray)
                                 }
@@ -2583,7 +2583,7 @@ struct ZoneWarMenuView: View {
                             Button {
                                 // Could navigate to the territory
                             } label: {
-                                Text("Visa")
+                                Text(L.t(sv: "Visa", nb: "Vis"))
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.primary)
                                     .padding(.horizontal, 14)
@@ -2613,7 +2613,7 @@ struct ZoneWarMenuView: View {
     
     private var sponsorsSection: some View {
         VStack(spacing: 16) {
-            Text("Zonkriget sponsras av")
+            Text(L.t(sv: "Zonkriget sponsras av", nb: "Sonekrigen sponses av"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.gray)
             
@@ -2683,16 +2683,16 @@ struct ZoneWarMenuView: View {
         let interval = Date().timeIntervalSince(date)
         
         if interval < 60 {
-            return "Just nu"
+            return L.t(sv: "Just nu", nb: "Akkurat nå")
         } else if interval < 3600 {
             let minutes = Int(interval / 60)
-            return "\(minutes) min sedan"
+            return L.t(sv: "\(minutes) min sedan", nb: "\(minutes) min siden")
         } else if interval < 86400 {
             let hours = Int(interval / 3600)
-            return "\(hours) tim sedan"
+            return L.t(sv: "\(hours) tim sedan", nb: "\(hours) timer siden")
         } else {
             let days = Int(interval / 86400)
-            return "\(days) dagar sedan"
+            return L.t(sv: "\(days) dagar sedan", nb: "\(days) dager siden")
         }
     }
 }

@@ -105,7 +105,7 @@ struct ProgressDevelopmentView: View {
             .padding(.vertical, 24)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle("Din utveckling")
+        .navigationTitle(L.t(sv: "Din utveckling", nb: "Din utvikling"))
         .sheet(item: $selectedPhoto) { photo in
             NavigationStack {
                 ProgressPhotoDetailView(
@@ -122,7 +122,7 @@ struct ProgressDevelopmentView: View {
             guard let newItem else { return }
             Task { await importPhoto(from: newItem) }
         }
-        .alert("Kunde inte spara bilden", isPresented: Binding(
+        .alert(L.t(sv: "Kunde inte spara bilden", nb: "Kunne ikke lagre bildet"), isPresented: Binding(
             get: { saveError != nil },
             set: { _ in saveError = nil }
         ), actions: {
@@ -134,9 +134,9 @@ struct ProgressDevelopmentView: View {
     
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Följ din visuella utveckling")
+            Text(L.t(sv: "Följ din visuella utveckling", nb: "Følg din visuelle utvikling"))
                 .font(.system(size: 20, weight: .bold))
-            Text("Lägg till framstegsbilder, jämför dem sida vid sida eller spela upp hela resan som en kort film.")
+            Text(L.t(sv: "Lägg till framstegsbilder, jämför dem sida vid sida eller spela upp hela resan som en kort film.", nb: "Legg til fremgangsbilder, sammenlign dem side om side eller spill av hele reisen som en kort film."))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }
@@ -149,7 +149,7 @@ struct ProgressDevelopmentView: View {
             } label: {
                 HStack {
                     Image(systemName: "film")
-                    Text("Se film")
+                    Text(L.t(sv: "Se film", nb: "Se film"))
                         .fontWeight(.semibold)
                 }
                 .foregroundColor(.white)
@@ -165,7 +165,7 @@ struct ProgressDevelopmentView: View {
             } label: {
                 HStack {
                     Image(systemName: "camera.fill")
-                    Text(isSavingPhoto ? "Laddar..." : "Lägg till framsteg")
+                    Text(isSavingPhoto ? L.t(sv: "Laddar...", nb: "Laster...") : L.t(sv: "Lägg till framsteg", nb: "Legg til fremgang"))
                         .fontWeight(.semibold)
                 }
                 .foregroundColor(.primary)
@@ -182,9 +182,9 @@ struct ProgressDevelopmentView: View {
     private var gallerySection: some View {
         VStack(alignment: .leading, spacing: 16) {
             if store.photos.isEmpty {
-                Text("Inga framsteg än")
+                Text(L.t(sv: "Inga framsteg än", nb: "Ingen fremgang ennå"))
                     .font(.headline)
-                Text("Lägg till din första bild för att börja spåra din resa.")
+                Text(L.t(sv: "Lägg till din första bild för att börja spåra din resa.", nb: "Legg til ditt første bilde for å begynne å spore reisen din."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             } else {
@@ -200,7 +200,7 @@ struct ProgressDevelopmentView: View {
                             Button(role: .destructive) {
                                 store.deletePhoto(photo)
                             } label: {
-                                Label("Ta bort", systemImage: "trash")
+                                Label(L.t(sv: "Ta bort", nb: "Slett"), systemImage: "trash")
                             }
                         }
                     }
@@ -218,7 +218,7 @@ struct ProgressDevelopmentView: View {
         }
         guard let data = try? await item.loadTransferable(type: Data.self) else {
             await MainActor.run {
-                saveError = "Kunde inte läsa bilden."
+                saveError = L.t(sv: "Kunde inte läsa bilden.", nb: "Kunne ikke lese bildet.")
             }
             return
         }
@@ -226,10 +226,10 @@ struct ProgressDevelopmentView: View {
             do {
                 try store.addPhoto(data: compressed)
             } catch {
-                saveError = "Något gick fel när bilden skulle sparas."
+                saveError = L.t(sv: "Något gick fel när bilden skulle sparas.", nb: "Noe gikk galt da bildet skulle lagres.")
             }
         } else {
-            saveError = "Kunde inte bearbeta bilden."
+            saveError = L.t(sv: "Kunde inte bearbeta bilden.", nb: "Kunne ikke behandle bildet.")
         }
     }
 }
@@ -296,8 +296,8 @@ private struct ProgressPhotoDetailView: View {
     var body: some View {
         VStack(spacing: 20) {
             Picker("Mode", selection: $mode) {
-                Text("Singel").tag(Mode.single)
-                Text("Jämförelse").tag(Mode.comparison)
+                Text(L.t(sv: "Singel", nb: "Singel")).tag(Mode.single)
+                Text(L.t(sv: "Jämförelse", nb: "Sammenligning")).tag(Mode.comparison)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -311,7 +311,7 @@ private struct ProgressPhotoDetailView: View {
             thumbnails
         }
         .padding(.bottom, 16)
-        .navigationTitle("Progressbilder")
+        .navigationTitle(L.t(sv: "Progressbilder", nb: "Fremgangsbilder"))
         .navigationBarTitleDisplayMode(.inline)
     }
     
@@ -323,7 +323,7 @@ private struct ProgressPhotoDetailView: View {
             }
             .frame(height: 320)
             
-            Picker("Jämför med", selection: Binding(
+            Picker(L.t(sv: "Jämför med", nb: "Sammenlign med"), selection: Binding(
                 get: { comparisonPhoto?.id ?? primaryPhoto.id },
                 set: { newValue in
                     comparisonPhoto = store.photos.first(where: { $0.id == newValue })
@@ -361,7 +361,7 @@ private struct ProgressPhotoDetailView: View {
         if let comparisonPhoto {
             return formatter.string(from: comparisonPhoto.date)
         }
-        return "Välj bild"
+        return L.t(sv: "Välj bild", nb: "Velg bilde")
     }
     
     private enum Mode {
@@ -455,11 +455,11 @@ private struct ProgressSlideshowView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Din film")
+            Text(L.t(sv: "Din film", nb: "Din film"))
                 .font(.title2.bold())
             
             if store.photos.isEmpty {
-                Text("Lägg till några bilder för att skapa en film.")
+                Text(L.t(sv: "Lägg till några bilder för att skapa en film.", nb: "Legg til noen bilder for å lage en film."))
                     .font(.callout)
                     .foregroundColor(.secondary)
             } else {
@@ -496,7 +496,7 @@ private struct ProgressSlideshowView: View {
                 }
             }
             
-            Button("Stäng") {
+            Button(L.t(sv: "Stäng", nb: "Lukk")) {
                 dismiss()
             }
             .font(.system(size: 16, weight: .semibold))

@@ -23,11 +23,11 @@ struct FriendsRaceView: View {
             return "--"
         }
         let remaining = max(0, startOfNextMonth.timeIntervalSince(now))
-        guard remaining > 0 else { return "0 dagar" }
+        guard remaining > 0 else { return L.t(sv: "0 dagar", nb: "0 dager") }
         if let formatted = countdownFormatter.string(from: remaining) {
             return formatted
         }
-        return "0 dagar"
+        return L.t(sv: "0 dagar", nb: "0 dager")
     }
     
     var body: some View {
@@ -36,14 +36,14 @@ struct FriendsRaceView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 24) {
-                Text("Tävla mot dina vänner")
+                Text(L.t(sv: "Tävla mot dina vänner", nb: "Konkurrer mot vennene dine"))
                     .font(.system(size: 28, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
                 
-                Text("Tid kvar denna månad: \(monthCountdown)")
+                Text(L.t(sv: "Tid kvar denna månad: \(monthCountdown)", nb: "Tid igjen denne måneden: \(monthCountdown)"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,7 +65,7 @@ struct FriendsRaceView: View {
                     Spacer()
                 } else if viewModel.participants.isEmpty {
                     Spacer()
-                    Text("Bjud in vänner för att börja tävla!")
+                    Text(L.t(sv: "Bjud in vänner för att börja tävla!", nb: "Inviter venner for å begynne å konkurrere!"))
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                     Spacer()
@@ -96,7 +96,7 @@ struct FriendsRaceView: View {
                                         Text(participant.name)
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundColor(.white)
-                                        Text(String(format: "%.1f km • %d steg", participant.distance, participant.steps))
+                                        Text(L.t(sv: String(format: "%.1f km • %d steg", participant.distance, participant.steps), nb: String(format: "%.1f km • %d skritt", participant.distance, participant.steps)))
                                             .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(.white.opacity(0.7))
                                     }
@@ -124,7 +124,7 @@ struct FriendsRaceView: View {
                 Button(action: { dismiss() }) {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
-                        Text("Tillbaka")
+                        Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                     }
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
@@ -308,7 +308,7 @@ final class FriendsRaceViewModel: ObservableObject {
     
     func load(for user: User) async {
         guard !user.id.isEmpty else {
-            self.errorMessage = "Kunde inte hitta din profil."
+            self.errorMessage = L.t(sv: "Kunde inte hitta din profil.", nb: "Kunne ikke finne profilen din.")
             return
         }
         isLoading = true
@@ -339,14 +339,14 @@ final class FriendsRaceViewModel: ObservableObject {
             let sorted = participants.sorted { $0.distance > $1.distance }
             self.participants = sorted
             if self.participants.isEmpty {
-                self.errorMessage = "Bjud in vänner för att se deras framsteg."
+                self.errorMessage = L.t(sv: "Bjud in vänner för att se deras framsteg.", nb: "Inviter venner for å se fremgangen deres.")
             }
             if let currentParticipant = sorted.first(where: { $0.id == user.id }) {
                 maybeAwardFinishReward(for: currentParticipant.id, distance: currentParticipant.distance)
             }
         } catch {
             print("❌ FriendsRaceViewModel load error: \(error)")
-            self.errorMessage = "Kunde inte ladda dina vänner just nu. Försök igen senare."
+            self.errorMessage = L.t(sv: "Kunde inte ladda dina vänner just nu. Försök igen senare.", nb: "Kunne ikke laste vennene dine akkurat nå. Prøv igjen senere.")
         }
         isLoading = false
     }
@@ -365,7 +365,7 @@ final class FriendsRaceViewModel: ObservableObject {
     }
     
     var finishLabel: String {
-        "Mållinje 100 km"
+        L.t(sv: "Mållinje 100 km", nb: "Mållinje 100 km")
     }
     
     private func maybeAwardFinishReward(for userId: String, distance: Double) {

@@ -35,11 +35,11 @@ struct BookingConfirmationView: View {
                     .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showCheckmark)
                     
                     VStack(spacing: 8) {
-                        Text("Bokning bekräftad!")
+                        Text(L.t(sv: "Bokning bekräftad!", nb: "Booking bekreftet!"))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.primary)
                         
-                        Text("Din lektion är nu bokad")
+                        Text(L.t(sv: "Din lektion är nu bokad", nb: "Leksjonen din er nå booket"))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -81,34 +81,34 @@ struct BookingConfirmationView: View {
                             if let lesson = lessonType {
                                 ConfirmationDetailRow(
                                     icon: "figure.golf",
-                                    title: "Lektionstyp",
+                                    title: L.t(sv: "Lektionstyp", nb: "Leksjonstype"),
                                     value: lesson.name
                                 )
                             }
                             
                             ConfirmationDetailRow(
                                 icon: "calendar",
-                                title: "Datum",
+                                title: L.t(sv: "Datum", nb: "Dato"),
                                 value: date
                             )
                             
                             ConfirmationDetailRow(
                                 icon: "clock.fill",
-                                title: "Tid",
+                                title: L.t(sv: "Tid", nb: "Tid"),
                                 value: time
                             )
                             
                             ConfirmationDetailRow(
                                 icon: "mappin.and.ellipse",
-                                title: "Plats",
+                                title: L.t(sv: "Plats", nb: "Sted"),
                                 value: location
                             )
                             
                             if let lesson = lessonType {
                                 ConfirmationDetailRow(
                                     icon: "timer",
-                                    title: "Längd",
-                                    value: "\(lesson.durationMinutes) minuter"
+                                    title: L.t(sv: "Längd", nb: "Varighet"),
+                                    value: L.t(sv: "\(lesson.durationMinutes) minuter", nb: "\(lesson.durationMinutes) minutter")
                                 )
                             }
                             
@@ -116,7 +116,7 @@ struct BookingConfirmationView: View {
                                 .padding(.vertical, 4)
                             
                             HStack {
-                                Text("Totalt betalt")
+                                Text(L.t(sv: "Totalt betalt", nb: "Totalt betalt"))
                                     .font(.headline)
                                     .foregroundColor(.primary)
                                 
@@ -141,7 +141,7 @@ struct BookingConfirmationView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "bell.badge.fill")
                                 .foregroundColor(.primary)
-                            Text("Tränaren kommer att bekräfta din bokning inom kort")
+                            Text(L.t(sv: "Tränaren kommer att bekräfta din bokning inom kort", nb: "Treneren vil bekrefte bookingen din snart"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -149,7 +149,7 @@ struct BookingConfirmationView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "message.fill")
                                 .foregroundColor(.primary)
-                            Text("Du får en notis när bokningen är bekräftad")
+                            Text(L.t(sv: "Du får en notis när bokningen är bekräftad", nb: "Du får et varsel når bookingen er bekreftet"))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -167,7 +167,7 @@ struct BookingConfirmationView: View {
                     Button {
                         onDismiss()
                     } label: {
-                        Text("Klar")
+                        Text(L.t(sv: "Klar", nb: "Ferdig"))
                             .font(.headline)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)

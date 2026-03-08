@@ -27,7 +27,7 @@ struct MonthlyPrizeView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         // Pro member notice
-                        Text("Enbart PRO medlemmar kan delta")
+                        Text(L.t(sv: "Enbart PRO medlemmar kan delta", nb: "Kun PRO-medlemmer kan delta"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -36,7 +36,7 @@ struct MonthlyPrizeView: View {
                         
                         // Countdown
                         VStack(spacing: 8) {
-                            Text("Tid kvar av månaden")
+                            Text(L.t(sv: "Tid kvar av månaden", nb: "Tid igjen av måneden"))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,8 +55,8 @@ struct MonthlyPrizeView: View {
                         .padding(.horizontal, 20)
 
                         HealthDataDisclosureView(
-                            title: "Topplistan bygger på Apple Health",
-                            description: "Stegen som visas på Månadens pris hämtas automatiskt från Apple Health. Se till att dela stegdata med Up&Down för att kvala in och håll koll på dina behörigheter i Hälsa-appen.",
+                            title: L.t(sv: "Topplistan bygger på Apple Health", nb: "Topplisten bygger på Apple Health"),
+                            description: L.t(sv: "Stegen som visas på Månadens pris hämtas automatiskt från Apple Health. Se till att dela stegdata med Up&Down för att kvala in och håll koll på dina behörigheter i Hälsa-appen.", nb: "Skrittene som vises på Månedens premie hentes automatisk fra Apple Health. Sørg for å dele skrittdata med Up&Down for å kvalifisere deg og hold styr på tillatelsene dine i Helse-appen."),
                             showsManageButton: true,
                             manageAction: openHealthSettings
                         )
@@ -69,7 +69,7 @@ struct MonthlyPrizeView: View {
                         
                         // Current month leaderboard
                         VStack(spacing: 0) {
-                            Text("Topplista denna månad")
+                            Text(L.t(sv: "Topplista denna månad", nb: "Toppliste denne måneden"))
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,7 +79,7 @@ struct MonthlyPrizeView: View {
                                 VStack(spacing: 16) {
                                     ProgressView()
                                         .scaleEffect(1.2)
-                                    Text("Laddar topplistan...")
+                                    Text(L.t(sv: "Laddar topplistan...", nb: "Laster topplisten..."))
                                         .font(.system(size: 16))
                                         .foregroundColor(.gray)
                                 }
@@ -90,10 +90,10 @@ struct MonthlyPrizeView: View {
                                     Image(systemName: "trophy")
                                         .font(.system(size: 60))
                                         .foregroundColor(.gray)
-                                    Text("Inga Pro-medlemmar på topplistan ännu")
+                                    Text(L.t(sv: "Inga Pro-medlemmar på topplistan ännu", nb: "Ingen Pro-medlemmer på topplisten ennå"))
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(.primary)
-                                    Text("Endast Pro-medlemmar syns på topplistan")
+                                    Text(L.t(sv: "Endast Pro-medlemmar syns på topplistan", nb: "Kun Pro-medlemmer vises på topplisten"))
                                         .font(.system(size: 14))
                                         .foregroundColor(.gray)
                                         .multilineTextAlignment(.center)
@@ -142,12 +142,12 @@ struct MonthlyPrizeView: View {
                             .font(.system(size: 60))
                             .foregroundColor(.gray)
                         
-                        Text("Enbart för Pro medlemmar")
+                        Text(L.t(sv: "Enbart för Pro medlemmar", nb: "Kun for Pro-medlemmer"))
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                         
-                        Text("Uppgradera till Pro för att delta i månadens tävling, synas på topplistan och vinna häftiga priser!")
+                        Text(L.t(sv: "Uppgradera till Pro för att delta i månadens tävling, synas på topplistan och vinna häftiga priser!", nb: "Oppgrader til Pro for å delta i månedens konkurranse, vises på topplisten og vinne flotte premier!"))
                             .font(.system(size: 16))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -156,7 +156,7 @@ struct MonthlyPrizeView: View {
                         Button {
                             SuperwallService.shared.showPaywall()
                         } label: {
-                            Text("Bli Pro medlem")
+                            Text(L.t(sv: "Bli Pro medlem", nb: "Bli Pro-medlem"))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(colorScheme == .dark ? .black : .white)
                                 .frame(maxWidth: .infinity)
@@ -172,7 +172,7 @@ struct MonthlyPrizeView: View {
                     .background(Color(.systemBackground).opacity(0.3))
                 }
             }
-            .navigationTitle("Månadens pris")
+            .navigationTitle(L.t(sv: "Månadens pris", nb: "Månedens premie"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -342,7 +342,7 @@ struct MonthlyUserRow: View {
             Spacer()
             
             // Steps
-            Text("\(user.steps) steg")
+            Text(L.t(sv: "\(user.steps) steg", nb: "\(user.steps) skritt"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.primary)
                 .lineLimit(1)

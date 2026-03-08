@@ -265,7 +265,7 @@ struct PopupAdView: View {
                     }
                     .padding(.top, 8)
                     
-                    Text("Annons")
+                    Text(L.t(sv: "Annons", nb: "Annonse"))
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.5))
                 }

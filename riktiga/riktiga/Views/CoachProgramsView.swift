@@ -40,11 +40,11 @@ struct CoachProgramsSheet: View {
                     routinesList
                 }
             }
-            .navigationTitle("Pass från tränare")
+            .navigationTitle(L.t(sv: "Pass från tränare", nb: "Økter fra trener"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Klar") {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         isPresented = false
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -95,14 +95,14 @@ struct CoachProgramsSheet: View {
                                 .foregroundColor(.primary)
                             
                             HStack(spacing: 8) {
-                                Text("\(item.routine.exercises.count) övningar")
+                                Text(L.t(sv: "\(item.routine.exercises.count) övningar", nb: "\(item.routine.exercises.count) øvelser"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                                 
                                 Text("•")
                                     .foregroundColor(.secondary)
                                 
-                                Text("Från \(item.coachName ?? "tränare")")
+                                Text(L.t(sv: "Från \(item.coachName ?? "tränare")", nb: "Fra \(item.coachName ?? "trener")"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                             }
@@ -129,11 +129,11 @@ struct CoachProgramsSheet: View {
                 .font(.system(size: 48))
                 .foregroundColor(.gray)
             
-            Text("Inga pass från tränare")
+            Text(L.t(sv: "Inga pass från tränare", nb: "Ingen økter fra trener"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.gray)
             
-            Text("När din tränare tilldelar dig ett träningsprogram kommer det att visas här")
+            Text(L.t(sv: "När din tränare tilldelar dig ett träningsprogram kommer det att visas här", nb: "Når treneren din tildeler deg et treningsprogram vil det vises her"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -150,7 +150,7 @@ struct CoachProgramsSheet: View {
                 .font(.system(size: 48))
                 .foregroundColor(.orange)
             
-            Text("Kunde inte ladda program")
+            Text(L.t(sv: "Kunde inte ladda program", nb: "Kunne ikke laste program"))
                 .font(.system(size: 16, weight: .medium))
             
             Text(message)
@@ -159,7 +159,7 @@ struct CoachProgramsSheet: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             
-            Button("Försök igen") {
+            Button(L.t(sv: "Försök igen", nb: "Prøv igjen")) {
                 Task { await loadPrograms() }
             }
             .font(.system(size: 15, weight: .semibold))
@@ -254,9 +254,9 @@ struct RoutineDetailSheet: View {
                             .font(.system(size: 28, weight: .bold))
                         
                         HStack {
-                            Label("\(routine.exercises.count) övningar", systemImage: "dumbbell.fill")
+                            Label(L.t(sv: "\(routine.exercises.count) övningar", nb: "\(routine.exercises.count) øvelser"), systemImage: "dumbbell.fill")
                             Text("•")
-                            Text("Från \(coachName ?? "din tränare")")
+                            Text(L.t(sv: "Från \(coachName ?? "din tränare")", nb: "Fra \(coachName ?? "treneren din")"))
                         }
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
@@ -323,7 +323,7 @@ struct RoutineDetailSheet: View {
                                 .font(.system(size: 32))
                                 .foregroundColor(.orange)
                             
-                            Text("Inga övningar i detta pass")
+                            Text(L.t(sv: "Inga övningar i detta pass", nb: "Ingen øvelser i denne økten"))
                                 .font(.system(size: 15))
                                 .foregroundColor(.secondary)
                         }
@@ -337,7 +337,7 @@ struct RoutineDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
@@ -349,7 +349,7 @@ struct RoutineDetailSheet: View {
                     } label: {
                         HStack {
                             Image(systemName: "play.fill")
-                            Text("Starta pass")
+                            Text(L.t(sv: "Starta pass", nb: "Start økt"))
                         }
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
@@ -405,10 +405,10 @@ struct CoachInvitationView: View {
             
             // Coach name
             VStack(spacing: 8) {
-                Text(invitation.coach?.displayName ?? "En tränare")
+                Text(invitation.coach?.displayName ?? L.t(sv: "En tränare", nb: "En trener"))
                     .font(.system(size: 22, weight: .bold))
                 
-                Text("vill coacha dig!")
+                Text(L.t(sv: "vill coacha dig!", nb: "vil coache deg!"))
                     .font(.system(size: 17))
                     .foregroundColor(.secondary)
             }
@@ -423,7 +423,7 @@ struct CoachInvitationView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text("Acceptera")
+                            Text(L.t(sv: "Acceptera", nb: "Aksepter"))
                         }
                     }
                     .font(.system(size: 17, weight: .semibold))
@@ -442,7 +442,7 @@ struct CoachInvitationView: View {
                         if isDeclining {
                             ProgressView()
                         } else {
-                            Text("Nej tack")
+                            Text(L.t(sv: "Nej tack", nb: "Nei takk"))
                         }
                     }
                     .font(.system(size: 17, weight: .medium))

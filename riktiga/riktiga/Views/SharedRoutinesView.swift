@@ -17,8 +17,8 @@ struct SharedRoutinesView: View {
     @State private var showPaywall = false
     
     enum SharedRoutineTab: String, CaseIterable {
-        case myRoutines = "Mina rutiner"
-        case sharedWithMe = "Delas med mig"
+        case myRoutines = "myRoutines"
+        case sharedWithMe = "sharedWithMe"
     }
     
     var body: some View {
@@ -47,11 +47,11 @@ struct SharedRoutinesView: View {
                 }
             }
         }
-        .navigationTitle("Dela pass med vänner")
+        .navigationTitle(L.t(sv: "Dela pass med vänner", nb: "Del økter med venner"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     dismiss()
                 }
             }
@@ -119,7 +119,7 @@ struct SharedRoutinesView: View {
                 } label: {
                     VStack(spacing: 8) {
                         HStack(spacing: 6) {
-                            Text(tab.rawValue)
+                            Text(tab == .myRoutines ? L.t(sv: "Mina rutiner", nb: "Mine rutiner") : L.t(sv: "Delas med mig", nb: "Delt med meg"))
                                 .font(.system(size: 15, weight: selectedTab == tab ? .bold : .medium))
                                 .foregroundColor(selectedTab == tab ? .primary : .gray)
                             
@@ -169,7 +169,7 @@ struct SharedRoutinesView: View {
                                     .foregroundColor(.black)
                             }
                             
-                            Text("Skapa ny rutin")
+                            Text(L.t(sv: "Skapa ny rutin", nb: "Opprett ny rutine"))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.primary)
                             
@@ -232,11 +232,11 @@ struct SharedRoutinesView: View {
                 .foregroundColor(.gray.opacity(0.5))
             
             VStack(spacing: 8) {
-                Text("Inga rutiner än")
+                Text(L.t(sv: "Inga rutiner än", nb: "Ingen rutiner ennå"))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("Skapa en rutin och dela den med dina vänner.")
+                Text(L.t(sv: "Skapa en rutin och dela den med dina vänner.", nb: "Opprett en rutine og del den med vennene dine."))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -247,7 +247,7 @@ struct SharedRoutinesView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Skapa ny rutin")
+                    Text(L.t(sv: "Skapa ny rutin", nb: "Opprett ny rutine"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -268,11 +268,11 @@ struct SharedRoutinesView: View {
                 .foregroundColor(.gray.opacity(0.5))
             
             VStack(spacing: 8) {
-                Text("Inga delade pass")
+                Text(L.t(sv: "Inga delade pass", nb: "Ingen delte økter"))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("Här visas pass som dina vänner delat med dig.")
+                Text(L.t(sv: "Här visas pass som dina vänner delat med dig.", nb: "Her vises økter som vennene dine har delt med deg."))
                     .font(.system(size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -340,7 +340,7 @@ struct ShareableWorkoutCard: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text("\(workout.exercises.count) övningar")
+                Text(L.t(sv: "\(workout.exercises.count) övningar", nb: "\(workout.exercises.count) øvelser"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                 
@@ -356,7 +356,7 @@ struct ShareableWorkoutCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "paperplane.fill")
                         .font(.system(size: 14))
-                    Text("Dela")
+                    Text(L.t(sv: "Dela", nb: "Del"))
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -397,7 +397,7 @@ struct ReceivedWorkoutCard: View {
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(sharedWorkout.senderUsername ?? "Okänd")
+                        Text(sharedWorkout.senderUsername ?? L.t(sv: "Okänd", nb: "Ukjent"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
                         
@@ -413,7 +413,7 @@ struct ReceivedWorkoutCard: View {
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                     
-                    Text("\(sharedWorkout.exercises.count) övningar • \(dateFormatter.string(from: sharedWorkout.createdAt))")
+                    Text(L.t(sv: "\(sharedWorkout.exercises.count) övningar", nb: "\(sharedWorkout.exercises.count) øvelser") + " • \(dateFormatter.string(from: sharedWorkout.createdAt))")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary.opacity(0.7))
                 }
@@ -473,7 +473,7 @@ struct ShareWorkoutView: View {
                             .font(.system(size: 16))
                             .foregroundColor(.gray)
                         
-                        TextField("Sök vän...", text: $searchText)
+                        TextField(L.t(sv: "Sök vän...", nb: "Søk venn..."), text: $searchText)
                             .font(.system(size: 16))
                     }
                     .padding(12)
@@ -500,18 +500,18 @@ struct ShareWorkoutView: View {
                 }
             }
         }
-        .navigationTitle("Dela pass")
+        .navigationTitle(L.t(sv: "Dela pass", nb: "Del økt"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Avbryt") {
+                Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                     dismiss()
                 }
             }
             
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selectedFriend != nil && !showSuccess {
-                    Button("Skicka") {
+                    Button(L.t(sv: "Skicka", nb: "Send")) {
                         sendWorkout()
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -538,7 +538,7 @@ struct ShareWorkoutView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                 
-                Text("\(workout.exercises.count) övningar")
+                Text(L.t(sv: "\(workout.exercises.count) övningar", nb: "\(workout.exercises.count) øvelser"))
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
             }
@@ -602,11 +602,11 @@ struct ShareWorkoutView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.gray.opacity(0.5))
             
-            Text("Inga vänner att dela med")
+            Text(L.t(sv: "Inga vänner att dela med", nb: "Ingen venner å dele med"))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.primary)
             
-            Text("Följ andra användare för att kunna dela pass med dem.")
+            Text(L.t(sv: "Följ andra användare för att kunna dela pass med dem.", nb: "Følg andre brukere for å kunne dele økter med dem."))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -624,7 +624,7 @@ struct ShareWorkoutView: View {
                 if let friend = selectedFriend {
                     ProfileImage(url: friend.avatarUrl, size: 36)
                     
-                    Text("Till: \(friend.username)")
+                    Text(L.t(sv: "Till: \(friend.username)", nb: "Til: \(friend.username)"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -633,7 +633,7 @@ struct ShareWorkoutView: View {
             }
             .padding(.horizontal, 16)
             
-            TextField("Lägg till ett meddelande (valfritt)", text: $message)
+            TextField(L.t(sv: "Lägg till ett meddelande (valfritt)", nb: "Legg til en melding (valgfritt)"), text: $message)
                 .font(.system(size: 15))
                 .padding(12)
                 .background(Color(.secondarySystemBackground))
@@ -652,11 +652,11 @@ struct ShareWorkoutView: View {
                 .foregroundColor(.green)
             
             VStack(spacing: 8) {
-                Text("Passet har delats!")
+                Text(L.t(sv: "Passet har delats!", nb: "Økten er delt!"))
                     .font(.system(size: 22, weight: .bold))
                 
                 if let friend = selectedFriend {
-                    Text("\(workout.name) har skickats till \(friend.username)")
+                    Text(L.t(sv: "\(workout.name) har skickats till \(friend.username)", nb: "\(workout.name) er sendt til \(friend.username)"))
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -664,7 +664,7 @@ struct ShareWorkoutView: View {
             }
             
             Button(action: { dismiss() }) {
-                Text("Klar")
+                Text(L.t(sv: "Klar", nb: "Ferdig"))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -703,7 +703,7 @@ struct ShareWorkoutView: View {
         guard let userId = authViewModel.currentUser?.id,
               let friend = selectedFriend else { return }
         
-        let senderName = authViewModel.currentUser?.name ?? "Någon"
+        let senderName = authViewModel.currentUser?.name ?? L.t(sv: "Någon", nb: "Noen")
         
         isSending = true
         
@@ -765,10 +765,10 @@ struct ReceivedWorkoutDetailView: View {
                     ProfileImage(url: sharedWorkout.senderAvatarUrl, size: 50)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(sharedWorkout.senderUsername ?? "Okänd")
+                        Text(sharedWorkout.senderUsername ?? L.t(sv: "Okänd", nb: "Ukjent"))
                             .font(.system(size: 17, weight: .semibold))
                         
-                        Text("Delade \(dateFormatter.string(from: sharedWorkout.createdAt))")
+                        Text(L.t(sv: "Delade", nb: "Delt") + " \(dateFormatter.string(from: sharedWorkout.createdAt))")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -805,13 +805,13 @@ struct ReceivedWorkoutDetailView: View {
                 
                 // Stats
                 HStack(spacing: 12) {
-                    SharedWorkoutStatBox(value: "\(sharedWorkout.exercises.count)", label: "Övningar")
+                    SharedWorkoutStatBox(value: "\(sharedWorkout.exercises.count)", label: L.t(sv: "Övningar", nb: "Øvelser"))
                     SharedWorkoutStatBox(value: "\(totalSets)", label: "Set")
                 }
                 
                 // Exercises list
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Övningar")
+                    Text(L.t(sv: "Övningar", nb: "Øvelser"))
                         .font(.system(size: 16, weight: .bold))
                         .padding(.horizontal, 4)
                     
@@ -865,11 +865,11 @@ struct ReceivedWorkoutDetailView: View {
                         } else if showSaveSuccess {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Sparat!")
+                            Text(L.t(sv: "Sparat!", nb: "Lagret!"))
                         } else {
                             Image(systemName: "bookmark.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Spara som rutin")
+                            Text(L.t(sv: "Spara som rutin", nb: "Lagre som rutine"))
                         }
                     }
                     .font(.system(size: 17, weight: .semibold))
@@ -884,11 +884,11 @@ struct ReceivedWorkoutDetailView: View {
             }
             .padding(16)
         }
-        .navigationTitle("Delat pass")
+        .navigationTitle(L.t(sv: "Delat pass", nb: "Delt økt"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Stäng") {
+                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                     onDismiss()
                     dismiss()
                 }

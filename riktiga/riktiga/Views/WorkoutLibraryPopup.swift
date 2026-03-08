@@ -40,12 +40,12 @@ struct WorkoutLibraryPopup: View {
                     VStack(alignment: .leading, spacing: 24) {
                         // Dina pass section
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Dina pass")
+                            Text(L.t(sv: "Dina pass", nb: "Dine økter"))
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(.primary)
                             
                             if viewModel.savedWorkouts.isEmpty {
-                                Text("Du har inga gym rutiner ännu.")
+                                Text(L.t(sv: "Du har inga gym rutiner ännu.", nb: "Du har ingen gymrutiner ennå."))
                                     .font(.system(size: 15))
                                     .foregroundColor(.secondary)
                                     .padding(.vertical, 8)
@@ -64,7 +64,7 @@ struct WorkoutLibraryPopup: View {
                                                         .font(.system(size: 16, weight: .semibold))
                                                         .foregroundColor(.primary)
                                                     
-                                                    Text("\(workout.exercises.count) övningar")
+                                                    Text(L.t(sv: "\(workout.exercises.count) övningar", nb: "\(workout.exercises.count) øvelser"))
                                                         .font(.system(size: 14))
                                                         .foregroundColor(.secondary)
                                                 }
@@ -93,11 +93,11 @@ struct WorkoutLibraryPopup: View {
                         
                         // Utforska våra pass section
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Utforska våra pass")
+                            Text(L.t(sv: "Utforska våra pass", nb: "Utforsk våre økter"))
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(.primary)
                             
-                            Text("Kommer snart...")
+                            Text(L.t(sv: "Kommer snart...", nb: "Kommer snart..."))
                                 .font(.system(size: 15))
                                 .foregroundColor(.secondary)
                                 .padding(.vertical, 8)

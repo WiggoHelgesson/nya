@@ -18,10 +18,10 @@ struct AdminAnnouncementView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.orange)
                         
-                        Text("⚠️ VARNING")
+                        Text(L.t(sv: "⚠️ VARNING", nb: "⚠️ ADVARSEL"))
                             .font(.system(size: 22, weight: .bold))
                         
-                        Text("Detta skickar en notis till ALLA användare i appen!")
+                        Text(L.t(sv: "Detta skickar en notis till ALLA användare i appen!", nb: "Dette sender et varsel til ALLE brukere i appen!"))
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -33,7 +33,7 @@ struct AdminAnnouncementView: View {
                     
                     // Preview of notification
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("📱 Förhandsgranskning av notis")
+                        Text(L.t(sv: "📱 Förhandsgranskning av notis", nb: "📱 Forhåndsvisning av varsel"))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.secondary)
                         
@@ -44,15 +44,15 @@ struct AdminAnnouncementView: View {
                                 Text("Up&Down")
                                     .font(.system(size: 14, weight: .semibold))
                                 Spacer()
-                                Text("nu")
+                                Text(L.t(sv: "nu", nb: "nå"))
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                             }
                             
-                            Text("Har du sett våra nya priser? 💪")
+                            Text(L.t(sv: "Har du sett våra nya priser? 💪", nb: "Har du sett våre nye premier? 💪"))
                                 .font(.system(size: 15, weight: .semibold))
                             
-                            Text("Genom att träna ökar du dina chanser att vinna priser till ett värde över 3000+ kr")
+                            Text(L.t(sv: "Genom att träna ökar du dina chanser att vinna priser till ett värde över 3000+ kr", nb: "Ved å trene øker du sjansene dine for å vinne premier til en verdi over 3000+ kr"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                         }
@@ -80,10 +80,10 @@ struct AdminAnnouncementView: View {
                                 .font(.system(size: 50))
                                 .foregroundColor(.green)
                             
-                            Text("✅ Notis skickad!")
+                            Text(L.t(sv: "✅ Notis skickad!", nb: "✅ Varsel sendt!"))
                                 .font(.system(size: 18, weight: .bold))
                             
-                            Text("Notisen har skickats till alla användare")
+                            Text(L.t(sv: "Notisen har skickats till alla användare", nb: "Varselet er sendt til alle brukere"))
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                         }
@@ -100,10 +100,10 @@ struct AdminAnnouncementView: View {
                                 if isSending {
                                     ProgressView()
                                         .tint(.white)
-                                    Text("Skickar...")
+                                    Text(L.t(sv: "Skickar...", nb: "Sender..."))
                                 } else {
                                     Image(systemName: "paperplane.fill")
-                                    Text("Skicka till alla användare")
+                                    Text(L.t(sv: "Skicka till alla användare", nb: "Send til alle brukere"))
                                 }
                             }
                             .font(.system(size: 17, weight: .semibold))
@@ -120,7 +120,7 @@ struct AdminAnnouncementView: View {
                 }
                 .padding(.top, 32)
             }
-            .navigationTitle("Skicka Notis")
+            .navigationTitle(L.t(sv: "Skicka Notis", nb: "Send Varsel"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -132,8 +132,8 @@ struct AdminAnnouncementView: View {
         Task {
             do {
                 await PushNotificationService.shared.sendAnnouncementToAllUsers(
-                    title: "Har du sett våra nya priser? 💪",
-                    body: "Genom att träna ökar du dina chanser att vinna priser till ett värde över 3000+ kr"
+                    title: L.t(sv: "Har du sett våra nya priser? 💪", nb: "Har du sett våre nye premier? 💪"),
+                    body: L.t(sv: "Genom att träna ökar du dina chanser att vinna priser till ett värde över 3000+ kr", nb: "Ved å trene øker du sjansene dine for å vinne premier til en verdi over 3000+ kr")
                 )
                 
                 await MainActor.run {
@@ -145,7 +145,7 @@ struct AdminAnnouncementView: View {
             } catch {
                 await MainActor.run {
                     isSending = false
-                    errorMessage = "Kunde inte skicka notis: \(error.localizedDescription)"
+                    errorMessage = L.t(sv: "Kunde inte skicka notis: \(error.localizedDescription)", nb: "Kunne ikke sende varsel: \(error.localizedDescription)")
                 }
                 print("❌ Failed to send announcement: \(error)")
             }

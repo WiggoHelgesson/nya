@@ -38,7 +38,7 @@ struct ActiveFriendsMapView: View {
                     HStack {
                         Image(systemName: "figure.run")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("\(activeFriends.count) vän\(activeFriends.count == 1 ? "" : "ner") tränar just nu")
+                        Text(L.t(sv: "\(activeFriends.count) vän\(activeFriends.count == 1 ? "" : "ner") tränar just nu", nb: "\(activeFriends.count) venn\(activeFriends.count == 1 ? "" : "er") trener akkurat nå"))
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -65,7 +65,7 @@ struct ActiveFriendsMapView: View {
                 VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.2)
-                    Text("Laddar aktiva vänner...")
+                    Text(L.t(sv: "Laddar aktiva vänner...", nb: "Laster aktive venner..."))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.gray)
                 }
@@ -86,11 +86,11 @@ struct ActiveFriendsMapView: View {
                             .foregroundColor(.gray)
                     }
                     
-                    Text("Inga aktiva vänner")
+                    Text(L.t(sv: "Inga aktiva vänner", nb: "Ingen aktive venner"))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.primary)
                     
-                    Text("När dina vänner startar ett pass\nser du dem här på kartan")
+                    Text(L.t(sv: "När dina vänner startar ett pass\nser du dem här på kartan", nb: "Når vennene dine starter en økt\nser du dem her på kartet"))
                         .font(.system(size: 15))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -100,7 +100,7 @@ struct ActiveFriendsMapView: View {
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.clockwise")
-                            Text("Uppdatera")
+                            Text(L.t(sv: "Uppdatera", nb: "Oppdater"))
                         }
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
@@ -284,7 +284,7 @@ struct ActiveFriendCard: View {
                 Text(friend.formattedDuration)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                Text("aktiv")
+                Text(L.t(sv: "aktiv", nb: "aktiv"))
                     .font(.system(size: 12))
                     .foregroundColor(.gray)
             }
@@ -308,10 +308,10 @@ struct ActiveFriendCard: View {
     
     private var activityText: String {
         switch friend.activityType.lowercased() {
-        case "walking", "gym": return "Kör gympass"
-        case "running": return "Springer"
-        case "cycling": return "Cyklar"
-        default: return "Tränar"
+        case "walking", "gym": return L.t(sv: "Kör gympass", nb: "Kjører gymøkt")
+        case "running": return L.t(sv: "Springer", nb: "Løper")
+        case "cycling": return L.t(sv: "Cyklar", nb: "Sykler")
+        default: return L.t(sv: "Tränar", nb: "Trener")
         }
     }
 }

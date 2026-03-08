@@ -43,7 +43,7 @@ struct ShareActivityView: View {
                     
                     if insightsLoader.isLoading {
                         Spacer()
-                        ProgressView("Skapar dina delningskort...")
+                        ProgressView(L.t(sv: "Skapar dina delningskort...", nb: "Lager dine delingskort..."))
                             .progressViewStyle(.circular)
                             .padding(.top, 32)
                         Spacer()
@@ -68,15 +68,15 @@ struct ShareActivityView: View {
                 }
             }
         }
-        .confirmationDialog("Välj bakgrund", isPresented: $showBackgroundDialog, titleVisibility: .visible) {
+        .confirmationDialog(L.t(sv: "Välj bakgrund", nb: "Velg bakgrunn"), isPresented: $showBackgroundDialog, titleVisibility: .visible) {
             ForEach(ShareBackgroundOption.allCases) { option in
                 Button(option.displayName) {
                     selectedBackground = option
                 }
             }
-            Button("Avbryt", role: .cancel) {}
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         }
-        .alert("Meddelande", isPresented: $showAlert) {
+        .alert(L.t(sv: "Meddelande", nb: "Melding"), isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(alertMessage)
@@ -86,7 +86,7 @@ struct ShareActivityView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Bra jobbat!")
+                Text(L.t(sv: "Bra jobbat!", nb: "Bra jobbet!"))
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
                 
@@ -110,7 +110,7 @@ struct ShareActivityView: View {
     
     private var headerSubtitle: String {
         let total = max(insightsLoader.insights.totalWorkouts, 1)
-        return "Detta är ditt \(ordinalString(for: total)) pass"
+        return L.t(sv: "Detta är ditt \(ordinalString(for: total)) pass", nb: "Dette er din \(ordinalString(for: total)) økt")
     }
     
     private var templates: [ShareCardTemplate] {
@@ -157,10 +157,10 @@ struct ShareActivityView: View {
     
     private var actionRow: some View {
         HStack(spacing: 14) {
-            ShareActionButton(icon: "square.and.arrow.down", label: "Spara") {
+            ShareActionButton(icon: "square.and.arrow.down", label: L.t(sv: "Spara", nb: "Lagre")) {
                 saveCurrentCardToPhotos()
             }
-            ShareActionButton(icon: "paintpalette.fill", label: "Bakgrund") {
+            ShareActionButton(icon: "paintpalette.fill", label: L.t(sv: "Bakgrund", nb: "Bakgrunn")) {
                 showBackgroundDialog = true
             }
             ShareActionButton(icon: "camera.viewfinder", label: "Stories") {
@@ -173,7 +173,7 @@ struct ShareActivityView: View {
     
     private var doneButton: some View {
         Button(action: finishSharing) {
-            Text("Klar")
+            Text(L.t(sv: "Klar", nb: "Ferdig"))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -224,25 +224,25 @@ struct ShareActivityView: View {
     private func shareToInstagramStories() {
         guard let image = renderCurrentCardImage(),
               let pngData = image.pngData() else {
-            showAlert(message: "Kunde inte skapa bilden.")
+            showAlert(message: L.t(sv: "Kunde inte skapa bilden.", nb: "Kunne ikke lage bildet."))
             return
         }
         UIPasteboard.general.setItems([["com.instagram.sharedSticker.backgroundImage": pngData]],
                                       options: [.expirationDate: Date().addingTimeInterval(300)])
         guard let url = URL(string: "instagram-stories://share") else {
-            showAlert(message: "Kunde inte öppna Instagram Stories.")
+            showAlert(message: L.t(sv: "Kunde inte öppna Instagram Stories.", nb: "Kunne ikke åpne Instagram Stories."))
             return
         }
         UIApplication.shared.open(url, options: [:]) { success in
             if !success {
-                showAlert(message: "Kunde inte öppna Instagram Stories. Kontrollera att appen är installerad.")
+                showAlert(message: L.t(sv: "Kunde inte öppna Instagram Stories. Kontrollera att appen är installerad.", nb: "Kunne ikke åpne Instagram Stories. Sjekk at appen er installert."))
             }
         }
     }
     
     private func saveCurrentCardToPhotos() {
         guard let image = renderCurrentCardImage() else {
-            showAlert(message: "Kunde inte skapa bilden.")
+            showAlert(message: L.t(sv: "Kunde inte skapa bilden.", nb: "Kunne ikke lage bildet."))
             return
         }
         
@@ -257,7 +257,7 @@ struct ShareActivityView: View {
     
     private func savePNGToPhotos(image: UIImage) {
         guard let pngData = image.pngData() else {
-            showAlert(message: "Kunde inte skapa PNG-bilden.")
+            showAlert(message: L.t(sv: "Kunde inte skapa PNG-bilden.", nb: "Kunne ikke lage PNG-bildet."))
             return
         }
         
@@ -267,14 +267,14 @@ struct ShareActivityView: View {
         do {
             try pngData.write(to: tempURL)
         } catch {
-            showAlert(message: "Kunde inte skapa temporär fil.")
+            showAlert(message: L.t(sv: "Kunde inte skapa temporär fil.", nb: "Kunne ikke lage midlertidig fil."))
             return
         }
         
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
                 DispatchQueue.main.async {
-                    self.showAlert(message: "Ge åtkomst till foton i inställningar.")
+                    self.showAlert(message: L.t(sv: "Ge åtkomst till foton i inställningar.", nb: "Gi tilgang til bilder i innstillinger."))
                 }
                 return
             }
@@ -289,10 +289,10 @@ struct ShareActivityView: View {
                 
                 DispatchQueue.main.async {
                     if success {
-                        self.showAlert(message: "Bilden sparades som PNG med transparens.")
+                        self.showAlert(message: L.t(sv: "Bilden sparades som PNG med transparens.", nb: "Bildet ble lagret som PNG med gjennomsiktighet."))
                     } else {
                         print("❌ PNG save error: \(error?.localizedDescription ?? "unknown")")
-                        self.showAlert(message: "Kunde inte spara bilden.")
+                        self.showAlert(message: L.t(sv: "Kunde inte spara bilden.", nb: "Kunne ikke lagre bildet."))
                     }
                 }
             }
@@ -303,7 +303,7 @@ struct ShareActivityView: View {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
                 DispatchQueue.main.async {
-                    self.showAlert(message: "Ge åtkomst till foton i inställningar.")
+                    self.showAlert(message: L.t(sv: "Ge åtkomst till foton i inställningar.", nb: "Gi tilgang til bilder i innstillinger."))
                 }
                 return
             }
@@ -311,7 +311,7 @@ struct ShareActivityView: View {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }) { success, _ in
                 DispatchQueue.main.async {
-                    self.showAlert(message: success ? "Bilden sparades i kamerarullen." : "Kunde inte spara bilden.")
+                    self.showAlert(message: success ? L.t(sv: "Bilden sparades i kamerarullen.", nb: "Bildet ble lagret i kamerarullen.") : L.t(sv: "Kunde inte spara bilden.", nb: "Kunne ikke lagre bildet."))
                 }
             }
         }
@@ -472,7 +472,7 @@ final class ShareInsightsLoader: ObservableObject {
         guard let exercises else { return [:] }
         var map: [String: Int] = [:]
         for exercise in exercises {
-            let key = (exercise.category ?? "Överkropp").capitalized
+            let key = (exercise.category ?? L.t(sv: "Överkropp", nb: "Overkropp")).capitalized
             map[key, default: 0] += 1
         }
         return map
@@ -498,8 +498,8 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .transparent: return "Transparent"
-        case .white: return "Vit"
-        case .black: return "Svart"
+        case .white: return L.t(sv: "Vit", nb: "Hvit")
+        case .black: return L.t(sv: "Svart", nb: "Svart")
         }
     }
     
@@ -678,7 +678,7 @@ struct ShareCardView: View {
             HStack(spacing: 24 * scale) {
                 // Tid (Time)
                 VStack(alignment: .leading, spacing: 2 * scale) {
-                    Text("Tid")
+                    Text(L.t(sv: "Tid", nb: "Tid"))
                         .font(.system(size: 12 * scale, weight: .semibold))
                         .foregroundColor(textColor.opacity(0.7))
                     Text(overlayDurationString(post.duration))
@@ -689,7 +689,7 @@ struct ShareCardView: View {
                 // Volym (for gym) or Distans (for running)
                 if post.activityType == "Gympass" {
                     VStack(alignment: .leading, spacing: 2 * scale) {
-                        Text("Volym")
+                        Text(L.t(sv: "Volym", nb: "Volum"))
                             .font(.system(size: 12 * scale, weight: .semibold))
                             .foregroundColor(textColor.opacity(0.7))
                         Text(formatGymVolume(from: post.exercises))
@@ -698,7 +698,7 @@ struct ShareCardView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2 * scale) {
-                        Text("Distans")
+                        Text(L.t(sv: "Distans", nb: "Distanse"))
                             .font(.system(size: 12 * scale, weight: .semibold))
                             .foregroundColor(textColor.opacity(0.7))
                         Text(formatDistance(post.distance))
@@ -708,7 +708,7 @@ struct ShareCardView: View {
                     
                     if let pace = formattedPace(distance: post.distance, duration: post.duration) {
                         VStack(alignment: .leading, spacing: 2 * scale) {
-                            Text("Tempo")
+                            Text(L.t(sv: "Tempo", nb: "Tempo"))
                                 .font(.system(size: 12 * scale, weight: .semibold))
                                 .foregroundColor(textColor.opacity(0.7))
                             Text(pace)
@@ -738,7 +738,7 @@ struct ShareCardView: View {
                 .font(.system(size: 20 * scale, weight: .semibold))
                 .foregroundColor(textColor)
             
-            Text("Du har tränat \(insights.streakInfo.currentStreak) dagar i rad!")
+            Text(L.t(sv: "Du har tränat \(insights.streakInfo.currentStreak) dagar i rad!", nb: "Du har trent \(insights.streakInfo.currentStreak) dager på rad!"))
                 .font(.system(size: 16 * scale))
                 .foregroundColor(textColor.opacity(0.7))
                 .multilineTextAlignment(.center)
@@ -777,7 +777,7 @@ struct ShareCardView: View {
         let allItems = emptyDays + days
         
         return VStack(spacing: 12 * scale) {
-            Text("\(insights.monthWorkoutDates.count) pass i \(monthName)")
+            Text(L.t(sv: "\(insights.monthWorkoutDates.count) pass i \(monthName)", nb: "\(insights.monthWorkoutDates.count) økter i \(monthName)"))
                 .font(.system(size: 22 * scale, weight: .semibold))
                 .foregroundColor(textColor)
                 .padding(.top, 24 * scale)
@@ -844,7 +844,7 @@ struct ShareCardView: View {
     private var muscleCard: some View {
         let topGroups = insights.muscleGroups.sorted { $0.value > $1.value }.prefix(3)
         return VStack(alignment: .leading, spacing: 12 * scale) {
-            Text("Fokusområden")
+            Text(L.t(sv: "Fokusområden", nb: "Fokusområder"))
                 .font(.system(size: 22 * scale, weight: .bold))
                 .foregroundColor(textColor)
                 .padding(.horizontal, 24 * scale)
@@ -856,7 +856,7 @@ struct ShareCardView: View {
                         .font(.system(size: 18 * scale, weight: .medium))
                         .foregroundColor(textColor.opacity(0.9))
                     Spacer()
-                    Text("\(element.value) övningar")
+                    Text(L.t(sv: "\(element.value) övningar", nb: "\(element.value) øvelser"))
                         .font(.system(size: 18 * scale, weight: .medium))
                         .foregroundColor(textColor.opacity(0.7))
                 }
@@ -913,12 +913,12 @@ struct ShareCardView: View {
     var stats: [ShareStat] = []
 
     if post.activityType == "Gympass" {
-        stats.append(ShareStat(title: "Volym", value: formatGymVolume(from: post.exercises), isPrimary: true))
-        stats.append(ShareStat(title: "Tid", value: overlayDurationString(post.duration), isPrimary: false))
+        stats.append(ShareStat(title: L.t(sv: "Volym", nb: "Volum"), value: formatGymVolume(from: post.exercises), isPrimary: true))
+        stats.append(ShareStat(title: L.t(sv: "Tid", nb: "Tid"), value: overlayDurationString(post.duration), isPrimary: false))
     } else {
-            stats.append(ShareStat(title: "Distans", value: formatDistance(post.distance), isPrimary: true))
+            stats.append(ShareStat(title: L.t(sv: "Distans", nb: "Distanse"), value: formatDistance(post.distance), isPrimary: true))
         if let pace = formattedPace(distance: post.distance, duration: post.duration) {
-                stats.append(ShareStat(title: "Tempo", value: pace, isPrimary: false))
+                stats.append(ShareStat(title: L.t(sv: "Tempo", nb: "Tempo"), value: pace, isPrimary: false))
         }
             stats.append(ShareStat(title: "Tid", value: overlayDurationString(post.duration), isPrimary: false))
     }

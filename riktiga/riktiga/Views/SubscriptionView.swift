@@ -19,11 +19,11 @@ struct SubscriptionView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.yellow)
                         
-                        Text("Uppgradera till Premium")
+                        Text(L.t(sv: "Uppgradera till Premium", nb: "Oppgrader til Premium"))
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(.primary)
                         
-                        Text("Få tillgång till alla rabattkoder och exklusiva erbjudanden")
+                        Text(L.t(sv: "Få tillgång till alla rabattkoder och exklusiva erbjudanden", nb: "Få tilgang til alle rabattkoder og eksklusive tilbud"))
                             .font(.system(size: 16))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -32,15 +32,15 @@ struct SubscriptionView: View {
                     
                     // Features
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Premium fördelar")
+                        Text(L.t(sv: "Premium fördelar", nb: "Premium-fordeler"))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.primary)
                         
                         VStack(spacing: 12) {
-                            FeatureRow(icon: "tag.fill", text: "Obegränsade rabattkoder")
-                            FeatureRow(icon: "star.fill", text: "Exklusiva erbjudanden")
-                            FeatureRow(icon: "bolt.fill", text: "Prioriterad support")
-                            FeatureRow(icon: "heart.fill", text: "Stöd utvecklingen")
+                            FeatureRow(icon: "tag.fill", text: L.t(sv: "Obegränsade rabattkoder", nb: "Ubegrensede rabattkoder"))
+                            FeatureRow(icon: "star.fill", text: L.t(sv: "Exklusiva erbjudanden", nb: "Eksklusive tilbud"))
+                            FeatureRow(icon: "bolt.fill", text: L.t(sv: "Prioriterad support", nb: "Prioritert support"))
+                            FeatureRow(icon: "heart.fill", text: L.t(sv: "Stöd utvecklingen", nb: "Støtt utviklingen"))
                         }
                     }
                     .padding(.horizontal, 20)
@@ -49,7 +49,7 @@ struct SubscriptionView: View {
                     if let offerings = offerings,
                        let currentOffering = offerings.current {
                         VStack(spacing: 16) {
-                            Text("Välj din plan")
+                            Text(L.t(sv: "Välj din plan", nb: "Velg din plan"))
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.primary)
                             
@@ -71,7 +71,7 @@ struct SubscriptionView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle())
                             
-                            Text("Laddar priser...")
+                            Text(L.t(sv: "Laddar priser...", nb: "Laster priser..."))
                                 .font(.system(size: 16))
                                 .foregroundColor(.gray)
                         }
@@ -92,7 +92,7 @@ struct SubscriptionView: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             }
-                            Text(isProcessingPurchase ? "Bearbetar..." : "Börja prenumeration")
+                            Text(isProcessingPurchase ? L.t(sv: "Bearbetar...", nb: "Behandler...") : L.t(sv: "Börja prenumeration", nb: "Start abonnement"))
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
                         }
@@ -110,23 +110,23 @@ struct SubscriptionView: View {
                             await restorePurchases()
                         }
                     }) {
-                        Text("Återställ köp")
+                        Text(L.t(sv: "Återställ köp", nb: "Gjenopprett kjøp"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                     }
                     .padding(.bottom, 20)
                 }
             }
-            .navigationTitle("Premium")
+            .navigationTitle(L.t(sv: "Premium", nb: "Premium"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
             }
-            .alert("Fel", isPresented: $showError) {
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: $showError) {
                 Button("OK") { }
             } message: {
                 Text(errorMessage)
@@ -152,7 +152,7 @@ struct SubscriptionView: View {
         if success {
             dismiss()
         } else {
-            errorMessage = "Köp misslyckades. Försök igen."
+            errorMessage = L.t(sv: "Köp misslyckades. Försök igen.", nb: "Kjøp mislyktes. Prøv igjen.")
             showError = true
         }
         
@@ -167,7 +167,7 @@ struct SubscriptionView: View {
         if success {
             dismiss()
         } else {
-            errorMessage = "Återställning misslyckades. Kontrollera att du har köpt något tidigare."
+            errorMessage = L.t(sv: "Återställning misslyckades. Kontrollera att du har köpt något tidigare.", nb: "Gjenoppretting mislyktes. Sjekk at du har kjøpt noe tidligere.")
             showError = true
         }
         
@@ -222,7 +222,7 @@ struct PackageCard: View {
                         .foregroundColor(.primary)
                     
                     if package.packageType == .annual {
-                        Text("Bästa valet")
+                        Text(L.t(sv: "Bästa valet", nb: "Beste valget"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)

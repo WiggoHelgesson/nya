@@ -3,6 +3,13 @@ import SwiftUI
 enum HomeTab: String, CaseIterable {
     case hem = "Hem"
     case hittaTranare = "Hitta tränare"
+
+    var displayName: String {
+        switch self {
+        case .hem: return L.t(sv: "Hem", nb: "Hjem")
+        case .hittaTranare: return L.t(sv: "Hitta tränare", nb: "Finn trener")
+        }
+    }
 }
 
 struct SocialContainerView: View {
@@ -33,14 +40,14 @@ struct SocialContainerView: View {
                     ZStack {
                         // Center: Page title or Pro CTA
                         if isPremium {
-                            Text("Socialt")
+                            Text(L.t(sv: "Socialt", nb: "Sosialt"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.primary)
                         } else {
                             Button {
                                 SuperwallService.shared.showPaywall()
                             } label: {
-                                Text("Bli pro medlem")
+                                Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 14)
@@ -149,7 +156,7 @@ struct SocialContainerView: View {
                                 }
                             } label: {
                                 VStack(spacing: 10) {
-                                    Text(tab.rawValue)
+                                    Text(tab.displayName)
                                         .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
                                         .foregroundColor(selectedTab == tab ? .primary : .gray)
                                     
@@ -195,7 +202,7 @@ struct SocialContainerView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }
@@ -286,12 +293,12 @@ struct DMNavigationWrapper: View {
                     DirectMessageView(
                         conversationId: uuid,
                         otherUserId: "",
-                        otherUsername: "Chatt",
+                        otherUsername: L.t(sv: "Chatt", nb: "Chat"),
                         otherAvatarUrl: nil
                     )
                     .environmentObject(authViewModel)
                 } else {
-                    Text("Kunde inte öppna konversationen")
+                    Text(L.t(sv: "Kunde inte öppna konversationen", nb: "Kunne ikke åpne samtalen"))
                         .foregroundColor(.secondary)
                 }
             }

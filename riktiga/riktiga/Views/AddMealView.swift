@@ -311,6 +311,14 @@ struct AddMealView: View {
         case all = "Alla"
         case myMeals = "Måltider"
         case saved = "Sparade"
+        
+        var displayName: String {
+            switch self {
+            case .all: return L.t(sv: "Alla", nb: "Alle")
+            case .myMeals: return L.t(sv: "Måltider", nb: "Måltider")
+            case .saved: return L.t(sv: "Sparade", nb: "Lagrede")
+            }
+        }
     }
     
     var body: some View {
@@ -345,7 +353,7 @@ struct AddMealView: View {
                     Spacer()
                 }
             }
-            .navigationTitle("Logga mat")
+            .navigationTitle(L.t(sv: "Logga mat", nb: "Logg mat"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -385,7 +393,7 @@ struct AddMealView: View {
                     }
                 } label: {
                     VStack(spacing: 6) {
-                        Text(tab.rawValue)
+                        Text(tab.displayName)
                             .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
                             .foregroundColor(selectedTab == tab ? .black : .gray)
                         
@@ -404,7 +412,7 @@ struct AddMealView: View {
     // MARK: - Search Bar Section
     private var searchBarSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Beskriv vad du åt")
+            Text(L.t(sv: "Beskriv vad du åt", nb: "Beskriv hva du spiste"))
                 .font(.system(size: 13))
                 .foregroundColor(.gray)
             
@@ -413,7 +421,7 @@ struct AddMealView: View {
                     .font(.system(size: 16))
                     .foregroundColor(.gray)
                 
-                TextField("Sök matvara...", text: $viewModel.searchText)
+                TextField(L.t(sv: "Sök matvara...", nb: "Søk matvare..."), text: $viewModel.searchText)
                     .font(.system(size: 17))
                     .foregroundColor(.black)
                     .autocorrectionDisabled()
@@ -448,7 +456,7 @@ struct AddMealView: View {
         VStack(spacing: 16) {
             // Header with calories
             HStack {
-                Text("Dagligt intag")
+                Text(L.t(sv: "Dagligt intag", nb: "Daglig inntak"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.black)
                 
@@ -475,11 +483,11 @@ struct AddMealView: View {
             
             // Macros
             HStack(spacing: 0) {
-                macroColumn(title: "KH", current: viewModel.consumedCarbs, goal: viewModel.carbsGoal, color: Color(red: 0.85, green: 0.7, blue: 0.7))
+                macroColumn(title: L.t(sv: "KH", nb: "KH"), current: viewModel.consumedCarbs, goal: viewModel.carbsGoal, color: Color(red: 0.85, green: 0.7, blue: 0.7))
                 
-                macroColumn(title: "Protein", current: viewModel.consumedProtein, goal: viewModel.proteinGoal, color: Color(red: 0.85, green: 0.75, blue: 0.7))
+                macroColumn(title: L.t(sv: "Protein", nb: "Protein"), current: viewModel.consumedProtein, goal: viewModel.proteinGoal, color: Color(red: 0.85, green: 0.75, blue: 0.7))
                 
-                macroColumn(title: "Fett", current: viewModel.consumedFat, goal: viewModel.fatGoal, color: Color(red: 0.7, green: 0.75, blue: 0.85))
+                macroColumn(title: L.t(sv: "Fett", nb: "Fett"), current: viewModel.consumedFat, goal: viewModel.fatGoal, color: Color(red: 0.7, green: 0.75, blue: 0.85))
             }
         }
         .padding(16)
@@ -539,7 +547,7 @@ struct AddMealView: View {
                 .foregroundColor(.green.opacity(0.6))
                 .padding(.bottom, 20)
             
-            Text("Sök efter mat ovan för att logga din måltid")
+            Text(L.t(sv: "Sök efter mat ovan för att logga din måltid", nb: "Søk etter mat ovenfor for å logge måltidet ditt"))
                 .font(.system(size: 15))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -558,11 +566,11 @@ struct AddMealView: View {
             Text("🍲🧃")
                 .font(.system(size: 80))
             
-            Text("Mina måltider")
+            Text(L.t(sv: "Mina måltider", nb: "Mine måltider"))
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.black)
             
-            Text("Logga snabbt dina favoritmåltider.")
+            Text(L.t(sv: "Logga snabbt dina favoritmåltider.", nb: "Logg raskt dine favorittmåltider."))
                 .font(.system(size: 15))
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -570,7 +578,7 @@ struct AddMealView: View {
             Button {
                 // Coming soon - disabled
             } label: {
-                Text("Lanseras inom kort")
+                Text(L.t(sv: "Lanseras inom kort", nb: "Lanseres snart"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.7))
                     .frame(maxWidth: .infinity)
@@ -601,24 +609,24 @@ struct AddMealView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.gray.opacity(0.4))
                         
-                        Text("Sparade matvaror")
+                        Text(L.t(sv: "Sparade matvaror", nb: "Lagrede matvarer"))
                             .font(.system(size: 14))
                             .foregroundColor(.gray.opacity(0.6))
                     }
                 )
             
-            Text("Inga sparade matvaror ännu")
+            Text(L.t(sv: "Inga sparade matvaror ännu", nb: "Ingen lagrede matvarer ennå"))
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.black)
             
             HStack(spacing: 4) {
-                Text("Tryck på")
+                Text(L.t(sv: "Tryck på", nb: "Trykk på"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
                 Image(systemName: "bookmark")
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
-                Text("på en matvara för att spara.")
+                Text(L.t(sv: "på en matvara för att spara.", nb: "på en matvare for å lagre."))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -646,7 +654,7 @@ struct AddMealView: View {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 40))
                                     .foregroundColor(.gray.opacity(0.5))
-                                Text("Inga resultat hittades")
+                                Text(L.t(sv: "Inga resultat hittades", nb: "Ingen resultater funnet"))
                                     .font(.system(size: 15))
                                     .foregroundColor(.gray)
                             }
@@ -655,7 +663,7 @@ struct AddMealView: View {
                         .padding(.top, 40)
                     } else {
                         // Header
-                        Text("Välj från databas")
+                        Text(L.t(sv: "Välj från databas", nb: "Velg fra database"))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.black)
                             .padding(.top, 8)
@@ -695,7 +703,7 @@ struct AddMealView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 16))
-                            Text("Generera resultat med AI")
+                            Text(L.t(sv: "Generera resultat med AI", nb: "Generer resultater med AI"))
                                 .font(.system(size: 16, weight: .medium))
                         }
                         .foregroundColor(.black)
@@ -1224,6 +1232,14 @@ struct FoodDetailView: View {
         case tablespoon = "Msk"
         case gram = "G"
         case serving = "Portion"
+        
+        var displayName: String {
+            switch self {
+            case .tablespoon: return L.t(sv: "Msk", nb: "Ss")
+            case .gram: return L.t(sv: "G", nb: "G")
+            case .serving: return L.t(sv: "Portion", nb: "Porsjon")
+            }
+        }
     }
     
     // Calculate nutrients based on servings
@@ -1279,7 +1295,7 @@ struct FoodDetailView: View {
                             
                             // Measurement selector
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Mått")
+                                Text(L.t(sv: "Mått", nb: "Mål"))
                                     .font(.system(size: 15))
                                     .foregroundColor(.gray)
                                 
@@ -1290,7 +1306,7 @@ struct FoodDetailView: View {
                                                 selectedMeasurement = type
                                             }
                                         } label: {
-                                            Text(type.rawValue)
+                                            Text(type.displayName)
                                                 .font(.system(size: 15, weight: .medium))
                                                 .foregroundColor(selectedMeasurement == type ? .white : .black)
                                                 .padding(.horizontal, 20)
@@ -1304,7 +1320,7 @@ struct FoodDetailView: View {
                             
                             // Number of servings
                             HStack {
-                                Text("Antal portioner")
+                                Text(L.t(sv: "Antal portioner", nb: "Antall porsjoner"))
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.black)
                                 
@@ -1355,7 +1371,7 @@ struct FoodDetailView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             } else {
-                                Text("Logga")
+                                Text(L.t(sv: "Logga", nb: "Logg"))
                                     .font(.system(size: 17, weight: .semibold))
                             }
                         }
@@ -1371,7 +1387,7 @@ struct FoodDetailView: View {
                     .background(Color(red: 0.96, green: 0.96, blue: 0.94))
                 }
             }
-            .navigationTitle("Vald matvara")
+            .navigationTitle(L.t(sv: "Vald matvara", nb: "Valgt matvare"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1400,7 +1416,7 @@ struct FoodDetailView: View {
                     .foregroundColor(.black)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Kalorier")
+                    Text(L.t(sv: "Kalorier", nb: "Kalorier"))
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                     Text("\(displayCalories)")
@@ -1416,9 +1432,9 @@ struct FoodDetailView: View {
             
             // Macros row
             HStack(spacing: 12) {
-                macroCard(emoji: "🥩", label: "Protein", value: "\(displayProtein)g")
-                macroCard(emoji: "🌾", label: "Kolhydrater", value: "\(displayCarbs)g")
-                macroCard(emoji: "🫒", label: "Fett", value: "\(displayFat)g")
+                macroCard(emoji: "🥩", label: L.t(sv: "Protein", nb: "Protein"), value: "\(displayProtein)g")
+                macroCard(emoji: "🌾", label: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), value: "\(displayCarbs)g")
+                macroCard(emoji: "🫒", label: L.t(sv: "Fett", nb: "Fett"), value: "\(displayFat)g")
             }
         }
         .padding(.horizontal, 4)
@@ -1427,10 +1443,10 @@ struct FoodDetailView: View {
     // MARK: - Nutrition Detail Card
     private var nutritionDetailCard: some View {
         VStack(spacing: 12) {
-            nutritionRow(label: "Fiber", value: "- g")
-            nutritionRow(label: "Socker", value: "- g")
-            nutritionRow(label: "Salt", value: "- g")
-            nutritionRow(label: "Mättat fett", value: "- g")
+            nutritionRow(label: L.t(sv: "Fiber", nb: "Fiber"), value: "- g")
+            nutritionRow(label: L.t(sv: "Socker", nb: "Sukker"), value: "- g")
+            nutritionRow(label: L.t(sv: "Salt", nb: "Salt"), value: "- g")
+            nutritionRow(label: L.t(sv: "Mättat fett", nb: "Mettet fett"), value: "- g")
         }
         .padding(16)
         .background(Color.white)
@@ -1594,7 +1610,7 @@ struct CreateMealView: View {
                             // TODO: Save meal
                             dismiss()
                         } label: {
-                            Text("Skapa måltid")
+                            Text(L.t(sv: "Skapa måltid", nb: "Opprett måltid"))
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(mealItems.isEmpty ? .gray : .white)
                                 .frame(maxWidth: .infinity)
@@ -1609,7 +1625,7 @@ struct CreateMealView: View {
                     .background(Color(red: 0.96, green: 0.96, blue: 0.94))
                 }
             }
-            .navigationTitle("Skapa måltid")
+            .navigationTitle(L.t(sv: "Skapa måltid", nb: "Opprett måltid"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1632,7 +1648,7 @@ struct CreateMealView: View {
     private var nameInputCard: some View {
         HStack {
             if mealName.isEmpty {
-                Text("Tryck för att namnge")
+                Text(L.t(sv: "Tryck för att namnge", nb: "Trykk for å navngi"))
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.gray.opacity(0.5))
             }
@@ -1664,7 +1680,7 @@ struct CreateMealView: View {
                     .foregroundColor(.black)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Kalorier")
+                    Text(L.t(sv: "Kalorier", nb: "Kalorier"))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
                     Text("\(totalCalories)")
@@ -1684,9 +1700,9 @@ struct CreateMealView: View {
             
             // Macros
             HStack(spacing: 10) {
-                macroMiniCard(emoji: "🥩", label: "Protein", value: "\(totalProtein)g")
-                macroMiniCard(emoji: "🌾", label: "Kolhydrater", value: "\(totalCarbs)g")
-                macroMiniCard(emoji: "🫒", label: "Fett", value: "\(totalFat)g")
+                macroMiniCard(emoji: "🥩", label: L.t(sv: "Protein", nb: "Protein"), value: "\(totalProtein)g")
+                macroMiniCard(emoji: "🌾", label: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), value: "\(totalCarbs)g")
+                macroMiniCard(emoji: "🫒", label: L.t(sv: "Fett", nb: "Fett"), value: "\(totalFat)g")
             }
         }
     }
@@ -1724,7 +1740,7 @@ struct CreateMealView: View {
                     .font(.system(size: 18))
                     .foregroundColor(.gray)
                 
-                Text("Ingredienser")
+                Text(L.t(sv: "Ingredienser", nb: "Ingredienser"))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.black)
             }
@@ -1738,7 +1754,7 @@ struct CreateMealView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.black)
                     
-                    Text("Lägg till ingredienser")
+                    Text(L.t(sv: "Lägg till ingredienser", nb: "Legg til ingredienser"))
                         .font(.system(size: 16))
                         .foregroundColor(.black)
                 }
@@ -1807,12 +1823,12 @@ struct NutriScoreBadge: View {
     
     private var gradeDescription: String {
         switch grade.uppercased() {
-        case "A": return "Utmärkt näringsvärde"
-        case "B": return "Bra näringsvärde"
-        case "C": return "Genomsnittligt näringsvärde"
-        case "D": return "Lågt näringsvärde"
-        case "E": return "Dåligt näringsvärde"
-        default: return "Näringsvärde"
+        case "A": return L.t(sv: "Utmärkt näringsvärde", nb: "Utmerket næringsverdi")
+        case "B": return L.t(sv: "Bra näringsvärde", nb: "Bra næringsverdi")
+        case "C": return L.t(sv: "Genomsnittligt näringsvärde", nb: "Gjennomsnittlig næringsverdi")
+        case "D": return L.t(sv: "Lågt näringsvärde", nb: "Lav næringsverdi")
+        case "E": return L.t(sv: "Dåligt näringsvärde", nb: "Dårlig næringsverdi")
+        default: return L.t(sv: "Näringsvärde", nb: "Næringsverdi")
         }
     }
     

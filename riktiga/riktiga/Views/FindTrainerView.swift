@@ -27,12 +27,12 @@ struct FindTrainerView: View {
                         VStack(spacing: 0) {
                             // Hero section
                             VStack(spacing: 8) {
-                                Text("Personliga tränare")
+                                Text(L.t(sv: "Personliga tränare", nb: "Personlige trenere"))
                                     .font(.system(size: 22, weight: .bold))
                                     .foregroundColor(.primary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 
-                                Text("Hitta en tränare som passar dig")
+                                Text(L.t(sv: "Hitta en tränare som passar dig", nb: "Finn en trener som passer deg"))
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,11 +98,11 @@ struct FindTrainerView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.secondary)
             
-            Text("Inga tränare tillgängliga")
+            Text(L.t(sv: "Inga tränare tillgängliga", nb: "Ingen trenere tilgjengelig"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
             
-            Text("Det finns inga tränare registrerade just nu. Kom tillbaka snart!")
+            Text(L.t(sv: "Det finns inga tränare registrerade just nu. Kom tillbaka snart!", nb: "Det er ingen trenere registrert akkurat nå. Kom tilbake snart!"))
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -282,7 +282,7 @@ struct TrainerGridCard: View {
                 
                 // Subtitle (like brand name on Blocket)
                 if let years = trainer.experienceYears, years > 0 {
-                    Text("\(years) års erfarenhet")
+                    Text(L.t(sv: "\(years) års erfarenhet", nb: "\(years) års erfaring"))
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -297,12 +297,12 @@ struct TrainerGridCard: View {
         let hours = Int(interval / 3600)
         let days = Int(interval / 86400)
         
-        if minutes < 1 { return "Just nu" }
-        if minutes < 60 { return "\(minutes) min sedan" }
-        if hours < 24 { return "\(hours) h sedan" }
-        if days < 7 { return "\(days) d sedan" }
-        if days < 30 { return "\(days / 7) v sedan" }
-        return "\(days / 30) mån sedan"
+        if minutes < 1 { return L.t(sv: "Just nu", nb: "Akkurat nå") }
+        if minutes < 60 { return L.t(sv: "\(minutes) min sedan", nb: "\(minutes) min siden") }
+        if hours < 24 { return L.t(sv: "\(hours) h sedan", nb: "\(hours) t siden") }
+        if days < 7 { return L.t(sv: "\(days) d sedan", nb: "\(days) d siden") }
+        if days < 30 { return L.t(sv: "\(days / 7) v sedan", nb: "\(days / 7) u siden") }
+        return L.t(sv: "\(days / 30) mån sedan", nb: "\(days / 30) mnd siden")
     }
 }
 
@@ -326,13 +326,13 @@ struct BecomeTrainerPromoCard: View {
                 
                 // Text content
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Signa upp dig\nsom tränare")
+                    Text(L.t(sv: "Signa upp dig\nsom tränare", nb: "Meld deg på\nsom trener"))
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.black)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    Text("Dela dina kunskaper, tips & bli betald")
+                    Text(L.t(sv: "Dela dina kunskaper, tips & bli betald", nb: "Del kunnskapen din, tips og bli betalt"))
                         .font(.system(size: 15))
                         .foregroundColor(.black.opacity(0.7))
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -340,7 +340,7 @@ struct BecomeTrainerPromoCard: View {
                     // CTA button
                     HStack {
                         Spacer()
-                        Text("Mer information")
+                        Text(L.t(sv: "Mer information", nb: "Mer informasjon"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
                         Spacer()

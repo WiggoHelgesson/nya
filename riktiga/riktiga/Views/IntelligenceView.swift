@@ -85,7 +85,7 @@ struct IntelligenceView: View {
         HStack(spacing: 6) {
             Image(systemName: "cube.fill")
                 .font(.system(size: 11, weight: .medium))
-            Text("Förhandsvisning")
+            Text(L.t(sv: "Förhandsvisning", nb: "Forhåndsvisning"))
                 .font(.system(size: 13, weight: .semibold))
         }
         .foregroundColor(.secondary)
@@ -101,7 +101,7 @@ struct IntelligenceView: View {
     
     private var titleSection: some View {
         VStack(spacing: 14) {
-            Text("Intelligens")
+            Text(L.t(sv: "Intelligens", nb: "Intelligens"))
                 .font(.system(size: 48, weight: .bold, design: .rounded))
                 .overlay(
                     LinearGradient(
@@ -111,11 +111,11 @@ struct IntelligenceView: View {
                     )
                 )
                 .mask(
-                    Text("Intelligens")
+                    Text(L.t(sv: "Intelligens", nb: "Intelligens"))
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                 )
             
-            Text("Lås upp alla Intelligens-funktioner\nmed Up&Down Pro.")
+            Text(L.t(sv: "Lås upp alla Intelligens-funktioner\nmed Up&Down Pro.", nb: "Lås opp alle Intelligens-funksjoner\nmed Up&Down Pro."))
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -131,24 +131,24 @@ struct IntelligenceView: View {
                 icon: "bubble.left.fill",
                 iconColor: Color(red: 0.30, green: 0.55, blue: 0.95),
                 iconBg: Color(red: 0.30, green: 0.55, blue: 0.95).opacity(0.12),
-                title: "Daglig Vägledning",
-                description: "Utforska din hälsa genom konversation"
+                title: L.t(sv: "Daglig Vägledning", nb: "Daglig Veiledning"),
+                description: L.t(sv: "Utforska din hälsa genom konversation", nb: "Utforsk helsen din gjennom samtale")
             )
             
             featureRow(
                 icon: "bolt.fill",
                 iconColor: Color(red: 0.92, green: 0.35, blue: 0.35),
                 iconBg: Color(red: 0.92, green: 0.35, blue: 0.35).opacity(0.12),
-                title: "Smarta Förslag",
-                description: "Personlig feedback över alla aktiviteter"
+                title: L.t(sv: "Smarta Förslag", nb: "Smarte Forslag"),
+                description: L.t(sv: "Personlig feedback över alla aktiviteter", nb: "Personlig tilbakemelding over alle aktiviteter")
             )
             
             featureRow(
                 icon: "circle.grid.2x2.fill",
                 iconColor: Color(red: 0.55, green: 0.40, blue: 0.85),
                 iconBg: Color(red: 0.55, green: 0.40, blue: 0.85).opacity(0.12),
-                title: "Inbyggt Minne",
-                description: "Vägledning som lär sig från tidigare interaktioner"
+                title: L.t(sv: "Inbyggt Minne", nb: "Innebygd Minne"),
+                description: L.t(sv: "Vägledning som lär sig från tidigare interaktioner", nb: "Veiledning som lærer av tidligere interaksjoner")
             )
         }
         .padding(.horizontal, 4)
@@ -183,7 +183,7 @@ struct IntelligenceView: View {
         Button {
             dismiss()
         } label: {
-            Text("Fortsätt")
+            Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -198,13 +198,13 @@ struct IntelligenceView: View {
     
     private var footerLinks: some View {
         HStack(spacing: 24) {
-            Button("Återställ köp") {
+            Button(L.t(sv: "Återställ köp", nb: "Gjenopprett kjøp")) {
                 // TODO: restore purchases
             }
             .font(.system(size: 13, weight: .medium))
             .foregroundColor(.secondary)
             
-            Button("Lös in kod") {
+            Button(L.t(sv: "Lös in kod", nb: "Løs inn kode")) {
                 // TODO: redeem code
             }
             .font(.system(size: 13, weight: .medium))

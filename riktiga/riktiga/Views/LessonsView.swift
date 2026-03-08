@@ -47,10 +47,10 @@ struct LessonsView: View {
                     .font(.system(size: 80))
                     .foregroundColor(.primary)
                 
-                Text("Golflektioner")
+                Text(L.t(sv: "Golflektioner", nb: "Golfleksjoner"))
                     .font(.system(size: 28, weight: .bold))
                 
-                Text("Kommer inom väldigt snar framtid...")
+                Text(L.t(sv: "Kommer inom väldigt snar framtid...", nb: "Kommer innen veldig kort tid..."))
                     .font(.system(size: 18))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -167,7 +167,7 @@ struct LessonsView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
                     
-                    TextField("Sök tränare, stad eller klubb...", text: $searchText)
+                    TextField(L.t(sv: "Sök tränare, stad eller klubb...", nb: "Søk trener, by eller klubb..."), text: $searchText)
                         .textFieldStyle(.plain)
                         .onSubmit {
                             Task { await applyFilter() }
@@ -264,7 +264,7 @@ struct LessonsView: View {
                 }
                 
                 // Trainer count
-                Text("\(filteredTrainers.count) tränare")
+                Text(L.t(sv: "\(filteredTrainers.count) tränare", nb: "\(filteredTrainers.count) trenere"))
                     .font(.system(size: 14))
                     .foregroundColor(.gray)
             }
@@ -320,9 +320,9 @@ struct LessonsView: View {
                         Image(systemName: "person.slash")
                             .font(.system(size: 48))
                             .foregroundColor(.gray)
-                        Text("Inga tränare hittades")
+                        Text(L.t(sv: "Inga tränare hittades", nb: "Ingen trenere funnet"))
                             .font(.headline)
-                        Text("Prova att ändra dina filter")
+                        Text(L.t(sv: "Prova att ändra dina filter", nb: "Prøv å endre filtrene dine"))
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
@@ -461,7 +461,7 @@ struct TrainerListCard: View {
                     Text("\(trainer.hourlyRate) kr")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.primary)
-                    Text("/timme")
+                    Text(L.t(sv: "/timme", nb: "/time"))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -494,7 +494,7 @@ struct FilterSheetView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Price Range
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Prisintervall")
+                        Text(L.t(sv: "Prisintervall", nb: "Prisintervall"))
                             .font(.headline)
                         
                         HStack {
@@ -517,7 +517,7 @@ struct FilterSheetView: View {
                     
                     // Rating
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Minsta betyg")
+                        Text(L.t(sv: "Minsta betyg", nb: "Minimumsvurdering"))
                             .font(.headline)
                         
                         HStack {
@@ -533,7 +533,7 @@ struct FilterSheetView: View {
                             Spacer()
                             
                             if minRating > 0 {
-                                Button("Rensa") {
+                                Button(L.t(sv: "Rensa", nb: "Tøm")) {
                                     minRating = 0
                                 }
                                 .font(.caption)
@@ -546,7 +546,7 @@ struct FilterSheetView: View {
                     
                     // Specialties
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Specialiteter")
+                        Text(L.t(sv: "Specialiteter", nb: "Spesialiteter"))
                             .font(.headline)
                         
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -579,11 +579,11 @@ struct FilterSheetView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Filter")
+            .navigationTitle(L.t(sv: "Filter", nb: "Filter"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Rensa allt") {
+                    Button(L.t(sv: "Rensa allt", nb: "Tøm alt")) {
                         filter = TrainerSearchFilter()
                         minPrice = 0
                         maxPrice = 2000
@@ -593,7 +593,7 @@ struct FilterSheetView: View {
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Tillämpa") {
+                    Button(L.t(sv: "Tillämpa", nb: "Bruk")) {
                         filter.minPrice = minPrice > 0 ? Int(minPrice) : nil
                         filter.maxPrice = maxPrice < 2000 ? Int(maxPrice) : nil
                         filter.minRating = minRating > 0 ? minRating : nil
@@ -802,7 +802,7 @@ struct TrainerDetailView: View {
                     Text(String(format: "%.1f", rating))
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                    Text("(\(trainer.totalReviews ?? 0) omdömen)")
+                    Text(L.t(sv: "(\(trainer.totalReviews ?? 0) omdömen)", nb: "(\(trainer.totalReviews ?? 0) anmeldelser)"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -815,12 +815,12 @@ struct TrainerDetailView: View {
     private var quickStats: some View {
         HStack(spacing: 12) {
             StatBadge(icon: "figure.golf", value: "HCP \(trainer.handicap)")
-            StatBadge(icon: "clock", value: "från \(trainer.hourlyRate) kr")
+            StatBadge(icon: "clock", value: L.t(sv: "från \(trainer.hourlyRate) kr", nb: "fra \(trainer.hourlyRate) kr"))
             if let years = trainer.experienceYears, years > 0 {
-                StatBadge(icon: "calendar", value: "\(years) års erfarenhet")
+                StatBadge(icon: "calendar", value: L.t(sv: "\(years) års erfarenhet", nb: "\(years) års erfaring"))
             }
             if let lessons = trainer.totalLessons, lessons > 0 {
-                StatBadge(icon: "person.2", value: "\(lessons) lektioner")
+                StatBadge(icon: "person.2", value: L.t(sv: "\(lessons) lektioner", nb: "\(lessons) leksjoner"))
             }
         }
         .frame(maxWidth: .infinity)
@@ -830,7 +830,7 @@ struct TrainerDetailView: View {
     
     private var specialtiesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Specialiteter")
+            Text(L.t(sv: "Specialiteter", nb: "Spesialiteter"))
                 .font(.headline)
             
             FlowLayout(spacing: 8) {
@@ -862,7 +862,7 @@ struct TrainerDetailView: View {
     
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Om mig")
+            Text(L.t(sv: "Om mig", nb: "Om meg"))
                 .font(.headline)
             
             Text(trainer.bio ?? trainer.description)
@@ -889,7 +889,7 @@ struct TrainerDetailView: View {
     
     private var lessonTypesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Lektioner")
+            Text(L.t(sv: "Lektioner", nb: "Leksjoner"))
                 .font(.headline)
             
             ForEach(viewModel.lessonTypes) { lessonType in
@@ -935,13 +935,13 @@ struct TrainerDetailView: View {
     private var reviewsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Omdömen")
+                Text(L.t(sv: "Omdömen", nb: "Anmeldelser"))
                     .font(.headline)
                 
                 Spacer()
                 
                 if viewModel.reviews.count > 2 {
-                    Button("Visa alla") {
+                    Button(L.t(sv: "Visa alla", nb: "Vis alle")) {
                         showAllReviews = true
                     }
                     .font(.subheadline)
@@ -953,7 +953,7 @@ struct TrainerDetailView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
             } else if viewModel.reviews.isEmpty {
-                Text("Inga omdömen ännu")
+                Text(L.t(sv: "Inga omdömen ännu", nb: "Ingen anmeldelser ennå"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 8)
@@ -979,11 +979,11 @@ struct TrainerDetailView: View {
             HStack {
                 Image(systemName: "mappin.and.ellipse")
                     .foregroundColor(.primary)
-                Text("Träningsområde")
+                Text(L.t(sv: "Träningsområde", nb: "Treningsområde"))
                     .font(.headline)
             }
             
-            Text("Tränaren kan hålla lektioner inom \(Int(radiusKm)) km radie")
+            Text(L.t(sv: "Tränaren kan hålla lektioner inom \(Int(radiusKm)) km radie", nb: "Treneren kan holde leksjoner innen \(Int(radiusKm)) km radius"))
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -1028,7 +1028,7 @@ struct TrainerDetailView: View {
     
     private var locationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Plats")
+            Text(L.t(sv: "Plats", nb: "Sted"))
                 .font(.headline)
             
             Map(coordinateRegion: .constant(MKCoordinateRegion(
@@ -1054,7 +1054,7 @@ struct TrainerDetailView: View {
         } label: {
             HStack {
                 Image(systemName: "calendar.badge.plus")
-                Text("Boka lektion")
+                Text(L.t(sv: "Boka lektion", nb: "Book leksjon"))
             }
             .font(.headline)
             .foregroundColor(.white)
@@ -1157,7 +1157,7 @@ struct ReviewCard: View {
             if review.isVerified {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.seal.fill")
-                    Text("Verifierad bokning")
+                    Text(L.t(sv: "Verifierad bokning", nb: "Verifisert booking"))
                 }
                 .font(.caption)
                 .foregroundColor(.primary)
@@ -1241,7 +1241,7 @@ struct AllReviewsView: View {
                         ProgressView()
                             .padding(.top, 50)
                     } else if reviews.isEmpty {
-                        Text("Inga omdömen ännu")
+                        Text(L.t(sv: "Inga omdömen ännu", nb: "Ingen anmeldelser ennå"))
                             .foregroundColor(.secondary)
                             .padding(.top, 50)
                     } else {
@@ -1252,11 +1252,11 @@ struct AllReviewsView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Omdömen för \(trainerName)")
+            .navigationTitle(L.t(sv: "Omdömen för \(trainerName)", nb: "Anmeldelser for \(trainerName)"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Stäng") {
+                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
                         dismiss()
                     }
                 }
@@ -1306,10 +1306,10 @@ struct ContactTrainerView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                Text("Kontakta \(trainer.name)")
+                Text(L.t(sv: "Kontakta \(trainer.name)", nb: "Kontakt \(trainer.name)"))
                     .font(.headline)
                 
-                Text("Skriv ett meddelande för att boka en lektion. Tränaren kommer kontakta dig via appen.")
+                Text(L.t(sv: "Skriv ett meddelande för att boka en lektion. Tränaren kommer kontakta dig via appen.", nb: "Skriv en melding for å booke en leksjon. Treneren vil kontakte deg via appen."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -1331,7 +1331,7 @@ struct ContactTrainerView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Skicka förfrågan")
+                        Text(L.t(sv: "Skicka förfrågan", nb: "Send forespørsel"))
                     }
                 }
                 .font(.headline)
@@ -1345,23 +1345,23 @@ struct ContactTrainerView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Boka lektion")
+            .navigationTitle(L.t(sv: "Boka lektion", nb: "Book leksjon"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
             }
-            .alert("Förfrågan skickad!", isPresented: $showSuccess) {
+            .alert(L.t(sv: "Förfrågan skickad!", nb: "Forespørsel sendt!"), isPresented: $showSuccess) {
                 Button("OK") {
                     dismiss()
                 }
             } message: {
-                Text("\(trainer.name) har fått ditt meddelande och kommer kontakta dig snart.")
+                Text(L.t(sv: "\(trainer.name) har fått ditt meddelande och kommer kontakta dig snart.", nb: "\(trainer.name) har mottatt meldingen din og vil kontakte deg snart."))
             }
-            .alert("Fel", isPresented: .init(
+            .alert(L.t(sv: "Fel", nb: "Feil"), isPresented: .init(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
@@ -1389,7 +1389,7 @@ struct ContactTrainerView: View {
             } catch {
                 await MainActor.run {
                     isSending = false
-                    errorMessage = "Kunde inte skicka förfrågan: \(error.localizedDescription)"
+                    errorMessage = L.t(sv: "Kunde inte skicka förfrågan: \(error.localizedDescription)", nb: "Kunne ikke sende forespørsel: \(error.localizedDescription)")
                 }
             }
         }

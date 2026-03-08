@@ -139,41 +139,51 @@ enum ActivityType: String, CaseIterable, Identifiable {
     
     var shortName: String {
         switch self {
-        case .running: return "Löpning"
-        case .golf: return "Golf"
-        case .walking: return "Gym"
-        case .hiking: return "Klättring"
-        case .skiing: return "Skidor"
+        case .running: return L.t(sv: "Löpning", nb: "Løping")
+        case .golf: return L.t(sv: "Golf", nb: "Golf")
+        case .walking: return L.t(sv: "Gym", nb: "Gym")
+        case .hiking: return L.t(sv: "Klättring", nb: "Klatring")
+        case .skiing: return L.t(sv: "Skidor", nb: "Ski")
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .running: return L.t(sv: "Löppass", nb: "Løpetur")
+        case .golf: return L.t(sv: "Golfrunda", nb: "Golfrunde")
+        case .walking: return L.t(sv: "Gympass", nb: "Gymøkt")
+        case .hiking: return L.t(sv: "Bestiga berg", nb: "Fjellklatring")
+        case .skiing: return L.t(sv: "Skidåkning", nb: "Skiløping")
         }
     }
     
     var buttonText: String {
         switch self {
-        case .running: return "Starta löppass"
-        case .golf: return "Starta golfrunda"
-        case .walking: return "Starta gympass"
-        case .hiking: return "Starta bergsbestigning"
-        case .skiing: return "Starta skidpass"
+        case .running: return L.t(sv: "Starta löppass", nb: "Start løpetur")
+        case .golf: return L.t(sv: "Starta golfrunda", nb: "Start golfrunde")
+        case .walking: return L.t(sv: "Starta gympass", nb: "Start gymøkt")
+        case .hiking: return L.t(sv: "Starta bergsbestigning", nb: "Start fjellklatring")
+        case .skiing: return L.t(sv: "Starta skidpass", nb: "Start skiøkt")
         }
     }
     
     var headline: String {
         switch self {
-        case .walking: return "Bygg styrka"
-        case .running: return "Jaga farten"
-        case .golf: return "Perfekt sving"
-        case .hiking: return "Upp på toppen"
-        case .skiing: return "Följ spåren"
+        case .walking: return L.t(sv: "Bygg styrka", nb: "Bygg styrke")
+        case .running: return L.t(sv: "Jaga farten", nb: "Jakt på farten")
+        case .golf: return L.t(sv: "Perfekt sving", nb: "Perfekt sving")
+        case .hiking: return L.t(sv: "Upp på toppen", nb: "Opp på toppen")
+        case .skiing: return L.t(sv: "Följ spåren", nb: "Følg sporene")
         }
     }
     
     var description: String {
         switch self {
-        case .walking: return "Logga gympass, set och vikter med precision."
-        case .running: return "Spela in distans, tempo och PB på dina löppass."
-        case .golf: return "Håll koll på rundor, slag och distans på banan."
-        case .hiking: return "Kapa nya toppar och spara höjdmetrarna."
-        case .skiing: return "Följ dina åk och lutning i backen."
+        case .walking: return L.t(sv: "Logga gympass, set och vikter med precision.", nb: "Logg gymøkt, sett og vekter med presisjon.")
+        case .running: return L.t(sv: "Spela in distans, tempo och PB på dina löppass.", nb: "Spill inn distanse, tempo og PB på løpeturene dine.")
+        case .golf: return L.t(sv: "Håll koll på rundor, slag och distans på banan.", nb: "Hold oversikt over runder, slag og distanse på banen.")
+        case .hiking: return L.t(sv: "Kapa nya toppar och spara höjdmetrarna.", nb: "Erobre nye topper og lagre høydemeterne.")
+        case .skiing: return L.t(sv: "Följ dina åk och lutning i backen.", nb: "Følg turene dine og helningen i bakken.")
         }
     }
 }
@@ -189,9 +199,9 @@ struct ActivityCarouselSelectionView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Välj aktivitet")
+                Text(L.t(sv: "Välj aktivitet", nb: "Velg aktivitet"))
                     .font(.system(size: 26, weight: .bold))
-                Text("Tryck på en ruta för att välja och starta.")
+                Text(L.t(sv: "Tryck på en ruta för att välja och starta.", nb: "Trykk på en rute for å velge og starte."))
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
@@ -243,7 +253,7 @@ struct ActivityCarouselSelectionView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(activity.rawValue)
+                                Text(activity.displayName)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
@@ -275,10 +285,10 @@ struct XpCelebrationView: View {
     
     init(
         points: Int,
-        title: String = "Grymt jobbat! 💥",
-        subtitle: String = "Du har precis tjänat in",
+        title: String = L.t(sv: "Grymt jobbat! 💥", nb: "Knallbra jobba! 💥"),
+        subtitle: String = L.t(sv: "Du har precis tjänat in", nb: "Du har nettopp tjent"),
         badgeText: String = "XP",
-        buttonTitle: String = "Fortsätt",
+        buttonTitle: String = L.t(sv: "Fortsätt", nb: "Fortsett"),
         onButtonTap: @escaping () -> Void
     ) {
         self.points = points
@@ -386,7 +396,7 @@ struct StreakCelebrationView: View {
                     
                     // Title
                     VStack(spacing: 8) {
-                        Text("Din streak lever!")
+                        Text(L.t(sv: "Din streak lever!", nb: "Din streak lever!"))
                             .font(.system(size: 32, weight: .black))
                     .foregroundColor(.primary)
                             .opacity(showContent ? 1 : 0)
@@ -429,12 +439,12 @@ struct StreakCelebrationView: View {
                     HStack(spacing: 16) {
                         statCard(
                             value: "\(streakInfo.consecutiveDays)",
-                            label: "DAGAR I RAD"
+                            label: L.t(sv: "DAGAR I RAD", nb: "DAGER PÅ RAD")
                         )
                         
                         statCard(
                             value: "\(streakInfo.completedDaysThisWeek)/7",
-                            label: "DENNA VECKA"
+                            label: L.t(sv: "DENNA VECKA", nb: "DENNE UKEN")
                         )
                     }
                     .padding(.horizontal, 32)
@@ -442,7 +452,7 @@ struct StreakCelebrationView: View {
                     
                     // Week calendar
                     VStack(spacing: 16) {
-                        Text("VECKA \(Calendar.current.component(.weekOfYear, from: Date()))")
+                        Text(L.t(sv: "VECKA \(Calendar.current.component(.weekOfYear, from: Date()))", nb: "UKE \(Calendar.current.component(.weekOfYear, from: Date()))"))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.gray)
                         
@@ -454,7 +464,7 @@ struct StreakCelebrationView: View {
                     }
                     .opacity(showContent ? 1 : 0)
                     
-                    Text("Fortsätt logga pass för att hålla streaken vid liv!")
+                    Text(L.t(sv: "Fortsätt logga pass för att hålla streaken vid liv!", nb: "Fortsett å logge økter for å holde streaken i live!"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -463,7 +473,7 @@ struct StreakCelebrationView: View {
                     
                     // Button
                     Button(action: onDismiss) {
-                        Text("SKAPA INLÄGG")
+                        Text(L.t(sv: "SKAPA INLÄGG", nb: "OPPRETT INNLEGG"))
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -758,7 +768,7 @@ struct SessionMapView: View {
                                 
                                 // Notify followers about session start
                                 if let userId = authViewModel.currentUser?.id {
-                                    let userName = authViewModel.currentUser?.name ?? "Användare"
+                                    let userName = authViewModel.currentUser?.name ?? L.t(sv: "Användare", nb: "Bruker")
                                     Task {
                                         let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
                                         try? await ActiveSessionService.shared.startSession(
@@ -876,7 +886,7 @@ struct SessionMapView: View {
                         VStack(spacing: 16) {
                             // Activity label + expand button
                             HStack {
-                                Text((selectedActivity ?? activity).rawValue)
+                                Text((selectedActivity ?? activity).displayName)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.primary)
                                 Spacer()
@@ -901,7 +911,7 @@ struct SessionMapView: View {
                                     Text(formattedTime(sessionDuration))
                                         .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Tid")
+                                    Text(L.t(sv: "Tid", nb: "Tid"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -911,7 +921,7 @@ struct SessionMapView: View {
                                     Text(averagePaceForSession())
                                         .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Snitt tempo")
+                                    Text(L.t(sv: "Snitt tempo", nb: "Gjennomsnitt tempo"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -921,7 +931,7 @@ struct SessionMapView: View {
                                     Text(String(format: "%.2f", locationManager.distance).replacingOccurrences(of: ".", with: ","))
                                         .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.primary)
-                                    Text("Distans (km)")
+                                    Text(L.t(sv: "Distans (km)", nb: "Distanse (km)"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -954,7 +964,7 @@ struct SessionMapView: View {
                                         HStack(spacing: 8) {
                                             Image(systemName: "play.fill")
                                                 .font(.system(size: 16, weight: .bold))
-                                            Text("Fortsätt")
+                                            Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
                                                 .font(.system(size: 16, weight: .bold))
                                         }
                                         .frame(maxWidth: .infinity)
@@ -968,7 +978,7 @@ struct SessionMapView: View {
                                         HStack(spacing: 8) {
                                             Image(systemName: "flag.checkered")
                                                 .font(.system(size: 16, weight: .bold))
-                                            Text("Avsluta")
+                                            Text(L.t(sv: "Avsluta", nb: "Avslutt"))
                                                 .font(.system(size: 16, weight: .bold))
                                         }
                                         .frame(maxWidth: .infinity)
@@ -993,7 +1003,7 @@ struct SessionMapView: View {
                                     HStack(spacing: 10) {
                                         Image(systemName: "pause.fill")
                                             .font(.system(size: 16, weight: .bold))
-                                        Text("Pausa")
+                                        Text(L.t(sv: "Pausa", nb: "Pause"))
                                             .font(.system(size: 16, weight: .bold))
                                     }
                                     .frame(maxWidth: .infinity)
@@ -1025,7 +1035,7 @@ struct SessionMapView: View {
                             // Activity label with expand icon
                             HStack {
                                 Spacer()
-                                Text((selectedActivity ?? activity).rawValue)
+                                Text((selectedActivity ?? activity).displayName)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(.primary)
                                 Spacer()
@@ -1041,7 +1051,7 @@ struct SessionMapView: View {
                                     Text("00:00")
                                         .font(.system(size: 26, weight: .bold, design: .default))
                                         .foregroundColor(.primary)
-                                    Text("Tid")
+                                    Text(L.t(sv: "Tid", nb: "Tid"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1051,7 +1061,7 @@ struct SessionMapView: View {
                                     Text("0:00")
                                         .font(.system(size: 30, weight: .bold, design: .default))
                                         .foregroundColor(.primary)
-                                    Text("Tempo (min/km)")
+                                    Text(L.t(sv: "Tempo (min/km)", nb: "Tempo (min/km)"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1061,7 +1071,7 @@ struct SessionMapView: View {
                                     Text("0,00")
                                         .font(.system(size: 26, weight: .bold, design: .default))
                                         .foregroundColor(.primary)
-                                    Text("Distans (km)")
+                                    Text(L.t(sv: "Distans (km)", nb: "Distanse (km)"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.secondary)
                                 }
@@ -1130,7 +1140,7 @@ struct SessionMapView: View {
                                                 }
                                                 
                                                 if let userId = authViewModel.currentUser?.id {
-                                                    let userName = authViewModel.currentUser?.name ?? "Användare"
+                                                    let userName = authViewModel.currentUser?.name ?? L.t(sv: "Användare", nb: "Bruker")
                                                     Task {
                                                         let currentLocation = locationManager.userLocation.map { CLLocation(latitude: $0.latitude, longitude: $0.longitude) }
                                                         try? await ActiveSessionService.shared.startSession(
@@ -1159,7 +1169,7 @@ struct SessionMapView: View {
                                                 .offset(x: 2)
                                         }
                                     }
-                                    Text("Starta")
+                                    Text(L.t(sv: "Starta", nb: "Start"))
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundColor(.primary)
                                 }
@@ -1254,28 +1264,28 @@ struct SessionMapView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.88), value: showFullScreenStats)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showActivityPicker)
         .navigationBarHidden(true)
-        .alert("Platsåtkomst i bakgrunden krävs", isPresented: $locationManager.showLocationDeniedAlert) {
-            Button("Avbryt", role: .cancel) {}
-            Button("Öppna Inställningar") {
+        .alert(L.t(sv: "Platsåtkomst i bakgrunden krävs", nb: "Bakgrunnsplassering kreves"), isPresented: $locationManager.showLocationDeniedAlert) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
+            Button(L.t(sv: "Öppna Inställningar", nb: "Åpne innstillinger")) {
                 locationManager.openSettings()
             }
         } message: {
-            Text("För att spåra din rutt när appen är stängd måste du välja 'Tillåt alltid' för platsåtkomst i Inställningar.")
+            Text(L.t(sv: "För att spåra din rutt när appen är stängd måste du välja 'Tillåt alltid' för platsåtkomst i Inställningar.", nb: "For å spore ruten din når appen er lukket må du velge 'Tillat alltid' for plasseringstilgang i Innstillinger."))
         }
-        .alert("Vill du verkligen avsluta?", isPresented: $showEndSessionConfirmation) {
-            Button("Återuppta", role: .cancel) { }
-            Button("Avsluta", role: .destructive) {
+        .alert(L.t(sv: "Vill du verkligen avsluta?", nb: "Vil du virkelig avslutte?"), isPresented: $showEndSessionConfirmation) {
+            Button(L.t(sv: "Återuppta", nb: "Gjenoppta"), role: .cancel) { }
+            Button(L.t(sv: "Avsluta", nb: "Avslutt"), role: .destructive) {
                 checkAndEndSession()
             }
         }
-        .alert("Fordon detekterat", isPresented: $showVehicleDetectedAlert) {
+        .alert(L.t(sv: "Fordon detekterat", nb: "Kjøretøy oppdaget"), isPresented: $showVehicleDetectedAlert) {
             Button("OK") {
                 // User acknowledges - session is paused but NOT dismissed
                 // They can resume when they slow down
                 showVehicleDetectedAlert = false
             }
         } message: {
-            Text("Tracking pausas. Du verkar färdas med ett fordon. Passet sparas och du kan fortsätta när du saktar ner.")
+            Text(L.t(sv: "Tracking pausas. Du verkar färdas med ett fordon. Passet sparas och du kan fortsätta när du saktar ner.", nb: "Sporing pauses. Du ser ut til å reise med et kjøretøy. Økten lagres og du kan fortsette når du bremser ned."))
         }
         .onDisappear {
             // Save session state when view disappears, but DON'T stop timer
@@ -1807,7 +1817,7 @@ struct SessionMapView: View {
                             .background(Circle().fill(Color(.systemGray6)))
                     }
                     
-                    Text((selectedActivity ?? activity).rawValue)
+                    Text((selectedActivity ?? activity).displayName)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.secondary)
                     
@@ -1834,7 +1844,7 @@ struct SessionMapView: View {
                     Text(formattedTimeWithHours(sessionDuration))
                         .font(.system(size: 52, weight: .bold, design: .default))
                         .foregroundColor(.primary)
-                    Text("Tid")
+                    Text(L.t(sv: "Tid", nb: "Tid"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -1850,7 +1860,7 @@ struct SessionMapView: View {
                             .foregroundColor(.primary)
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
-                        Text("Tempo (min/km)")
+                        Text(L.t(sv: "Tempo (min/km)", nb: "Tempo (min/km)"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -1862,7 +1872,7 @@ struct SessionMapView: View {
                             .foregroundColor(.primary)
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
-                        Text("Snitt (min/km)")
+                        Text(L.t(sv: "Snitt (min/km)", nb: "Gjennomsnitt (min/km)"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.secondary)
                     }
@@ -1879,7 +1889,7 @@ struct SessionMapView: View {
                         .foregroundColor(.primary)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
-                    Text("Distans (km)")
+                    Text(L.t(sv: "Distans (km)", nb: "Distanse (km)"))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -1899,7 +1909,7 @@ struct SessionMapView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "pause.fill")
                             .font(.system(size: 18, weight: .bold))
-                        Text("Pausa")
+                        Text(L.t(sv: "Pausa", nb: "Pause"))
                             .font(.system(size: 18, weight: .bold))
                     }
                     .foregroundColor(.white)

@@ -50,13 +50,13 @@ struct ConversationSettingsView: View {
         .task {
             await loadParticipants()
         }
-        .alert("Radera konversation", isPresented: $showDeleteConfirmation) {
-            Button("Avbryt", role: .cancel) {}
-            Button("Radera", role: .destructive) {
+        .alert(L.t(sv: "Radera konversation", nb: "Slett samtale"), isPresented: $showDeleteConfirmation) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
+            Button(L.t(sv: "Radera", nb: "Slett"), role: .destructive) {
                 deleteConversation()
             }
         } message: {
-            Text("Är du säker på att du vill radera denna konversation? Alla meddelanden kommer tas bort.")
+            Text(L.t(sv: "Är du säker på att du vill radera denna konversation? Alla meddelanden kommer tas bort.", nb: "Er du sikker på at du vil slette denne samtalen? Alle meldinger vil bli fjernet."))
         }
     }
     
@@ -70,7 +70,7 @@ struct ConversationSettingsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .medium))
-                    Text("Tillbaka")
+                    Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                         .font(.system(size: 16))
                 }
                 .foregroundColor(.primary)
@@ -78,7 +78,7 @@ struct ConversationSettingsView: View {
             
             Spacer()
             
-            Text("Detaljer")
+            Text(L.t(sv: "Detaljer", nb: "Detaljer"))
                 .font(.system(size: 17, weight: .bold))
             
             Spacer()
@@ -87,7 +87,7 @@ struct ConversationSettingsView: View {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .medium))
-                Text("Tillbaka")
+                Text(L.t(sv: "Tillbaka", nb: "Tilbake"))
                     .font(.system(size: 16))
             }
             .opacity(0)
@@ -114,12 +114,12 @@ struct ConversationSettingsView: View {
                 }
             }
             
-            Text(isGroup ? (groupName ?? otherUsername) : "Du och \(otherUsername)")
+            Text(isGroup ? (groupName ?? otherUsername) : L.t(sv: "Du och \(otherUsername)", nb: "Du og \(otherUsername)"))
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.primary)
             
             if isGroup {
-                Text("\(participants.count) medlemmar")
+                Text(L.t(sv: "\(participants.count) medlemmar", nb: "\(participants.count) medlemmer"))
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
@@ -151,7 +151,7 @@ struct ConversationSettingsView: View {
     
     private var participantsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Deltagare")
+            Text(L.t(sv: "Deltagare", nb: "Deltakere"))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
@@ -169,7 +169,7 @@ struct ConversationSettingsView: View {
                                 .foregroundColor(.primary)
                             
                             if participant.isCurrentUser {
-                                Text("Du")
+                                Text(L.t(sv: "Du", nb: "Du"))
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                             }
@@ -202,7 +202,7 @@ struct ConversationSettingsView: View {
                     .foregroundColor(.primary)
                     .frame(width: 28)
                 
-                Text("Tysta konversation")
+                Text(L.t(sv: "Tysta konversation", nb: "Demp samtale"))
                     .font(.system(size: 16))
                     .foregroundColor(.primary)
                 
@@ -229,7 +229,7 @@ struct ConversationSettingsView: View {
         Button {
             showDeleteConfirmation = true
         } label: {
-            Text("Radera konversation")
+            Text(L.t(sv: "Radera konversation", nb: "Slett samtale"))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.red)
                 .frame(maxWidth: .infinity)
@@ -262,7 +262,7 @@ struct ConversationSettingsView: View {
             let result = profiles.map { profile in
                 ChatParticipant(
                     id: profile.id,
-                    username: profile.username ?? "Användare",
+                    username: profile.username ?? L.t(sv: "Användare", nb: "Bruker"),
                     avatarUrl: profile.avatar_url,
                     isCurrentUser: profile.id == currentUserId
                 )

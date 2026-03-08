@@ -4,7 +4,7 @@ import SwiftUI
 struct StravaStyleHeaderView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     var isProfilePage: Bool = false
-    var pageTitle: String = "Hem"
+    var pageTitle: String = L.t(sv: "Hem", nb: "Hjem")
     var onSettingsTapped: (() -> Void)? = nil
     
     @State private var unreadNotifications = 0
@@ -28,7 +28,7 @@ struct StravaStyleHeaderView: View {
                 Button {
                     SuperwallService.shared.showPaywall()
                 } label: {
-                    Text("Bli pro medlem")
+                    Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
@@ -165,7 +165,7 @@ struct StravaStyleHeaderView: View {
                         .environmentObject(authViewModel)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
-                                Button("Stäng") {
+                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
                                     showPublicProfile = false
                                 }
                             }

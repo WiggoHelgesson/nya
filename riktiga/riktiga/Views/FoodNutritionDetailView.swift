@@ -56,7 +56,7 @@ struct FoodNutritionDetailView: View {
                 .padding(.bottom, 120)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Näringsvärden")
+            .navigationTitle(L.t(sv: "Näringsvärden", nb: "Næringsverdier"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -77,7 +77,7 @@ struct FoodNutritionDetailView: View {
                         Button(role: .destructive) {
                             dismiss()
                         } label: {
-                            Label("Avbryt", systemImage: "xmark")
+                            Label(L.t(sv: "Avbryt", nb: "Avbryt"), systemImage: "xmark")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -125,14 +125,14 @@ struct FoodNutritionDetailView: View {
             
             MacroSummaryCard(
                 emoji: "🌾",
-                label: "Kolhydrater",
+                label: L.t(sv: "Kolhydrater", nb: "Karbohydrater"),
                 value: "\(totalCarbs)g",
                 color: Color(red: 0.95, green: 0.93, blue: 0.88)
             )
             
             MacroSummaryCard(
                 emoji: "🥑",
-                label: "Fett",
+                label: L.t(sv: "Fett", nb: "Fett"),
                 value: "\(totalFat)g",
                 color: Color(red: 0.9, green: 0.93, blue: 0.98)
             )
@@ -145,7 +145,7 @@ struct FoodNutritionDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Text("Ingredienser")
+                Text(L.t(sv: "Ingredienser", nb: "Ingredienser"))
                     .font(.system(size: 18, weight: .bold))
                 
                 Spacer()
@@ -156,7 +156,7 @@ struct FoodNutritionDetailView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Lägg till")
+                        Text(L.t(sv: "Lägg till", nb: "Legg til"))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(.primary)
@@ -195,7 +195,7 @@ struct FoodNutritionDetailView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14))
-                    Text("Rätta till")
+                    Text(L.t(sv: "Rätta till", nb: "Korriger"))
                         .font(.system(size: 16, weight: .medium))
                 }
                 .foregroundColor(.primary)
@@ -213,7 +213,7 @@ struct FoodNutritionDetailView: View {
             Button {
                 saveAndDismiss()
             } label: {
-                Text("Klar")
+                Text(L.t(sv: "Klar", nb: "Ferdig"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -463,7 +463,7 @@ struct FoodNutritionDetailView: View {
     // MARK: - Actions
     private func addNewIngredient() {
         let newIngredient = AnalyzingFoodManager.AnalyzedIngredient(
-            name: "Ny ingrediens",
+            name: L.t(sv: "Ny ingrediens", nb: "Ny ingrediens"),
             calories: 0,
             protein: 0,
             carbs: 0,
@@ -509,14 +509,14 @@ struct FixNutritionSheet: View {
                         .font(.system(size: 40))
                         .foregroundColor(.black)
                     
-                    Text("Rätta till")
+                    Text(L.t(sv: "Rätta till", nb: "Korriger"))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.black)
                 }
                 .padding(.top, 8)
                 
                 // Text field
-                TextField("Beskriv vad som ska rättas", text: $fixDescription, axis: .vertical)
+                TextField(L.t(sv: "Beskriv vad som ska rättas", nb: "Beskriv hva som skal korrigeres"), text: $fixDescription, axis: .vertical)
                     .font(.system(size: 16))
                     .padding(16)
                     .background(Color.gray.opacity(0.08))
@@ -526,11 +526,11 @@ struct FixNutritionSheet: View {
                 
                 // Example
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Exempel:")
+                    Text(L.t(sv: "Exempel:", nb: "Eksempel:"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.black)
                     
-                    Text("\"Det var bara 100g kyckling, inte 200g\" eller \"Du missade att ta med såsen\"")
+                    Text(L.t(sv: "\"Det var bara 100g kyckling, inte 200g\" eller \"Du missade att ta med såsen\"", nb: "\"Det var bare 100g kylling, ikke 200g\" eller \"Du glemte å ta med sausen\""))
                         .font(.system(size: 15))
                         .foregroundColor(.gray)
                 }
@@ -548,7 +548,7 @@ struct FixNutritionSheet: View {
                             .progressViewStyle(LinearProgressViewStyle(tint: .black))
                             .scaleEffect(y: 2)
                         
-                        Text("Analyserar med AI...")
+                        Text(L.t(sv: "Analyserar med AI...", nb: "Analyserer med AI..."))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.gray)
                     }
@@ -557,7 +557,7 @@ struct FixNutritionSheet: View {
                     Button {
                         onFix()
                     } label: {
-                        Text("Uppdatera")
+                        Text(L.t(sv: "Uppdatera", nb: "Oppdater"))
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -666,14 +666,14 @@ struct EditIngredientSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Ingrediens") {
-                    TextField("Namn", text: $name)
-                    TextField("Mängd (t.ex. 100g, 1 portion)", text: $amount)
+                Section(L.t(sv: "Ingrediens", nb: "Ingrediens")) {
+                    TextField(L.t(sv: "Namn", nb: "Navn"), text: $name)
+                    TextField(L.t(sv: "Mängd (t.ex. 100g, 1 portion)", nb: "Mengde (f.eks. 100g, 1 porsjon)"), text: $amount)
                 }
                 
-                Section("Näringsvärden") {
+                Section(L.t(sv: "Näringsvärden", nb: "Næringsverdier")) {
                     HStack {
-                        Text("Kalorier")
+                        Text(L.t(sv: "Kalorier", nb: "Kalorier"))
                         Spacer()
                         TextField("0", text: $calories)
                             .keyboardType(.numberPad)
@@ -695,7 +695,7 @@ struct EditIngredientSheet: View {
                     }
                     
                     HStack {
-                        Text("Kolhydrater")
+                        Text(L.t(sv: "Kolhydrater", nb: "Karbohydrater"))
                         Spacer()
                         TextField("0", text: $carbs)
                             .keyboardType(.numberPad)
@@ -706,7 +706,7 @@ struct EditIngredientSheet: View {
                     }
                     
                     HStack {
-                        Text("Fett")
+                        Text(L.t(sv: "Fett", nb: "Fett"))
                         Spacer()
                         TextField("0", text: $fat)
                             .keyboardType(.numberPad)
@@ -723,23 +723,23 @@ struct EditIngredientSheet: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Ta bort ingrediens")
+                            Text(L.t(sv: "Ta bort ingrediens", nb: "Fjern ingrediens"))
                             Spacer()
                         }
                     }
                 }
             }
-            .navigationTitle("Redigera ingrediens")
+            .navigationTitle(L.t(sv: "Redigera ingrediens", nb: "Rediger ingrediens"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Avbryt") {
+                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
                         dismiss()
                     }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Spara") {
+                    Button(L.t(sv: "Spara", nb: "Lagre")) {
                         saveChanges()
                         dismiss()
                     }
