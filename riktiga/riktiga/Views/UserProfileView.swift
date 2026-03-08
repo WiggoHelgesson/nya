@@ -412,47 +412,47 @@ struct UserProfileView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
                     
-                    // MARK: - Mutual Friends
-                    if !isOwnProfile && !mutualFriends.isEmpty {
-                        HStack(spacing: 6) {
-                            HStack(spacing: -8) {
-                                ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { _, friend in
-                                    ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
-                                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                    // MARK: - Mutual Friends + Live Gallery + About/Chart/Compare
+                    Group {
+                        if !isOwnProfile && !mutualFriends.isEmpty {
+                            HStack(spacing: 6) {
+                                HStack(spacing: -8) {
+                                    ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { _, friend in
+                                        ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
+                                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                    }
+                                }
+                                
+                                if mutualFriends.count == 1, let friend = mutualFriends.first {
+                                    Text(L.t(
+                                        sv: "Vän med \(friend.name)",
+                                        nb: "Venn med \(friend.name)"
+                                    ))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                                } else {
+                                    Text(L.t(
+                                        sv: "\(mutualFriends.count) gemensamma vänner",
+                                        nb: "\(mutualFriends.count) felles venner"
+                                    ))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
                                 }
                             }
-                            
-                            if mutualFriends.count == 1, let friend = mutualFriends.first {
-                                Text(L.t(
-                                    sv: "Vän med \(friend.name)",
-                                    nb: "Venn med \(friend.name)"
-                                ))
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                            } else {
-                                Text(L.t(
-                                    sv: "\(mutualFriends.count) gemensamma vänner",
-                                    nb: "\(mutualFriends.count) felles venner"
-                                ))
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                            .opacity(showStats ? 1 : 0)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                        .opacity(showStats ? 1 : 0)
+                        
+                        if !livePhotoPosts.isEmpty {
+                            PublicProfileLiveGallery(
+                                posts: livePhotoPosts,
+                                selectedPost: $selectedLivePhotoPost
+                            )
+                            .opacity(showHeader ? 1 : 0)
+                        }
                     }
                     
-                    // MARK: - Up&Down Live Gallery Slider
-                    if !livePhotoPosts.isEmpty {
-                        PublicProfileLiveGallery(
-                            posts: livePhotoPosts,
-                            selectedPost: $selectedLivePhotoPost
-                        )
-                        .opacity(showHeader ? 1 : 0)
-                    }
-                    
-                    // MARK: - Om {username} + Chart + Compare
                     Group {
                         if hasAboutData {
                             aboutSection
@@ -651,20 +651,44 @@ struct UserProfileView: View {
         .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
     }
     
+    private enum ProfileLoadResult: Sendable {
+        case profile(User?)
+        case followers([String])
+        case following([String])
+    }
+    
     private func loadData() async {
         isLoading = true
         
-        // Load all data in parallel
-        async let profileTask = ProfileService.shared.fetchUserProfile(userId: userId)
-        async let followersIdsTask = SocialService.shared.getFollowers(userId: userId)
-        async let followingIdsTask = SocialService.shared.getFollowing(userId: userId)
+        let results = await withTaskGroup(of: ProfileLoadResult.self, returning: [ProfileLoadResult].self) { group in
+            group.addTask {
+                let p = try? await ProfileService.shared.fetchUserProfile(userId: self.userId)
+                return .profile(p)
+            }
+            group.addTask {
+                let ids = (try? await SocialService.shared.getFollowers(userId: self.userId)) ?? []
+                return .followers(ids)
+            }
+            group.addTask {
+                let ids = (try? await SocialService.shared.getFollowing(userId: self.userId)) ?? []
+                return .following(ids)
+            }
+            var collected: [ProfileLoadResult] = []
+            for await result in group { collected.append(result) }
+            return collected
+        }
         
-        // Wait for all results
-        let profile = try? await profileTask
-        let followersIds = (try? await followersIdsTask) ?? []
-        let followingIds = (try? await followingIdsTask) ?? []
+        var profile: User? = nil
+        var followersIds: [String] = []
+        var followingIds: [String] = []
+        for result in results {
+            switch result {
+            case .profile(let p): profile = p
+            case .followers(let ids): followersIds = ids
+            case .following(let ids): followingIds = ids
+            }
+        }
         
-        // Update UI once with all data
         await MainActor.run {
             if let profile = profile {
                 self.username = profile.name
@@ -702,7 +726,6 @@ struct UserProfileView: View {
             await profilePostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
         }
         
-        // Calculate weekly hours and daily data from posts
         await MainActor.run {
             workoutsCount = profilePostsViewModel.posts.count
             calculateWeeklyActivity()
@@ -710,9 +733,13 @@ struct UserProfileView: View {
         
         // Load mutual friends (only for other users' profiles)
         if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
-            let mutual = try? await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
-            await MainActor.run {
-                self.mutualFriends = mutual ?? []
+            do {
+                let mutual = try await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
+                await MainActor.run {
+                    self.mutualFriends = mutual
+                }
+            } catch {
+                print("⚠️ Failed to load mutual friends: \(error)")
             }
         }
     }
@@ -1517,12 +1544,15 @@ struct UserComparisonView: View {
             startDate = nil
         }
         
-        // Load both users' posts
-        async let myPostsTask = WorkoutService.shared.getUserWorkoutPosts(userId: myUserId, forceRefresh: true)
-        async let theirPostsTask = WorkoutService.shared.getUserWorkoutPosts(userId: theirUserId, forceRefresh: true)
-        
-        let myPosts = (try? await myPostsTask) ?? []
-        let theirPosts = (try? await theirPostsTask) ?? []
+        // Load both users' posts in parallel
+        let myPosts: [SocialWorkoutPost]
+        let theirPosts: [SocialWorkoutPost]
+        do {
+            let myTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: myUserId, forceRefresh: true) }
+            let theirTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: theirUserId, forceRefresh: true) }
+            myPosts = (try? await myTask.value) ?? []
+            theirPosts = (try? await theirTask.value) ?? []
+        }
         
         // Filter by date range
         let isoFormatter = ISO8601DateFormatter()
