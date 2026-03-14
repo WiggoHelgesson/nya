@@ -18,7 +18,6 @@ struct SocialContainerView: View {
     let popToRootTrigger: Int
     @State private var selectedTab: HomeTab = .hem
     @State private var showFindFriends = false
-    @State private var showPublicProfile = false
     @State private var unreadNotifications = 0
     @State private var isFetchingUnread = false
     @State private var unreadMessages = 0
@@ -28,8 +27,23 @@ struct SocialContainerView: View {
     
     private let fetchThrottleInterval: TimeInterval = 30
     
+    @State private var showEditProfile = false
+    
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
+    }
+    
+    private var profileCompletedSteps: Int {
+        guard let user = authViewModel.currentUser else { return 0 }
+        var count = 0
+        if !user.pinnedPostIds.isEmpty { count += 1 }
+        if let bio = user.bio, !bio.isEmpty { count += 1 }
+        if !user.gymPbs.isEmpty || user.pb5kmMinutes != nil || user.pb10kmMinutes != nil || user.pbMarathonMinutes != nil { count += 1 }
+        if !user.completedRaces.isEmpty { count += 1 }
+        if let gym = user.homeGym, !gym.isEmpty { count += 1 }
+        if let goal = user.trainingGoal, !goal.isEmpty { count += 1 }
+        if let identity = user.trainingIdentity, !identity.isEmpty { count += 1 }
+        return min(count, 3)
     }
     
     var body: some View {
@@ -38,37 +52,17 @@ struct SocialContainerView: View {
                 // MARK: - Header (samma som Rewards)
                 VStack(spacing: 0) {
                     ZStack {
-                        // Center: Page title or Pro CTA
-                        if isPremium {
-                            Text(L.t(sv: "Socialt", nb: "Sosialt"))
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.primary)
-                        } else {
-                            Button {
-                                SuperwallService.shared.showPaywall()
-                            } label: {
-                                Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 9)
-                                    .background(
-                                        LinearGradient(colors: [.black, Color(white: 0.55)],
-                                                       startPoint: .leading, endPoint: .trailing)
-                                    )
-                                    .cornerRadius(20)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        // Center: Page title
+                        Text(L.t(sv: "Socialt", nb: "Sosialt"))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
                         
                         // Left and Right sides
                         HStack {
                             // Left: Profile picture + Search
                             HStack(spacing: 10) {
-                                Button {
-                                    showPublicProfile = true
-                                } label: {
-                                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                NavigationLink(destination: UserProfileView(userId: authViewModel.currentUser?.id ?? "").environmentObject(authViewModel)) {
+                                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                                         .overlay(
                                             Circle()
                                                 .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -76,7 +70,6 @@ struct SocialContainerView: View {
                                 }
                                 .buttonStyle(.plain)
                                 
-                                // Search / Find friends
                                 NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 20, weight: .regular))
@@ -147,46 +140,43 @@ struct SocialContainerView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 16)
                     
-                    // MARK: - Tab Selector (Strava-style underline)
-                    HStack(spacing: 0) {
-                        ForEach(HomeTab.allCases, id: \.self) { tab in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedTab = tab
-                                }
-                            } label: {
-                                VStack(spacing: 10) {
-                                    Text(tab.displayName)
-                                        .font(.system(size: 16, weight: selectedTab == tab ? .bold : .medium))
-                                        .foregroundColor(selectedTab == tab ? .primary : .gray)
-                                    
-                                    // Black underline indicator
-                                    Rectangle()
-                                        .fill(selectedTab == tab ? Color.primary : Color.clear)
-                                        .frame(height: 3)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    // Bottom separator
+                    Rectangle()
+                        .fill(Color.primary)
+                        .frame(height: 0.5)
+                        .opacity(0.1)
                 }
                 .background(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 .zIndex(2)
                 
-                // Swipeable content
-                TabView(selection: $selectedTab) {
-                    SocialView()
-                        .environmentObject(authViewModel)
-                        .tag(HomeTab.hem)
-                    
-                    FindTrainerView()
-                        .environmentObject(authViewModel)
-                        .tag(HomeTab.hittaTranare)
+                if profileCompletedSteps < 3 {
+                    Button {
+                        showEditProfile = true
+                    } label: {
+                        HStack {
+                            Text(L.t(
+                                sv: "Sätt upp din publika profil \(profileCompletedSteps)/3",
+                                nb: "Sett opp din offentlige profil \(profileCompletedSteps)/3"
+                            ))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color.black)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                
+                SocialView()
+                    .environmentObject(authViewModel)
             }
             .navigationBarHidden(true)
             .navigationDestination(for: String.self) { conversationId in
@@ -195,19 +185,10 @@ struct SocialContainerView: View {
             }
         }
         .id(popToRootTrigger)
-        .sheet(isPresented: $showPublicProfile) {
-            if let userId = authViewModel.currentUser?.id {
-                NavigationStack {
-                    UserProfileView(userId: userId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    showPublicProfile = false
-                                }
-                            }
-                        }
-                }
+        .sheet(isPresented: $showEditProfile) {
+            NavigationStack {
+                EditProfileView()
+                    .environmentObject(authViewModel)
             }
         }
         .task {

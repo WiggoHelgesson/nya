@@ -53,7 +53,7 @@ struct AnimatedGifView: UIViewRepresentable {
         spinner?.startAnimating()
         spinner?.isHidden = false
         
-        let task = URLSession.shared.dataTask(with: url) { data, _, error in
+        let task = SupabaseConfig.urlSession.dataTask(with: url) { data, _, error in
             guard let data = data, error == nil else {
                 DispatchQueue.main.async {
                     spinner?.stopAnimating()
@@ -133,6 +133,7 @@ struct DirectMessageView: View {
     @State private var currentUserId: UUID?
     @State private var isLoading = true
     @State private var showSettings = false
+    @State private var otherIsPro = false
     @State private var otherUserLastSeen: Date? = nil
     @State private var senderNames: [UUID: String] = [:]
     @State private var senderAvatars: [UUID: String] = [:]
@@ -1141,7 +1142,7 @@ struct ImageMessageBubble: View {
                 }
                 
                 // Image / GIF
-                if let imageUrl = message.imageUrl, let url = URL(string: imageUrl) {
+                if let imageUrl = message.imageUrl, let url = URL(string: SupabaseConfig.rewriteURL(imageUrl)) {
                     if message.isGif {
                         AnimatedGifView(url: url)
                             .frame(width: 240, height: 190)
@@ -1231,7 +1232,7 @@ struct ChatFullScreenImageView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            if let urlString = imageUrl, let url = URL(string: urlString) {
+            if let urlString = imageUrl, let url = URL(string: SupabaseConfig.rewriteURL(urlString)) {
                 if isGif {
                     AnimatedGifView(url: url)
                         .scaleEffect(scale)
@@ -2240,7 +2241,7 @@ struct GifPickerView: View {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
             let response = try JSONDecoder().decode(GiphyResponse.self, from: data)
             let results = response.data.map { GiphyGif(from: $0) }
             await MainActor.run {
@@ -2263,7 +2264,7 @@ struct GifPickerView: View {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
             let response = try JSONDecoder().decode(GiphyResponse.self, from: data)
             let results = response.data.map { GiphyGif(from: $0) }
             await MainActor.run {

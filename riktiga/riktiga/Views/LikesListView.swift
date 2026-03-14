@@ -159,7 +159,7 @@ private struct LikeUserRow: View {
         HStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: user.id)) {
                 HStack(spacing: 12) {
-                    ProfileImage(url: user.avatarUrl, size: 48)
+                    ProfileImage(url: user.avatarUrl, size: 48, isPro: user.isProMember)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(user.name)

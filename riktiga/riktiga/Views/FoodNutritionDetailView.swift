@@ -408,7 +408,7 @@ struct FoodNutritionDetailView: View {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],

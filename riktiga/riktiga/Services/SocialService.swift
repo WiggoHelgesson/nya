@@ -58,7 +58,7 @@ class SocialService {
                     let currentUser = try await supabase.auth.user()
                     let userProfile: [UserSearchResult] = try await supabase
                         .from("profiles")
-                        .select("id, username, avatar_url")
+                        .select("id, username, avatar_url, is_pro_member")
                         .eq("id", value: currentUser.id.uuidString)
                         .execute()
                         .value
@@ -134,7 +134,7 @@ class SocialService {
             // Then get user details for those IDs
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: followingIds)
                 .not("username", operator: .is, value: "null")
                 .execute()
@@ -187,7 +187,7 @@ class SocialService {
             // Then get user details for those IDs
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: followerIds)
                 .not("username", operator: .is, value: "null")
                 .execute()
@@ -371,7 +371,7 @@ class SocialService {
             
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: likerIds)
                 .execute()
                 .value
@@ -405,7 +405,7 @@ class SocialService {
             
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: likerIds)
                 .execute()
                 .value
@@ -594,7 +594,7 @@ class SocialService {
             // Fetch user data for all comment authors
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: userIds)
                 .execute()
                 .value
@@ -613,6 +613,7 @@ class SocialService {
                     createdAt: comment.createdAt,
                     userName: user?.name,
                     userAvatarUrl: user?.avatarUrl,
+                    userIsPro: user?.isProMember ?? false,
                     parentCommentId: comment.parentCommentId
                 )
             }
@@ -693,7 +694,7 @@ class SocialService {
             
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .not("username", operator: .is, value: "null")
                 .limit(50)
                 .execute()
@@ -721,7 +722,7 @@ class SocialService {
                 // If user is not following anyone, return random users
                 let allUsers: [UserSearchResult] = try await supabase
                     .from("profiles")
-                    .select("id, username, avatar_url")
+                    .select("id, username, avatar_url, is_pro_member")
                     .neq("id", value: userId)
                     .not("username", operator: .is, value: "null")
                     .limit(limit)
@@ -767,7 +768,7 @@ class SocialService {
                 // Fallback: get random users if no mutual friends found
                 let allUsers: [UserSearchResult] = try await supabase
                     .from("profiles")
-                    .select("id, username, avatar_url")
+                    .select("id, username, avatar_url, is_pro_member")
                     .neq("id", value: userId)
                     .not("username", operator: .is, value: "null")
                     .limit(limit)
@@ -783,7 +784,7 @@ class SocialService {
             
             let recommendedUsers: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: userIdsToFetch)
                 .not("username", operator: .is, value: "null")
                 .execute()
@@ -840,24 +841,24 @@ class SocialService {
         }
     }
     
-    func getMutualFriends(currentUserId: String, otherUserId: String) async throws -> [UserSearchResult] {
+    func getMutualFriends(currentUserId: String, otherUserId: String) async throws -> (friends: [UserSearchResult], totalCount: Int) {
         do {
             let myFollowing = try await getFollowing(userId: currentUserId)
             let theirFollowing = try await getFollowing(userId: otherUserId)
             let mutualIds = Array(Set(myFollowing).intersection(Set(theirFollowing)))
-            guard !mutualIds.isEmpty else { return [] }
+            guard !mutualIds.isEmpty else { return ([], 0) }
             
             let profiles: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .in("id", values: mutualIds)
                 .limit(3)
                 .execute()
                 .value
-            return profiles
+            return (profiles, mutualIds.count)
         } catch {
             print("❌ Error getting mutual friends: \(error)")
-            return []
+            return ([], 0)
         }
     }
     
@@ -868,7 +869,7 @@ class SocialService {
             
             let users: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .ilike("username", pattern: "%\(query)%")
                 .not("username", operator: .is, value: "null")
                 .neq("id", value: currentUserId)
@@ -901,7 +902,7 @@ class SocialService {
             // We'll fetch all users and filter locally for better matching
             let allUsers: [UserSearchResult] = try await supabase
                 .from("profiles")
-                .select("id, username, avatar_url")
+                .select("id, username, avatar_url, is_pro_member")
                 .not("username", operator: .is, value: "null")
                 .neq("id", value: currentUserId)
                 .limit(500) // Get a good sample

@@ -77,6 +77,8 @@ struct MainTabView: View {
     @State private var showAIScanPaywall = false
     @State private var showManualEntry = false
     @State private var showProWelcome = false
+    @AppStorage("hasSeenFirstLaunchPopup") private var hasSeenFirstLaunchPopup = false
+    @State private var showFirstLaunchPopup = false
     @State private var hasActiveCoach = false
     @State private var coachWorkoutToStart: SavedGymWorkout? = nil
     @State private var pendingCoachInvitation: CoachInvitation? = nil
@@ -93,7 +95,7 @@ struct MainTabView: View {
         if hasActiveCoach {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("fork.knife", L.t(sv: "Kalorier", nb: "Kalorier"), "fork.knife"),
+                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill"),
                 ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
                 ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
@@ -101,7 +103,7 @@ struct MainTabView: View {
         } else {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("fork.knife", L.t(sv: "Kalorier", nb: "Kalorier"), "fork.knife"),
+                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill"),
                 ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
@@ -114,7 +116,7 @@ struct MainTabView: View {
     private var coachTabIndex: Int { 2 } // Endast om hasActiveCoach
     
     var body: some View {
-        customTabView
+        mainContent
             .modifier(FullScreenCoversModifier(
                 showStartSession: $showStartSession,
                 showResumeSession: $showResumeSession,
@@ -170,6 +172,12 @@ struct MainTabView: View {
                     showResumeSession = true
                 }
                 hapticGenerator.prepare()
+                
+                if !hasSeenFirstLaunchPopup {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showFirstLaunchPopup = true
+                    }
+                }
             }
             .task {
                 await checkForActiveCoach()
@@ -186,6 +194,68 @@ struct MainTabView: View {
                     Task { try? await AuthSessionManager.shared.ensureValidSession() }
                 }
             }
+            .overlay {
+                if showFirstLaunchPopup {
+                    firstLaunchPopupOverlay
+                }
+            }
+    }
+    
+    // MARK: - First Launch Popup
+    private var firstLaunchPopupOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { }
+            
+            VStack(spacing: 0) {
+                Image("75")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 220)
+                    .clipped()
+                
+                VStack(spacing: 16) {
+                    Text(L.t(sv: "Tracka ett pass med Up&Down", nb: "Track en økt med Up&Down"))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Text(L.t(
+                        sv: "Redo att testa Up&Down? Välj bland gympass, löppass, golf, skidåkning eller bergsklättring och skapa ditt första inlägg idag!",
+                        nb: "Klar til å teste Up&Down? Velg blant gymøkter, løpeøkter, golf, ski eller fjellklatring og lag ditt første innlegg i dag!"
+                    ))
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            hasSeenFirstLaunchPopup = true
+                            showFirstLaunchPopup = false
+                        }
+                    } label: {
+                        Text(L.t(sv: "Klar", nb: "Klar"))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(20)
+            }
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+            .padding(.horizontal, 24)
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
+        .animation(.easeOut(duration: 0.25), value: showFirstLaunchPopup)
     }
     
     // MARK: - Coach Invitation Sheet
@@ -241,48 +311,20 @@ struct MainTabView: View {
             VStack {
                 Spacer()
                 
-                VStack(spacing: 12) {
-                    HStack(spacing: 12) {
-                        addMealOption(icon: "dumbbell.fill", title: L.t(sv: "Starta gympass", nb: "Start treningsøkt")) {
-                            showAddMealSheet = false
-                            startActivityType = .walking
-                            showStartSession = true
-                        }
-                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
-                        
-                        addMealOption(icon: "figure.run", title: L.t(sv: "Starta löppass", nb: "Start løpeøkt")) {
-                            showAddMealSheet = false
-                            startActivityType = .running
-                            showStartSession = true
-                        }
-                        .scaleEffect(showAddMealSheet ? 1 : 0.8)
+                HStack(spacing: 12) {
+                    addMealOption(icon: "dumbbell.fill", title: L.t(sv: "Starta gympass", nb: "Start treningsøkt")) {
+                        showAddMealSheet = false
+                        startActivityType = .walking
+                        showStartSession = true
                     }
+                    .scaleEffect(showAddMealSheet ? 1 : 0.8)
                     
-                    HStack(spacing: 12) {
-                        if !revenueCatManager.isProMember && barcodeScanLimitManager.isAtLimit() {
-                            barcodeScanLimitedOption()
-                                .scaleEffect(showAddMealSheet ? 1 : 0.8)
-                        } else {
-                            addMealOption(icon: "barcode.viewfinder", title: L.t(sv: "Scanna streckkod", nb: "Skann strekkode")) {
-                                showAddMealSheet = false
-                                initialScannerMode = .barcode
-                                showFoodScanner = true
-                            }
-                            .scaleEffect(showAddMealSheet ? 1 : 0.8)
-                        }
-                        
-                        if !revenueCatManager.isProMember && scanLimitManager.isAtLimit() {
-                            aiScanLimitedOption()
-                                .scaleEffect(showAddMealSheet ? 1 : 0.8)
-                        } else {
-                            aiScanOption {
-                                showAddMealSheet = false
-                                initialScannerMode = .ai
-                                showFoodScanner = true
-                            }
-                            .scaleEffect(showAddMealSheet ? 1 : 0.8)
-                        }
+                    addMealOption(icon: "figure.run", title: L.t(sv: "Starta löppass", nb: "Start løpeøkt")) {
+                        showAddMealSheet = false
+                        startActivityType = .running
+                        showStartSession = true
                     }
+                    .scaleEffect(showAddMealSheet ? 1 : 0.8)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -514,7 +556,78 @@ struct MainTabView: View {
         .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
     }
     
-    // MARK: - Custom Tab View (all iOS versions)
+    // MARK: - Main Content (branching by iOS version)
+    @ViewBuilder
+    private var mainContent: some View {
+        if #available(iOS 26, *) {
+            liquidGlassTabView
+        } else {
+            customTabView
+        }
+    }
+    
+    // MARK: - Liquid Glass Tab View (iOS 26+)
+    @available(iOS 26, *)
+    private var liquidGlassTabView: some View {
+        ZStack {
+            TabView(selection: $selectedTab) {
+                Tab(L.t(sv: "Hem", nb: "Hjem"), systemImage: "house.fill", value: 0) {
+                    SocialContainerView(popToRootTrigger: popToRootTrigger[0] ?? 0)
+                }
+                
+                Tab(L.t(sv: "Topplistor", nb: "Topplister"), systemImage: "trophy.fill", value: 1) {
+                    LeaderboardContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
+                }
+                
+                if hasActiveCoach {
+                    Tab(L.t(sv: "Coach", nb: "Coach"), systemImage: "person.badge.shield.checkmark.fill", value: 2) {
+                        CoachTabView(popToRootTrigger: popToRootTrigger[2] ?? 0)
+                    }
+                }
+                
+                Tab(L.t(sv: "Belöningar", nb: "Belønninger"), systemImage: "gift.fill", value: rewardsTabIndex) {
+                    RewardsContainerView(popToRootTrigger: popToRootTrigger[rewardsTabIndex] ?? 0)
+                }
+                
+                Tab(L.t(sv: "Profil", nb: "Profil"), systemImage: "person.fill", value: profileTabIndex) {
+                    ProfileContainerView(popToRootTrigger: popToRootTrigger[profileTabIndex] ?? 0)
+                }
+            }
+            
+            if showAddMealSheet {
+                addMealOverlay
+            }
+            
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
+                        floatingAddButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 72)
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
+            
+            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+                VStack {
+                    Spacer()
+                    activeSessionBanner
+                        .padding(.bottom, 68)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.easeInOut(duration: 0.15), value: selectedTab)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
+        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
+    }
+    
+    // MARK: - Custom Tab View (pre-iOS 26)
     private var customTabView: some View {
         VStack(spacing: 0) {
             // Content views based on selected tab
@@ -524,7 +637,7 @@ struct MainTabView: View {
                     .opacity(selectedTab == 0 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 0 && !showAddMealSheet)
                 
-                HomeContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
+                LeaderboardContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(selectedTab == 1 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 1 && !showAddMealSheet)

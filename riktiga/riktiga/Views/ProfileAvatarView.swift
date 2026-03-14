@@ -5,40 +5,33 @@ import Supabase
 struct ProfileAvatarView: View {
     let path: String
     let size: CGFloat
+    let isPro: Bool
     
     @State private var image: UIImage?
     @State private var isLoading = true
     @State private var loadFailed = false
     
-    init(path: String, size: CGFloat = 72) {
+    init(path: String, size: CGFloat = 72, isPro: Bool = false) {
         self.path = path
         self.size = size
+        self.isPro = isPro
     }
     
-    var body: some View {
+    private var avatarContent: some View {
         Group {
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(width: size, height: size)
-                    .clipShape(Circle())
+                    .clipShape(isPro ? AnyShape(RoundedRectangle(cornerRadius: size * 0.28)) : AnyShape(Circle()))
             } else if isLoading {
-                Circle()
+                proShape
                     .fill(Color(.systemGray5))
                     .frame(width: size, height: size)
                     .overlay(ProgressView().scaleEffect(0.6))
-            } else if loadFailed || path.isEmpty {
-                Circle()
-                    .fill(Color(.systemGray5))
-                    .frame(width: size, height: size)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.gray)
-                            .font(.system(size: size * 0.5))
-                    )
             } else {
-                Circle()
+                proShape
                     .fill(Color(.systemGray5))
                     .frame(width: size, height: size)
                     .overlay(
@@ -48,7 +41,34 @@ struct ProfileAvatarView: View {
                     )
             }
         }
-        .frame(width: size, height: size)
+    }
+    
+    private var proShape: some Shape {
+        isPro ? AnyShape(RoundedRectangle(cornerRadius: size * 0.28)) : AnyShape(Circle())
+    }
+    
+    var body: some View {
+        Group {
+            if isPro {
+                ZStack {
+                    RoundedRectangle(cornerRadius: size * 0.3)
+                        .fill(
+                            LinearGradient(
+                                colors: [.black, Color(.systemGray2), .white, Color(.systemGray2), .black],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: size + 5, height: size + 5)
+                    
+                    avatarContent
+                }
+                .frame(width: size + 5, height: size + 5)
+            } else {
+                avatarContent
+                    .frame(width: size, height: size)
+            }
+        }
         .task(id: path) {
             await loadImage()
         }
@@ -83,7 +103,7 @@ struct ProfileAvatarView: View {
                 guard let url = URL(string: path) else {
                     throw NSError(domain: "InvalidURL", code: 0)
                 }
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 guard let downloadedImage = UIImage(data: data) else {
                     throw NSError(domain: "InvalidImage", code: 0)
                 }
@@ -122,7 +142,7 @@ struct ProfileAvatarView: View {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 10
                 
-                let (data, _) = try await URLSession.shared.data(for: request)
+                let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
                 
                 guard let downloadedImage = UIImage(data: data) else { continue }
                 

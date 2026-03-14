@@ -11,7 +11,7 @@ final class FoodScannerService {
     private let jsonDecoder: JSONDecoder
     private let jsonEncoder: JSONEncoder
     
-    private init(session: URLSession = .shared) {
+    private init(session: URLSession = SupabaseConfig.urlSession) {
         self.session = session
         self.jsonDecoder = JSONDecoder()
         self.jsonEncoder = JSONEncoder()

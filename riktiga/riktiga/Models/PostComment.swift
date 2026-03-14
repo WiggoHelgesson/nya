@@ -8,6 +8,7 @@ struct PostComment: Codable, Identifiable {
     let createdAt: String
     let userName: String?
     let userAvatarUrl: String?
+    let userIsPro: Bool
     let parentCommentId: String?
     var likeCount: Int
     var isLikedByCurrentUser: Bool
@@ -36,6 +37,7 @@ struct PostComment: Codable, Identifiable {
          createdAt: String = ISO8601DateFormatter().string(from: Date()),
          userName: String? = nil,
          userAvatarUrl: String? = nil,
+         userIsPro: Bool = false,
          parentCommentId: String? = nil,
          likeCount: Int = 0,
          isLikedByCurrentUser: Bool = false) {
@@ -46,6 +48,7 @@ struct PostComment: Codable, Identifiable {
         self.createdAt = createdAt
         self.userName = userName
         self.userAvatarUrl = userAvatarUrl
+        self.userIsPro = userIsPro
         self.parentCommentId = parentCommentId
         self.likeCount = likeCount
         self.isLikedByCurrentUser = isLikedByCurrentUser
@@ -65,15 +68,18 @@ struct PostComment: Codable, Identifiable {
         struct ProfileData: Decodable {
             let username: String?
             let avatar_url: String?
+            let is_pro_member: Bool?
         }
         
         // Check if "profiles" key exists and decode it
         if let profiles = try? container.decodeIfPresent(ProfileData.self, forKey: .profiles) {
              self.userName = profiles.username
              self.userAvatarUrl = profiles.avatar_url
+             self.userIsPro = profiles.is_pro_member ?? false
         } else {
              self.userName = nil
              self.userAvatarUrl = nil
+             self.userIsPro = false
         }
 
         // Handle additional keys safely

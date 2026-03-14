@@ -382,7 +382,7 @@ struct CoachInvitationView: View {
         VStack(spacing: 24) {
             // Coach avatar
             if let avatarUrl = invitation.coach?.avatarUrl, !avatarUrl.isEmpty {
-                AsyncImage(url: URL(string: avatarUrl)) { image in
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)

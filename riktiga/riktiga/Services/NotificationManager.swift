@@ -355,7 +355,7 @@ final class NotificationManager {
     
     private func downloadAttachment(from url: URL) async -> UNNotificationAttachment? {
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
             let tempDir = FileManager.default.temporaryDirectory
             let fileUrl = tempDir.appendingPathComponent("monthly-report-avatar.jpg")
             try data.write(to: fileUrl)

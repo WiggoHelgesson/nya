@@ -5,6 +5,7 @@ import Supabase
 
 // MARK: - ProfileActivitiesView (Activities tab content)
 struct ProfileActivitiesView: View {
+    var onPublicProfileTapped: (() -> Void)? = nil
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var showImagePicker = false
@@ -28,7 +29,6 @@ struct ProfileActivitiesView: View {
     @State private var isInitialLoad = true
     @StateObject private var myPostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
-    @State private var showPublicProfile = false
     @State private var navigationPath = NavigationPath()
     @State private var showRoutines = false
     @State private var showSharedRoutines = false
@@ -37,6 +37,11 @@ struct ProfileActivitiesView: View {
     @State private var selectedUserStories: UserStories? = nil
     @State private var friendUsers: [UserSearchResult] = []
     @State private var selectedFriendUserId: String? = nil
+    @State private var myEvents: [Event] = []
+    @State private var showCreateEvent = false
+    @State private var selectedEvent: Event? = nil
+    @State private var availableInviteCount = 0
+    @State private var showInviteView = false
     
     private let statsLoadThrottle: TimeInterval = 60
     
@@ -102,22 +107,42 @@ struct ProfileActivitiesView: View {
                                 }) {
                                     ZStack {
                                         if !myStories.isEmpty {
-                                            Circle()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [Color.white, Color.black, Color.gray],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    ),
-                                                    lineWidth: 3
-                                                )
-                                                .frame(width: 108, height: 108)
+                                            if isPremium {
+                                                RoundedRectangle(cornerRadius: 128 * 0.3)
+                                                    .stroke(
+                                                        LinearGradient(
+                                                            colors: [Color.white, Color.black, Color.gray],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        ),
+                                                        lineWidth: 3
+                                                    )
+                                                    .frame(width: 133, height: 133)
+                                            } else {
+                                                Circle()
+                                                    .stroke(
+                                                        LinearGradient(
+                                                            colors: [Color.white, Color.black, Color.gray],
+                                                            startPoint: .topLeading,
+                                                            endPoint: .bottomTrailing
+                                                        ),
+                                                        lineWidth: 3
+                                                    )
+                                                    .frame(width: 128, height: 128)
+                                            }
                                         }
                                         
-                                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 100)
+                                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 120, isPro: isPremium)
                                             .overlay(
-                                                Circle()
-                                                    .stroke(Color(.systemBackground), lineWidth: 4)
+                                                Group {
+                                                    if isPremium {
+                                                        RoundedRectangle(cornerRadius: 120 * 0.3)
+                                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                                    } else {
+                                                        Circle()
+                                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                                    }
+                                                }
                                             )
                                     }
                                 }
@@ -133,14 +158,23 @@ struct ProfileActivitiesView: View {
                                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                                 }
                             }
-                            .offset(y: 50)
+                            .offset(y: 60)
                         }
                         
-                        Spacer().frame(height: 56)
+                        Spacer().frame(height: 66)
                         
                         Text(displayName)
                             .font(.system(size: 22, weight: .bold))
-                            .padding(.bottom, 6)
+                        
+                        if let user = authViewModel.currentUser,
+                           (user.verifiedSchoolEmail?.lowercased().hasSuffix("@elev.danderyd.se") == true
+                            || user.email.lowercased().hasSuffix("@elev.danderyd.se")) {
+                            Text("Danderyds gymnasium")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer().frame(height: 6)
                         
                         // Stats row
                         HStack(spacing: 0) {
@@ -188,7 +222,7 @@ struct ProfileActivitiesView: View {
                     
                     // MARK: - Profile Buttons
                     HStack(spacing: 8) {
-                        Button(action: { showPublicProfile = true }) {
+                        Button(action: { onPublicProfileTapped?() }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "person.crop.circle")
                                     .font(.system(size: 14, weight: .medium))
@@ -216,6 +250,42 @@ struct ProfileActivitiesView: View {
                             .cornerRadius(10)
                         }
                     }
+                    
+                    // MARK: - Invite Friends Button
+                    if availableInviteCount > 0 {
+                        Button {
+                            showInviteView = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "envelope.badge.person.crop")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.primary)
+                                    .frame(width: 36, height: 36)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                                
+                                Text(L.t(
+                                    sv: "Bjud in \(availableInviteCount) vän\(availableInviteCount == 1 ? "" : "ner") till Up&Down",
+                                    nb: "Inviter \(availableInviteCount) venn\(availableInviteCount == 1 ? "" : "er") til Up&Down"
+                                ))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(.systemGray3))
+                            }
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 0.5)
+                            )
+                        }
+                    }
 
                     // MARK: - Friends Grid
                     if !friendUsers.isEmpty {
@@ -229,7 +299,7 @@ struct ProfileActivitiesView: View {
                                 } label: {
                                     Text(L.t(sv: "Visa alla", nb: "Vis alle"))
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(.primary)
                                 }
                             }
                             
@@ -311,6 +381,14 @@ struct ProfileActivitiesView: View {
                             )
                         }
                     }
+                    
+                    // MARK: - Händelser (Events)
+                    EventsSliderView(
+                        events: myEvents,
+                        isOwnProfile: true,
+                        onCreateTapped: { showCreateEvent = true },
+                        onEventTapped: { event in selectedEvent = event }
+                    )
                     
                     // MARK: - Up&Down Live Gallery
                     UpAndDownLiveGallery(posts: myPostsViewModel.posts)
@@ -439,20 +517,7 @@ struct ProfileActivitiesView: View {
                         .environmentObject(authViewModel)
                 }
             }
-            .sheet(isPresented: $showPublicProfile) {
-                if let userId = authViewModel.currentUser?.id {
-                    NavigationStack {
-                        UserProfileView(userId: userId)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button("Stäng") {
-                                        showPublicProfile = false
-                                    }
-                                }
-                            }
-                    }
-                    }
-            }
+            
             .sheet(isPresented: Binding(
                 get: { selectedFriendUserId != nil },
                 set: { if !$0 { selectedFriendUserId = nil } }
@@ -470,6 +535,32 @@ struct ProfileActivitiesView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showCreateEvent) {
+                if let userId = authViewModel.currentUser?.id {
+                    CreateEventView(userId: userId) { newEvent in
+                        myEvents.insert(newEvent, at: 0)
+                    }
+                }
+            }
+            .sheet(item: $selectedEvent) { event in
+                NavigationStack {
+                    EventDetailView(
+                        event: event,
+                        isOwnEvent: true,
+                        onDeleted: {
+                            myEvents.removeAll { $0.id == event.id }
+                            selectedEvent = nil
+                        }
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(L.t(sv: "Stäng", nb: "Lukk")) {
+                                selectedEvent = nil
+                            }
+                        }
+                    }
+                }
+            }
             .onChange(of: bannerPickerItem) { _, newItem in
                 guard let newItem else { return }
                 Task { await uploadBanner(newItem) }
@@ -478,12 +569,26 @@ struct ProfileActivitiesView: View {
                 guard let newItem else { return }
                 Task { await uploadAvatar(newItem) }
             }
+            .navigationDestination(isPresented: $showInviteView) {
+                InviteView()
+                    .environmentObject(authViewModel)
+            }
             .task {
                 // Load banner URL
                 bannerUrl = authViewModel.currentUser?.bannerUrl
                 
                 // Update premium status
                 isPremium = RevenueCatManager.shared.isProMember
+                
+                // Load invite count
+                if let userId = authViewModel.currentUser?.id {
+                    do {
+                        let invites = try await InviteService.shared.getMyInvites(userId: userId)
+                        availableInviteCount = invites.filter { !$0.isUsed }.count
+                    } catch {
+                        print("⚠️ Failed to load invite count: \(error)")
+                    }
+                }
                 
                 // Load profile observer first (non-async)
                 profileObserver = NotificationCenter.default.addObserver(
@@ -526,6 +631,11 @@ struct ProfileActivitiesView: View {
                     group.addTask {
                         // Load user's stories
                         await self.loadMyStories()
+                    }
+                    group.addTask {
+                        if let userId = await self.authViewModel.currentUser?.id {
+                            await self.loadMyEvents(userId: userId)
+                        }
                     }
                 }
             }
@@ -616,6 +726,17 @@ struct ProfileActivitiesView: View {
             print("📖 Profile: Loaded \(stories.count) stories")
         } catch {
             print("❌ Profile: Error loading stories: \(error)")
+        }
+    }
+    
+    private func loadMyEvents(userId: String) async {
+        do {
+            let events = try await EventService.shared.fetchEvents(userId: userId)
+            await MainActor.run {
+                self.myEvents = events
+            }
+        } catch {
+            print("❌ Profile: Error loading events: \(error)")
         }
     }
     
@@ -1024,7 +1145,7 @@ struct LivePhotoGridImage: View {
         }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
             if let loadedImage = UIImage(data: data) {
                 ImageCacheManager.shared.setImage(loadedImage, for: path)
                 await MainActor.run {

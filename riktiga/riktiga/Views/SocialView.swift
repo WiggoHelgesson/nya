@@ -96,6 +96,19 @@ struct SocialView: View {
     // Friend location map state
     @State private var showFriendsMap = false
     
+    // School feed state
+    enum FeedType { case friends, school }
+    @State private var selectedFeedType: FeedType = .friends
+    @State private var schoolPosts: [SocialWorkoutPost] = []
+    @State private var showSchoolVerification = false
+    @State private var isSchoolVerified = false
+    @State private var isLoadingSchoolFeed = false
+    @State private var schoolVisiblePostCount = 5
+    
+    // Invite banner state
+    @State private var availableInviteCount = 0
+    @State private var showInviteView = false
+    
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
@@ -292,17 +305,29 @@ struct SocialView: View {
                                 // MARK: - Friends at gym section
                                 friendsAtGymSection
                                 
+                                // MARK: - Invite friends banner
+                                if availableInviteCount > 0 {
+                                    inviteFriendsBanner
+                                }
+                                
+                                // MARK: - Feed type picker (Vänner / Din skola)
+                                feedTypePicker
+                                
                                 // MARK: - Upload progress indicator
-                                if uploadManager.uploadingPost != nil {
+                                if uploadManager.uploadingPost != nil && selectedFeedType == .friends {
                                     uploadProgressCard
                                 }
                                 
-                                // Separator line between friends section and posts
+                                // Separator line between picker and posts
                                 Divider()
                                     .background(Color(.systemGray5))
                                 
-                                // Always show feed content
-                                feedContent
+                                // Show feed based on selected type
+                                if selectedFeedType == .friends {
+                                    feedContent
+                                } else {
+                                    schoolFeedContent
+                                }
                             }
                         }
                     }
@@ -328,6 +353,7 @@ struct SocialView: View {
             .onAppear {
                 animateContentIn()
                 loadStats()
+                loadInviteCount()
                 Task { await adService.fetchFeedAds() }
             }
         }
@@ -487,24 +513,43 @@ struct SocialView: View {
                     
                     // Profile picture with black/silver gradient ring
                     ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black,
-                                        Color(white: 0.7),
-                                        Color.white.opacity(0.8),
-                                        Color(white: 0.7),
-                                        Color.black
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                        if authViewModel.currentUser?.isProMember == true {
+                            RoundedRectangle(cornerRadius: 115 * 0.3)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black,
+                                            Color(white: 0.7),
+                                            Color.white.opacity(0.8),
+                                            Color(white: 0.7),
+                                            Color.black
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .frame(width: 115, height: 115)
-                            .shadow(color: .black.opacity(0.3), radius: 12)
+                                .frame(width: 115, height: 115)
+                                .shadow(color: .black.opacity(0.3), radius: 12)
+                        } else {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black,
+                                            Color(white: 0.7),
+                                            Color.white.opacity(0.8),
+                                            Color(white: 0.7),
+                                            Color.black
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 115, height: 115)
+                                .shadow(color: .black.opacity(0.3), radius: 12)
+                        }
                         
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 105)
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 105, isPro: authViewModel.currentUser?.isProMember == true)
                     }
                     .padding(.leading, 24)
                     
@@ -752,9 +797,18 @@ struct SocialView: View {
                     // MARK: - Friends at gym section
                     friendsAtGymSection
                     
-                    // Always show feed content
-                    feedContent
-                        .opacity(showPosts ? 1 : 0)
+                    if availableInviteCount > 0 {
+                        inviteFriendsBanner
+                    }
+                    
+                    feedTypePicker
+                    
+                    if selectedFeedType == .friends {
+                        feedContent
+                            .opacity(showPosts ? 1 : 0)
+                    } else {
+                        schoolFeedContent
+                    }
                 }
             }
             .onChange(of: highlightedPostId) { _, postId in
@@ -824,7 +878,7 @@ struct SocialView: View {
                         ForEach(activeFriends) { friend in
                             friendAtGymCard(
                                 imageContent: AnyView(
-                                    AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { phase in
+                                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(friend.avatarUrl ?? ""))) { phase in
                                         switch phase {
                                         case .success(let image):
                                             image
@@ -872,6 +926,218 @@ struct SocialView: View {
         }
         .onDisappear {
             stopActiveFriendsTimer()
+        }
+    }
+    
+    // MARK: - Feed Type Picker (Vänner / Din skola)
+    private var feedTypePicker: some View {
+        HStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedFeedType = .friends
+                }
+            } label: {
+                VStack(spacing: 6) {
+                    Text(L.t(sv: "Vänner", nb: "Venner"))
+                        .font(.system(size: 15, weight: selectedFeedType == .friends ? .bold : .medium))
+                        .foregroundColor(selectedFeedType == .friends ? .primary : .secondary)
+                    
+                    Rectangle()
+                        .fill(selectedFeedType == .friends ? Color.primary : Color.clear)
+                        .frame(height: 2)
+                }
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+            }
+            
+            Button {
+                if isSchoolVerified {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedFeedType = .school
+                    }
+                    if schoolPosts.isEmpty && !isLoadingSchoolFeed {
+                        Task { await loadSchoolFeed() }
+                    }
+                } else {
+                    showSchoolVerification = true
+                }
+            } label: {
+                VStack(spacing: 6) {
+                    Text(L.t(sv: "Din skola", nb: "Din skole"))
+                        .font(.system(size: 15, weight: selectedFeedType == .school ? .bold : .medium))
+                        .foregroundColor(selectedFeedType == .school ? .primary : .secondary)
+                    
+                    Rectangle()
+                        .fill(selectedFeedType == .school ? Color.primary : Color.clear)
+                        .frame(height: 2)
+                }
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 16)
+        .sheet(isPresented: $showSchoolVerification) {
+            SchoolVerificationView(
+                isVerified: $isSchoolVerified,
+                onVerified: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedFeedType = .school
+                    }
+                    Task { await loadSchoolFeed() }
+                }
+            )
+            .environmentObject(authViewModel)
+        }
+        .onAppear {
+            checkSchoolVerification()
+        }
+    }
+    
+    // MARK: - School Feed Content
+    private var schoolFeedContent: some View {
+        LazyVStack(spacing: 0) {
+            if isLoadingSchoolFeed && schoolPosts.isEmpty {
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text(L.t(sv: "Laddar skolflödet...", nb: "Laster skolfeeden..."))
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else if schoolPosts.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "building.columns")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary)
+                    Text(L.t(sv: "Inga inlägg från din skola ännu", nb: "Ingen innlegg fra skolen din ennå"))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ForEach(Array(schoolPostsToDisplay.enumerated()), id: \.element.id) { index, post in
+                    VStack(spacing: 0) {
+                        SocialPostCard(
+                            post: post,
+                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                            onLikeChanged: { postId, isLiked, count in
+                                if let idx = schoolPosts.firstIndex(where: { $0.id == postId }) {
+                                    schoolPosts[idx] = schoolPosts[idx]
+                                }
+                            },
+                            onCommentCountChanged: { _, _ in },
+                            onPostDeleted: { postId in
+                                schoolPosts.removeAll { $0.id == postId }
+                            }
+                        )
+                        .id("school_\(post.id)")
+                        
+                        Divider()
+                            .background(Color(.systemGray5))
+                    }
+                    .onAppear {
+                        if index >= schoolVisiblePostCount - 2,
+                           schoolVisiblePostCount < schoolPosts.count {
+                            schoolVisiblePostCount += 5
+                        }
+                    }
+                }
+                
+                if schoolVisiblePostCount >= schoolPosts.count {
+                    Text(L.t(sv: "Inga fler inlägg", nb: "Ingen flere innlegg"))
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .padding()
+                }
+            }
+        }
+    }
+    
+    private var schoolPostsToDisplay: [SocialWorkoutPost] {
+        Array(schoolPosts.prefix(schoolVisiblePostCount))
+    }
+    
+    private func checkSchoolVerification() {
+        guard let user = authViewModel.currentUser else { return }
+        isSchoolVerified = SchoolService.shared.isSchoolVerified(user: user)
+    }
+    
+    private func loadSchoolFeed() async {
+        isLoadingSchoolFeed = true
+        do {
+            let posts = try await SchoolService.shared.getSchoolFeed()
+            await MainActor.run {
+                schoolPosts = posts
+                isLoadingSchoolFeed = false
+            }
+        } catch {
+            print("❌ Failed to load school feed: \(error)")
+            await MainActor.run { isLoadingSchoolFeed = false }
+        }
+    }
+    
+    // MARK: - Invite Friends Banner (Glass Card)
+    private var inviteFriendsBanner: some View {
+        Button {
+            showInviteView = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "envelope.badge.person.crop")
+                    .font(.system(size: 22))
+                    .foregroundColor(.primary)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L.t(
+                        sv: "Bjud in \(availableInviteCount) vän\(availableInviteCount == 1 ? "" : "ner") till Up&Down",
+                        nb: "Inviter \(availableInviteCount) venn\(availableInviteCount == 1 ? "" : "er") til Up&Down"
+                    ))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    
+                    Text(L.t(sv: "Dela dina exklusiva inbjudningar", nb: "Del dine eksklusive invitasjoner"))
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.systemGray3))
+            }
+            .padding(14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 0.5)
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .navigationDestination(isPresented: $showInviteView) {
+            InviteView()
+                .environmentObject(authViewModel)
+        }
+    }
+    
+    private func loadInviteCount() {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        Task {
+            do {
+                let invites = try await InviteService.shared.getMyInvites(userId: userId)
+                let available = invites.filter { !$0.isUsed }.count
+                await MainActor.run {
+                    availableInviteCount = available
+                }
+            } catch {
+                print("⚠️ Failed to load invite count: \(error)")
+            }
         }
     }
     
@@ -1611,17 +1877,11 @@ struct SocialView: View {
                         .background(Color(.systemGray5))
                 }
                 
-                // Dynamic ad or fallback sponsored post after 4th post
-                if index == 3 {
-                    if let feedAd = adService.feedAds.first {
-                        FeedAdCard(ad: feedAd)
-                            .opacity(showPosts ? 1 : 0)
-                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    } else {
-                        SponsoredPostCard()
-                            .opacity(showPosts ? 1 : 0)
-                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    }
+                // Dynamic ad after 4th post
+                if index == 3, let feedAd = adService.feedAds.first {
+                    FeedAdCard(ad: feedAd)
+                        .opacity(showPosts ? 1 : 0)
+                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
                     Divider()
                         .background(Color(.systemGray5))
                 }
@@ -1861,7 +2121,7 @@ struct SocialView: View {
                 .upload(fileName, data: imageData, options: .init(contentType: "image/jpeg", upsert: true))
             
             // Create full public URL for the avatar
-            let fullAvatarUrl = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/avatars/\(fileName)"
+            let fullAvatarUrl = "\(SupabaseConfig.storageBaseURL)/avatars/\(fileName)"
             
             // Save to news_settings table
             struct SettingsPayload: Encodable {
@@ -2369,11 +2629,7 @@ struct SocialPostCard: View {
     private var headerSection: some View {
         HStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: post.userId)) {
-                if post.userIsPro == true {
-                    ProProfileImage(url: post.userAvatarUrl, size: 48)
-                } else {
-                    ProfileImage(url: post.userAvatarUrl, size: 48)
-                }
+                ProfileImage(url: post.userAvatarUrl, size: 48, isPro: post.userIsPro == true)
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -3364,7 +3620,7 @@ struct CommentsView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Route image (only for non-gym workouts)
             if !isGymWorkout, let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                AsyncImage(url: URL(string: imageUrl)) { phase in
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(imageUrl))) { phase in
                     switch phase {
                     case .success(let image):
                         image
@@ -3953,7 +4209,7 @@ struct CommentRow: View {
         } label: {
             Group {
                 if let avatarUrl = comment.userAvatarUrl, !avatarUrl.isEmpty {
-                    ProfileImage(url: avatarUrl, size: 40)
+                    ProfileImage(url: avatarUrl, size: 40, isPro: comment.userIsPro)
                 } else {
                     Circle()
                         .fill(Color(.systemGray5))
@@ -5388,7 +5644,7 @@ struct FullFrameAsyncImage: View {
         // Try to load from URL
         if let url = URL(string: path) {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 if let downloadedImage = UIImage(data: data) {
                     ImageCacheManager.shared.setImage(downloadedImage, for: path)
                     await MainActor.run {
@@ -5409,7 +5665,7 @@ struct FullFrameAsyncImage: View {
                 .from("workout-images")
                 .createSignedURL(path: filename, expiresIn: 3600)
             
-            let (data, _) = try await URLSession.shared.data(from: signedURL)
+            let (data, _) = try await SupabaseConfig.urlSession.data(from: signedURL)
             if let downloadedImage = UIImage(data: data) {
                 ImageCacheManager.shared.setImage(downloadedImage, for: path)
                 await MainActor.run {
@@ -5440,7 +5696,7 @@ struct EmptyStateUserCard: View {
     var body: some View {
         VStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: user.id)) {
-                ProfileImage(url: user.avatarUrl, size: 70)
+                ProfileImage(url: user.avatarUrl, size: 70, isPro: user.isProMember)
             }
             
             Text(user.name)
@@ -5704,7 +5960,7 @@ struct ExternalActivityCard: View {
             
             // Map image if available
             if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-                AsyncImage(url: URL(string: imageUrl)) { phase in
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(imageUrl))) { phase in
                     switch phase {
                     case .success(let image):
                         image
@@ -5941,97 +6197,6 @@ private struct FeedAdCard: View {
     }
 }
 
-// MARK: - Sponsored Post Card (Up&DownCoach)
-private struct SponsoredPostCard: View {
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack(spacing: 12) {
-                // Profile picture - Up&DownCoach logo
-                Image("logga")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 40, height: 40)
-                    .clipShape(Circle())
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text("Up&DownCoach")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                        
-                        Text(L.t(sv: "Sponsrad", nb: "Sponset"))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(Color.gray)
-                            )
-                    }
-                    
-                    Text(L.t(sv: "Annons", nb: "Annonse"))
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            
-            // Post image
-            Button(action: {
-                if let url = URL(string: "https://upanddowncoach.com") {
-                    UIApplication.shared.open(url)
-                }
-            }) {
-                Image("80")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 400)
-                    .clipped()
-            }
-            .buttonStyle(.plain)
-            
-            // Bottom CTA
-            Button(action: {
-                if let url = URL(string: "https://upanddowncoach.com") {
-                    UIApplication.shared.open(url)
-                }
-            }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Up&DownCoach")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
-                        Text("upanddowncoach.com")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Text(L.t(sv: "Besök", nb: "Besøk"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(Color.primary)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.plain)
-        }
-        .background(Color(.systemBackground))
-    }
-}
-
 // MARK: - Pro Upgrade Banner
 private struct ProUpgradeBanner: View {
     let onTap: () -> Void
@@ -6175,7 +6340,7 @@ struct FriendsLocationMapView: View {
                             } label: {
                                 VStack(spacing: 4) {
                                     // Friend avatar
-                                    AsyncImage(url: URL(string: friend.avatarUrl ?? "")) { phase in
+                                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(friend.avatarUrl ?? ""))) { phase in
                                         switch phase {
                                         case .success(let image):
                                             image

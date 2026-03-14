@@ -343,7 +343,7 @@ struct ShareActivityView: View {
         let candidate = post.userImageUrl ?? post.imageUrl
         guard let urlString = candidate, let url = URL(string: urlString) else { return }
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 if let image = UIImage(data: data) {
                 await MainActor.run {
                     coverImage = image

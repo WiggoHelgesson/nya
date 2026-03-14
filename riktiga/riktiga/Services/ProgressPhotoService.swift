@@ -17,6 +17,7 @@ final class ProgressPhotoService {
             .select("*")
             .eq("user_id", value: userId)
             .order("photo_date", ascending: false)
+            .order("created_at", ascending: false)
             .execute()
             .value
         
@@ -122,5 +123,51 @@ final class ProgressPhotoService {
             .value
         
         return photos.first?.weightKg
+    }
+    
+    // MARK: - Fetch Shared Progress Photos (for public profiles)
+    func fetchSharedPhotos(for userId: String) async throws -> [WeightProgressEntry] {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let photos: [WeightProgressEntry] = try await supabase
+            .from("progress_photos")
+            .select("*")
+            .eq("user_id", value: userId)
+            .eq("shared_on_profile", value: true)
+            .order("photo_date", ascending: false)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return photos
+    }
+    
+    // MARK: - Toggle Sharing for All Photos
+    func toggleSharing(shared: Bool, userId: String) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        try await supabase
+            .from("progress_photos")
+            .update(["shared_on_profile": shared])
+            .eq("user_id", value: userId)
+            .execute()
+        
+        print("✅ Progress photos sharing set to \(shared)")
+    }
+    
+    // MARK: - Check if sharing is enabled
+    func isSharingEnabled(for userId: String) async throws -> Bool {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        let photos: [WeightProgressEntry] = try await supabase
+            .from("progress_photos")
+            .select("*")
+            .eq("user_id", value: userId)
+            .eq("shared_on_profile", value: true)
+            .limit(1)
+            .execute()
+            .value
+        
+        return !photos.isEmpty
     }
 }

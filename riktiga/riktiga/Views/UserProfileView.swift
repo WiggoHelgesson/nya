@@ -33,6 +33,7 @@ struct UserProfileView: View {
     @State private var profilePbMarathonH: Int? = nil
     @State private var profilePbMarathonM: Int? = nil
     @State private var profileCompletedRaces: [String] = []
+    @State private var verifiedSchoolEmail: String? = nil
     @StateObject private var profilePostsViewModel = SocialViewModel()
     @State private var selectedPost: SocialWorkoutPost?
     @State private var selectedLivePhotoPost: SocialWorkoutPost?
@@ -58,6 +59,28 @@ struct UserProfileView: View {
     
     // Mutual friends
     @State private var mutualFriends: [UserSearchResult] = []
+    @State private var mutualFriendsTotal: Int = 0
+    
+    // Profile picture fullscreen
+    @State private var showFullscreenAvatar: Bool = false
+    
+    // Mutual friend navigation
+    @State private var selectedMutualFriendId: String? = nil
+    
+    // Events
+    @State private var userEvents: [Event] = []
+    @State private var selectedEvent: Event? = nil
+    @State private var showCreateEvent = false
+    @State private var showEditProfile = false
+    
+    // Progress photos
+    @State private var progressPhotos: [WeightProgressEntry] = []
+    @State private var isLoadingProgressPhotos = false
+    @State private var showAddProgressPhoto = false
+    @State private var fullscreenProgressPhoto: WeightProgressEntry? = nil
+    @State private var sharePhotosOnProfile = false
+    @State private var isTogglingPhotoShare = false
+    @State private var hasLoadedPhotoShareState = false
     
     private var isOwnProfile: Bool {
         authViewModel.currentUser?.id == userId
@@ -78,6 +101,33 @@ struct UserProfileView: View {
         return pinnedPostIds.compactMap { id in
             profilePostsViewModel.posts.first(where: { $0.id == id })
         }
+    }
+    
+    private var mutualFriendsLabel: some View {
+        let friends = Array(mutualFriends.prefix(3))
+        let remaining = mutualFriendsTotal - mutualFriends.count
+        
+        return mutualFriendsText(friends: friends, remaining: remaining)
+            .font(.system(size: 13))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    
+    private func mutualFriendsText(friends: [UserSearchResult], remaining: Int) -> Text {
+        var result = Text(L.t(sv: "Vän med ", nb: "Venn med ")).foregroundColor(.secondary)
+        for (index, friend) in friends.enumerated() {
+            if index > 0 {
+                if remaining <= 0 && index == friends.count - 1 {
+                    result = result + Text(L.t(sv: " och ", nb: " og ")).foregroundColor(.secondary)
+                } else {
+                    result = result + Text(", ").foregroundColor(.secondary)
+                }
+            }
+            result = result + Text(friend.name).bold().foregroundColor(.primary)
+        }
+        if remaining > 0 {
+            result = result + Text(L.t(sv: " och \(remaining) andra", nb: " og \(remaining) andre")).foregroundColor(.secondary)
+        }
+        return result
     }
     
     private var hasAboutData: Bool {
@@ -232,24 +282,122 @@ struct UserProfileView: View {
         }
     }
     
+    private var progressPhotosSlider: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Text(L.t(sv: "Progress Bilder", nb: "Fremgangsbilder"))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if !progressPhotos.isEmpty {
+                    Text("\(progressPhotos.count)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 4)
+            
+            if isOwnProfile && !progressPhotos.isEmpty {
+                HStack(spacing: 8) {
+                    Text(L.t(sv: "Visa på din publika profil", nb: "Vis på din offentlige profil"))
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $sharePhotosOnProfile)
+                        .labelsHidden()
+                        .disabled(isTogglingPhotoShare)
+                        .onChange(of: sharePhotosOnProfile) { _, newValue in
+                            guard hasLoadedPhotoShareState else { return }
+                            Task { await togglePhotoSharing(newValue) }
+                        }
+                }
+                .padding(.horizontal, 4)
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    if isOwnProfile {
+                        Button {
+                            showAddProgressPhoto = true
+                        } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.systemGray6))
+                                
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(
+                                        Color(.systemGray3).opacity(0.6),
+                                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                                    )
+                                
+                                VStack(spacing: 8) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(Color(.systemGray2))
+                                    
+                                    Text(L.t(sv: "Ny bild", nb: "Nytt bilde"))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(.systemGray2))
+                                }
+                            }
+                            .frame(width: 120, height: 160)
+                        }
+                    }
+                    
+                    ForEach(progressPhotos) { photo in
+                        Button {
+                            fullscreenProgressPhoto = photo
+                        } label: {
+                            SmallWeightEntryCard(photo: photo)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .fullScreenCover(item: $fullscreenProgressPhoto) { photo in
+            ProgressPhotoFullscreenView(photo: photo)
+        }
+        .sheet(isPresented: $showAddProgressPhoto) {
+            AddWeightProgressView(onPhotoAdded: { newPhoto in
+                progressPhotos.insert(newPhoto, at: 0)
+            })
+            .environmentObject(authViewModel)
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            // Fixed Header Section
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // MARK: - Facebook-style Banner + Avatar
+                    // MARK: - Full-bleed Banner + Avatar
                     ZStack(alignment: .bottom) {
-                        // Banner
+                        // Banner extending behind navigation bar
                         ZStack(alignment: .bottomTrailing) {
-                            if let bannerUrl = bannerUrl, !bannerUrl.isEmpty {
-                                LocalAsyncImage(path: bannerUrl)
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: UIScreen.main.bounds.width, height: 200)
-                                    .clipped()
-                            } else {
-                                Color(.systemGray4)
-                                    .frame(width: UIScreen.main.bounds.width, height: 200)
+                            GeometryReader { geo in
+                                let minY = geo.frame(in: .global).minY
+                                let extraHeight = max(0, minY)
+                                
+                                if let bannerUrl = bannerUrl, !bannerUrl.isEmpty {
+                                    LocalAsyncImage(path: bannerUrl)
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: geo.size.width, height: 260 + extraHeight)
+                                        .clipped()
+                                        .offset(y: -extraHeight)
+                                } else {
+                                    Color(.systemGray4)
+                                        .frame(width: geo.size.width, height: 260 + extraHeight)
+                                        .offset(y: -extraHeight)
+                                }
                             }
+                            .frame(height: 260)
                             
                             if isOwnProfile {
                                 PhotosPicker(selection: $bannerPickerItem, matching: .images) {
@@ -263,15 +411,25 @@ struct UserProfileView: View {
                                 .padding(12)
                             }
                         }
-                        .frame(height: 200)
+                        .frame(height: 260)
                         
                         // Avatar overlapping the banner
                         ZStack(alignment: .bottomTrailing) {
-                            ProfileAvatarView(path: avatarUrl ?? "", size: 100)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color(.systemBackground), lineWidth: 4)
-                                )
+                            Button { showFullscreenAvatar = true } label: {
+                                ProfileAvatarView(path: avatarUrl ?? "", size: 120, isPro: isPro)
+                                    .overlay(
+                                        Group {
+                                            if isPro {
+                                                RoundedRectangle(cornerRadius: 120 * 0.3)
+                                                    .stroke(Color(.systemBackground), lineWidth: 4)
+                                            } else {
+                                                Circle()
+                                                    .stroke(Color(.systemBackground), lineWidth: 4)
+                                            }
+                                        }
+                                    )
+                            }
+                            .buttonStyle(.plain)
                             
                             if isOwnProfile {
                                 PhotosPicker(selection: $avatarPickerItem, matching: .images) {
@@ -285,12 +443,12 @@ struct UserProfileView: View {
                                 }
                             }
                         }
-                        .offset(y: 50)
+                        .offset(y: 60)
                         .opacity(showHeader ? 1 : 0)
                     }
                     
                     // Spacer for the overlapping avatar
-                    Spacer().frame(height: 56)
+                    Spacer().frame(height: 66)
                     
                     // MARK: - Name + Stats (centered)
                     VStack(spacing: 10) {
@@ -307,6 +465,14 @@ struct UserProfileView: View {
                             }
                         }
                         .opacity(showHeader ? 1 : 0)
+                        
+                        if let schoolEmail = verifiedSchoolEmail,
+                           schoolEmail.lowercased().hasSuffix("@elev.danderyd.se") {
+                            Text("Danderyds gymnasium")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .opacity(showHeader ? 1 : 0)
+                        }
                         
                         // Stats row
                         HStack(spacing: 0) {
@@ -345,22 +511,6 @@ struct UserProfileView: View {
                                 .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.plain)
-                        }
-                        .opacity(showStats ? 1 : 0)
-                        
-                        // Personal Records button
-                        Button(action: { showPersonalRecords = true }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "trophy.fill")
-                                    .font(.system(size: 12))
-                                Text(L.t(sv: "Personliga rekord", nb: "Personlige rekorder"))
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(8)
                         }
                         .opacity(showStats ? 1 : 0)
                         
@@ -407,6 +557,21 @@ struct UserProfileView: View {
                                 .disabled(isCreatingConversation)
                             }
                             .opacity(showStats ? 1 : 0)
+                            
+                        } else if isOwnProfile {
+                            Button { showEditProfile = true } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "pencil")
+                                    Text(L.t(sv: "Redigera profil", nb: "Rediger profil"))
+                                }
+                                .font(.system(size: 14, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 40)
+                                .background(Color(.systemGray5))
+                                .foregroundColor(.primary)
+                                .cornerRadius(10)
+                            }
+                            .opacity(showStats ? 1 : 0)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -415,33 +580,33 @@ struct UserProfileView: View {
                     // MARK: - Mutual Friends + Live Gallery + About/Chart/Compare
                     Group {
                         if !isOwnProfile && !mutualFriends.isEmpty {
-                            HStack(spacing: 6) {
+                            HStack(alignment: .center, spacing: 8) {
                                 HStack(spacing: -8) {
-                                    ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { _, friend in
-                                        ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
-                                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                    ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { index, friend in
+                                        Button { selectedMutualFriendId = friend.id } label: {
+                                            ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
+                                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                        }
+                                        .zIndex(Double(3 - index))
                                     }
                                 }
                                 
-                                if mutualFriends.count == 1, let friend = mutualFriends.first {
-                                    Text(L.t(
-                                        sv: "Vän med \(friend.name)",
-                                        nb: "Venn med \(friend.name)"
-                                    ))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                                } else {
-                                    Text(L.t(
-                                        sv: "\(mutualFriends.count) gemensamma vänner",
-                                        nb: "\(mutualFriends.count) felles venner"
-                                    ))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
-                                }
+                                mutualFriendsLabel
+                                    .lineLimit(2)
                             }
                             .padding(.horizontal, 16)
                             .padding(.bottom, 8)
                             .opacity(showStats ? 1 : 0)
+                        }
+                        
+                        if isOwnProfile || !userEvents.isEmpty {
+                            EventsSliderView(
+                                events: userEvents,
+                                isOwnProfile: isOwnProfile,
+                                onCreateTapped: { showCreateEvent = true },
+                                onEventTapped: { event in selectedEvent = event }
+                            )
+                            .opacity(showHeader ? 1 : 0)
                         }
                         
                         if !livePhotoPosts.isEmpty {
@@ -450,15 +615,6 @@ struct UserProfileView: View {
                                 selectedPost: $selectedLivePhotoPost
                             )
                             .opacity(showHeader ? 1 : 0)
-                        }
-                    }
-                    
-                    Group {
-                        if hasAboutData {
-                            aboutSection
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .opacity(showHeader ? 1 : 0)
                         }
                         
                         WeeklyHoursChart(
@@ -469,17 +625,54 @@ struct UserProfileView: View {
                         .padding(.vertical, 12)
                         .opacity(showChart ? 1 : 0)
                         
-                        if let currentUser = authViewModel.currentUser, currentUser.id != userId {
-                            CompareButton(
-                                myAvatarUrl: currentUser.avatarUrl,
-                                theirAvatarUrl: avatarUrl,
-                                action: {
-                                    showComparison = true
+                        // MARK: - Progress Photos Slider
+                        if !progressPhotos.isEmpty || isOwnProfile {
+                            progressPhotosSlider
+                                .opacity(showChart ? 1 : 0)
+                        }
+                        
+                        if !isOwnProfile {
+                            HStack(spacing: 8) {
+                                Button(action: { showComparison = true }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "arrow.left.arrow.right")
+                                            .font(.system(size: 12))
+                                        Text(L.t(sv: "Jämför", nb: "Sammenlign"))
+                                            .font(.system(size: 13, weight: .medium))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 34)
+                                    .background(Color(.systemGray6))
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(8)
                                 }
-                            )
+                                
+                                Button(action: { showPersonalRecords = true }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "trophy.fill")
+                                            .font(.system(size: 12))
+                                        Text(L.t(sv: "Personliga rekord", nb: "Personlige rekorder"))
+                                            .font(.system(size: 13, weight: .medium))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 34)
+                                    .background(Color(.systemGray6))
+                                    .foregroundColor(.primary)
+                                    .cornerRadius(8)
+                                }
+                            }
                             .padding(.horizontal, 16)
-                            .padding(.bottom, 12)
-                            .opacity(showChart ? 1 : 0)
+                            .padding(.top, 8)
+                            .opacity(showStats ? 1 : 0)
+                        }
+                    }
+                    
+                    Group {
+                        if hasAboutData {
+                            aboutSection
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .opacity(showHeader ? 1 : 0)
                         }
                     }
                     
@@ -500,22 +693,33 @@ struct UserProfileView: View {
                             .padding(.horizontal, 16)
                             
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
+                                LazyHStack(spacing: 0) {
                                     ForEach(pinnedPosts) { post in
-                                        PinnedPostCard(
+                                        SocialPostCard(
                                             post: post,
-                                            onTap: { selectedPost = post }
+                                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
+                                            onLikeChanged: { postId, isLiked, count in
+                                                profilePostsViewModel.updatePostLikeStatus(postId: postId, isLiked: isLiked, likeCount: count)
+                                            },
+                                            onCommentCountChanged: { postId, count in
+                                                profilePostsViewModel.updatePostCommentCount(postId: postId, commentCount: count)
+                                            },
+                                            onPostDeleted: { postId in
+                                                profilePostsViewModel.removePost(postId: postId)
+                                            }
                                         )
-                                        .frame(width: UIScreen.main.bounds.width * 0.85)
+                                        .frame(width: UIScreen.main.bounds.width)
                                     }
                                 }
-                                .padding(.horizontal, 16)
+                                .scrollTargetLayout()
                             }
+                            .scrollTargetBehavior(.paging)
                         }
                         .padding(.vertical, 12)
                         .opacity(showPosts ? 1 : 0)
                     }
                     
+
                     Divider()
                         .opacity(showPosts ? 1 : 0)
                 
@@ -581,8 +785,27 @@ struct UserProfileView: View {
                 }
             }
         }
-        .navigationTitle(L.t(sv: "Profil", nb: "Profil"))
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Color.black.opacity(0.35))
+                        .clipShape(Circle())
+                }
+            }
+            ToolbarItem(placement: .principal) {
+                Text(username.isEmpty ? L.t(sv: "Profil", nb: "Profil") : username)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
         .task {
             await loadData()
             triggerAnimations()
@@ -608,6 +831,10 @@ struct UserProfileView: View {
         .navigationDestination(item: $selectedPost) { post in
             WorkoutDetailView(post: post)
         }
+        .navigationDestination(item: $selectedMutualFriendId) { friendId in
+            UserProfileView(userId: friendId)
+                .environmentObject(authViewModel)
+        }
         .navigationDestination(item: $navigateToConversation) { conversationId in
             DirectMessageView(
                 conversationId: conversationId,
@@ -620,8 +847,44 @@ struct UserProfileView: View {
         .sheet(isPresented: $showPersonalRecords) {
             PersonalRecordsView(userId: userId, username: username)
         }
+        .sheet(isPresented: $showEditProfile, onDismiss: {
+            Task { await loadData() }
+        }) {
+            EditProfileView()
+                .environmentObject(authViewModel)
+        }
         .sheet(item: $selectedLivePhotoPost) { post in
             LivePhotoDetailSheet(post: post)
+        }
+        .sheet(isPresented: $showCreateEvent) {
+            CreateEventView(userId: userId) { newEvent in
+                userEvents.insert(newEvent, at: 0)
+            }
+        }
+        .sheet(item: $selectedEvent) { event in
+            NavigationStack {
+                EventDetailView(
+                    event: event,
+                    isOwnEvent: isOwnProfile,
+                    onDeleted: {
+                        userEvents.removeAll { $0.id == event.id }
+                        selectedEvent = nil
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(L.t(sv: "Stäng", nb: "Lukk")) {
+                            selectedEvent = nil
+                        }
+                    }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showFullscreenAvatar) {
+            FullscreenAvatarView(
+                avatarUrl: avatarUrl,
+                username: username
+            )
         }
         .sheet(isPresented: $showComparison) {
             if let currentUser = authViewModel.currentUser {
@@ -707,6 +970,7 @@ struct UserProfileView: View {
                 self.profilePbMarathonH = profile.pbMarathonHours
                 self.profilePbMarathonM = profile.pbMarathonMinutes
                 self.profileCompletedRaces = profile.completedRaces
+                self.verifiedSchoolEmail = profile.verifiedSchoolEmail
             }
             
             self.followersCount = followersIds.count
@@ -734,14 +998,54 @@ struct UserProfileView: View {
         // Load mutual friends (only for other users' profiles)
         if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
             do {
-                let mutual = try await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
+                let result = try await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
                 await MainActor.run {
-                    self.mutualFriends = mutual
+                    self.mutualFriends = result.friends
+                    self.mutualFriendsTotal = result.totalCount
                 }
             } catch {
                 print("⚠️ Failed to load mutual friends: \(error)")
             }
         }
+        
+        // Load events
+        do {
+            let events = try await EventService.shared.fetchEvents(userId: userId)
+            await MainActor.run { self.userEvents = events }
+        } catch {
+            print("⚠️ Failed to load events: \(error)")
+        }
+        
+        // Load progress photos (own = all, others = shared only)
+        do {
+            let photos: [WeightProgressEntry]
+            if isOwnProfile {
+                photos = try await ProgressPhotoService.shared.fetchPhotos(for: userId)
+                let sharing = try await ProgressPhotoService.shared.isSharingEnabled(for: userId)
+                await MainActor.run {
+                    self.progressPhotos = photos
+                    self.sharePhotosOnProfile = sharing
+                    self.hasLoadedPhotoShareState = true
+                }
+            } else {
+                photos = try await ProgressPhotoService.shared.fetchSharedPhotos(for: userId)
+                await MainActor.run { self.progressPhotos = photos }
+            }
+        } catch {
+            print("⚠️ Failed to load progress photos: \(error)")
+            await MainActor.run { self.hasLoadedPhotoShareState = true }
+        }
+    }
+    
+    private func togglePhotoSharing(_ enabled: Bool) async {
+        isTogglingPhotoShare = true
+        do {
+            try await ProgressPhotoService.shared.toggleSharing(shared: enabled, userId: userId)
+        } catch {
+            print("⚠️ Failed to toggle photo sharing: \(error)")
+            await MainActor.run { sharePhotosOnProfile = !enabled }
+        }
+        await MainActor.run { isTogglingPhotoShare = false }
     }
     
     private func calculateWeeklyActivity() {
@@ -1068,140 +1372,6 @@ struct ActivityBarChart: View {
         } else {
             return "\(Int(hours * 60)) min"
         }
-    }
-}
-
-// MARK: - Pinned Post Card (compact card for horizontal slider)
-
-struct PinnedPostCard: View {
-    let post: SocialWorkoutPost
-    let onTap: () -> Void
-    
-    private var activityIcon: String {
-        switch post.activityType {
-        case "Gym": return "dumbbell.fill"
-        case "Löpning": return "figure.run"
-        case "Golf": return "figure.golf"
-        case "Skidor": return "figure.skiing.downhill"
-        case "Simning": return "figure.pool.swim"
-        case "Cykling": return "figure.outdoor.cycle"
-        default: return "figure.walk"
-        }
-    }
-    
-    private var formattedDate: String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoNoMs = ISO8601DateFormatter()
-        isoNoMs.formatOptions = [.withInternetDateTime]
-        guard let date = iso.date(from: post.createdAt) ?? isoNoMs.date(from: post.createdAt) else { return "" }
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        df.locale = Locale(identifier: "sv_SE")
-        return df.string(from: date)
-    }
-    
-    var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 10) {
-                // Top row: activity icon + title + date
-                HStack(spacing: 10) {
-                    Image(systemName: activityIcon)
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Color.black)
-                        .clipShape(Circle())
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(post.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                        
-                        Text(formattedDate)
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.blue)
-                }
-                
-                // Stats row
-                HStack(spacing: 16) {
-                    if let duration = post.duration, duration > 0 {
-                        statPill(icon: "clock", value: formatDuration(duration))
-                    }
-                    if let distance = post.distance, distance > 0 {
-                        statPill(icon: "location", value: String(format: "%.1f km", distance))
-                    }
-                    if let exercises = post.exercises, !exercises.isEmpty {
-                        statPill(icon: "dumbbell", value: "\(exercises.count) \(L.t(sv: "övningar", nb: "øvelser"))")
-                    }
-                }
-                
-                // Gym exercises preview
-                if let exercises = post.exercises, !exercises.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(exercises.prefix(3), id: \.name) { exercise in
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 6, height: 6)
-                                Text(exercise.name)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
-                                Spacer()
-                                Text("\(exercise.sets)×\(exercise.reps.first ?? 0) • \(String(format: "%.0f", exercise.kg.max() ?? 0)) kg")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        if exercises.count > 3 {
-                            Text(L.t(sv: "+\(exercises.count - 3) övningar till", nb: "+\(exercises.count - 3) øvelser til"))
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            .padding(14)
-            .background(Color(.systemBackground))
-            .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(.systemGray4), lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-    
-    private func statPill(icon: String, value: String) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color(.systemGray6))
-        .cornerRadius(6)
-    }
-    
-    private func formatDuration(_ seconds: Int) -> String {
-        let h = seconds / 3600
-        let m = (seconds % 3600) / 60
-        if h > 0 { return "\(h)h \(m)m" }
-        return "\(m) min"
     }
 }
 
@@ -1545,14 +1715,10 @@ struct UserComparisonView: View {
         }
         
         // Load both users' posts in parallel
-        let myPosts: [SocialWorkoutPost]
-        let theirPosts: [SocialWorkoutPost]
-        do {
-            let myTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: myUserId, forceRefresh: true) }
-            let theirTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: theirUserId, forceRefresh: true) }
-            myPosts = (try? await myTask.value) ?? []
-            theirPosts = (try? await theirTask.value) ?? []
-        }
+        let myTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: myUserId, forceRefresh: true) }
+        let theirTask = Task { try await WorkoutService.shared.getUserWorkoutPosts(userId: theirUserId, forceRefresh: true) }
+        let myPosts = (try? await myTask.value) ?? [WorkoutPost]()
+        let theirPosts = (try? await theirTask.value) ?? [WorkoutPost]()
         
         // Filter by date range
         let isoFormatter = ISO8601DateFormatter()
@@ -2301,5 +2467,80 @@ struct ExerciseStatCompareRow: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Fullscreen Avatar View
+struct FullscreenAvatarView: View {
+    let avatarUrl: String?
+    let username: String
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                
+                Spacer()
+                
+                if let url = avatarUrl, !url.isEmpty {
+                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(url))) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .clipShape(Circle())
+                                .padding(.horizontal, 24)
+                        case .failure(_), .empty:
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 280, height: 280)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 80))
+                                        .foregroundColor(.gray)
+                                )
+                        @unknown default:
+                            ProgressView().tint(.white)
+                        }
+                    }
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 280, height: 280)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 80))
+                                .foregroundColor(.gray)
+                        )
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 4) {
+                    Text(username)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text(L.t(sv: "Profilbild", nb: "Profilbilde"))
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .padding(.bottom, 40)
+            }
+        }
+        .statusBarHidden(true)
     }
 }

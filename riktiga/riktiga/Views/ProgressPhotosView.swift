@@ -9,6 +9,7 @@ struct WeightProgressEntry: Codable, Identifiable {
     let weightKg: Double
     let photoDate: Date
     let createdAt: Date
+    let sharedOnProfile: Bool
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -17,6 +18,7 @@ struct WeightProgressEntry: Codable, Identifiable {
         case weightKg = "weight_kg"
         case photoDate = "photo_date"
         case createdAt = "created_at"
+        case sharedOnProfile = "shared_on_profile"
     }
     
     // Custom decoder for dates
@@ -26,6 +28,7 @@ struct WeightProgressEntry: Codable, Identifiable {
         userId = try container.decode(String.self, forKey: .userId)
         imageUrl = try container.decode(String.self, forKey: .imageUrl)
         weightKg = try container.decode(Double.self, forKey: .weightKg)
+        sharedOnProfile = try container.decodeIfPresent(Bool.self, forKey: .sharedOnProfile) ?? false
         
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -38,7 +41,6 @@ struct WeightProgressEntry: Codable, Identifiable {
         } else if let date = isoFormatterNoMs.date(from: photoDateString) {
             photoDate = date
         } else {
-            // Try date-only format
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             photoDate = dateFormatter.date(from: photoDateString) ?? Date()
@@ -54,13 +56,14 @@ struct WeightProgressEntry: Codable, Identifiable {
         }
     }
     
-    init(id: String, userId: String, imageUrl: String, weightKg: Double, photoDate: Date, createdAt: Date) {
+    init(id: String, userId: String, imageUrl: String, weightKg: Double, photoDate: Date, createdAt: Date, sharedOnProfile: Bool = false) {
         self.id = id
         self.userId = userId
         self.imageUrl = imageUrl
         self.weightKg = weightKg
         self.photoDate = photoDate
         self.createdAt = createdAt
+        self.sharedOnProfile = sharedOnProfile
     }
 }
 
@@ -255,12 +258,12 @@ struct WeightEntryCard: View {
     
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: URL(string: photo.imageUrl)) { phase in
+            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(photo.imageUrl))) { phase in
                 switch phase {
                 case .success(let image):
                     image
                         .resizable()
-                        .aspectRatio(3/4, contentMode: .fill)
+                        .scaledToFill()
                 case .failure:
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
@@ -623,7 +626,7 @@ struct WeightEntryDetailView: View {
                 Color.black.ignoresSafeArea()
                 
                 VStack {
-                    AsyncImage(url: URL(string: photo.imageUrl)) { phase in
+                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(photo.imageUrl))) { phase in
                         switch phase {
                         case .success(let image):
                             image
@@ -775,6 +778,9 @@ struct ProgressPhotosSectionView: View {
     @State private var isLoading = true
     @State private var showAllPhotos = false
     @State private var showAddPhoto = false
+    @State private var shareOnProfile = false
+    @State private var isTogglingShare = false
+    @State private var hasLoadedSharingState = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -797,6 +803,25 @@ struct ProgressPhotosSectionView: View {
                 }
             }
             .padding(.horizontal, 20)
+            
+            if !photos.isEmpty {
+                HStack {
+                    Text(L.t(sv: "Vill du dela dessa på din publika profil?", nb: "Vil du dele disse på din offentlige profil?"))
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $shareOnProfile)
+                        .labelsHidden()
+                        .disabled(isTogglingShare)
+                        .onChange(of: shareOnProfile) { _, newValue in
+                            guard hasLoadedSharingState else { return }
+                            Task { await toggleShareOnProfile(newValue) }
+                        }
+                }
+                .padding(.horizontal, 20)
+            }
             
             if isLoading {
                 HStack {
@@ -917,11 +942,29 @@ struct ProgressPhotosSectionView: View {
         
         do {
             photos = try await ProgressPhotoService.shared.fetchPhotos(for: userId)
+            let sharing = try await ProgressPhotoService.shared.isSharingEnabled(for: userId)
+            await MainActor.run {
+                shareOnProfile = sharing
+                hasLoadedSharingState = true
+            }
         } catch {
             print("❌ Error loading progress photos: \(error)")
+            await MainActor.run { hasLoadedSharingState = true }
         }
         
         isLoading = false
+    }
+    
+    private func toggleShareOnProfile(_ enabled: Bool) async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+        isTogglingShare = true
+        do {
+            try await ProgressPhotoService.shared.toggleSharing(shared: enabled, userId: userId)
+        } catch {
+            print("❌ Error toggling sharing: \(error)")
+            await MainActor.run { shareOnProfile = !enabled }
+        }
+        isTogglingShare = false
     }
 }
 
@@ -932,13 +975,13 @@ struct SmallWeightEntryCard: View {
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "d MMM"
+        formatter.dateFormat = "d MMM yyyy"
         return formatter.string(from: photo.photoDate)
     }
     
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: URL(string: photo.imageUrl)) { phase in
+            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(photo.imageUrl))) { phase in
                 switch phase {
                 case .success(let image):
                     image
@@ -979,5 +1022,86 @@ struct SmallWeightEntryCard: View {
         }
         .frame(width: 110, height: 150)
         .cornerRadius(12)
+    }
+}
+
+// MARK: - Progress Photo Fullscreen View
+struct ProgressPhotoFullscreenView: View {
+    let photo: WeightProgressEntry
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale: CGFloat = 1.0
+    
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMMM yyyy"
+        return formatter.string(from: photo.photoDate)
+    }
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Color.white.opacity(0.2))
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                
+                Spacer()
+                
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(photo.imageUrl))) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .scaleEffect(scale)
+                            .gesture(
+                                MagnifyGesture()
+                                    .onChanged { value in
+                                        scale = max(1.0, value.magnification)
+                                    }
+                                    .onEnded { _ in
+                                        withAnimation(.spring(response: 0.3)) {
+                                            scale = 1.0
+                                        }
+                                    }
+                            )
+                    case .failure:
+                        Image(systemName: "photo")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                    default:
+                        ProgressView().tint(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                
+                Spacer()
+                
+                VStack(spacing: 4) {
+                    Text(String(format: "%.1f kg", photo.weightKg))
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(formattedDate)
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .statusBarHidden()
     }
 }

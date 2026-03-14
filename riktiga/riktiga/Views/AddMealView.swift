@@ -753,7 +753,7 @@ struct FoodSearchResultRow: View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // Optional image - only show if food has an image
-                if let imageUrl = food.imageUrl, let url = URL(string: imageUrl) {
+                if let imageUrl = food.imageUrl, let url = URL(string: SupabaseConfig.rewriteURL(imageUrl)) {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
@@ -1016,7 +1016,7 @@ class AddMealViewModel: ObservableObject {
         request.cachePolicy = .returnCacheDataElseLoad
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -1122,7 +1122,7 @@ class AddMealViewModel: ObservableObject {
             request.timeoutInterval = 10
             
             print("📡 Looking up barcode: \(barcode)")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {

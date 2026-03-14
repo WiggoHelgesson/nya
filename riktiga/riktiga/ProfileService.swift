@@ -12,6 +12,7 @@ class ProfileService {
     private let avatarBucket = "profile-images"
     
     private struct UsernameRow: Decodable { let id: String }
+    private struct GymPBEncodable: Encodable { let name: String; let kg: Double; let reps: Int }
     
     func isUsernameAvailable(_ username: String, excludingUserId: String? = nil) async -> Bool {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -48,7 +49,7 @@ class ProfileService {
                 let coreColumns = "id, username, current_xp, current_level, is_pro_member, avatar_url, banner_url, climbed_mountains, completed_races, bio"
                 let onboardingColumn = ", onboarding_completed"
                 let personalBestColumns = ", pb_5km_minutes, pb_10km_hours, pb_10km_minutes, pb_marathon_hours, pb_marathon_minutes"
-                let editProfileColumns = ", pinned_post_ids, gym_pbs, home_gym, training_goal, training_identity"
+                let editProfileColumns = ", pinned_post_ids, gym_pbs, home_gym, training_goal, training_identity, verified_school_email"
                 var profiles: [User]
                 let shouldAttemptPBColumns = personalBestColumnsAvailable ?? true
                 let shouldAttemptOnboardingColumn = onboardingColumnAvailable ?? true
@@ -524,7 +525,7 @@ class ProfileService {
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: String] = ["userId": userId]
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        let (_, resp) = try await URLSession.shared.data(for: req)
+        let (_, resp) = try await SupabaseConfig.urlSession.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
             throw NSError(domain: "EdgeFunction", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "delete-user failed with status \(http.statusCode)"])
         }
@@ -545,11 +546,115 @@ class ProfileService {
         if let code = postgrestError.code, missingColumnCodes.contains(code) {
             return true
         }
-        // Also check error message for column-not-found hints
         let message = postgrestError.message.lowercased()
         if message.contains("column") && (message.contains("does not exist") || message.contains("not found")) {
             return true
         }
         return false
+    }
+    
+    // MARK: - Auto PB Updates
+    
+    func updateRunningPBIfBetter(userId: String, distanceKm: Double, durationSeconds: Int, currentUser: User?) async {
+        let totalMinutes = durationSeconds / 60
+        let hours = durationSeconds / 3600
+        let minutes = (durationSeconds % 3600) / 60
+        
+        var updates: [String: AnyJSON] = [:]
+        
+        // 5km check (4.75 - 5.25 km tolerance)
+        if distanceKm >= 4.75 && distanceKm <= 5.25 {
+            let current5km = currentUser?.pb5kmMinutes ?? Int.max
+            if totalMinutes < current5km {
+                updates["pb_5km_minutes"] = .integer(totalMinutes)
+                print("🏃 New 5km PB: \(totalMinutes) min (was \(current5km == Int.max ? "none" : "\(current5km)"))")
+            }
+        }
+        
+        // 10km check (9.5 - 10.5 km tolerance)
+        if distanceKm >= 9.5 && distanceKm <= 10.5 {
+            let currentTotal = ((currentUser?.pb10kmHours ?? 99) * 60) + (currentUser?.pb10kmMinutes ?? 99)
+            let newTotal = hours * 60 + minutes
+            if newTotal < currentTotal {
+                updates["pb_10km_hours"] = .integer(hours)
+                updates["pb_10km_minutes"] = .integer(minutes)
+                print("🏃 New 10km PB: \(hours)h \(minutes)min")
+            }
+        }
+        
+        // Marathon check (39.9 - 44.1 km tolerance)
+        if distanceKm >= 39.9 && distanceKm <= 44.1 {
+            let currentTotal = ((currentUser?.pbMarathonHours ?? 99) * 60) + (currentUser?.pbMarathonMinutes ?? 99)
+            let newTotal = hours * 60 + minutes
+            if newTotal < currentTotal {
+                updates["pb_marathon_hours"] = .integer(hours)
+                updates["pb_marathon_minutes"] = .integer(minutes)
+                print("🏃 New Marathon PB: \(hours)h \(minutes)min")
+            }
+        }
+        
+        guard !updates.isEmpty else { return }
+        
+        do {
+            try await AuthSessionManager.shared.ensureValidSession()
+            try await supabase
+                .from("profiles")
+                .update(updates)
+                .eq("id", value: userId)
+                .execute()
+            print("✅ Running PB updated in profile")
+        } catch {
+            print("❌ Failed to update running PB: \(error.localizedDescription)")
+        }
+    }
+    
+    func updateGymPBIfBetter(userId: String, exercises: [GymExercisePost], currentUser: User?) async {
+        let trackedExercises: [(matchName: String, displayName: String)] = [
+            ("barbell bench press", "Bänkpress"),
+            ("barbell deadlift", "Marklyft")
+        ]
+        
+        var currentPbs = currentUser?.gymPbs ?? []
+        var changed = false
+        
+        for tracked in trackedExercises {
+            guard let exercise = exercises.first(where: { $0.name.lowercased() == tracked.matchName }) else { continue }
+            let maxKg = exercise.kg.max() ?? 0
+            guard maxKg > 0 else { continue }
+            
+            let bestRepsAtMax = zip(exercise.kg, exercise.reps)
+                .filter { $0.0 == maxKg }
+                .map { $0.1 }
+                .max() ?? 1
+            
+            if let existingIndex = currentPbs.firstIndex(where: { $0.name == tracked.displayName }) {
+                if maxKg > currentPbs[existingIndex].kg {
+                    currentPbs[existingIndex] = GymPB(name: tracked.displayName, kg: maxKg, reps: bestRepsAtMax)
+                    changed = true
+                    print("💪 New \(tracked.displayName) PB: \(maxKg)kg x \(bestRepsAtMax)")
+                }
+            } else {
+                currentPbs.append(GymPB(name: tracked.displayName, kg: maxKg, reps: bestRepsAtMax))
+                changed = true
+                print("💪 First \(tracked.displayName) PB: \(maxKg)kg x \(bestRepsAtMax)")
+            }
+        }
+        
+        guard changed else { return }
+        
+        do {
+            let pbsEncoded = currentPbs.map { pb in
+                GymPBEncodable(name: pb.name, kg: pb.kg, reps: pb.reps)
+            }
+            try await AuthSessionManager.shared.ensureValidSession()
+            try await supabase
+                .from("profiles")
+                .update(["gym_pbs": pbsEncoded])
+                .eq("id", value: userId)
+                .execute()
+            print("✅ Gym PBs updated in profile")
+        } catch {
+            print("❌ Failed to update gym PBs: \(error.localizedDescription)")
+        }
     }
 }

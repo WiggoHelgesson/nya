@@ -171,33 +171,6 @@ struct FindFriendsView: View {
                 }
             }
             
-            Spacer()
-            
-            // Bottom invite section
-            VStack(spacing: 12) {
-                Divider()
-                
-                Text(L.t(sv: "Bjud in vänner som inte är med ännu", nb: "Inviter venner som ikke er med ennå"))
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                
-                Button {
-                    shareApp()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text(L.t(sv: "Bjud in", nb: "Inviter"))
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.black)
-                    .cornerRadius(25)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-            }
         }
         .navigationTitle(L.t(sv: "Sök", nb: "Søk"))
         .navigationBarTitleDisplayMode(.inline)
@@ -224,9 +197,11 @@ struct FindFriendsView: View {
         }
         .onAppear {
             NavigationDepthTracker.shared.pushView()
+            NavigationDepthTracker.shared.hideTabBar = true
         }
         .onDisappear {
             NavigationDepthTracker.shared.popView()
+            NavigationDepthTracker.shared.hideTabBar = false
         }
     }
     
@@ -842,7 +817,7 @@ struct FriendSearchRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Profile picture
-            ProfileImage(url: user.avatarUrl, size: 50)
+            ProfileImage(url: user.avatarUrl, size: 50, isPro: user.isProMember)
             
             // User info
             VStack(alignment: .leading, spacing: 4) {

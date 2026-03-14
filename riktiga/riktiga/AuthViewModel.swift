@@ -33,6 +33,16 @@ class AuthViewModel: NSObject, ObservableObject {
     var onGoogleSignInComplete: ((Bool, OnboardingData?, String?) -> Void)? // (success, onboardingData, googleName)
     var pendingGoogleOnboardingData: OnboardingData?
     
+    // Invite system — set before signup to bypass @elev.danderyd.se restriction
+    var pendingInviteCode: String?
+    
+    static let allowedEmailDomain = "@elev.danderyd.se"
+    static let domainRestrictionMessage = "Up & Down är just nu exklusivt för studenter. Du behöver en skolmail för att skapa ett konto."
+    
+    func isAllowedEmail(_ email: String) -> Bool {
+        email.lowercased().hasSuffix(Self.allowedEmailDomain)
+    }
+    
     override init() {
         super.init()
         // Kontrollera om användaren redan är inloggad vid appstart
@@ -52,12 +62,17 @@ class AuthViewModel: NSObject, ObservableObject {
                 
                 switch event {
                 case .signedOut:
-                    await MainActor.run {
-                        if self.isLoggedIn {
-                            print("🔑 Server-side sign out detected")
-                            self.isLoggedIn = false
-                            self.currentUser = nil
+                    let hasSession = (try? await supabase.auth.session) != nil
+                    if !hasSession {
+                        await MainActor.run {
+                            if self.isLoggedIn {
+                                print("🔑 Server-side sign out confirmed — session gone")
+                                self.isLoggedIn = false
+                                self.currentUser = nil
+                            }
                         }
+                    } else {
+                        print("🔑 .signedOut event ignored — session still present (transient refresh failure)")
                     }
                     
                 case .tokenRefreshed:
@@ -141,19 +156,35 @@ class AuthViewModel: NSObject, ObservableObject {
                     self.isCheckingAuth = false
                 }
             }
+            
+            #if DEBUG
+            print("🔐 [AUTH] checkAuthStatus started — network: \(NetworkMonitor.shared.connectionType.rawValue), connected: \(NetworkMonitor.shared.isConnected)")
+            SupabaseConfig.diagnoseConnection()
+            #endif
+            
             do {
                 let session = try await supabase.auth.session
-                
-                print("✅ Found existing session for user: \(session.user.id)")
                 
                 let profile: User?
                 do {
                     profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString)
                 } catch {
-                    // Network/session error fetching profile -- do NOT sign out.
-                    // The session exists, we just can't reach the DB right now.
-                    print("⚠️ Could not fetch profile (network/transient error): \(error) — keeping user logged in")
-                    return
+                    #if DEBUG
+                    print("❌ [AUTH] Could not fetch profile, retrying in 2s: \((error as NSError).localizedDescription)")
+                    #endif
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    do {
+                        profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString)
+                    } catch {
+                        #if DEBUG
+                        print("❌ [AUTH] Retry also failed: \((error as NSError).localizedDescription)")
+                        #endif
+                        let wasLoggedIn = await MainActor.run { self.isLoggedIn }
+                        if wasLoggedIn {
+                            print("⚠️ [AUTH] Profile fetch failed but keeping session alive")
+                        }
+                        return
+                    }
                 }
                 
                 if let profile {
@@ -201,16 +232,22 @@ class AuthViewModel: NSObject, ObservableObject {
                         self.errorMessage = "Kontot är raderat eller saknas."
                     }
                 }
+            } catch let authError as AuthError where authError == .sessionMissing {
+                print("ℹ️ No session found (sessionMissing) — showing login")
+                await MainActor.run {
+                    self.isLoggedIn = false
+                    self.currentUser = nil
+                }
             } catch {
-                // supabase.auth.session threw — try refreshing before giving up
-                print("⚠️ Session access failed: \(error) — attempting refresh")
+                #if DEBUG
+                let nsError = error as NSError
+                print("❌ [AUTH] Session access failed: \(nsError.domain) \(nsError.code) — \(nsError.localizedDescription)")
+                #endif
                 do {
                     try await AuthSessionManager.shared.forceRefresh()
                     let session = try await supabase.auth.session
                     print("✅ Session recovered after refresh for user: \(session.user.id)")
                 } catch {
-                    // If user was already logged in, do NOT log them out on transient errors.
-                    // The auth state listener will handle true server-side sign-outs.
                     let wasLoggedIn = await MainActor.run { self.isLoggedIn }
                     if wasLoggedIn {
                         print("⚠️ Session refresh failed but user was logged in — keeping session alive")
@@ -236,7 +273,10 @@ class AuthViewModel: NSObject, ObservableObject {
         }
         
         do {
-            try await supabase.auth.resetPasswordForEmail(trimmedEmail)
+            try await supabase.auth.resetPasswordForEmail(
+                trimmedEmail,
+                redirectTo: URL(string: "upanddown://reset-password")!
+            )
             return (true, "Vi har skickat ett mejl till \(trimmedEmail) med instruktioner för att återställa ditt lösenord.")
         } catch {
             print("❌ Password reset failed: \(error)")
@@ -256,7 +296,6 @@ class AuthViewModel: NSObject, ObservableObject {
                 do {
                     profile = try await ProfileService.shared.fetchUserProfile(userId: session.user.id.uuidString)
                 } catch {
-                    // Network error fetching profile after successful auth — don't sign out
                     await MainActor.run {
                         self.errorMessage = "Kunde inte hämta profilen just nu. Försök igen."
                         self.isLoading = false
@@ -328,6 +367,12 @@ class AuthViewModel: NSObject, ObservableObject {
             return
         }
         
+        // Danderyd domain restriction
+        if !isAllowedEmail(trimmedEmail) && pendingInviteCode == nil {
+            errorMessage = Self.domainRestrictionMessage
+            return
+        }
+        
         isLoading = true
         errorMessage = ""
         
@@ -343,6 +388,13 @@ class AuthViewModel: NSObject, ObservableObject {
                 let placeholderUsername = "user-\(userId.prefix(6))"
                 var newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
                 try await ProfileService.shared.createUserProfile(newUser)
+                
+                // Redeem invite code if used
+                if let inviteCode = pendingInviteCode {
+                    let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
+                    if redeemed { print("✅ Invite code redeemed during signup") }
+                    await MainActor.run { self.pendingInviteCode = nil }
+                }
                 
                 if let onboardingData {
                     _ = await ProfileService.shared.applyOnboardingData(userId: userId, data: onboardingData)
@@ -576,14 +628,25 @@ class AuthViewModel: NSObject, ObservableObject {
                             self.onGoogleSignInComplete?(true, nil, nil)
                         }
                     } else {
-                        // New user OR user who didn't finish onboarding - start onboarding
+                        // New user OR user who didn't finish onboarding
                         var userForOnboarding: User
+                        
+                        // Domain restriction: block non-allowed emails without invite code
+                        // (only existing users with completed onboarding bypass this)
+                        if !self.isAllowedEmail(email) && self.pendingInviteCode == nil {
+                            try? await self.supabase.auth.signOut()
+                            await MainActor.run {
+                                self.errorMessage = Self.domainRestrictionMessage
+                                self.isLoading = false
+                                self.onGoogleSignInComplete?(false, nil, nil)
+                            }
+                            return
+                        }
+                        
                         if let profile = existingProfile {
-                            // Profile exists but onboarding not completed
                             print("🔄 [Google] Profile exists but onboarding not completed")
                             userForOnboarding = profile
                         } else {
-                            // Brand new user - create profile
                             print("🆕 [Google] Step 3: Creating new profile...")
                             let defaultName = googleName ?? email.components(separatedBy: "@").first ?? "Användare"
                             userForOnboarding = User(id: userId, name: defaultName, email: email)
@@ -601,6 +664,13 @@ class AuthViewModel: NSObject, ObservableObject {
                                 }
                                 return
                             }
+                        }
+                        
+                        // Redeem invite code if used
+                        if let inviteCode = self.pendingInviteCode {
+                            let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
+                            if redeemed { print("✅ Invite code redeemed during Google signup") }
+                            await MainActor.run { self.pendingInviteCode = nil }
                         }
                         
                         await RevenueCatManager.shared.logInFor(appUserId: userId)
@@ -781,14 +851,25 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     }
                     await RevenueCatManager.shared.logInFor(appUserId: userId)
                 } else {
-                    // New user OR user who didn't finish onboarding - start onboarding
+                    // New user OR user who didn't finish onboarding
                     var userForOnboarding: User
+                    let appleEmail = email ?? session.user.email ?? ""
+                    
+                    // Domain restriction: block non-allowed emails without invite code
+                    // (only existing users with completed onboarding bypass this)
+                    if !self.isAllowedEmail(appleEmail) && self.pendingInviteCode == nil {
+                        try? await self.supabase.auth.signOut()
+                        await MainActor.run {
+                            self.errorMessage = Self.domainRestrictionMessage
+                            self.isLoading = false
+                            self.onAppleSignInComplete?(false, nil, nil, nil)
+                        }
+                        return
+                    }
                     
                     if let profile = existingProfile {
-                        // Profile exists but onboarding not completed
                         userForOnboarding = profile
                     } else {
-                        // Brand new user - create profile with Apple's provided name
                         let appleFullName = [appleFirstName, appleLastName]
                             .compactMap { $0 }
                             .joined(separator: " ")
@@ -798,20 +879,25 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         userForOnboarding = User(
                             id: userId,
                             name: initialUsername,
-                            email: email ?? session.user.email ?? ""
+                            email: appleEmail
                         )
                         
                         try await ProfileService.shared.createUserProfile(userForOnboarding)
                         
-                        // If Apple provided a name, also update the username in profiles table
                         if !appleFullName.isEmpty {
                             try? await ProfileService.shared.updateUsername(userId: userId, username: appleFullName)
                         }
                         
-                        // Fetch updated profile
                         if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
                             userForOnboarding = profile
                         }
+                    }
+                    
+                    // Redeem invite code if used
+                    if let inviteCode = self.pendingInviteCode {
+                        let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
+                        if redeemed { print("✅ Invite code redeemed during Apple signup") }
+                        await MainActor.run { self.pendingInviteCode = nil }
                     }
                     
                     await RevenueCatManager.shared.logInFor(appUserId: userId)

@@ -79,7 +79,7 @@ struct ProductHealthResultView: View {
     private var productHeader: some View {
         VStack(spacing: 8) {
             // Product image (if available)
-            if let imageUrl = analysis.imageUrl, let url = URL(string: imageUrl) {
+            if let imageUrl = analysis.imageUrl, let url = URL(string: SupabaseConfig.rewriteURL(imageUrl)) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):

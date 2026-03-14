@@ -174,7 +174,7 @@ struct UserFollowRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Profile picture
-            ProfileImage(url: user.avatarUrl, size: 50)
+            ProfileImage(url: user.avatarUrl, size: 50, isPro: user.isProMember)
             
             // User info
             VStack(alignment: .leading, spacing: 4) {

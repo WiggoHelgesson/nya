@@ -73,7 +73,7 @@ class ExerciseImageLoader: ObservableObject {
         request.setValue("exercisedb.p.rapidapi.com", forHTTPHeaderField: "X-RapidAPI-Host")
         print("🔑 Added RapidAPI headers for image request")
         
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        SupabaseConfig.urlSession.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
                 print("❌ Error loading image for exercise \(exerciseId): \(error)")
                 self?.loadFromFallbackIfNeeded(exerciseId: exerciseId, gifUrl: gifUrl)
@@ -112,7 +112,7 @@ class ExerciseImageLoader: ObservableObject {
             return
         }
         
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        SupabaseConfig.urlSession.dataTask(with: url) { data, _, _ in
             defer {
                 DispatchQueue.main.async { [weak self] in
                     self?.isLoading = false

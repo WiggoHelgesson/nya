@@ -81,7 +81,7 @@ final class WorkoutGeneratorService {
         request.httpBody = try encoder.encode(payload)
         request.timeoutInterval = 40
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {

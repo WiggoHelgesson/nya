@@ -2023,8 +2023,32 @@ struct SessionCompleteView: View {
                 userIsPro: RevenueCatManager.shared.isProMember
             )
             
+            // Auto-update PBs in background
+            if let userId = authViewModel.currentUser?.id {
+                let currentUser = authViewModel.currentUser
+                if activity == .running && distance > 0 && duration > 0 {
+                    await ProfileService.shared.updateRunningPBIfBetter(
+                        userId: userId,
+                        distanceKm: distance,
+                        durationSeconds: duration,
+                        currentUser: currentUser
+                    )
+                }
+                if activity == .walking, let exercises = exercisesData {
+                    await ProfileService.shared.updateGymPBIfBetter(
+                        userId: userId,
+                        exercises: exercises,
+                        currentUser: currentUser
+                    )
+                }
+                if let refreshed = try? await ProfileService.shared.fetchUserProfile(userId: userId) {
+                    await MainActor.run {
+                        authViewModel.currentUser = refreshed
+                    }
+                }
+            }
+            
             await MainActor.run {
-                // Fire off background upload
                 PostUploadManager.shared.startUpload(context: uploadContext)
                 
                 isSaving = false

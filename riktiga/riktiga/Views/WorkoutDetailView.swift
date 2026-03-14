@@ -90,7 +90,7 @@ struct WorkoutDetailView: View {
         HStack(spacing: 12) {
             // Avatar
             if let avatarUrl = post.userAvatarUrl, !avatarUrl.isEmpty {
-                AsyncImage(url: URL(string: avatarUrl)) { image in
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -446,7 +446,7 @@ struct WorkoutDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 10) {
                         if let avatarUrl = post.userAvatarUrl, !avatarUrl.isEmpty {
-                            AsyncImage(url: URL(string: avatarUrl)) { image in
+                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
                             } placeholder: {
                                 Circle().fill(Color(.systemGray5))

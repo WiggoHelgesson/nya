@@ -852,7 +852,7 @@ struct TrainerOnboardingView: View {
                                     .frame(width: 80, height: 80)
                                     .clipShape(Circle())
                             } else {
-                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 80)
+                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 80, isPro: authViewModel.currentUser?.isProMember ?? false)
                             }
                             
                             // Edit badge

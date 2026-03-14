@@ -4,6 +4,7 @@ import Supabase
 import MapKit
 import CoreLocation
 import Combine
+import ConfettiSwiftUI
 
 struct EditProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -47,6 +48,9 @@ struct EditProfileView: View {
     @State private var trainingGoal: String = ""
     @State private var trainingIdentity: String = ""
     
+    // Completed races
+    @State private var completedRaces: [String] = []
+    
     // Sheet states
     @State private var showBioSheet = false
     @State private var showPinnedSheet = false
@@ -55,9 +59,28 @@ struct EditProfileView: View {
     @State private var showHomeGymSheet = false
     @State private var showTrainingGoalSheet = false
     @State private var showIdentitySheet = false
+    @State private var showRacesSheet = false
+    
+    // Confetti
+    @State private var confettiCounter = 0
+    @State private var previousCompletedSteps = 0
     
     // Posts for pinned picker
     @StateObject private var pinnedFeedViewModel = SocialViewModel()
+    
+    private var currentCompletedSteps: Int {
+        var count = 0
+        if !pinnedPostIds.isEmpty { count += 1 }
+        if !bio.isEmpty { count += 1 }
+        let hasGymPb = (!gymPb1Name.isEmpty && !gymPb1Kg.isEmpty) || (!gymPb2Name.isEmpty && !gymPb2Kg.isEmpty) || (!gymPb3Name.isEmpty && !gymPb3Kg.isEmpty)
+        let hasRunningPb = !pb5km.isEmpty || !pb10kmM.isEmpty || !pbMarathonM.isEmpty
+        if hasGymPb || hasRunningPb { count += 1 }
+        if !completedRaces.isEmpty { count += 1 }
+        if !homeGym.isEmpty { count += 1 }
+        if !trainingGoal.isEmpty { count += 1 }
+        if !trainingIdentity.isEmpty { count += 1 }
+        return min(count, 3)
+    }
     
     var body: some View {
         NavigationStack {
@@ -73,7 +96,6 @@ struct EditProfileView: View {
                             introduktionSection
                             prestationsstatusSection
                             traningsinfoSection
-                            saveButton
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 20)
@@ -81,13 +103,26 @@ struct EditProfileView: View {
                     }
                 }
             }
+            .confettiCannon(
+                counter: $confettiCounter,
+                num: currentCompletedSteps >= 3 ? 60 : 12,
+                colors: currentCompletedSteps >= 3
+                    ? [Color(red: 1.0, green: 0.84, blue: 0.0), Color(red: 1.0, green: 0.65, blue: 0.0), Color(red: 1.0, green: 0.95, blue: 0.6), Color(red: 1.0, green: 0.5, blue: 0.0), .white]
+                    : [Color(red: 0.2, green: 0.6, blue: 0.9), Color(red: 0.3, green: 0.8, blue: 0.7), Color(red: 0.4, green: 0.7, blue: 0.5)],
+                confettiSize: currentCompletedSteps >= 3 ? 12 : 8,
+                rainHeight: currentCompletedSteps >= 3 ? 800 : 400,
+                radius: currentCompletedSteps >= 3 ? 700 : 300,
+                repetitions: currentCompletedSteps >= 3 ? 3 : 1,
+                repetitionInterval: currentCompletedSteps >= 3 ? 0.6 : 0.3
+            )
             .navigationTitle(L.t(sv: "Redigera profil", nb: "Rediger profil"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(L.t(sv: "Avbryt", nb: "Avbryt")) {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                 }
             }
             .onAppear { loadCurrentProfile() }
@@ -96,6 +131,7 @@ struct EditProfileView: View {
                     if let data = try? await newItem?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
                         selectedImage = uiImage
+                        autoSave()
                     }
                 }
             }
@@ -104,15 +140,12 @@ struct EditProfileView: View {
                     if let data = try? await newItem?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
                         selectedBannerImage = uiImage
+                        autoSave()
                     }
                 }
             }
             .alert(L.t(sv: "Meddelande", nb: "Melding"), isPresented: $showAlert) {
-                Button("OK") {
-                    if alertMessage.contains("sparad") || alertMessage.contains("lagret") {
-                        dismiss()
-                    }
-                }
+                Button("OK") {}
             } message: {
                 Text(alertMessage)
             }
@@ -123,6 +156,15 @@ struct EditProfileView: View {
             .sheet(isPresented: $showHomeGymSheet) { homeGymSheet }
             .sheet(isPresented: $showTrainingGoalSheet) { trainingGoalSheet }
             .sheet(isPresented: $showIdentitySheet) { identitySheet }
+            .sheet(isPresented: $showRacesSheet) { racesSheet }
+            .onChange(of: showBioSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showPinnedSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showGymPbSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showRunningPbSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showHomeGymSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showTrainingGoalSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showIdentitySheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showRacesSheet) { _, isOpen in if !isOpen { autoSave() } }
         }
     }
     
@@ -170,7 +212,7 @@ struct EditProfileView: View {
                         .clipShape(Circle())
                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 4))
                 } else {
-                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 100)
+                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 100, isPro: authViewModel.currentUser?.isProMember ?? false)
                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 4))
                 }
                 
@@ -203,6 +245,7 @@ struct EditProfileView: View {
                 .padding(12)
                 .background(Color(.systemBackground))
                 .cornerRadius(10)
+                .onSubmit { autoSave() }
         }
     }
     
@@ -251,8 +294,8 @@ struct EditProfileView: View {
                 
                 Divider().padding(.leading, 58)
                 
-                editRow(icon: "flag.fill", label: L.t(sv: "Genomförda officiella lopp", nb: "Gjennomførte offisielle løp"), detail: nil) {
-                    // Placeholder for future
+                editRow(icon: "flag.fill", label: L.t(sv: "Genomförda officiella lopp", nb: "Gjennomførte offisielle løp"), detail: completedRaces.isEmpty ? nil : "\(completedRaces.count) lopp") {
+                    showRacesSheet = true
                 }
             }
         }
@@ -749,6 +792,34 @@ struct EditProfileView: View {
         .presentationDetents([.medium])
     }
     
+    // MARK: - Races Sheet
+    
+    static let knownRaces: [String] = [
+        // Swedish
+        "Stockholm Marathon", "Göteborgsvarvet", "Lidingöloppet", "Vasaloppet",
+        "Tjejmilen", "Midnattsloppet", "Stockholm Halvmarathon", "Göteborg Marathon",
+        "En Svensk Klassiker", "Kungsleden Ultra", "Ultravasan", "Spring i Bansen",
+        "O-ringen", "Klassikern", "Hässelbyloppet", "Bellmanstafetten",
+        // Major World Marathons
+        "New York City Marathon", "Boston Marathon", "London Marathon",
+        "Berlin Marathon", "Chicago Marathon", "Tokyo Marathon",
+        // Triathlon / Ironman
+        "Ironman (Full)", "Ironman 70.3", "Ironman Kalmar", "Challenge Roth",
+        // Nordic
+        "Oslo Marathon", "Copenhagen Marathon", "Copenhagen Half", "Helsinki City Marathon",
+        // Ultra
+        "UTMB (Ultra-Trail du Mont-Blanc)", "Western States 100", "Comrades Marathon",
+        // Other well-known
+        "Marathon des Sables", "Wings for Life World Run", "Spartan Race",
+        "Tough Viking", "Hyrox", "Blodomloppet", "Stafettvasan",
+        "Göteborgsvarvet Halvmarathon", "Malmö Marathon", "TCS Lidingöloppet 30",
+        "Engelbrektsloppet", "Cykelvasan"
+    ]
+    
+    private var racesSheet: some View {
+        RacesPickerSheet(completedRaces: $completedRaces, dismiss: { showRacesSheet = false })
+    }
+    
     // MARK: - Helpers
     
     private func iconForActivity(_ type: String) -> String {
@@ -822,6 +893,13 @@ struct EditProfileView: View {
         homeGym = user.homeGym ?? ""
         trainingGoal = user.trainingGoal ?? ""
         trainingIdentity = user.trainingIdentity ?? ""
+        
+        // Load completed races
+        completedRaces = user.completedRaces
+        
+        DispatchQueue.main.async {
+            previousCompletedSteps = currentCompletedSteps
+        }
     }
     
     // MARK: - Build Gym PBs Array
@@ -838,6 +916,45 @@ struct EditProfileView: View {
             result.append(["name": gymPb3Name, "kg": Double(gymPb3Kg) ?? 0, "reps": Int(gymPb3Reps) ?? 0])
         }
         return result
+    }
+    
+    // MARK: - Auto Save (silent, triggered when sheets close)
+    
+    private func autoSave() {
+        Task {
+            do {
+                var imageUrl: String?
+                if let selectedImage = selectedImage {
+                    imageUrl = try await uploadProfileImage(selectedImage)
+                    await MainActor.run { self.selectedImage = nil }
+                }
+                
+                var newBannerUrl: String?
+                if let selectedBannerImage = selectedBannerImage {
+                    newBannerUrl = try await uploadBannerImage(selectedBannerImage)
+                    await MainActor.run { self.selectedBannerImage = nil }
+                }
+                
+                try await updateUserProfile(
+                    username: username,
+                    avatarUrl: imageUrl,
+                    bannerUrl: newBannerUrl
+                )
+                print("✅ Profile auto-saved")
+                
+                await MainActor.run {
+                    let stepsNow = currentCompletedSteps
+                    if stepsNow > previousCompletedSteps {
+                        let generator = UIImpactFeedbackGenerator(style: stepsNow >= 3 ? .heavy : .medium)
+                        generator.impactOccurred()
+                        confettiCounter += 1
+                    }
+                    previousCompletedSteps = stepsNow
+                }
+            } catch {
+                print("⚠️ Auto-save failed: \(error.localizedDescription)")
+            }
+        }
     }
     
     // MARK: - Save
@@ -933,7 +1050,8 @@ struct EditProfileView: View {
             "pb_marathon_minutes": DynamicEncodable(Int(pbMarathonM) ?? NSNull() as Any),
             "home_gym": DynamicEncodable(homeGym.isEmpty ? NSNull() : homeGym),
             "training_goal": DynamicEncodable(trainingGoal.isEmpty ? NSNull() : trainingGoal),
-            "training_identity": DynamicEncodable(trainingIdentity.isEmpty ? NSNull() : trainingIdentity)
+            "training_identity": DynamicEncodable(trainingIdentity.isEmpty ? NSNull() : trainingIdentity),
+            "completed_races": DynamicEncodable(completedRaces)
         ]
         
         if let avatarUrl = avatarUrl {
@@ -964,6 +1082,7 @@ struct EditProfileView: View {
                 authViewModel.currentUser?.homeGym = homeGym.isEmpty ? nil : homeGym
                 authViewModel.currentUser?.trainingGoal = trainingGoal.isEmpty ? nil : trainingGoal
                 authViewModel.currentUser?.trainingIdentity = trainingIdentity.isEmpty ? nil : trainingIdentity
+                authViewModel.currentUser?.completedRaces = completedRaces
                 if let avatarUrl = avatarUrl { authViewModel.currentUser?.avatarUrl = avatarUrl }
                 if let bannerUrl = bannerUrl { authViewModel.currentUser?.bannerUrl = bannerUrl }
             }
@@ -971,7 +1090,8 @@ struct EditProfileView: View {
             if ProfileService.shared.isMissingPersonalBestColumnsError(error) {
                 var fallbackData: [String: DynamicEncodable] = [
                     "username": DynamicEncodable(username),
-                    "bio": DynamicEncodable(bio.isEmpty ? NSNull() : bio)
+                    "bio": DynamicEncodable(bio.isEmpty ? NSNull() : bio),
+                    "completed_races": DynamicEncodable(completedRaces)
                 ]
                 if let avatarUrl = avatarUrl { fallbackData["avatar_url"] = DynamicEncodable(avatarUrl) }
                 if let bannerUrl = bannerUrl { fallbackData["banner_url"] = DynamicEncodable(bannerUrl) }
@@ -985,6 +1105,7 @@ struct EditProfileView: View {
                 await MainActor.run {
                     authViewModel.currentUser?.name = username
                     authViewModel.currentUser?.bio = bio.isEmpty ? nil : bio
+                    authViewModel.currentUser?.completedRaces = completedRaces
                     if let avatarUrl = avatarUrl { authViewModel.currentUser?.avatarUrl = avatarUrl }
                     if let bannerUrl = bannerUrl { authViewModel.currentUser?.bannerUrl = bannerUrl }
                 }
@@ -1169,6 +1290,85 @@ class GymSearchLocationHelper: NSObject, ObservableObject, CLLocationManagerDele
     
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location error: \(error.localizedDescription)")
+    }
+}
+
+// MARK: - Races Picker Sheet
+
+struct RacesPickerSheet: View {
+    @Binding var completedRaces: [String]
+    var dismiss: () -> Void
+    
+    @State private var searchText = ""
+    
+    private var filteredRaces: [String] {
+        if searchText.isEmpty {
+            return EditProfileView.knownRaces
+        }
+        let query = searchText.lowercased()
+        return EditProfileView.knownRaces.filter { $0.lowercased().contains(query) }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                if !completedRaces.isEmpty {
+                    Section(header: Text(L.t(sv: "Valda lopp", nb: "Valgte løp"))) {
+                        ForEach(completedRaces, id: \.self) { race in
+                            Button {
+                                completedRaces.removeAll { $0 == race }
+                            } label: {
+                                HStack {
+                                    Text(race)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.system(size: 20))
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Section(header: Text(L.t(sv: "Alla lopp", nb: "Alle løp"))) {
+                    ForEach(filteredRaces, id: \.self) { race in
+                        let isSelected = completedRaces.contains(race)
+                        Button {
+                            if isSelected {
+                                completedRaces.removeAll { $0 == race }
+                            } else {
+                                completedRaces.append(race)
+                            }
+                        } label: {
+                            HStack {
+                                Text(race)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.system(size: 20))
+                                } else {
+                                    Image(systemName: "circle")
+                                        .foregroundColor(Color(.systemGray3))
+                                        .font(.system(size: 20))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: L.t(sv: "Sök lopp...", nb: "Søk løp..."))
+            .navigationTitle(L.t(sv: "Officiella lopp", nb: "Offisielle løp"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(L.t(sv: "Klar", nb: "Ferdig")) { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
     }
 }
 

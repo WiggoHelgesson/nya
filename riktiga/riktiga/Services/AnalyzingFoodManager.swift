@@ -431,7 +431,7 @@ class AnalyzingFoodManager: ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         request.timeoutInterval = 60
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],

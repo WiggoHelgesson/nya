@@ -199,15 +199,6 @@ struct HomeView: View {
                 .environmentObject(authViewModel)
                 .zIndex(2)
             
-            // MARK: - Pro Banner (Sticky)
-            // Only show for non-Pro members
-            if !(authViewModel.currentUser?.isProMember ?? false) {
-                ProBannerView(onTap: {
-                    SuperwallService.shared.showPaywall()
-                })
-                .zIndex(1)
-            }
-            
             ZStack {
                 Color(.systemGroupedBackground)
                     .ignoresSafeArea()
@@ -348,6 +339,7 @@ struct HomeView: View {
             viewModel.setUserId(authViewModel.currentUser?.id)
             viewModel.loadData()
             updateDisplayedValues(animated: false)
+            
         }
         .onChange(of: authViewModel.currentUser?.id) { _, newId in
             viewModel.setUserId(newId)
@@ -2772,7 +2764,7 @@ struct FoodLogDetailView: View {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
@@ -3303,7 +3295,7 @@ struct RecommendedFriendCard: View {
     var body: some View {
         VStack(spacing: 12) {
             NavigationLink(destination: UserProfileView(userId: user.id)) {
-                ProfileImage(url: user.avatarUrl, size: 60)
+                ProfileImage(url: user.avatarUrl, size: 60, isPro: user.isProMember)
             }
             
             Text(user.name)

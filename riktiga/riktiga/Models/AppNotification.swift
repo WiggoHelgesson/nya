@@ -6,6 +6,7 @@ struct AppNotification: Identifiable, Codable {
     let actorId: String // Den som utförde handlingen
     let actorUsername: String?
     let actorAvatarUrl: String?
+    var actorIsPro: Bool
     let type: NotificationType
     let postId: String?
     let commentText: String?
@@ -83,6 +84,7 @@ struct AppNotification: Identifiable, Codable {
          actorId: String,
          actorUsername: String?,
          actorAvatarUrl: String?,
+         actorIsPro: Bool = false,
          type: NotificationType,
          postId: String?,
          commentText: String?,
@@ -93,6 +95,7 @@ struct AppNotification: Identifiable, Codable {
         self.actorId = actorId
         self.actorUsername = actorUsername
         self.actorAvatarUrl = actorAvatarUrl
+        self.actorIsPro = actorIsPro
         self.type = type
         self.postId = postId
         self.commentText = commentText
@@ -107,6 +110,7 @@ struct AppNotification: Identifiable, Codable {
         self.actorId = try container.decodeIfPresent(String.self, forKey: .actorId) ?? ""
         self.actorUsername = try container.decodeIfPresent(String.self, forKey: .actorUsername)
         self.actorAvatarUrl = try container.decodeIfPresent(String.self, forKey: .actorAvatarUrl)
+        self.actorIsPro = false
         
         let typeString = try container.decodeIfPresent(String.self, forKey: .type) ?? "unknown"
         self.type = NotificationType(rawValue: typeString)

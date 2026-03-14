@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct NotificationsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -104,9 +105,11 @@ struct NotificationsView: View {
         }
         .onAppear {
             NavigationDepthTracker.shared.setAtRoot(false)
+            NavigationDepthTracker.shared.hideTabBar = true
         }
         .onDisappear {
             NavigationDepthTracker.shared.setAtRoot(true)
+            NavigationDepthTracker.shared.hideTabBar = false
             onDismiss?()
         }
         .navigationDestination(isPresented: Binding(
@@ -204,8 +207,26 @@ struct NotificationsView: View {
             avatarUrls.append(contentsOf: invitations.compactMap { $0.coach?.avatarUrl }.filter { !$0.isEmpty })
             ImageCacheManager.shared.prefetch(urls: avatarUrls)
             
+            // Enrich notifications with pro status
+            var enriched = fetched
+            let uniqueActorIds = Set(fetched.map { $0.actorId }).filter { !$0.isEmpty }
+            if !uniqueActorIds.isEmpty {
+                struct ProStatus: Decodable { let id: String; let is_pro_member: Bool? }
+                if let statuses: [ProStatus] = try? await SupabaseConfig.supabase
+                    .from("profiles")
+                    .select("id, is_pro_member")
+                    .in("id", values: Array(uniqueActorIds))
+                    .execute()
+                    .value {
+                    let proMap = Dictionary(uniqueKeysWithValues: statuses.map { ($0.id, $0.is_pro_member ?? false) })
+                    for i in enriched.indices {
+                        enriched[i].actorIsPro = proMap[enriched[i].actorId] ?? false
+                    }
+                }
+            }
+            
             await MainActor.run {
-                notifications = fetched
+                notifications = enriched
                 pendingCoachInvitations = invitations
                 isLoading = false
                 errorMessage = nil
@@ -258,56 +279,18 @@ struct NotificationsView: View {
     
     private func handleNotificationTap(_ notification: AppNotification) {
         Task {
-            // For comment, reply, and like notifications, navigate to the post's comments
             switch notification.type {
-            case .comment, .reply, .like:
-                if let postId = notification.postId, !postId.isEmpty {
-                    do {
-                        // Fetch the post
-                        let post = try await SocialService.shared.getPost(postId: postId)
-                        await MainActor.run {
-                            selectedPostForComments = post
-                        }
-                    } catch {
-                        print("❌ Error fetching post for notification: \(error)")
-                        // Fallback to profile navigation
-                        await MainActor.run {
-                            if !notification.actorId.isEmpty {
-                                selectedProfileId = notification.actorId
-                            }
-                        }
-                    }
-                } else {
-                    // No post ID, go to profile
-                    await MainActor.run {
-                        if !notification.actorId.isEmpty {
-                            selectedProfileId = notification.actorId
-                        }
-                    }
-                }
-                
-            case .follow:
-                // For follow notifications, go to the user's profile
-                await MainActor.run {
-                    if !notification.actorId.isEmpty {
-                        selectedProfileId = notification.actorId
-                    }
-                }
-                
             case .coachInvitation:
-                // Fetch the invitation and show acceptance view
                 if let invitationId = notification.postId {
                     await handleCoachInvitation(invitationId: invitationId)
                 }
                 
             case .coachProgramAssigned:
-                // Navigate to coach programs view
                 await MainActor.run {
                     showCoachPrograms = true
                 }
                 
             default:
-                // Default: go to profile
                 await MainActor.run {
                     if !notification.actorId.isEmpty {
                         selectedProfileId = notification.actorId
@@ -402,7 +385,7 @@ struct CoachInvitationNotificationRow: View {
             HStack(alignment: .top, spacing: 12) {
                 // Coach avatar
                 if let avatarUrl = invitation.coach?.avatarUrl, !avatarUrl.isEmpty {
-                    AsyncImage(url: URL(string: avatarUrl)) { image in
+                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -547,7 +530,7 @@ struct NotificationRowStrava: View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 12) {
                 // Profile picture (cached)
-                ProfileImage(url: notification.actorAvatarUrl, size: 52)
+                ProfileImage(url: notification.actorAvatarUrl, size: 52, isPro: notification.actorIsPro)
                 
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
@@ -751,7 +734,7 @@ struct CoachProgramsListView: View {
                                         Spacer()
                                         
                                         if let avatarUrl = assignment.coach?.avatarUrl, !avatarUrl.isEmpty {
-                                            AsyncImage(url: URL(string: avatarUrl)) { image in
+                                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                                                 image
                                                     .resizable()
                                                     .aspectRatio(contentMode: .fill)

@@ -114,7 +114,7 @@ struct RaceDetailView: View {
                                         Button(action: {
                                             selectedImageUrl = memory.imageUrl
                                         }) {
-                                            AsyncImage(url: URL(string: memory.imageUrl)) { phase in
+                                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(memory.imageUrl))) { phase in
                                                 switch phase {
                                                 case .empty:
                                                     Rectangle()

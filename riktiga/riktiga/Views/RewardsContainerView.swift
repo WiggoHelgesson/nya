@@ -53,7 +53,7 @@ struct RewardsContainerView: View {
                                 Button {
                                     showPublicProfile = true
                                 } label: {
-                                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                                    ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                                         .overlay(
                                             Circle()
                                                 .stroke(Color.black.opacity(0.1), lineWidth: 1)

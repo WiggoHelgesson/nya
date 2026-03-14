@@ -87,7 +87,7 @@ struct NewMessageView: View {
                                 HStack(spacing: 8) {
                                     ForEach(selectedGroupUsersList) { user in
                                         HStack(spacing: 6) {
-                                            ProfileImage(url: user.avatarUrl, size: 24)
+                                            ProfileImage(url: user.avatarUrl, size: 24, isPro: user.isProMember)
                                             Text(user.name)
                                                 .font(.system(size: 13, weight: .medium))
                                                 .foregroundColor(.primary)
@@ -171,7 +171,7 @@ struct NewMessageView: View {
                                     }
                                 } label: {
                                     HStack(spacing: 12) {
-                                        ProfileImage(url: user.avatarUrl, size: 44)
+                                        ProfileImage(url: user.avatarUrl, size: 44, isPro: user.isProMember)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(user.name)
@@ -298,13 +298,13 @@ struct NewMessageView: View {
                 
                 VStack(spacing: 20) {
                     HStack(spacing: 16) {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 52)
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 52, isPro: authViewModel.currentUser?.isProMember ?? false)
                         
                         Image(systemName: "bubble.left.and.bubble.right.fill")
                             .font(.system(size: 20))
                             .foregroundColor(.secondary)
                         
-                        ProfileImage(url: user.avatarUrl, size: 52)
+                        ProfileImage(url: user.avatarUrl, size: 52, isPro: user.isProMember)
                     }
                     .padding(.top, 8)
                     
@@ -364,11 +364,11 @@ struct NewMessageView: View {
                 VStack(spacing: 20) {
                     // Overlapping group avatars
                     HStack(spacing: -12) {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 44)
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 44, isPro: authViewModel.currentUser?.isProMember ?? false)
                             .zIndex(3)
                         
                         ForEach(Array(selectedGroupUsersList.prefix(3).enumerated()), id: \.element.id) { index, user in
-                            ProfileImage(url: user.avatarUrl, size: 44)
+                            ProfileImage(url: user.avatarUrl, size: 44, isPro: user.isProMember)
                                 .zIndex(Double(2 - index))
                         }
                         

@@ -404,7 +404,7 @@ struct BookingFlowView: View {
                 
                 // Trainer info
                 HStack(spacing: 16) {
-                    AsyncImage(url: URL(string: trainer.avatarUrl ?? "")) { image in
+                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(trainer.avatarUrl ?? ""))) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Circle().fill(Color.gray.opacity(0.3))

@@ -97,7 +97,7 @@ final class StripeConnectService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw StripeConnectError.invalidResponse
@@ -132,7 +132,7 @@ final class StripeConnectService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         let decoded = try JSONDecoder().decode(OnboardingLinkResponse.self, from: data)
         
         if !decoded.success && decoded.alreadyComplete != true {
@@ -165,7 +165,7 @@ final class StripeConnectService {
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         let decoded = try JSONDecoder().decode(AccountStatusResponse.self, from: data)
         
         if !decoded.success {
@@ -214,7 +214,7 @@ final class StripeConnectService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         let decoded = try JSONDecoder().decode(CheckoutResponse.self, from: data)
         
         if !decoded.success {

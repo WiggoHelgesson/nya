@@ -48,7 +48,7 @@ class FatSecretService {
         print("🔑 Client ID: \(clientId.prefix(10))...")
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             let responseString = String(data: data, encoding: .utf8) ?? "No response body"
             print("📡 FatSecret raw response: \(responseString)")
@@ -110,7 +110,7 @@ class FatSecretService {
         request.timeoutInterval = 20
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             let responseString = String(data: data, encoding: .utf8) ?? "No response"
             print("📡 FatSecret search raw response: \(responseString.prefix(500))...")
@@ -189,7 +189,7 @@ class FatSecretService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw FatSecretError.searchFailed

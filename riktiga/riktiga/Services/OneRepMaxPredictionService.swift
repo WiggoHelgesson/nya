@@ -14,7 +14,7 @@ final class OneRepMaxPredictionService {
     private var predictionCache: [String: CachedPrediction] = [:]
     private let cacheExpirationDays: Int = 7
     
-    private init(session: URLSession = .shared) {
+    private init(session: URLSession = SupabaseConfig.urlSession) {
         self.session = session
         self.jsonDecoder = JSONDecoder()
         self.jsonEncoder = JSONEncoder()

@@ -161,7 +161,7 @@ struct CoachTabView: View {
                                         // Coach avatar & name
                                         HStack(spacing: 14) {
                                             if let avatarUrl = coach.avatarUrl, !avatarUrl.isEmpty {
-                                                AsyncImage(url: URL(string: avatarUrl)) { image in
+                                                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                                                     image
                                                         .resizable()
                                                         .aspectRatio(contentMode: .fill)
@@ -437,7 +437,7 @@ struct CoachTabView: View {
             HStack(spacing: 10) {
                 // Tränarens profilbild
                 if let avatarUrl = coachRelation?.coach?.avatarUrl, !avatarUrl.isEmpty {
-                    AsyncImage(url: URL(string: avatarUrl)) { image in
+                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(avatarUrl))) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -851,7 +851,7 @@ struct CoachHeaderView: View {
                     Button {
                         showPublicProfile = true
                     } label: {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                             .overlay(
                                 Circle()
                                     .stroke(Color.black.opacity(0.1), lineWidth: 1)

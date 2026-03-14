@@ -18,24 +18,27 @@ struct ProfileContainerView: View {
     @State private var selectedTab: ProfileTab = .statistik
     @State private var showSettings = false
     @State private var navigationPath = NavigationPath()
+    @State private var showPublicProfile = false
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
-                // MARK: - Combined Header with Tabs (Strava-style)
                 ProfileHeaderWithTabs(selectedTab: $selectedTab, onSettingsTapped: {
                     showSettings = true
+                }, onPublicProfileTapped: {
+                    showPublicProfile = true
                 })
                     .environmentObject(authViewModel)
                     .zIndex(2)
                 
-                // Swipeable content
                 TabView(selection: $selectedTab) {
                     StatisticsView()
                         .environmentObject(authViewModel)
                         .tag(ProfileTab.statistik)
                     
-                    ProfileActivitiesView()
+                    ProfileActivitiesView(onPublicProfileTapped: {
+                        showPublicProfile = true
+                    })
                         .environmentObject(authViewModel)
                         .tag(ProfileTab.aktiviteter)
                 }
@@ -43,11 +46,18 @@ struct ProfileContainerView: View {
                 .animation(.easeInOut(duration: 0.25), value: selectedTab)
             }
             .navigationBarHidden(true)
+            .navigationDestination(isPresented: $showPublicProfile) {
+                if let userId = authViewModel.currentUser?.id {
+                    UserProfileView(userId: userId)
+                        .environmentObject(authViewModel)
+                }
+            }
         }
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
             showSettings = false
+            showPublicProfile = false
             NotificationCenter.default.post(name: NSNotification.Name("PopToRootProfil"), object: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToStatistics"))) { _ in
@@ -139,9 +149,8 @@ struct ProfileHeaderWithTabs: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Binding var selectedTab: ProfileTab
     
-    @State private var showPublicProfile = false
-    
     var onSettingsTapped: (() -> Void)? = nil
+    var onPublicProfileTapped: (() -> Void)? = nil
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -178,9 +187,9 @@ struct ProfileHeaderWithTabs: View {
                 HStack {
                     // Profile picture
                     Button {
-                        showPublicProfile = true
+                        onPublicProfileTapped?()
                     } label: {
-                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                        ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                             .overlay(
                                 Circle()
                                     .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -235,21 +244,6 @@ struct ProfileHeaderWithTabs: View {
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showPublicProfile) {
-            if let userId = authViewModel.currentUser?.id {
-                NavigationStack {
-                    UserProfileView(userId: userId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    showPublicProfile = false
-                                }
-                            }
-                        }
-                }
-            }
-        }
     }
 }
 

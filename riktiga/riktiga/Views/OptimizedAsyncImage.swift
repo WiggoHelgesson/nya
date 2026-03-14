@@ -116,12 +116,26 @@ class ImageCacheManager {
             return localImage
         }
         
-        guard let url = URL(string: urlString) else {
+        let rewritten = SupabaseConfig.rewriteURL(urlString)
+        guard let url = URL(string: rewritten) else {
+            print("❌ [IMG] Bad URL: \(urlString)")
             throw URLError(.badURL)
         }
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        #if DEBUG
+        print("📷 [IMG] Downloading: \(url.absoluteString.prefix(120))")
+        #endif
+        
+        let (data, response) = try await SupabaseConfig.urlSession.data(from: url)
+        
+        #if DEBUG
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            print("❌ [IMG] HTTP \(http.statusCode) for: \(url.absoluteString.prefix(120))")
+        }
+        #endif
+        
         guard let image = UIImage(data: data) else {
+            print("❌ [IMG] Cannot decode image data (\(data.count) bytes) from: \(url.absoluteString.prefix(120))")
             throw URLError(.cannotDecodeContentData)
         }
         setImage(image, for: urlString)
@@ -399,24 +413,48 @@ struct PageEntranceModifier: ViewModifier {
 struct ProfileImage: View {
     let url: String?
     let size: CGFloat
+    let isPro: Bool
     
-    init(url: String?, size: CGFloat = 50) {
+    init(url: String?, size: CGFloat = 50, isPro: Bool = false) {
         self.url = url
         self.size = size
+        self.isPro = isPro
     }
     
     var body: some View {
-        OptimizedAsyncImage(
-            url: url,
-            width: size,
-            height: size,
-            cornerRadius: size / 2
-        )
-        .id(url ?? "no-url")
+        if isPro {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.3)
+                    .fill(
+                        LinearGradient(
+                            colors: [.black, Color(.systemGray2), .white, Color(.systemGray2), .black],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: size + 5, height: size + 5)
+                
+                OptimizedAsyncImage(
+                    url: url,
+                    width: size,
+                    height: size,
+                    cornerRadius: size * 0.28
+                )
+            }
+            .id(url ?? "no-url")
+        } else {
+            OptimizedAsyncImage(
+                url: url,
+                width: size,
+                height: size,
+                cornerRadius: size / 2
+            )
+            .id(url ?? "no-url")
+        }
     }
 }
 
-// Pro member profile image with squircle shape and gradient border
+// Keep for backward compatibility
 struct ProProfileImage: View {
     let url: String?
     let size: CGFloat
@@ -427,24 +465,6 @@ struct ProProfileImage: View {
     }
     
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.3)
-                .fill(
-                    LinearGradient(
-                        colors: [.black, Color(.systemGray2), .white, Color(.systemGray2), .black],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: size + 5, height: size + 5)
-            
-            OptimizedAsyncImage(
-                url: url,
-                width: size,
-                height: size,
-                cornerRadius: size * 0.28
-            )
-        }
-        .id(url ?? "no-url")
+        ProfileImage(url: url, size: size, isPro: true)
     }
 }

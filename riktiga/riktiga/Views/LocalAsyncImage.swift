@@ -29,7 +29,7 @@ struct LocalAsyncImage: View {
             var request = URLRequest(url: url)
             request.timeoutInterval = 10
             
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let downloadedImage = UIImage(data: data) else {
                 throw NSError(domain: "InvalidImage", code: 1)
@@ -127,11 +127,15 @@ struct LocalAsyncImage: View {
             } else {
                 bucket = "workout-images"
             }
-            effectivePath = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/\(bucket)/\(path)"
+            effectivePath = "\(SupabaseConfig.storageBaseURL)/\(bucket)/\(path)"
             print("🔗 Converted relative path to Supabase URL: \(effectivePath)")
         } else {
-            effectivePath = path
+            effectivePath = SupabaseConfig.rewriteURL(path)
         }
+        
+        #if DEBUG
+        print("📷 [LOCAL] path=\(path.prefix(80)) → effective=\(effectivePath.prefix(80))")
+        #endif
         
         // Create cache key by normalizing the URL
         let cacheKey: String = {
@@ -172,9 +176,10 @@ struct LocalAsyncImage: View {
                 request.cachePolicy = .returnCacheDataElseLoad
                 request.timeoutInterval = 30
                 
-                // Setup URLSession with persistent caching
                 let config = URLSessionConfiguration.default
                 config.urlCache = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 200 * 1024 * 1024, diskPath: "imageCache")
+                config.allowsExpensiveNetworkAccess = true
+                config.allowsConstrainedNetworkAccess = true
                 let session = URLSession(configuration: config)
                 
                 let (data, response) = try await session.data(for: request)
@@ -213,7 +218,9 @@ struct LocalAsyncImage: View {
                 await MainActor.run {
                     self.isLoading = false
                     self.loadFailed = true
-                    print("❌ Failed to load image from URL: \(error)")
+                    let nsError = error as NSError
+                    print("❌ [LOCAL] Failed: \(effectivePath.prefix(80))")
+                    print("❌ [LOCAL] Error: \(nsError.domain) \(nsError.code) — \(nsError.localizedDescription)")
                 }
             }
         } else {
@@ -232,7 +239,7 @@ struct LocalAsyncImage: View {
                 print("📝 Extracted filename: \(filename)")
                 
                 // Try to load from Supabase Storage
-                let supabaseStorageURL = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/workout-images/\(filename)"
+                let supabaseStorageURL = "\(SupabaseConfig.storageBaseURL)/workout-images/\(filename)"
                 print("🔗 Supabase Storage URL: \(supabaseStorageURL)")
                 
                 guard let storageURL = URL(string: supabaseStorageURL) else {
@@ -252,6 +259,8 @@ struct LocalAsyncImage: View {
                     
                     let config = URLSessionConfiguration.default
                     config.urlCache = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 200 * 1024 * 1024, diskPath: "imageCache")
+                    config.allowsExpensiveNetworkAccess = true
+                    config.allowsConstrainedNetworkAccess = true
                     let session = URLSession(configuration: config)
                     
                     let (data, response) = try await session.data(for: request)

@@ -435,7 +435,7 @@ class GymSessionViewModel: ObservableObject {
         
         exercises[exerciseIndex].sets[setIndex].kg = kg
         exercises[exerciseIndex].sets[setIndex].reps = reps
-        exercises[exerciseIndex].sets[setIndex].isCompleted = kg > 0 && reps > 0
+        exercises[exerciseIndex].sets[setIndex].isCompleted = kg >= 0 && reps > 0
         updateLiveActivity()
         
         // Sync to real-time database

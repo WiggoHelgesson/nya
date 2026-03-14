@@ -252,7 +252,7 @@ private struct AvatarView: View {
     
     var body: some View {
         Group {
-            if let url, let imageURL = URL(string: url) {
+            if let url, let imageURL = URL(string: SupabaseConfig.rewriteURL(url)) {
                 AsyncImage(url: imageURL) { phase in
                     switch phase {
                     case .success(let image):

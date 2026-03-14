@@ -183,7 +183,7 @@ class StravaService: ObservableObject {
             .data(using: .utf8)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -257,7 +257,7 @@ class StravaService: ObservableObject {
             .data(using: .utf8)
         
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -333,7 +333,7 @@ class StravaService: ObservableObject {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
             
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 lastUploadStatus = "Okänt fel"

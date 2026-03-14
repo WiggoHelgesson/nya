@@ -398,7 +398,7 @@ struct GymSessionView: View {
                                             return exercise.cardioSeconds > 0
                                         }
                                         return exercise.sets.contains { set in
-                                            set.kg > 0 && set.reps > 0
+                                            set.kg >= 0 && set.reps > 0
                                         }
                                     }
                                     if hasValidData {
@@ -568,7 +568,7 @@ struct GymSessionView: View {
                 return exercise.cardioSeconds > 0
             }
             return exercise.sets.contains { set in
-                set.kg > 0 && set.reps > 0
+                set.kg >= 0 && set.reps > 0
             }
         }
         
@@ -670,7 +670,7 @@ struct GymSessionView: View {
                     ForEach(receivedUppys) { uppy in
                         VStack(spacing: 4) {
                             // Avatar
-                            AsyncImage(url: URL(string: uppy.fromUserAvatar ?? "")) { phase in
+                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(uppy.fromUserAvatar ?? ""))) { phase in
                                 switch phase {
                                 case .success(let image):
                                     image
@@ -1128,6 +1128,9 @@ struct CardioTimerView: View {
     @State private var isFinished = false
     @State private var displaySeconds: Int
     @State private var timer: Timer?
+    @State private var timerStartDate: Date?
+    @State private var secondsBeforeCurrentRun: Int = 0
+    @Environment(\.scenePhase) private var scenePhase
     
     init(exerciseId: String, accumulatedSeconds: Int, onUpdateSeconds: @escaping (Int) -> Void) {
         self.exerciseId = exerciseId
@@ -1159,6 +1162,8 @@ struct CardioTimerView: View {
                     Button {
                         isFinished = false
                         displaySeconds = 0
+                        secondsBeforeCurrentRun = 0
+                        timerStartDate = nil
                         onUpdateSeconds(0)
                     } label: {
                         HStack(spacing: 6) {
@@ -1218,13 +1223,24 @@ struct CardioTimerView: View {
             timer?.invalidate()
             timer = nil
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active, isRunning, let start = timerStartDate {
+                let elapsed = secondsBeforeCurrentRun + max(0, Int(Date().timeIntervalSince(start)))
+                displaySeconds = elapsed
+                onUpdateSeconds(displaySeconds)
+            }
+        }
     }
     
     private func startTimer() {
         isRunning = true
         isFinished = false
+        secondsBeforeCurrentRun = displaySeconds
+        timerStartDate = Date()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            displaySeconds += 1
+            guard let start = timerStartDate else { return }
+            let elapsed = secondsBeforeCurrentRun + max(0, Int(Date().timeIntervalSince(start)))
+            displaySeconds = elapsed
             onUpdateSeconds(displaySeconds)
         }
     }
@@ -1233,6 +1249,10 @@ struct CardioTimerView: View {
         isRunning = false
         timer?.invalidate()
         timer = nil
+        if let start = timerStartDate {
+            displaySeconds = secondsBeforeCurrentRun + max(0, Int(Date().timeIntervalSince(start)))
+        }
+        timerStartDate = nil
     }
     
     private func stopTimer() {
@@ -1240,6 +1260,10 @@ struct CardioTimerView: View {
         isFinished = true
         timer?.invalidate()
         timer = nil
+        if let start = timerStartDate {
+            displaySeconds = secondsBeforeCurrentRun + max(0, Int(Date().timeIntervalSince(start)))
+        }
+        timerStartDate = nil
         onUpdateSeconds(displaySeconds)
     }
 }

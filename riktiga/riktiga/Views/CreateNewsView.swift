@@ -176,7 +176,7 @@ struct CreateNewsView: View {
                 .upload(fileName, data: imageData, options: .init(contentType: "image/jpeg"))
             
             // Return full public URL
-            let fullUrl = "https://xebatkodviqgkpsbyuiv.supabase.co/storage/v1/object/public/avatars/\(fileName)"
+            let fullUrl = "\(SupabaseConfig.storageBaseURL)/avatars/\(fileName)"
             return fullUrl
         } catch {
             print("❌ Failed to upload news image: \(error)")

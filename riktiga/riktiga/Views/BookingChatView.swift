@@ -150,7 +150,7 @@ struct BookingChatView: View {
     private var statusHeader: some View {
         HStack(spacing: 12) {
             // Avatar
-            AsyncImage(url: URL(string: viewModel.isTrainer ? (booking.studentAvatarUrl ?? "") : (booking.trainerAvatarUrl ?? ""))) { image in
+            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(viewModel.isTrainer ? (booking.studentAvatarUrl ?? "") : (booking.trainerAvatarUrl ?? "")))) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: "person.circle.fill")

@@ -888,7 +888,65 @@ struct NutritionProfileUpdate: Encodable {
     let birth_date: String?
 }
 
-// Note: MacroResultCard is now defined in AuthenticationView.swift
+struct MacroResultCard: View {
+    let emoji: String
+    let title: String
+    @Binding var value: Int
+    let unit: String
+    let progress: Double
+    
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isEditing = false
+    @State private var editValue: String = ""
+    
+    private var isDarkMode: Bool { colorScheme == .dark }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(emoji).font(.system(size: 14)).grayscale(1)
+                Text(title).font(.system(size: 14)).foregroundColor(.gray)
+                Spacer()
+            }
+            
+            HStack(alignment: .bottom, spacing: 0) {
+                ZStack {
+                    Circle().stroke(Color(.systemGray5), lineWidth: 6).frame(width: 60, height: 60)
+                    Circle().trim(from: 0, to: progress).stroke(Color.black, style: StrokeStyle(lineWidth: 6, lineCap: .round)).frame(width: 60, height: 60).rotationEffect(.degrees(-90))
+                    VStack(spacing: 0) {
+                        Text("\(value)").font(.system(size: 18, weight: .bold)).foregroundColor(isDarkMode ? .white : .black)
+                        if !unit.isEmpty { Text(unit).font(.system(size: 10)).foregroundColor(.gray) }
+                    }
+                }
+                Spacer()
+                Button {
+                    editValue = "\(value)"
+                    isEditing = true
+                } label: {
+                    Image(systemName: "pencil").font(.system(size: 14)).foregroundColor(.gray)
+                }
+            }
+        }
+        .padding(16)
+        .background(isDarkMode ? Color(.systemGray6) : Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(isDarkMode ? 0 : 0.06), radius: 8, x: 0, y: 2)
+        .alert(L.t(sv: "Ändra \(title.lowercased())", nb: "Endre \(title.lowercased())"), isPresented: $isEditing) {
+            TextField(L.t(sv: "Värde", nb: "Verdi"), text: $editValue)
+                .keyboardType(.numberPad)
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Spara", nb: "Lagre")) {
+                if let newValue = Int(editValue), newValue > 0 {
+                    value = newValue
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                }
+            }
+        } message: {
+            Text(L.t(sv: "Ange nytt värde för \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")", nb: "Skriv inn ny verdi for \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")"))
+        }
+    }
+}
 
 #Preview {
     NutritionOnboardingView()

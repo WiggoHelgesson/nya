@@ -5,6 +5,7 @@ import Supabase
 import UIKit
 import Combine
 import StoreKit
+import Contacts
 
 // MARK: - New Unified Onboarding Steps
 private enum OnboardingStep: Int, CaseIterable, Identifiable {
@@ -12,17 +13,16 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     case profilePicture  // NEW: Add profile picture
     case gender
     case workouts
+    case community
     case heightWeight
     case birthday
-    case goal
-    case results  // NEW: Shows animated graph
-    case targetWeight
     case motivation  // NEW: Shows motivation comparison
     case referralCode
     case rating  // NEW: Shows ratings and triggers iOS review popup
-    case progress  // NEW: Shows progress graph
+    case findFriends
     case appleHealth
     case notifications
+    case welcome
     
     var id: Int { rawValue }
     
@@ -32,17 +32,16 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .profilePicture: return L.t(sv: "Lägg till profilbild", nb: "Legg til profilbilde")
         case .gender: return L.t(sv: "Välj ditt kön", nb: "Velg ditt kjønn")
         case .workouts: return L.t(sv: "Hur många pass tränar du per vecka?", nb: "Hvor mange økter trener du per uke?")
+        case .community: return L.t(sv: "Välkommen till gemenskapen", nb: "Velkommen til fellesskapet")
         case .heightWeight: return L.t(sv: "Längd & vikt", nb: "Høyde & vekt")
-        case .birthday: return L.t(sv: "När är du född?", nb: "Når er du født?")
-        case .goal: return L.t(sv: "Vad är ditt mål?", nb: "Hva er målet ditt?")
-        case .results: return L.t(sv: "Up&Down gör det lättare för dig att nå dina mål", nb: "Up&Down gjør det lettere for deg å nå målene dine")
-        case .targetWeight: return L.t(sv: "Vad är din målvikt?", nb: "Hva er målvekten din?")
+        case .birthday: return L.t(sv: "Hur gammal är du?", nb: "Hvor gammel er du?")
         case .motivation: return L.t(sv: "Få 2x så mycket motivation genom att träna med Up&Down", nb: "Få 2x så mye motivasjon ved å trene med Up&Down")
         case .referralCode: return L.t(sv: "Ange kod (valfritt)", nb: "Skriv inn kode (valgfritt)")
         case .rating: return L.t(sv: "Betygsätt oss", nb: "Gi oss en vurdering")
-        case .progress: return L.t(sv: "Att nå sina mål tar lite tid men du fixar det!", nb: "Å nå målene sine tar litt tid, men du klarer det!")
+        case .findFriends: return L.t(sv: "Träning är inte en solosport.", nb: "Trening er ikke en solosport.")
         case .appleHealth: return L.t(sv: "Aktivera Apple Health", nb: "Aktiver Apple Health")
         case .notifications: return L.t(sv: "Aktivera notiser", nb: "Aktiver varsler")
+        case .welcome: return ""
         }
     }
     
@@ -50,19 +49,18 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
         switch self {
         case .name: return L.t(sv: "Välj ett användarnamn som visas för andra.", nb: "Velg et brukernavn som vises for andre.")
         case .profilePicture: return L.t(sv: "Allt blir roligare med en profilbild.", nb: "Alt blir morsommere med et profilbilde.")
-        case .gender: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .gender: return L.t(sv: "Vi använder denna datan för att anpassa dig till rätt topplistor.", nb: "Vi bruker disse dataene for å tilpasse deg til riktige topplister.")
         case .workouts: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
+        case .community: return ""
         case .heightWeight: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
-        case .birthday: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
-        case .goal: return L.t(sv: "Detta hjälper oss skapa en plan för ditt kaloriintag.", nb: "Dette hjelper oss å lage en plan for kaloriinntaket ditt.")
-        case .results: return ""
-        case .targetWeight: return L.t(sv: "Välj den vikt du vill uppnå.", nb: "Velg vekten du vil oppnå.")
+        case .birthday: return L.t(sv: "Vi använder denna datan för att personalisera din statistik och hålla yngre användare säkra.", nb: "Vi bruker disse dataene for å tilpasse statistikken din og holde yngre brukere trygge.")
         case .motivation: return ""
         case .referralCode: return L.t(sv: "Du kan hoppa över detta steg", nb: "Du kan hoppe over dette steget")
         case .rating: return ""
-        case .progress: return ""
+        case .findFriends: return L.t(sv: "Lägg till vänner på Up&Down för att ge och få stöttning, dela träna och hålla motivationen uppe!", nb: "Legg til venner på Up&Down for å gi og få støtte, dele trening og holde motivasjonen oppe!")
         case .appleHealth: return L.t(sv: "Appen behöver hälsodata för att logga dina pass och steg.", nb: "Appen trenger helsedata for å logge øktene og skrittene dine.")
         case .notifications: return L.t(sv: "Så vi kan påminna dig om mål och belöningar.", nb: "Slik at vi kan minne deg på mål og belønninger.")
+        case .welcome: return ""
         }
     }
 }
@@ -128,26 +126,21 @@ struct AuthenticationView: View {
     @State private var signupEmail: String = ""
     @State private var signupPassword: String = ""
     
-    // Calculation states
-    @State private var isCalculating = false
-    @State private var calculationProgress: Double = 0
-    @State private var calculationStep: String = ""
-    @State private var showResults = false
+    // Invite code (set via deep link or manual entry)
+    @State private var pendingInviteCode: String? = nil
+    @State private var showInviteCodeField = false
+    @State private var inviteCodeInput: String = ""
+    @State private var inviteCodeValid: Bool? = nil
+    @State private var isValidatingInvite = false
+    
+    
     
     // Animation
     @State private var contentOpacity: Double = 1
     @State private var contentOffset: CGFloat = 0
-    @State private var showResultsGraph: Bool = false
-    @State private var resultsAnimationComplete: Bool = false
-    
     // Motivation step animation
     @State private var motivationAnimationComplete: Bool = false
     @State private var showMotivationBars: Bool = false
-    
-    // Progress step animation
-    @State private var progressAnimationComplete: Bool = false
-    @State private var progressLineWidth: CGFloat = 0
-    @State private var showProgressDots: [Bool] = [false, false, false, false]
     
     // Profile picture
     @State private var selectedProfileImage: UIImage? = nil
@@ -158,11 +151,17 @@ struct AuthenticationView: View {
     @State private var usernameIsTaken: Bool = false
     @State private var usernameCheckTask: Task<Void, Never>? = nil
     
+    // Find Friends step
+    @State private var onboardingContacts: [(id: String, name: String, avatarUrl: String?)] = []
+    @State private var onboardingFollowingStatus: [String: Bool] = [:]
+    @State private var onboardingContactsGranted = false
+    @State private var onboardingContactsLoading = false
+    
     // Soft paywall after onboarding
     @State private var showOnboardingPaywall = false
     @State private var onboardingDataReady = false
     
-    private let heroImages = ["65", "66", "67"]
+    private let heroImages = ["84", "83", "85", "86"]
     private let onboardingSteps = OnboardingStep.allCases
     private let totalSteps = OnboardingStep.allCases.count
     
@@ -182,11 +181,7 @@ struct AuthenticationView: View {
         ZStack {
             backgroundColor.ignoresSafeArea()
             
-            if showResults {
-                resultsView
-            } else if isCalculating {
-                calculatingView
-            } else if let step = onboardingStep {
+            if let step = onboardingStep {
                 onboardingView(for: step)
             } else if showSignupForm {
                 signupFormView
@@ -208,6 +203,14 @@ struct AuthenticationView: View {
             }
         }
         .onAppear {
+            // Pick up invite code set via deep link
+            if let code = authViewModel.pendingInviteCode {
+                pendingInviteCode = code
+                inviteCodeInput = code
+                inviteCodeValid = true
+                showInviteCodeField = true
+            }
+            
             // If user has a session but needs onboarding (e.g. app restart after partial signup),
             // skip the landing/login screens and go straight to onboarding
             if authViewModel.needsOnboarding {
@@ -281,67 +284,180 @@ struct AuthenticationView: View {
     
     // MARK: - Landing View
     private var landingView: some View {
-        let autoSwipeTimer = Timer.publish(every: 4, on: .main, in: .common).autoconnect()
-        
-        let imageCount = heroImages.count
-        return VStack(spacing: 0) {
-            TabView(selection: $currentHeroIndex) {
-                ForEach(0..<imageCount, id: \.self) { index in
-                    Image(heroImages[index])
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .ignoresSafeArea(edges: .top)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentHeroIndex)
-            .onReceive(autoSwipeTimer) { _ in
-                withAnimation {
-                    currentHeroIndex = (currentHeroIndex + 1) % heroImages.count
-                }
-            }
+        VStack(spacing: 0) {
+            Spacer()
             
             VStack(spacing: 24) {
-                HStack(spacing: 8) {
-                    ForEach(0..<heroImages.count, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentHeroIndex ? primaryTextColor : primaryTextColor.opacity(0.25))
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(index == currentHeroIndex ? 1.2 : 1.0)
+                Image("upanddownlog")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 90, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                
+                VStack(spacing: 8) {
+                    if pendingInviteCode != nil {
+                        Text(L.t(sv: "Skapa ditt konto", nb: "Opprett kontoen din"))
+                            .font(.system(size: 26, weight: .bold))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(primaryTextColor)
+                        
+                        Text(L.t(sv: "Med din kod får du en exklusiv chans att skapa ett Up&Down konto", nb: "Med koden din får du en eksklusiv sjanse til å opprette en Up&Down-konto"))
+                            .font(.system(size: 15))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(secondaryTextColor)
+                    } else {
+                        Text(L.t(sv: "Enbart för Danderyds Gymnasium elever", nb: "Kun for Danderyds Gymnasium elever"))
+                            .font(.system(size: 26, weight: .bold))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(primaryTextColor)
+                        
+                        Text(L.t(sv: "Du behöver en elev.danderyd.se mail för att skapa ett konto", nb: "Du trenger en elev.danderyd.se e-post for å opprette en konto"))
+                            .font(.system(size: 15))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(secondaryTextColor)
                     }
                 }
                 
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
+                    if pendingInviteCode != nil {
+                        Button {
+                            authViewModel.pendingInviteCode = pendingInviteCode
+                            authViewModel.signInWithApple()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "apple.logo")
+                                    .font(.system(size: 20, weight: .medium))
+                                Text(L.t(sv: "Fortsätt med Apple", nb: "Fortsett med Apple"))
+                                    .font(.system(size: 17, weight: .medium))
+                            }
+                            .foregroundColor(primaryTextColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                        }
+                        .disabled(authViewModel.isLoading)
+                    }
+                    
+                    Button {
+                        authViewModel.pendingInviteCode = pendingInviteCode
+                        authViewModel.signInWithGoogle(onboardingData: OnboardingData())
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image("78")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 20, height: 20)
+                            Text(L.t(sv: "Fortsätt med Google", nb: "Fortsett med Google"))
+                                .font(.system(size: 17, weight: .medium))
+                        }
+                        .foregroundColor(primaryTextColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                    }
+                    .disabled(authViewModel.isLoading)
+                    
                     Button {
                         showLanding = false
                         showSignupForm = true
                     } label: {
-                        Text(L.t(sv: "Skapa konto helt gratis", nb: "Opprett konto helt gratis"))
-                            .font(.system(size: 18, weight: .semibold))
+                        Text(L.t(sv: "Skapa konto med mail", nb: "Opprett konto med e-post"))
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(buttonTextColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(buttonBackgroundColor)
                             .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 24)
                     
-                    Button {
-                        showLanding = false
-                        showSignupForm = false
-                    } label: {
-                        Text(L.t(sv: "Logga in", nb: "Logg inn"))
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(primaryTextColor)
+                    if !authViewModel.errorMessage.isEmpty {
+                        Text(authViewModel.errorMessage)
+                            .font(.system(size: 14))
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    if authViewModel.isLoading {
+                        ProgressView()
+                            .padding(.top, 4)
                     }
                 }
+                .padding(.horizontal, 24)
             }
-            .padding(.vertical, 24)
-            .background(backgroundColor)
+            .padding(.horizontal, 8)
+            
+            Spacer()
+            
+            VStack(spacing: 10) {
+                Text(L.t(sv: "Har du ingen skolmail? Få en kod av en befintlig Up&Down användare för att skapa konto.", nb: "Har du ingen skole-e-post? Få en kode av en eksisterende Up&Down-bruker for å opprette konto."))
+                    .font(.system(size: 13))
+                    .foregroundColor(secondaryTextColor.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                
+                if let code = pendingInviteCode {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.green)
+                        Text(L.t(sv: "Inbjudningskod aktiv: \(code)", nb: "Invitasjonskode aktiv: \(code)"))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.green)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(10)
+                } else {
+                    HStack {
+                        TextField(L.t(sv: "Ange kod", nb: "Skriv inn kode"), text: $inviteCodeInput)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
+                            .onChange(of: inviteCodeInput) { _, newValue in
+                                inviteCodeValid = nil
+                            }
+                        
+                        Button {
+                            validateAndSetInviteCode()
+                        } label: {
+                            if isValidatingInvite {
+                                ProgressView()
+                                    .frame(width: 44, height: 44)
+                            } else {
+                                Text(L.t(sv: "Aktivera", nb: "Aktiver"))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(buttonTextColor)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(buttonBackgroundColor)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .disabled(inviteCodeInput.trimmingCharacters(in: .whitespaces).isEmpty || isValidatingInvite)
+                    }
+                    
+                    if let valid = inviteCodeValid, !valid {
+                        Text(L.t(sv: "Ogiltig eller redan använd kod", nb: "Ugyldig eller allerede brukt kode"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                    }
+                }
+                
+                Button {
+                    showLanding = false
+                    showSignupForm = false
+                    authViewModel.errorMessage = ""
+                } label: {
+                    Text(L.t(sv: "Har du redan ett konto? Logga in", nb: "Har du allerede en konto? Logg inn"))
+                        .font(.system(size: 15))
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
         }
+        .background(backgroundColor)
     }
     
     // MARK: - Login Form View
@@ -449,50 +565,10 @@ struct AuthenticationView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(L.t(sv: "Skapa konto", nb: "Opprett konto"))
-                        .font(.system(size: 32, weight: .bold))
+                    Text(L.t(sv: "Enbart studenter från Danderyds Gymnasium kan skapa konto just nu", nb: "Kun elever fra Danderyds Gymnasium kan opprette konto akkurat nå"))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundColor(primaryTextColor)
                         .padding(.top, 8)
-                    
-                    Button {
-                        authViewModel.signInWithApple(onboardingData: OnboardingData())
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 20, weight: .medium))
-                            Text(L.t(sv: "Skapa konto med Apple", nb: "Opprett konto med Apple"))
-                                .font(.system(size: 17, weight: .medium))
-                        }
-                        .foregroundColor(primaryTextColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
-                    }
-                    .disabled(authViewModel.isLoading)
-                    
-                    Button {
-                        authViewModel.signInWithGoogle(onboardingData: OnboardingData())
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image("78")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 20, height: 20)
-                            Text(L.t(sv: "Skapa konto med Google", nb: "Opprett konto med Google"))
-                                .font(.system(size: 17, weight: .medium))
-                        }
-                        .foregroundColor(primaryTextColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
-                    }
-                    .disabled(authViewModel.isLoading)
-                    
-                    HStack {
-                        Rectangle().fill(Color(.systemGray4)).frame(height: 1)
-                        Text(L.t(sv: "eller", nb: "eller")).font(.system(size: 14)).foregroundColor(.gray).padding(.horizontal, 16)
-                        Rectangle().fill(Color(.systemGray4)).frame(height: 1)
-                    }
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L.t(sv: "E-post", nb: "E-post")).font(.system(size: 15)).foregroundColor(primaryTextColor)
@@ -501,14 +577,16 @@ struct AuthenticationView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .padding(14)
-                            .background(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 1))
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
                     }
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L.t(sv: "Lösenord", nb: "Passord")).font(.system(size: 15)).foregroundColor(primaryTextColor)
                         SecureField(L.t(sv: "Minst 6 tecken", nb: "Minst 6 tegn"), text: $signupPassword)
                             .padding(14)
-                            .background(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 1))
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
                     }
                     
                     Button {
@@ -532,6 +610,71 @@ struct AuthenticationView: View {
                         Text(authViewModel.errorMessage).font(.system(size: 14)).foregroundColor(.red)
                     }
                     
+                    // Invite code section
+                    if let code = pendingInviteCode {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(.green)
+                            Text(L.t(sv: "Inbjudningskod aktiv: \(code)", nb: "Invitasjonskode aktiv: \(code)"))
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.green)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(10)
+                    } else {
+                        if showInviteCodeField {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(L.t(sv: "Inbjudningskod", nb: "Invitasjonskode"))
+                                    .font(.system(size: 15))
+                                    .foregroundColor(primaryTextColor)
+                                HStack {
+                                    TextField(L.t(sv: "Ange kod", nb: "Skriv inn kode"), text: $inviteCodeInput)
+                                        .textInputAutocapitalization(.characters)
+                                        .autocorrectionDisabled()
+                                        .padding(14)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(10)
+                                        .onChange(of: inviteCodeInput) { _, newValue in
+                                            inviteCodeValid = nil
+                                        }
+                                    
+                                    Button {
+                                        validateAndSetInviteCode()
+                                    } label: {
+                                        if isValidatingInvite {
+                                            ProgressView()
+                                                .frame(width: 44, height: 44)
+                                        } else {
+                                            Text(L.t(sv: "Aktivera", nb: "Aktiver"))
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(buttonTextColor)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 14)
+                                                .background(buttonBackgroundColor)
+                                                .cornerRadius(10)
+                                        }
+                                    }
+                                    .disabled(inviteCodeInput.trimmingCharacters(in: .whitespaces).isEmpty || isValidatingInvite)
+                                }
+                                if let valid = inviteCodeValid, !valid {
+                                    Text(L.t(sv: "Ogiltig eller redan använd kod", nb: "Ugyldig eller allerede brukt kode"))
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.red)
+                                }
+                            }
+                        } else {
+                            Button {
+                                showInviteCodeField = true
+                            } label: {
+                                Text(L.t(sv: "Har du en inbjudningskod?", nb: "Har du en invitasjonskode?"))
+                                    .font(.system(size: 15))
+                                    .foregroundColor(primaryTextColor.opacity(0.7))
+                            }
+                        }
+                    }
+                    
                     Text(L.t(sv: "Genom att fortsätta godkänner du våra [Användarvillkor](https://www.upanddownapp.com/terms) och [Integritetspolicy](https://www.upanddownapp.com/privacy).", nb: "Ved å fortsette godtar du våre [Brukervilkår](https://www.upanddownapp.com/terms) og [Personvern](https://www.upanddownapp.com/privacy)."))
                         .font(.system(size: 13))
                         .foregroundColor(.gray)
@@ -551,8 +694,145 @@ struct AuthenticationView: View {
         return emailValid && signupPassword.count >= 6
     }
     
+    // MARK: - Community Fullscreen Step
+    private var communityStepView: some View {
+        ZStack {
+            Image("91")
+                .resizable()
+                .scaledToFill()
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .clear,
+                    .black.opacity(0.3),
+                    .black.opacity(0.7),
+                    .black.opacity(0.85)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Text(L.t(sv: "Välkommen till gemenskapen", nb: "Velkommen til fellesskapet"))
+                        .font(.system(size: 26, weight: .heavy))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    Text(L.t(sv: "Tusentals svenskar använder Up&Down och är redo att stötta dig!", nb: "Tusenvis av nordmenn bruker Up&Down og er klare til å støtte deg!"))
+                        .font(.system(size: 16))
+                        .foregroundColor(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 32)
+                
+                Button {
+                    continueFromStep(.community)
+                } label: {
+                    Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
+            }
+            .padding(.bottom, 16)
+        }
+        .ignoresSafeArea()
+        .opacity(contentOpacity)
+        .offset(y: contentOffset)
+    }
+    
+    // MARK: - Welcome Fullscreen Step
+    private var welcomeStepView: some View {
+        ZStack {
+            Image("83")
+                .resizable()
+                .scaledToFill()
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
+            
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .clear,
+                    .black.opacity(0.2),
+                    .black.opacity(0.6),
+                    .black.opacity(0.85)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 12) {
+                    Text(L.t(
+                        sv: "Välkommen, \(data.firstName)!",
+                        nb: "Velkommen, \(data.firstName)!"
+                    ))
+                        .font(.system(size: 32, weight: .heavy))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    
+                    Text(L.t(
+                        sv: "Du är redo att köra igång. Tracka gympass, löppass & annat och dela dina pass med alla andra tusentals användare, gå ut och slakta det!",
+                        nb: "Du er klar til å kjøre i gang. Track gymøkter, løpeøkter og annet og del øktene dine med alle de andre tusenvis av brukere, kom deg ut og knus det!"
+                    ))
+                        .font(.system(size: 16))
+                        .foregroundColor(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 32)
+                
+                Button {
+                    completeOnboarding()
+                } label: {
+                    Text(L.t(sv: "Kom igång!", nb: "Kom i gang!"))
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
+            }
+            .padding(.bottom, 16)
+        }
+        .ignoresSafeArea()
+        .opacity(contentOpacity)
+        .offset(y: contentOffset)
+    }
+    
     // MARK: - Onboarding View
     private func onboardingView(for step: OnboardingStep) -> some View {
+        Group {
+            if step == .community {
+                communityStepView
+            } else if step == .welcome {
+                welcomeStepView
+            } else {
+                standardOnboardingView(for: step)
+            }
+        }
+        .onChange(of: step) { oldStep, newStep in }
+    }
+    
+    private func standardOnboardingView(for step: OnboardingStep) -> some View {
         VStack(spacing: 0) {
             // Header with back button and progress bar
             HStack(spacing: 16) {
@@ -592,7 +872,11 @@ struct AuthenticationView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(step.title)
+                    Text(step == .profilePicture
+                         ? L.t(sv: "Välkommen, \(data.firstName)! Lägg till en profilbild", nb: "Velkommen, \(data.firstName)! Legg til et profilbilde")
+                         : step == .birthday
+                         ? L.t(sv: "Välkommen, \(data.firstName)! \(step.title)", nb: "Velkommen, \(data.firstName)! \(step.title)")
+                         : step.title)
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(primaryTextColor)
                     
@@ -627,12 +911,6 @@ struct AuthenticationView: View {
             }
             .background(backgroundColor)
         }
-        // Animation is handled by goToNextStep/goToPreviousStep
-        // This onChange is kept for any programmatic step changes
-        .onChange(of: step) { oldStep, newStep in
-            // Only animate if not already animated by navigation functions
-            // (contentOpacity will already be 0 if navigating via buttons)
-        }
     }
     
     @ViewBuilder
@@ -646,28 +924,26 @@ struct AuthenticationView: View {
             referralCodeStepContent
         case .rating:
             ratingStepContent
-        case .progress:
-            progressStepContent
         case .gender:
             genderStepContent
         case .workouts:
             workoutsStepContent
+        case .community:
+            EmptyView()
         case .heightWeight:
             heightWeightStepContent
         case .birthday:
             birthdayStepContent
-        case .goal:
-            goalStepContent
-        case .results:
-            resultsStepContent
-        case .targetWeight:
-            targetWeightStepContent
         case .motivation:
             motivationStepContent
+        case .findFriends:
+            findFriendsStepContent
         case .appleHealth:
             appleHealthStepContent
         case .notifications:
             notificationsStepContent
+        case .welcome:
+            EmptyView()
         }
     }
     
@@ -997,179 +1273,17 @@ struct AuthenticationView: View {
     }
     
     // MARK: - Progress Step (Weight Transition Graph)
-    private var progressStepContent: some View {
-        VStack(spacing: 32) {
-            Spacer().frame(height: 20)
-            
-            // Progress graph card
-            VStack(spacing: 20) {
-                Text(L.t(sv: "Din resa", nb: "Din reise"))
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                
-                // Graph
-                GeometryReader { geometry in
-                    let width = geometry.size.width - 40
-                    let height: CGFloat = 140
-                    
-                    ZStack(alignment: .bottomLeading) {
-                        // Background gradient
-                        LinearGradient(
-                            colors: [Color.orange.opacity(0.15), Color.orange.opacity(0.05), Color.clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .clipShape(
-                            ProgressCurvePath(width: width, height: height, progress: progressLineWidth / width)
-                        )
-                        .padding(.horizontal, 20)
-                        
-                        // Progress line
-                        Path { path in
-                            path.move(to: CGPoint(x: 20, y: height - 20))
-                            path.addLine(to: CGPoint(x: 20 + width * 0.2, y: height - 40))
-                            path.addLine(to: CGPoint(x: 20 + width * 0.45, y: height - 55))
-                            path.addLine(to: CGPoint(x: 20 + width * 0.7, y: height - 80))
-                            path.addLine(to: CGPoint(x: 20 + width, y: height - 120))
-                        }
-                        .trim(from: 0, to: progressLineWidth / width)
-                        .stroke(Color.black, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                        .animation(.easeOut(duration: 1.5), value: progressLineWidth)
-                        
-                        // Dots on the line
-                        if showProgressDots[0] {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 12, height: 12)
-                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                                .position(x: 20, y: height - 20)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        if showProgressDots[1] {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 12, height: 12)
-                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                                .position(x: 20 + width * 0.33, y: height - 47)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        if showProgressDots[2] {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 12, height: 12)
-                                .overlay(Circle().stroke(Color.black, lineWidth: 2))
-                                .position(x: 20 + width * 0.66, y: height - 75)
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        // Trophy at the end
-                        if showProgressDots[3] {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.orange)
-                                    .frame(width: 36, height: 36)
-                                
-                                Image(systemName: "trophy.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.white)
-                            }
-                            .position(x: 20 + width, y: height - 120)
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                    }
-                    .frame(height: height)
-                }
-                .frame(height: 140)
-                
-                // Day labels
-                HStack {
-                    Text(L.t(sv: "3 Dagar", nb: "3 Dager"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                    Spacer()
-                    Text(L.t(sv: "7 Dagar", nb: "7 Dager"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                    Spacer()
-                    Text(L.t(sv: "30 Dagar", nb: "30 Dager"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                }
-                .padding(.horizontal, 30)
-                
-                // Description
-                Text(L.t(sv: "Baserat på våra tidigare användare så är det viktigt att man håller igång i ungefär en månad innan resultaten kickar in.", nb: "Basert på våre tidligere brukere er det viktig at man holder det gående i omtrent en måned før resultatene slår inn."))
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .opacity(showProgressDots[3] ? 1 : 0)
-                    .animation(.easeOut(duration: 0.5), value: showProgressDots[3])
-            }
-            .padding(.vertical, 24)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(.systemGray6).opacity(0.5))
-            )
-            .padding(.horizontal, 20)
-            
-            Spacer()
-        }
-        .onAppear {
-            // Reset animation states
-            progressLineWidth = 0
-            showProgressDots = [false, false, false, false]
-            progressAnimationComplete = false
-            
-            // Animate the line
-            withAnimation(.easeOut(duration: 1.5)) {
-                progressLineWidth = UIScreen.main.bounds.width - 80
-            }
-            
-            // Animate dots sequentially
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    showProgressDots[0] = true
-                }
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    showProgressDots[1] = true
-                }
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    showProgressDots[2] = true
-                }
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    showProgressDots[3] = true
-                }
-            }
-            
-            // Enable continue button
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                withAnimation {
-                    progressAnimationComplete = true
-                }
-            }
-        }
-    }
-    
     private var genderStepContent: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 40)
             genderButton(title: L.t(sv: "Man", nb: "Mann"), value: "male")
             genderButton(title: L.t(sv: "Kvinna", nb: "Kvinne"), value: "female")
             genderButton(title: L.t(sv: "Annat", nb: "Annet"), value: "other")
+            
+            Text(L.t(sv: "Denna datan kommer inte visas på din profil.", nb: "Disse dataene vil ikke vises på profilen din."))
+                .font(.system(size: 13))
+                .foregroundColor(.gray)
+                .padding(.top, 8)
         }
     }
     
@@ -1206,11 +1320,6 @@ struct AuthenticationView: View {
             hapticFeedback()
                         } label: {
             HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(primaryTextColor)
-                    .frame(width: 40)
-                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(range).font(.system(size: 18, weight: .semibold)).foregroundColor(primaryTextColor)
                     Text(description).font(.system(size: 14)).foregroundColor(.gray)
@@ -1270,284 +1379,6 @@ struct AuthenticationView: View {
                 .environment(\.locale, Locale(identifier: "sv_SE"))
         }
     }
-    
-    private var goalStepContent: some View {
-                VStack(spacing: 12) {
-            Spacer().frame(height: 40)
-            goalButton(title: L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt"), value: "lose")
-            goalButton(title: L.t(sv: "Behålla vikt", nb: "Beholde vekt"), value: "maintain")
-            goalButton(title: L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt"), value: "gain")
-        }
-    }
-    
-    private func goalButton(title: String, value: String) -> some View {
-                        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                data.goal = value
-            }
-            hapticFeedback()
-                        } label: {
-            Text(title)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(data.goal == value ? selectedCardTextColor : unselectedCardTextColor)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 20)
-                .background(RoundedRectangle(cornerRadius: 16).fill(data.goal == value ? selectedCardBackgroundColor : cardBackgroundColor))
-        }
-    }
-    
-    // MARK: - Results Step (Animated Graph)
-    private var resultsStepContent: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            // Graph card
-            VStack(alignment: .leading, spacing: 16) {
-                Text(L.t(sv: "Din vikt", nb: "Din vekt"))
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(primaryTextColor)
-                
-                // Graph
-                ZStack {
-                    // Background grid lines
-                    VStack(spacing: 0) {
-                        ForEach(0..<3) { _ in
-                            Divider()
-                                .background(Color.gray.opacity(0.2))
-                            Spacer()
-                        }
-                        Divider()
-                            .background(Color.gray.opacity(0.2))
-                    }
-                    .padding(.vertical, 20)
-                    
-                    // Traditional diet line (red, goes down then up)
-                    GeometryReader { geo in
-                        let width = geo.size.width
-                        let height = geo.size.height
-                        
-                        // Red area fill
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: height * 0.15))
-                            path.addCurve(
-                                to: CGPoint(x: width * 0.45, y: height * 0.55),
-                                control1: CGPoint(x: width * 0.15, y: height * 0.15),
-                                control2: CGPoint(x: width * 0.35, y: height * 0.55)
-                            )
-                            path.addCurve(
-                                to: CGPoint(x: width, y: height * 0.1),
-                                control1: CGPoint(x: width * 0.6, y: height * 0.55),
-                                control2: CGPoint(x: width * 0.85, y: height * 0.1)
-                            )
-                            path.addLine(to: CGPoint(x: width, y: 0))
-                            path.addLine(to: CGPoint(x: 0, y: 0))
-                            path.closeSubpath()
-                        }
-                        .fill(Color.red.opacity(showResultsGraph ? 0.1 : 0))
-                        .animation(.easeOut(duration: 0.8).delay(0.5), value: showResultsGraph)
-                        
-                        // Red line
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: height * 0.15))
-                            path.addCurve(
-                                to: CGPoint(x: width * 0.45, y: height * 0.55),
-                                control1: CGPoint(x: width * 0.15, y: height * 0.15),
-                                control2: CGPoint(x: width * 0.35, y: height * 0.55)
-                            )
-                            path.addCurve(
-                                to: CGPoint(x: width, y: height * 0.1),
-                                control1: CGPoint(x: width * 0.6, y: height * 0.55),
-                                control2: CGPoint(x: width * 0.85, y: height * 0.1)
-                            )
-                        }
-                        .trim(from: 0, to: showResultsGraph ? 1 : 0)
-                        .stroke(Color.red.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .animation(.easeOut(duration: 1.0).delay(0.3), value: showResultsGraph)
-                        
-                        Text(L.t(sv: "Traditionell diet", nb: "Tradisjonell diett"))
-                            .font(.system(size: 12))
-                            .foregroundColor(.red.opacity(0.8))
-                            .offset(x: width * 0.55, y: height * 0.35)
-                            .opacity(showResultsGraph ? 1 : 0)
-                            .animation(.easeOut(duration: 0.5).delay(1.0), value: showResultsGraph)
-                    }
-                    
-                    // Up&Down line (black, steady decline)
-                    GeometryReader { geo in
-                        let width = geo.size.width
-                        let height = geo.size.height
-                        
-                        // Gray area fill
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: height * 0.15))
-                            path.addCurve(
-                                to: CGPoint(x: width * 0.35, y: height * 0.45),
-                                control1: CGPoint(x: width * 0.1, y: height * 0.15),
-                                control2: CGPoint(x: width * 0.25, y: height * 0.35)
-                            )
-                            path.addCurve(
-                                to: CGPoint(x: width, y: height * 0.75),
-                                control1: CGPoint(x: width * 0.5, y: height * 0.6),
-                                control2: CGPoint(x: width * 0.75, y: height * 0.75)
-                            )
-                            path.addLine(to: CGPoint(x: width, y: height))
-                            path.addLine(to: CGPoint(x: 0, y: height))
-                            path.closeSubpath()
-                        }
-                        .fill(Color.gray.opacity(showResultsGraph ? 0.15 : 0))
-                        .animation(.easeOut(duration: 0.8).delay(0.3), value: showResultsGraph)
-                        
-                        // Black line
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: height * 0.15))
-                            path.addCurve(
-                                to: CGPoint(x: width * 0.35, y: height * 0.45),
-                                control1: CGPoint(x: width * 0.1, y: height * 0.15),
-                                control2: CGPoint(x: width * 0.25, y: height * 0.35)
-                            )
-                            path.addCurve(
-                                to: CGPoint(x: width, y: height * 0.75),
-                                control1: CGPoint(x: width * 0.5, y: height * 0.6),
-                                control2: CGPoint(x: width * 0.75, y: height * 0.75)
-                            )
-                        }
-                        .trim(from: 0, to: showResultsGraph ? 1 : 0)
-                        .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .animation(.easeOut(duration: 1.2).delay(0.1), value: showResultsGraph)
-                        
-                        // Start circle
-                        Circle()
-                            .stroke(Color.primary, lineWidth: 2)
-                            .fill(Color(.systemBackground))
-                            .frame(width: 12, height: 12)
-                            .offset(x: -6, y: height * 0.15 - 6)
-                            .opacity(showResultsGraph ? 1 : 0)
-                            .animation(.easeOut(duration: 0.3), value: showResultsGraph)
-                        
-                        // End circle
-                        Circle()
-                            .stroke(Color.primary, lineWidth: 2)
-                            .fill(Color(.systemBackground))
-                            .frame(width: 12, height: 12)
-                            .offset(x: width - 6, y: height * 0.75 - 6)
-                            .opacity(showResultsGraph ? 1 : 0)
-                            .animation(.easeOut(duration: 0.3).delay(1.2), value: showResultsGraph)
-                    }
-                    
-                    // Up&Down label
-                    HStack(spacing: 6) {
-                        Image("23")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
-                            .cornerRadius(3)
-                        Text("Up&Down")
-                            .font(.system(size: 12, weight: .semibold))
-                        
-                        Text(L.t(sv: "Vikt", nb: "Vekt"))
-                            .font(.system(size: 10))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.primary)
-                            .cornerRadius(10)
-                    }
-                    .offset(x: -60, y: 55)
-                    .opacity(showResultsGraph ? 1 : 0)
-                    .animation(.easeOut(duration: 0.5).delay(0.8), value: showResultsGraph)
-                }
-                .frame(height: 160)
-                .padding(.horizontal, 8)
-                
-                // X-axis labels
-                HStack {
-                    Text(L.t(sv: "Månad 1", nb: "Måned 1"))
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                    Spacer()
-                    Text(L.t(sv: "Månad 6", nb: "Måned 6"))
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                }
-                .padding(.horizontal, 8)
-                .opacity(showResultsGraph ? 1 : 0)
-                .animation(.easeOut(duration: 0.5).delay(0.6), value: showResultsGraph)
-                
-                // Bottom text
-                Text(L.t(sv: "80% av Up&Down-användare behåller sin viktnedgång även 6 månader senare", nb: "80% av Up&Down-brukere beholder vektnedgangen sin selv 6 måneder senere"))
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 8)
-                    .opacity(showResultsGraph ? 1 : 0)
-                    .animation(.easeOut(duration: 0.5).delay(1.0), value: showResultsGraph)
-            }
-            .padding(20)
-            .background(Color(.systemBackground))
-            .cornerRadius(20)
-            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
-            
-            Spacer()
-        }
-        .onAppear {
-            // Reset and animate
-            showResultsGraph = false
-            resultsAnimationComplete = false
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                showResultsGraph = true
-            }
-            
-            // Enable continue button after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    resultsAnimationComplete = true
-                }
-            }
-        }
-    }
-    
-    private var targetWeightStepContent: some View {
-        VStack(spacing: 24) {
-            Spacer().frame(height: 20)
-            
-            Text(data.goal == "lose" ? L.t(sv: "Gå ner i vikt", nb: "Gå ned i vekt") : data.goal == "gain" ? L.t(sv: "Gå upp i vikt", nb: "Gå opp i vekt") : L.t(sv: "Behåll vikt", nb: "Behold vekt"))
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.gray)
-            
-            HStack {
-                Text(L.t(sv: "Nuvarande vikt:", nb: "Nåværende vekt:")).font(.system(size: 14)).foregroundColor(.gray)
-                Text("\(Int(data.weightKg)) kg").font(.system(size: 14, weight: .semibold)).foregroundColor(primaryTextColor)
-            }
-            
-            Picker(L.t(sv: "Målvikt", nb: "Målvekt"), selection: Binding(
-                get: { Int(data.targetWeightKg) },
-                set: { data.targetWeightKg = Double($0) }
-            )) {
-                ForEach(40...150, id: \.self) { kg in
-                    Text("\(kg) kg").tag(kg)
-                }
-            }
-            .pickerStyle(.wheel)
-            .frame(height: 150)
-            
-            let diff = Int(data.targetWeightKg) - Int(data.weightKg)
-            if diff != 0 {
-                HStack(spacing: 8) {
-                    Image(systemName: diff < 0 ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                        .foregroundColor(diff < 0 ? .green : .orange)
-                    Text("\(abs(diff)) kg \(diff < 0 ? L.t(sv: "att gå ner", nb: "å gå ned") : L.t(sv: "att gå upp", nb: "å gå opp"))")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(primaryTextColor)
-                }
-                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                .background(cardBackgroundColor)
-                .cornerRadius(12)
-                        }
-                    }
-                }
     
     // MARK: - Motivation Step Content
     private var motivationStepContent: some View {
@@ -1645,6 +1476,195 @@ struct AuthenticationView: View {
         }
     }
     
+    // MARK: - Find Friends Step Content
+    private var findFriendsStepContent: some View {
+        VStack(spacing: 0) {
+            if !onboardingContactsGranted {
+                VStack(spacing: 16) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.rectangle.stack")
+                            .font(.system(size: 24))
+                            .foregroundColor(primaryTextColor)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L.t(sv: "Hitta vänner från kontakter", nb: "Finn venner fra kontakter"))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(primaryTextColor)
+                            Text(L.t(sv: "Se vilka av dina kontakter som redan finns på Up&Down", nb: "Se hvilke av kontaktene dine som allerede er på Up&Down"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Spacer()
+                    }
+                    
+                    Button {
+                        requestOnboardingContactsPermission()
+                    } label: {
+                        Text(L.t(sv: "Aktivera kontakter", nb: "Aktiver kontakter"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(buttonTextColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(buttonBackgroundColor)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 16).fill(cardBackgroundColor))
+            } else if onboardingContactsLoading {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(L.t(sv: "Söker efter vänner...", nb: "Søker etter venner..."))
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .padding(.vertical, 30)
+            } else if !onboardingContacts.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(L.t(sv: "\(onboardingContacts.count) kontakter på Up&Down", nb: "\(onboardingContacts.count) kontakter på Up&Down"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 4)
+                    
+                    ForEach(onboardingContacts, id: \.id) { contact in
+                        onboardingUserRow(id: contact.id, name: contact.name, avatarUrl: contact.avatarUrl, badge: nil)
+                    }
+                }
+                .padding(.top, 8)
+            } else if onboardingContactsGranted {
+                VStack(spacing: 8) {
+                    Image(systemName: "person.2.slash")
+                        .font(.system(size: 28))
+                        .foregroundColor(.gray)
+                    Text(L.t(sv: "Inga kontakter hittade på Up&Down ännu", nb: "Ingen kontakter funnet på Up&Down ennå"))
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .padding(.vertical, 20)
+            }
+        }
+    }
+    
+    private func onboardingUserRow(id: String, name: String, avatarUrl: String?, badge: String?) -> some View {
+        HStack(spacing: 12) {
+            if let url = avatarUrl, !url.isEmpty {
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(url))) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Circle().fill(Color(.systemGray5))
+                        .overlay(Text(String(name.prefix(1)).uppercased()).font(.system(size: 16, weight: .semibold)).foregroundColor(.gray))
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+            } else {
+                Circle().fill(Color(.systemGray5))
+                    .frame(width: 44, height: 44)
+                    .overlay(Text(String(name.prefix(1)).uppercased()).font(.system(size: 16, weight: .semibold)).foregroundColor(.gray))
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(primaryTextColor)
+                if let badge = badge {
+                    Text(badge)
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            Button {
+                toggleOnboardingFollow(userId: id)
+            } label: {
+                Text(onboardingFollowingStatus[id] == true
+                     ? L.t(sv: "Följer", nb: "Følger")
+                     : L.t(sv: "Följ", nb: "Følg"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(onboardingFollowingStatus[id] == true ? .gray : buttonTextColor)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        onboardingFollowingStatus[id] == true
+                        ? Color(.systemGray5)
+                        : buttonBackgroundColor
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(.vertical, 6)
+    }
+    
+    
+    private func requestOnboardingContactsPermission() {
+        let store = CNContactStore()
+        store.requestAccess(for: .contacts) { granted, error in
+            DispatchQueue.main.async {
+                onboardingContactsGranted = granted
+                if granted {
+                    loadOnboardingContacts()
+                }
+            }
+        }
+    }
+    
+    private func loadOnboardingContacts() {
+        onboardingContactsLoading = true
+        Task {
+            do {
+                let store = CNContactStore()
+                let keysToFetch: [CNKeyDescriptor] = [
+                    CNContactGivenNameKey as CNKeyDescriptor,
+                    CNContactFamilyNameKey as CNKeyDescriptor
+                ]
+                let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+                var contactNames: [String] = []
+                
+                try store.enumerateContacts(with: request) { contact, _ in
+                    let fullName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                    if !fullName.isEmpty {
+                        contactNames.append(fullName)
+                    }
+                }
+                
+                let matched = try await SocialService.shared.findUsersByNames(names: contactNames)
+                
+                await MainActor.run {
+                    self.onboardingContacts = matched.map { (id: $0.id, name: $0.name, avatarUrl: $0.avatarUrl) }
+                    self.onboardingContactsLoading = false
+                }
+            } catch {
+                print("❌ Error loading onboarding contacts: \(error)")
+                await MainActor.run {
+                    self.onboardingContactsLoading = false
+                }
+            }
+        }
+    }
+    
+    private func toggleOnboardingFollow(userId: String) {
+        guard let currentUserId = authViewModel.currentUser?.id else { return }
+        let isFollowing = onboardingFollowingStatus[userId] == true
+        
+        onboardingFollowingStatus[userId] = !isFollowing
+        
+        Task {
+            do {
+                if isFollowing {
+                    try await SocialService.shared.unfollowUser(followerId: currentUserId, followingId: userId)
+                } else {
+                    try await SocialService.shared.followUser(followerId: currentUserId, followingId: userId)
+                }
+            } catch {
+                await MainActor.run {
+                    onboardingFollowingStatus[userId] = isFollowing
+                }
+            }
+        }
+    }
+    
     private var appleHealthStepContent: some View {
                 VStack(spacing: 20) {
                     Image("30")
@@ -1704,166 +1724,6 @@ struct AuthenticationView: View {
         }
     }
     
-    // MARK: - Calculating View
-    private var calculatingView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            Text("\(Int(calculationProgress))%")
-                .font(.system(size: 64, weight: .bold))
-                .foregroundColor(primaryTextColor)
-                .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.1), value: calculationProgress)
-            
-            Text(L.t(sv: "Vi skapar allt\nåt dig", nb: "Vi lager alt\nfor deg"))
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(primaryTextColor)
-                .multilineTextAlignment(.center)
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Rectangle().fill(Color(.systemGray5)).frame(height: 8).cornerRadius(4)
-                    Rectangle()
-                        .fill(LinearGradient(colors: [Color.red, Color.blue], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: geometry.size.width * CGFloat(calculationProgress / 100), height: 8)
-                        .cornerRadius(4)
-                }
-            }
-            .frame(height: 8)
-            .padding(.horizontal, 40)
-            
-            Text(calculationStep)
-                .font(.system(size: 16))
-                .foregroundColor(.gray)
-            
-            Spacer()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text(L.t(sv: "Daglig rekommendation för", nb: "Daglig anbefaling for"))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(primaryTextColor)
-                
-                checklistItem(text: L.t(sv: "Kalorier", nb: "Kalorier"), isChecked: calculationProgress >= 20)
-                checklistItem(text: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), isChecked: calculationProgress >= 40)
-                checklistItem(text: L.t(sv: "Protein", nb: "Protein"), isChecked: calculationProgress >= 60)
-                checklistItem(text: L.t(sv: "Fett", nb: "Fett"), isChecked: calculationProgress >= 80)
-                checklistItem(text: L.t(sv: "Hälsopoäng", nb: "Helsepoeng"), isChecked: calculationProgress >= 100)
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 60)
-        }
-    }
-    
-    @ViewBuilder
-    private func checklistItem(text: String, isChecked: Bool) -> some View {
-        HStack(spacing: 12) {
-            Text("•").foregroundColor(primaryTextColor)
-            Text(text).font(.system(size: 15)).foregroundColor(primaryTextColor)
-            Spacer()
-            if isChecked {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(primaryTextColor)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isChecked)
-    }
-    
-    // MARK: - Results View
-    private var resultsView: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                VStack(spacing: 16) {
-                    HStack {
-                        Spacer()
-                        GeometryReader { geometry in
-                            Rectangle().fill(buttonBackgroundColor).frame(height: 4).cornerRadius(2)
-                        }
-                        .frame(height: 4)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(primaryTextColor)
-                    
-                    Text(L.t(sv: "Grattis", nb: "Gratulerer"))
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(primaryTextColor)
-                    
-                    Text(L.t(sv: "din personliga plan är klar!", nb: "din personlige plan er klar!"))
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(primaryTextColor)
-                }
-                
-                VStack(spacing: 12) {
-                    Text(L.t(sv: "Du bör:", nb: "Du bør:"))
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                    
-                    Text(goalPredictionText)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(primaryTextColor)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(cardBackgroundColor)
-                        .cornerRadius(20)
-                }
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L.t(sv: "Daglig rekommendation", nb: "Daglig anbefaling"))
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(primaryTextColor)
-                        Text(L.t(sv: "Du kan ändra detta när som helst", nb: "Du kan endre dette når som helst"))
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                    }
-                    .padding(.horizontal, 24)
-                    
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                        MacroResultCard(emoji: "🔥", title: L.t(sv: "Kalorier", nb: "Kalorier"), value: $data.dailyCalories, unit: "", progress: 0.75)
-                        MacroResultCard(emoji: "🌾", title: L.t(sv: "Kolhydrater", nb: "Karbohydrater"), value: $data.dailyCarbs, unit: "g", progress: 0.65)
-                        MacroResultCard(emoji: "🍗", title: L.t(sv: "Protein", nb: "Protein"), value: $data.dailyProtein, unit: "g", progress: 0.70)
-                        MacroResultCard(emoji: "🥑", title: L.t(sv: "Fett", nb: "Fett"), value: $data.dailyFat, unit: "g", progress: 0.55)
-                    }
-                    .padding(.horizontal, 24)
-                }
-                
-                Spacer().frame(height: 20)
-                
-                Button {
-                    completeOnboarding()
-                } label: {
-                    Text(L.t(sv: "Kom igång!", nb: "Kom i gang!"))
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(buttonTextColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(buttonBackgroundColor)
-                        .clipShape(Capsule())
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
-            }
-        }
-    }
-    
-    private var goalPredictionText: String {
-        let weightDiff = abs(data.targetWeightKg - data.weightKg)
-        let weeks = Int(weightDiff / 0.5)
-        let targetDate = Calendar.current.date(byAdding: .weekOfYear, value: max(weeks, 1), to: Date()) ?? Date()
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "sv_SE")
-        dateFormatter.dateFormat = "d MMMM"
-        
-        let action = data.goal == "lose" ? L.t(sv: "Gå ner", nb: "Gå ned") : data.goal == "gain" ? L.t(sv: "Gå upp", nb: "Gå opp") : L.t(sv: "Behåll", nb: "Behold")
-        return "\(action) \(Int(weightDiff)) kg \(L.t(sv: "till", nb: "til")) \(dateFormatter.string(from: targetDate))"
-    }
-    
     // MARK: - Username Validation
     private func checkUsernameAvailability() {
         // Cancel previous check
@@ -1920,17 +1780,16 @@ struct AuthenticationView: View {
             return selectedProfileImage != nil
         case .referralCode: return true // Always can continue (optional step)
         case .rating: return true
-        case .progress: return progressAnimationComplete
         case .gender: return !data.gender.isEmpty
         case .workouts: return !data.workoutsPerWeek.isEmpty
+        case .community: return true
         case .heightWeight: return true
         case .birthday: return true
-        case .goal: return !data.goal.isEmpty
-        case .results: return resultsAnimationComplete
-        case .targetWeight: return true
         case .motivation: return motivationAnimationComplete
+        case .findFriends: return true
         case .appleHealth: return true
         case .notifications: return true
+        case .welcome: return true
         }
     }
     
@@ -1976,11 +1835,11 @@ struct AuthenticationView: View {
                     DispatchQueue.main.async {
                         data.notificationsAuthorized = granted
                         notificationsStatus = granted ? L.t(sv: "Notiser aktiverade", nb: "Varsler aktivert") : L.t(sv: "Notiser nekades", nb: "Varsler nektet")
-                        startCalculation()
+                        goToNextStep()
                     }
                 }
             } else {
-                startCalculation()
+                goToNextStep()
             }
         case .referralCode:
             // If a code was entered, validate and save it
@@ -2103,51 +1962,11 @@ struct AuthenticationView: View {
         generator.impactOccurred()
     }
     
-    private func startCalculation() {
-        withAnimation {
-            onboardingStep = nil
-            isCalculating = true
-        }
-        
-        let steps = [
-            L.t(sv: "Beräknar BMR...", nb: "Beregner BMR..."),
-            L.t(sv: "Tillämpar aktivitetsnivå...", nb: "Bruker aktivitetsnivå..."),
-            L.t(sv: "Optimerar makrofördelning...", nb: "Optimaliserer makrofordeling..."),
-            L.t(sv: "Anpassar efter mål...", nb: "Tilpasser etter mål..."),
-            L.t(sv: "Färdigställer plan...", nb: "Ferdigstiller plan...")
-        ]
-        
-        var currentStepIndex = 0
-        calculationStep = steps[0]
-        
-        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [self] timer in
-            if self.calculationProgress < 100 {
-                DispatchQueue.main.async {
-                    self.calculationProgress += 1
-                    let newIndex = min(Int(self.calculationProgress / 20), steps.count - 1)
-                    if newIndex != currentStepIndex {
-                        withAnimation {
-                            self.calculationStep = steps[newIndex]
-                        }
-                    }
-                }
-            } else {
-                timer.invalidate()
-                DispatchQueue.main.async {
-                    self.calculateNutritionPlan()
-                }
-            }
-        }
-    }
-    
     private func calculateNutritionPlan() {
         let bmr: Double
         let weight = data.weightKg
         let height = Double(data.heightCm)
         let age = Double(data.age)
-        
-        print("📊 calculateNutritionPlan() called")
-        print("   Input - Weight: \(weight), Height: \(height), Age: \(age), Gender: \(data.gender)")
         
         if data.gender == "male" {
             bmr = 10 * weight + 6.25 * height - 5 * age + 5
@@ -2176,21 +1995,26 @@ struct AuthenticationView: View {
         let fat = Int(tdee * 0.25 / 9)
         let carbs = Int((tdee - Double(protein * 4) - Double(fat * 9)) / 4)
         
-        print("   Calculated - Calories: \(calories), Protein: \(protein), Carbs: \(carbs), Fat: \(fat)")
+        data.dailyCalories = calories
+        data.dailyProtein = protein
+        data.dailyCarbs = max(carbs, 50)
+        data.dailyFat = fat
+    }
+    
+    private func validateAndSetInviteCode() {
+        let code = inviteCodeInput.trimmingCharacters(in: .whitespaces).uppercased()
+        guard !code.isEmpty else { return }
         
-        // Update data on main thread to ensure SwiftUI observes the changes
-        DispatchQueue.main.async {
-            self.data.dailyCalories = calories
-            self.data.dailyProtein = protein
-            self.data.dailyCarbs = max(carbs, 50)
-            self.data.dailyFat = fat
-            
-            print("   Updated data - dailyCalories: \(self.data.dailyCalories)")
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                    self.isCalculating = false
-                    self.showResults = true
+        isValidatingInvite = true
+        Task {
+            let valid = await InviteService.shared.validateInviteCode(code: code)
+            await MainActor.run {
+                isValidatingInvite = false
+                inviteCodeValid = valid
+                if valid {
+                    pendingInviteCode = code
+                    authViewModel.pendingInviteCode = code
+                    authViewModel.errorMessage = ""
                 }
             }
         }
@@ -2198,6 +2022,15 @@ struct AuthenticationView: View {
     
     private func createAccountAndStartOnboarding() {
         let trimmedEmail = signupEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Danderyd domain restriction
+        let isAllowedDomain = trimmedEmail.lowercased().hasSuffix(AuthViewModel.allowedEmailDomain)
+        let hasValidInvite = pendingInviteCode != nil
+        
+        if !isAllowedDomain && !hasValidInvite {
+            authViewModel.errorMessage = AuthViewModel.domainRestrictionMessage
+            return
+        }
         
         Task {
             await MainActor.run {
@@ -2212,6 +2045,13 @@ struct AuthenticationView: View {
                 let placeholderUsername = "user-\(userId.prefix(6))"
                 let newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
                 try await ProfileService.shared.createUserProfile(newUser)
+                
+                // Redeem invite code if used
+                if let inviteCode = pendingInviteCode {
+                    let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
+                    if redeemed { print("✅ Invite code redeemed during signup") }
+                    await MainActor.run { pendingInviteCode = nil }
+                }
                 
                 await RevenueCatManager.shared.logInFor(appUserId: userId)
                 
@@ -2261,12 +2101,7 @@ struct AuthenticationView: View {
                 print("   Carbs: \(data.dailyCarbs)")
                 print("   Fat: \(data.dailyFat)")
                 
-                // Ensure nutrition values are calculated
-                if data.dailyCalories == 0 {
-                    print("⚠️ Calories is 0, recalculating...")
-                    calculateNutritionPlan()
-                    print("   Recalculated - Calories: \(data.dailyCalories)")
-                }
+                calculateNutritionPlan()
                 
                 // Step 1: Try to update username (with fallback if duplicate)
                 var usernameUpdated = false
@@ -2561,52 +2396,6 @@ struct OnboardingReviewCardSimple: View {
     }
 }
 
-// MARK: - Progress Curve Path (for gradient fill)
-struct ProgressCurvePath: Shape {
-    let width: CGFloat
-    let height: CGFloat
-    let progress: CGFloat
-    
-    var animatableData: CGFloat {
-        get { progress }
-        set { }
-    }
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        
-        let clampedProgress = min(max(progress, 0), 1)
-        
-        // Start at bottom left
-        path.move(to: CGPoint(x: 0, y: height))
-        
-        // Draw the curve up to the current progress point
-        path.addLine(to: CGPoint(x: 0, y: height - 20))
-        path.addLine(to: CGPoint(x: width * 0.2 * clampedProgress, y: height - 20 - (20 * min(clampedProgress / 0.2, 1))))
-        
-        if clampedProgress > 0.2 {
-            let segmentProgress = min((clampedProgress - 0.2) / 0.25, 1)
-            path.addLine(to: CGPoint(x: width * 0.2 + width * 0.25 * segmentProgress, y: height - 40 - (15 * segmentProgress)))
-        }
-        
-        if clampedProgress > 0.45 {
-            let segmentProgress = min((clampedProgress - 0.45) / 0.25, 1)
-            path.addLine(to: CGPoint(x: width * 0.45 + width * 0.25 * segmentProgress, y: height - 55 - (25 * segmentProgress)))
-        }
-        
-        if clampedProgress > 0.7 {
-            let segmentProgress = min((clampedProgress - 0.7) / 0.3, 1)
-            path.addLine(to: CGPoint(x: width * 0.7 + width * 0.3 * segmentProgress, y: height - 80 - (40 * segmentProgress)))
-        }
-        
-        // Close the path back to bottom
-        path.addLine(to: CGPoint(x: width * clampedProgress, y: height))
-        path.closeSubpath()
-        
-        return path
-    }
-}
-
 // MARK: - Login Form
 struct LoginFormView: View {
     @State private var email = ""
@@ -2749,66 +2538,6 @@ struct ForgotPasswordSheet: View {
 }
 
 // MARK: - Macro Result Card (Editable)
-struct MacroResultCard: View {
-    let emoji: String
-    let title: String
-    @Binding var value: Int
-    let unit: String
-    let progress: Double
-    
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isEditing = false
-    @State private var editValue: String = ""
-    
-    private var isDarkMode: Bool { colorScheme == .dark }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(emoji).font(.system(size: 14)).grayscale(1)
-                Text(title).font(.system(size: 14)).foregroundColor(.gray)
-                Spacer()
-            }
-            
-            HStack(alignment: .bottom, spacing: 0) {
-                ZStack {
-                    Circle().stroke(Color(.systemGray5), lineWidth: 6).frame(width: 60, height: 60)
-                    Circle().trim(from: 0, to: progress).stroke(Color.black, style: StrokeStyle(lineWidth: 6, lineCap: .round)).frame(width: 60, height: 60).rotationEffect(.degrees(-90))
-                    VStack(spacing: 0) {
-                        Text("\(value)").font(.system(size: 18, weight: .bold)).foregroundColor(isDarkMode ? .white : .black)
-                        if !unit.isEmpty { Text(unit).font(.system(size: 10)).foregroundColor(.gray) }
-                    }
-                }
-                Spacer()
-                Button {
-                    editValue = "\(value)"
-                    isEditing = true
-                } label: {
-                    Image(systemName: "pencil").font(.system(size: 14)).foregroundColor(.gray)
-                }
-            }
-        }
-        .padding(16)
-        .background(isDarkMode ? Color(.systemGray6) : Color.white)
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(isDarkMode ? 0 : 0.06), radius: 8, x: 0, y: 2)
-        .alert(L.t(sv: "Ändra \(title.lowercased())", nb: "Endre \(title.lowercased())"), isPresented: $isEditing) {
-            TextField(L.t(sv: "Värde", nb: "Verdi"), text: $editValue)
-                .keyboardType(.numberPad)
-            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
-            Button(L.t(sv: "Spara", nb: "Lagre")) {
-                if let newValue = Int(editValue), newValue > 0 {
-                    value = newValue
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                }
-            }
-        } message: {
-            Text(L.t(sv: "Ange nytt värde för \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")", nb: "Skriv inn ny verdi for \(title.lowercased())\(unit.isEmpty ? "" : " (\(unit))")"))
-        }
-    }
-}
-
 #Preview {
     AuthenticationView()
         .environmentObject(AuthViewModel())

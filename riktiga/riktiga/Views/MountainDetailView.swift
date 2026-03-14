@@ -114,7 +114,7 @@ struct MountainDetailView: View {
                                         Button(action: {
                                             selectedImageUrl = memory.imageUrl
                                         }) {
-                                            AsyncImage(url: URL(string: memory.imageUrl)) { phase in
+                                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(memory.imageUrl))) { phase in
                                                 switch phase {
                                                 case .empty:
                                                     Rectangle()
@@ -344,7 +344,7 @@ struct FullScreenImageView: View {
                 
                 Spacer()
                 
-                AsyncImage(url: URL(string: imageUrl)) { phase in
+                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(imageUrl))) { phase in
                     switch phase {
                     case .empty:
                         ProgressView()

@@ -88,11 +88,13 @@ struct MessagesListView: View {
         }
         .onAppear {
             NavigationDepthTracker.shared.setAtRoot(false)
+            NavigationDepthTracker.shared.hideTabBar = true
             NotificationCenter.default.post(name: NSNotification.Name("HideFloatingButton"), object: nil)
         }
         .onDisappear {
             dmService.stopConversationListPolling()
             NavigationDepthTracker.shared.setAtRoot(true)
+            NavigationDepthTracker.shared.hideTabBar = false
             NotificationCenter.default.post(name: NSNotification.Name("ShowFloatingButton"), object: nil)
         }
         .sheet(isPresented: $showNewMessage) {

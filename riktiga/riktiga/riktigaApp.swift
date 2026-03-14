@@ -22,6 +22,7 @@ struct UpAndDownApp: App {
     @State private var showOptionalUpdate = false
     @State private var showAdPopup = false
     @ObservedObject private var adService = AdService.shared
+    @StateObject private var networkMonitor = NetworkMonitor.shared
     
     init() {
         // Configure Stripe
@@ -42,14 +43,25 @@ struct UpAndDownApp: App {
                 if showSplash {
                     SplashScreenView()
                         .onAppear {
+                            _ = NetworkMonitor.shared
+                            SupabaseConfig.diagnoseConnection()
+                            
                             Task {
                                 await versionService.checkVersion()
                                 await adService.fetchPopupAd()
                             }
                             
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                                 splashMinTimeElapsed = true
                                 dismissSplashIfReady()
+                            }
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+                                guard showSplash else { return }
+                                splashMinTimeElapsed = true
+                                withAnimation(.smooth(duration: 0.6)) {
+                                    showSplash = false
+                                }
                             }
                         }
                         .onChange(of: authViewModel.isCheckingAuth) { _, _ in
@@ -92,11 +104,11 @@ struct UpAndDownApp: App {
             }
             // Handle deep links (password reset, Insert Affiliate, Strava, Google Sign-In, etc.)
             .onOpenURL { url in
-                print("📱 Received deep link: \(url)")
+                print("\u{1f4f1} Received deep link: \(url)")
                 
                 // Handle Google Sign-In callback
                 if GIDSignIn.sharedInstance.handle(url) {
-                    print("✅ Google Sign-In URL handled")
+                    print("\u{2705} Google Sign-In URL handled")
                     return
                 }
                 
@@ -107,7 +119,19 @@ struct UpAndDownApp: App {
                 if url.scheme == "upanddown" && url.host == "upanddown" {
                     Task {
                         let success = await StravaService.shared.handleOAuthCallback(url: url)
-                        print(success ? "✅ Strava connected successfully" : "❌ Strava connection failed")
+                        print(success ? "\u{2705} Strava connected successfully" : "\u{274c} Strava connection failed")
+                    }
+                    return
+                }
+                
+                // Handle invite deep link (upanddown://invite?code=XXX or https://upanddownapp.com/invite?code=XXX)
+                if (url.scheme == "upanddown" && url.host == "invite") ||
+                   (urlString.contains("upanddownapp.com/invite")) {
+                    if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                       let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
+                       !code.isEmpty {
+                        print("\u{1f39f}\u{fe0f} Invite deep link received: \(code)")
+                        authViewModel.pendingInviteCode = code.uppercased()
                     }
                     return
                 }
@@ -117,11 +141,11 @@ struct UpAndDownApp: App {
                     if let affiliateCode = url.host {
                         Task {
                             _ = await InsertAffiliateSwift.setShortCode(shortCode: affiliateCode)
-                            print("✅ Insert Affiliate code processed: \(affiliateCode)")
+                            print("\u{2705} Insert Affiliate code processed: \(affiliateCode)")
                             // Set RevenueCat attribute if identifier exists
                             if let identifier = InsertAffiliateSwift.returnInsertAffiliateIdentifier() {
                                 Purchases.shared.attribution.setAttributes(["insert_affiliate": identifier])
-                                print("✅ RevenueCat attribute set: \(identifier)")
+                                print("\u{2705} RevenueCat attribute set: \(identifier)")
                             }
                         }
                     }
@@ -132,11 +156,11 @@ struct UpAndDownApp: App {
                     if let affiliateCode = pathComponents.last, affiliateCode.count > 2 {
                         Task {
                             _ = await InsertAffiliateSwift.setShortCode(shortCode: affiliateCode)
-                            print("✅ Insert Affiliate code processed: \(affiliateCode)")
+                            print("\u{2705} Insert Affiliate code processed: \(affiliateCode)")
                             // Set RevenueCat attribute if identifier exists
                             if let identifier = InsertAffiliateSwift.returnInsertAffiliateIdentifier() {
                                 Purchases.shared.attribution.setAttributes(["insert_affiliate": identifier])
-                                print("✅ RevenueCat attribute set: \(identifier)")
+                                print("\u{2705} RevenueCat attribute set: \(identifier)")
                             }
                         }
                     }
@@ -184,6 +208,12 @@ struct UpAndDownApp: App {
                     NotificationManager.shared.scheduleMonthlyReportNotifications(avatarUrl: authViewModel.currentUser?.avatarUrl)
                     WidgetSyncService.shared.syncStreakData()
                     LiveActivityManager.shared.cleanupOrphanedActivities()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NetworkMonitor.networkRestoredNotification)) { _ in
+                    Task {
+                        await AuthSessionManager.shared.recoverSession()
+                        await authViewModel.loadUserProfile()
+                    }
                 }
         } else {
             AuthenticationView()

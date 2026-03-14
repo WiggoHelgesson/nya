@@ -585,7 +585,7 @@ class ReferralService: ObservableObject {
         let body = ["action": "create_connect_account"]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let onboardingUrl = json["onboardingUrl"] as? String {
@@ -611,7 +611,7 @@ class ReferralService: ObservableObject {
         let body = ["action": "get_onboarding_link"]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let onboardingUrl = json["onboardingUrl"] as? String {
@@ -641,7 +641,7 @@ class ReferralService: ObservableObject {
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let success = json["success"] as? Bool {

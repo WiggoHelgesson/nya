@@ -35,7 +35,6 @@ struct SimpleAppHeader: View {
     @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var showFindFriends = false
-    @State private var showPublicProfile = false
     @State private var lastUnreadFetch: Date = .distantPast
     @StateObject private var dmService = DirectMessageService.shared
     
@@ -49,37 +48,17 @@ struct SimpleAppHeader: View {
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Page title or Pro CTA
-                if isPremium {
-                    Text(L.t(sv: "Hem", nb: "Hjem"))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.primary)
-                } else {
-                    Button {
-                        SuperwallService.shared.showPaywall()
-                    } label: {
-                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(colors: [.black, Color(white: 0.55)],
-                                               startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(20)
-                    }
-                    .buttonStyle(.plain)
-                }
+                // Center: Page title
+                Text(L.t(sv: "Hem", nb: "Hjem"))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.primary)
                 
                 // Left and Right sides
                 HStack {
                     // Left: Profile picture + Search
                     HStack(spacing: 10) {
-                        Button {
-                            showPublicProfile = true
-                        } label: {
-                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                        NavigationLink(destination: UserProfileView(userId: authViewModel.currentUser?.id ?? "").environmentObject(authViewModel)) {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                                 .overlay(
                                     Circle()
                                         .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -87,7 +66,6 @@ struct SimpleAppHeader: View {
                         }
                         .buttonStyle(.plain)
                         
-                        // Search / Find friends
                         NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 20, weight: .regular))
@@ -160,21 +138,6 @@ struct SimpleAppHeader: View {
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showPublicProfile) {
-            if let userId = authViewModel.currentUser?.id {
-                NavigationStack {
-                    UserProfileView(userId: userId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    showPublicProfile = false
-                                }
-                            }
-                        }
-                }
-            }
-        }
         .task {
             await throttledRefresh()
         }
@@ -228,7 +191,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
     @State private var unreadNotifications = 0
     @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
-    @State private var showPublicProfile = false
     @State private var lastUnreadFetch: Date = .distantPast
     @StateObject private var dmService = DirectMessageService.shared
     
@@ -245,37 +207,16 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Page title or Pro CTA
-                if isPremium {
-                    Text(tabDisplayName?(selectedTab) ?? selectedTab.rawValue)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.primary)
-                } else {
-                    Button {
-                        SuperwallService.shared.showPaywall()
-                    } label: {
-                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(colors: [.black, Color(white: 0.55)],
-                                               startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(20)
-                    }
-                    .buttonStyle(.plain)
-                }
+                // Center: Page title
+                Text(tabDisplayName?(selectedTab) ?? selectedTab.rawValue)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.primary)
                 
                 // Left and Right sides
                 HStack {
-                    // Left: Profile picture + Search
                     if isProfilePage {
-                        Button {
-                            showPublicProfile = true
-                        } label: {
-                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                        NavigationLink(destination: UserProfileView(userId: authViewModel.currentUser?.id ?? "").environmentObject(authViewModel)) {
+                            ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                                 .overlay(
                                     Circle()
                                         .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -284,10 +225,8 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                         .buttonStyle(.plain)
                     } else {
                         HStack(spacing: 10) {
-                            Button {
-                                showPublicProfile = true
-                            } label: {
-                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36)
+                            NavigationLink(destination: UserProfileView(userId: authViewModel.currentUser?.id ?? "").environmentObject(authViewModel)) {
+                                ProfileImage(url: authViewModel.currentUser?.avatarUrl, size: 36, isPro: authViewModel.currentUser?.isProMember ?? false)
                                     .overlay(
                                         Circle()
                                             .stroke(Color.black.opacity(0.1), lineWidth: 1)
@@ -295,7 +234,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
                             }
                             .buttonStyle(.plain)
                             
-                            // Search / Find friends
                             NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 20, weight: .regular))
@@ -411,21 +349,6 @@ struct CombinedHeaderWithTabs<Tab: RawRepresentable & CaseIterable & Hashable>: 
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        .sheet(isPresented: $showPublicProfile) {
-            if let userId = authViewModel.currentUser?.id {
-                NavigationStack {
-                    UserProfileView(userId: userId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    showPublicProfile = false
-                                }
-                            }
-                        }
-                }
-            }
-        }
         .task {
             await throttledRefresh()
         }

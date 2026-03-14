@@ -73,7 +73,7 @@ struct EditPostView: View {
                                     .padding(8)
                                 }
                         } else if let imageUrl = post.userImageUrl, !imageUrl.isEmpty {
-                            AsyncImage(url: URL(string: imageUrl)) { phase in
+                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(imageUrl))) { phase in
                                 switch phase {
                                 case .success(let image):
                                     image

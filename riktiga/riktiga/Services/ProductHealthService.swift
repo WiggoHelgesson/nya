@@ -12,7 +12,7 @@ final class ProductHealthService {
     // In-memory cache to avoid duplicate GPT calls
     private var cache: [String: ProductHealthAnalysis] = [:]
     
-    private init(session: URLSession = .shared) {
+    private init(session: URLSession = SupabaseConfig.urlSession) {
         self.session = session
     }
     

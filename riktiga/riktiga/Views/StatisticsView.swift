@@ -3540,7 +3540,7 @@ struct MonthlyReportView: View {
                     .padding(.horizontal, 20)
                 
                 ZStack(alignment: .bottomLeading) {
-                    if let imageUrl = post.imageUrl, let url = URL(string: imageUrl) {
+                    if let imageUrl = post.imageUrl, let url = URL(string: SupabaseConfig.rewriteURL(imageUrl)) {
                         AsyncImage(url: url) { image in
                             image
                                 .resizable()
@@ -3910,7 +3910,7 @@ private struct MonthlyReportLiveImage: View {
                 return
             }
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 if let loadedImage = UIImage(data: data) {
                     ImageCacheManager.shared.setImage(loadedImage, for: path)
                     await MainActor.run {

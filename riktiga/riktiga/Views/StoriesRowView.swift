@@ -8,6 +8,8 @@ struct StoriesRowView: View {
     let onStoryTap: (UserStories, Int) -> Void
     let onAddStoryTap: () -> Void
     
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
@@ -23,8 +25,8 @@ struct StoriesRowView: View {
                                 id: currentUserId,
                                 userId: currentUserId,
                                 username: L.t(sv: "Din händelse", nb: "Din hendelse"),
-                                avatarUrl: nil, // Will be loaded from profile
-                                isProMember: false,
+                                avatarUrl: nil,
+                                isProMember: authViewModel.currentUser?.isProMember ?? false,
                                 stories: myStories,
                                 hasUnviewedStories: false
                             )
@@ -85,46 +87,59 @@ struct MyStoryCircle: View {
     
     @EnvironmentObject var authViewModel: AuthViewModel
     
+    private var isPro: Bool { authViewModel.currentUser?.isProMember ?? false }
+    
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
-                    // Profile image with gradient ring if has stories
                     ZStack {
                         if myStories.isEmpty {
-                            // No stories - show dashed circle
-                            Circle()
-                                .stroke(style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
-                                .foregroundColor(Color.gray.opacity(0.3))
-                                .frame(width: 80, height: 80)
+                            if isPro {
+                                RoundedRectangle(cornerRadius: 80 * 0.3)
+                                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                    .foregroundColor(Color.gray.opacity(0.3))
+                                    .frame(width: 80, height: 80)
+                            } else {
+                                Circle()
+                                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                    .foregroundColor(Color.gray.opacity(0.3))
+                                    .frame(width: 80, height: 80)
+                            }
                         } else {
-                            // Has stories - show gradient ring (white, black, gray)
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white,
-                                            Color.black,
-                                            Color.gray
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 3
-                                )
-                                .frame(width: 80, height: 80)
+                            if isPro {
+                                RoundedRectangle(cornerRadius: 80 * 0.3)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [Color.white, Color.black, Color.gray],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 3
+                                    )
+                                    .frame(width: 80, height: 80)
+                            } else {
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [Color.white, Color.black, Color.gray],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 3
+                                    )
+                                    .frame(width: 80, height: 80)
+                            }
                         }
                         
-                        // Profile image - cached
                         OptimizedAsyncImage(
                             url: authViewModel.currentUser?.avatarUrl,
                             width: 72,
                             height: 72,
-                            cornerRadius: 36
+                            cornerRadius: isPro ? 72 * 0.28 : 36
                         )
                     }
                     
-                    // Add button (only if no stories)
                     if myStories.isEmpty {
                         Circle()
                             .fill(Color.black)
@@ -158,40 +173,50 @@ struct StoryCircle: View {
     let userStory: UserStories
     let onTap: () -> Void
     
+    private var isPro: Bool { userStory.isProMember }
+    
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
                 ZStack {
-                    // Gradient ring - white/black/gray if unviewed, light gray if viewed
-                    Circle()
-                        .stroke(
-                            userStory.hasUnviewedStories ?
-                            LinearGradient(
-                                colors: [
-                                    Color.white,
-                                    Color.black,
-                                    Color.gray
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ) :
-                            LinearGradient(
-                                colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.3)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 3
+                    let ringGradient = userStory.hasUnviewedStories ?
+                        LinearGradient(
+                            colors: [Color.white, Color.black, Color.gray],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ) :
+                        LinearGradient(
+                            colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 80, height: 80)
                     
-                    // Profile image - cached
+                    if isPro {
+                        RoundedRectangle(cornerRadius: 80 * 0.3)
+                            .stroke(ringGradient, lineWidth: 3)
+                            .frame(width: 80, height: 80)
+                    } else {
+                        Circle()
+                            .stroke(ringGradient, lineWidth: 3)
+                            .frame(width: 80, height: 80)
+                    }
+                    
                     if let avatarUrl = userStory.avatarUrl, !avatarUrl.isEmpty {
                         OptimizedAsyncImage(
                             url: avatarUrl,
                             width: 72,
                             height: 72,
-                            cornerRadius: 36
+                            cornerRadius: isPro ? 72 * 0.28 : 36
                         )
+                    } else if isPro {
+                        RoundedRectangle(cornerRadius: 72 * 0.28)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: 72, height: 72)
+                            .overlay(
+                                Text(String(userStory.username.prefix(1)).uppercased())
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .foregroundColor(.gray)
+                            )
                     } else {
                         Circle()
                             .fill(Color.gray.opacity(0.15))
@@ -363,7 +388,7 @@ struct StoryViewerOverlay: View {
                                     }
                             } else {
                                 // Load image
-                                AsyncImage(url: URL(string: story.imageUrl)) { phase in
+                                AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(story.imageUrl))) { phase in
                                     switch phase {
                                     case .success(let image):
                                         image
@@ -537,7 +562,7 @@ struct StoryViewerOverlay: View {
                         // Viewer avatars (max 3)
                         HStack(spacing: -8) {
                             ForEach(storyViewers.prefix(3)) { viewer in
-                                if let avatarUrl = viewer.avatarUrl, let url = URL(string: avatarUrl) {
+                                if let avatarUrl = viewer.avatarUrl, let url = URL(string: SupabaseConfig.rewriteURL(avatarUrl)) {
                                     AsyncImage(url: url) { image in
                                         image
                                             .resizable()
@@ -711,7 +736,7 @@ struct StoryViewerOverlay: View {
             
             Task {
                 do {
-                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                     if let uiImage = UIImage(data: data) {
                         await MainActor.run {
                             preloadedImages[index] = Image(uiImage: uiImage)
@@ -736,7 +761,7 @@ struct StoryViewerOverlay: View {
         
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
+                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 if let uiImage = UIImage(data: data) {
                     await MainActor.run {
                         preloadedImages[nextIndex] = Image(uiImage: uiImage)
@@ -940,7 +965,7 @@ struct StoryViewersListView: View {
                             ForEach(viewers) { viewer in
                                 HStack(spacing: 12) {
                                     // Avatar
-                                    if let avatarUrl = viewer.avatarUrl, let url = URL(string: avatarUrl) {
+                                    if let avatarUrl = viewer.avatarUrl, let url = URL(string: SupabaseConfig.rewriteURL(avatarUrl)) {
                                         AsyncImage(url: url) { image in
                                             image
                                                 .resizable()
@@ -1026,7 +1051,7 @@ struct StoryHeaderAvatar: View {
             // For own story, use current user's avatar from auth
             if isOwnStory, let currentAvatarUrl = authViewModel.currentUser?.avatarUrl,
                !currentAvatarUrl.isEmpty,
-               let url = URL(string: currentAvatarUrl) {
+               let url = URL(string: SupabaseConfig.rewriteURL(currentAvatarUrl)) {
                 AsyncImage(url: url) { image in
                     image
                         .resizable()
@@ -1037,7 +1062,7 @@ struct StoryHeaderAvatar: View {
                 }
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
-            } else if let avatarUrl = avatarUrl, !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+            } else if let avatarUrl = avatarUrl, !avatarUrl.isEmpty, let url = URL(string: SupabaseConfig.rewriteURL(avatarUrl)) {
                 // Use provided avatar URL
                 AsyncImage(url: url) { image in
                     image

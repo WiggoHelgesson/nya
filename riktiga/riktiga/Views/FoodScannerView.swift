@@ -1279,7 +1279,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                 var imageUrl: String? = nil
                 if let imageUrlStr = analysis.imageUrl, let url = URL(string: imageUrlStr) {
                     do {
-                        let (imageData, _) = try await URLSession.shared.data(from: url)
+                        let (imageData, _) = try await SupabaseConfig.urlSession.data(from: url)
                         if let image = UIImage(data: imageData) {
                             imageUrl = await uploadFoodImage(image: image, userId: userId)
                         }
@@ -1328,7 +1328,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             request.setValue("UpAndDown iOS App", forHTTPHeaderField: "User-Agent")
             request.timeoutInterval = 10
             
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
             
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let status = json["status"] as? Int, status == 1,
@@ -1368,7 +1368,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             var productImage: UIImage? = nil
             if let imageUrlString = imageUrlString, let imageUrl = URL(string: imageUrlString) {
                 do {
-                    let (imageData, _) = try await URLSession.shared.data(from: imageUrl)
+                    let (imageData, _) = try await SupabaseConfig.urlSession.data(from: imageUrl)
                     productImage = UIImage(data: imageData)
                     print("📷 Downloaded product image from Open Food Facts")
                 } catch {
@@ -1553,7 +1553,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         request.timeoutInterval = 60
         
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
