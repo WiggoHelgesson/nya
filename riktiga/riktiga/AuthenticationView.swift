@@ -9,8 +9,9 @@ import Contacts
 
 // MARK: - New Unified Onboarding Steps
 private enum OnboardingStep: Int, CaseIterable, Identifiable {
+    case school
     case name
-    case profilePicture  // NEW: Add profile picture
+    case profilePicture
     case gender
     case workouts
     case community
@@ -28,6 +29,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
+        case .school: return L.t(sv: "Välj din skola", nb: "Velg skolen din")
         case .name: return L.t(sv: "Välj användarnamn", nb: "Velg brukernavn")
         case .profilePicture: return L.t(sv: "Lägg till profilbild", nb: "Legg til profilbilde")
         case .gender: return L.t(sv: "Välj ditt kön", nb: "Velg ditt kjønn")
@@ -47,6 +49,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var subtitle: String {
         switch self {
+        case .school: return L.t(sv: "Genom att välja din skola ser du inlägg från andra personer från din skola & du är med i tävlingar mot andra skolor", nb: "Ved å velge skolen din ser du innlegg fra andre på skolen din og deltar i konkurranser mot andre skoler")
         case .name: return L.t(sv: "Välj ett användarnamn som visas för andra.", nb: "Velg et brukernavn som vises for andre.")
         case .profilePicture: return L.t(sv: "Allt blir roligare med en profilbild.", nb: "Alt blir morsommere med et profilbilde.")
         case .gender: return L.t(sv: "Vi använder denna datan för att anpassa dig till rätt topplistor.", nb: "Vi bruker disse dataene for å tilpasse deg til riktige topplister.")
@@ -126,14 +129,6 @@ struct AuthenticationView: View {
     @State private var signupEmail: String = ""
     @State private var signupPassword: String = ""
     
-    // Invite code (set via deep link or manual entry)
-    @State private var pendingInviteCode: String? = nil
-    @State private var showInviteCodeField = false
-    @State private var inviteCodeInput: String = ""
-    @State private var inviteCodeValid: Bool? = nil
-    @State private var isValidatingInvite = false
-    
-    
     
     // Animation
     @State private var contentOpacity: Double = 1
@@ -203,14 +198,6 @@ struct AuthenticationView: View {
             }
         }
         .onAppear {
-            // Pick up invite code set via deep link
-            if let code = authViewModel.pendingInviteCode {
-                pendingInviteCode = code
-                inviteCodeInput = code
-                inviteCodeValid = true
-                showInviteCodeField = true
-            }
-            
             // If user has a session but needs onboarding (e.g. app restart after partial signup),
             // skip the landing/login screens and go straight to onboarding
             if authViewModel.needsOnboarding {
@@ -295,51 +282,35 @@ struct AuthenticationView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 VStack(spacing: 8) {
-                    if pendingInviteCode != nil {
-                        Text(L.t(sv: "Skapa ditt konto", nb: "Opprett kontoen din"))
-                            .font(.system(size: 26, weight: .bold))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(primaryTextColor)
-                        
-                        Text(L.t(sv: "Med din kod får du en exklusiv chans att skapa ett Up&Down konto", nb: "Med koden din får du en eksklusiv sjanse til å opprette en Up&Down-konto"))
-                            .font(.system(size: 15))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(secondaryTextColor)
-                    } else {
-                        Text(L.t(sv: "Enbart för Danderyds Gymnasium elever", nb: "Kun for Danderyds Gymnasium elever"))
-                            .font(.system(size: 26, weight: .bold))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(primaryTextColor)
-                        
-                        Text(L.t(sv: "Du behöver en elev.danderyd.se mail för att skapa ett konto", nb: "Du trenger en elev.danderyd.se e-post for å opprette en konto"))
-                            .font(.system(size: 15))
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(secondaryTextColor)
-                    }
+                    Text(L.t(sv: "Skapa ditt konto", nb: "Opprett kontoen din"))
+                        .font(.system(size: 26, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(primaryTextColor)
+                    
+                    Text(L.t(sv: "Sveriges sociala träningsapp. Vi gör träningen billigare, roligare & mer social", nb: "Sveriges sosiale treningsapp. Vi gjør treningen billigere, morsommere & mer sosial"))
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(secondaryTextColor)
                 }
                 
                 VStack(spacing: 12) {
-                    if pendingInviteCode != nil {
-                        Button {
-                            authViewModel.pendingInviteCode = pendingInviteCode
-                            authViewModel.signInWithApple()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "apple.logo")
-                                    .font(.system(size: 20, weight: .medium))
-                                Text(L.t(sv: "Fortsätt med Apple", nb: "Fortsett med Apple"))
-                                    .font(.system(size: 17, weight: .medium))
-                            }
-                            .foregroundColor(primaryTextColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                    Button {
+                        authViewModel.signInWithApple()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 20, weight: .medium))
+                            Text(L.t(sv: "Fortsätt med Apple", nb: "Fortsett med Apple"))
+                                .font(.system(size: 17, weight: .medium))
                         }
-                        .disabled(authViewModel.isLoading)
+                        .foregroundColor(primaryTextColor)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
                     }
+                    .disabled(authViewModel.isLoading)
                     
                     Button {
-                        authViewModel.pendingInviteCode = pendingInviteCode
                         authViewModel.signInWithGoogle(onboardingData: OnboardingData())
                     } label: {
                         HStack(spacing: 12) {
@@ -388,71 +359,14 @@ struct AuthenticationView: View {
             
             Spacer()
             
-            VStack(spacing: 10) {
-                Text(L.t(sv: "Har du ingen skolmail? Få en kod av en befintlig Up&Down användare för att skapa konto.", nb: "Har du ingen skole-e-post? Få en kode av en eksisterende Up&Down-bruker for å opprette konto."))
-                    .font(.system(size: 13))
-                    .foregroundColor(secondaryTextColor.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                
-                if let code = pendingInviteCode {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(.green)
-                        Text(L.t(sv: "Inbjudningskod aktiv: \(code)", nb: "Invitasjonskode aktiv: \(code)"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.green)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(10)
-                } else {
-                    HStack {
-                        TextField(L.t(sv: "Ange kod", nb: "Skriv inn kode"), text: $inviteCodeInput)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .padding(14)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(10)
-                            .onChange(of: inviteCodeInput) { _, newValue in
-                                inviteCodeValid = nil
-                            }
-                        
-                        Button {
-                            validateAndSetInviteCode()
-                        } label: {
-                            if isValidatingInvite {
-                                ProgressView()
-                                    .frame(width: 44, height: 44)
-                            } else {
-                                Text(L.t(sv: "Aktivera", nb: "Aktiver"))
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(buttonTextColor)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
-                                    .background(buttonBackgroundColor)
-                                    .cornerRadius(10)
-                            }
-                        }
-                        .disabled(inviteCodeInput.trimmingCharacters(in: .whitespaces).isEmpty || isValidatingInvite)
-                    }
-                    
-                    if let valid = inviteCodeValid, !valid {
-                        Text(L.t(sv: "Ogiltig eller redan använd kod", nb: "Ugyldig eller allerede brukt kode"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.red)
-                    }
-                }
-                
-                Button {
-                    showLanding = false
-                    showSignupForm = false
-                    authViewModel.errorMessage = ""
-                } label: {
-                    Text(L.t(sv: "Har du redan ett konto? Logga in", nb: "Har du allerede en konto? Logg inn"))
-                        .font(.system(size: 15))
-                        .foregroundColor(secondaryTextColor)
-                }
+            Button {
+                showLanding = false
+                showSignupForm = false
+                authViewModel.errorMessage = ""
+            } label: {
+                Text(L.t(sv: "Har du redan ett konto? Logga in", nb: "Har du allerede en konto? Logg inn"))
+                    .font(.system(size: 15))
+                    .foregroundColor(secondaryTextColor)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
@@ -565,7 +479,7 @@ struct AuthenticationView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(L.t(sv: "Enbart studenter från Danderyds Gymnasium kan skapa konto just nu", nb: "Kun elever fra Danderyds Gymnasium kan opprette konto akkurat nå"))
+                    Text(L.t(sv: "Skapa konto med mail", nb: "Opprett konto med e-post"))
                         .font(.system(size: 26, weight: .bold))
                         .foregroundColor(primaryTextColor)
                         .padding(.top, 8)
@@ -608,71 +522,6 @@ struct AuthenticationView: View {
                     
                     if !authViewModel.errorMessage.isEmpty {
                         Text(authViewModel.errorMessage).font(.system(size: 14)).foregroundColor(.red)
-                    }
-                    
-                    // Invite code section
-                    if let code = pendingInviteCode {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(.green)
-                            Text(L.t(sv: "Inbjudningskod aktiv: \(code)", nb: "Invitasjonskode aktiv: \(code)"))
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.green)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(10)
-                    } else {
-                        if showInviteCodeField {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(L.t(sv: "Inbjudningskod", nb: "Invitasjonskode"))
-                                    .font(.system(size: 15))
-                                    .foregroundColor(primaryTextColor)
-                                HStack {
-                                    TextField(L.t(sv: "Ange kod", nb: "Skriv inn kode"), text: $inviteCodeInput)
-                                        .textInputAutocapitalization(.characters)
-                                        .autocorrectionDisabled()
-                                        .padding(14)
-                                        .background(Color(.systemGray6))
-                                        .cornerRadius(10)
-                                        .onChange(of: inviteCodeInput) { _, newValue in
-                                            inviteCodeValid = nil
-                                        }
-                                    
-                                    Button {
-                                        validateAndSetInviteCode()
-                                    } label: {
-                                        if isValidatingInvite {
-                                            ProgressView()
-                                                .frame(width: 44, height: 44)
-                                        } else {
-                                            Text(L.t(sv: "Aktivera", nb: "Aktiver"))
-                                                .font(.system(size: 15, weight: .semibold))
-                                                .foregroundColor(buttonTextColor)
-                                                .padding(.horizontal, 16)
-                                                .padding(.vertical, 14)
-                                                .background(buttonBackgroundColor)
-                                                .cornerRadius(10)
-                                        }
-                                    }
-                                    .disabled(inviteCodeInput.trimmingCharacters(in: .whitespaces).isEmpty || isValidatingInvite)
-                                }
-                                if let valid = inviteCodeValid, !valid {
-                                    Text(L.t(sv: "Ogiltig eller redan använd kod", nb: "Ugyldig eller allerede brukt kode"))
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.red)
-                                }
-                            }
-                        } else {
-                            Button {
-                                showInviteCodeField = true
-                            } label: {
-                                Text(L.t(sv: "Har du en inbjudningskod?", nb: "Har du en invitasjonskode?"))
-                                    .font(.system(size: 15))
-                                    .foregroundColor(primaryTextColor.opacity(0.7))
-                            }
-                        }
                     }
                     
                     Text(L.t(sv: "Genom att fortsätta godkänner du våra [Användarvillkor](https://www.upanddownapp.com/terms) och [Integritetspolicy](https://www.upanddownapp.com/privacy).", nb: "Ved å fortsette godtar du våre [Brukervilkår](https://www.upanddownapp.com/terms) og [Personvern](https://www.upanddownapp.com/privacy)."))
@@ -916,7 +765,9 @@ struct AuthenticationView: View {
     @ViewBuilder
     private func onboardingContent(for step: OnboardingStep) -> some View {
             switch step {
-            case .name:
+            case .school:
+            schoolStepContent
+        case .name:
             nameStepContent
         case .profilePicture:
             profilePictureStepContent
@@ -948,6 +799,97 @@ struct AuthenticationView: View {
     }
     
     // MARK: - Step Contents
+    
+    private var schoolStepContent: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 15))
+                TextField(L.t(sv: "Sök skola...", nb: "Søk skole..."), text: $onboardingSchoolSearch)
+                    .font(.system(size: 16))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !onboardingSchoolSearch.isEmpty {
+                    Button {
+                        onboardingSchoolSearch = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+            
+            Button {
+                onboardingSelectedSchoolDomain = nil
+                goToNextStep()
+            } label: {
+                Text(L.t(sv: "Hoppa över", nb: "Hopp over"))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(secondaryTextColor)
+            }
+            
+            if isLoadingSchools {
+                ProgressView()
+                    .padding(.top, 40)
+                Spacer()
+            } else {
+                let filtered = onboardingSchoolSearch.isEmpty ? onboardingSchoolList : onboardingSchoolList.filter {
+                    $0.name.localizedCaseInsensitiveContains(onboardingSchoolSearch) ||
+                    ($0.municipality?.localizedCaseInsensitiveContains(onboardingSchoolSearch) ?? false)
+                }
+                
+                ScrollView {
+                    LazyVStack(spacing: 6) {
+                        ForEach(filtered) { school in
+                            let isSelected = onboardingSelectedSchoolDomain == school.id
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    onboardingSelectedSchoolDomain = school.id
+                                }
+                            } label: {
+                                HStack {
+                                    Text(school.name)
+                                        .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+                                        .foregroundColor(isSelected ? primaryTextColor : secondaryTextColor)
+                                        .lineLimit(1)
+                                    
+                                    Spacer()
+                                    
+                                    if isSelected {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(selectedCardBackgroundColor)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(isSelected ? selectedCardBackgroundColor.opacity(0.1) : Color(.systemGray6))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isSelected ? selectedCardBackgroundColor : Color.clear, lineWidth: 1.5)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            guard onboardingSchoolList.isEmpty else { return }
+            isLoadingSchools = true
+            onboardingSchoolList = await SchoolService.shared.fetchAllSchools()
+            isLoadingSchools = false
+        }
+    }
+    
     private var nameStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
@@ -1090,6 +1032,12 @@ struct AuthenticationView: View {
                 .foregroundColor(.gray)
         }
     }
+    
+    // School selection (onboarding)
+    @State private var onboardingSchoolSearch: String = ""
+    @State private var onboardingSelectedSchoolDomain: String? = nil
+    @State private var onboardingSchoolList: [School] = []
+    @State private var isLoadingSchools = false
     
     // MARK: - Referral Code Step
     @State private var referralCodeInput: String = ""
@@ -1771,6 +1719,8 @@ struct AuthenticationView: View {
     // MARK: - Helper Functions
     private func canContinue(_ step: OnboardingStep) -> Bool {
         switch step {
+        case .school:
+            return onboardingSelectedSchoolDomain != nil
         case .name:
             return !data.firstName.trimmingCharacters(in: .whitespaces).isEmpty &&
                    data.firstName.count >= 2 &&
@@ -1806,6 +1756,18 @@ struct AuthenticationView: View {
         hapticFeedback()
         
         switch step {
+        case .school:
+            if let schoolId = onboardingSelectedSchoolDomain,
+               let userId = authViewModel.currentUser?.id {
+                Task {
+                    await SchoolService.shared.assignSchool(userId: userId, schoolId: schoolId)
+                    if var user = authViewModel.currentUser {
+                        user.verifiedSchoolEmail = "selected@\(schoolId)"
+                        await MainActor.run { authViewModel.currentUser = user }
+                    }
+                }
+            }
+            goToNextStep()
         case .profilePicture:
             // Save profile image to data
             print("📸 Saving profile image from selectedProfileImage: \(selectedProfileImage != nil ? "YES" : "NO")")
@@ -2001,36 +1963,8 @@ struct AuthenticationView: View {
         data.dailyFat = fat
     }
     
-    private func validateAndSetInviteCode() {
-        let code = inviteCodeInput.trimmingCharacters(in: .whitespaces).uppercased()
-        guard !code.isEmpty else { return }
-        
-        isValidatingInvite = true
-        Task {
-            let valid = await InviteService.shared.validateInviteCode(code: code)
-            await MainActor.run {
-                isValidatingInvite = false
-                inviteCodeValid = valid
-                if valid {
-                    pendingInviteCode = code
-                    authViewModel.pendingInviteCode = code
-                    authViewModel.errorMessage = ""
-                }
-            }
-        }
-    }
-    
     private func createAccountAndStartOnboarding() {
         let trimmedEmail = signupEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Danderyd domain restriction
-        let isAllowedDomain = trimmedEmail.lowercased().hasSuffix(AuthViewModel.allowedEmailDomain)
-        let hasValidInvite = pendingInviteCode != nil
-        
-        if !isAllowedDomain && !hasValidInvite {
-            authViewModel.errorMessage = AuthViewModel.domainRestrictionMessage
-            return
-        }
         
         Task {
             await MainActor.run {
@@ -2045,13 +1979,6 @@ struct AuthenticationView: View {
                 let placeholderUsername = "user-\(userId.prefix(6))"
                 let newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
                 try await ProfileService.shared.createUserProfile(newUser)
-                
-                // Redeem invite code if used
-                if let inviteCode = pendingInviteCode {
-                    let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
-                    if redeemed { print("✅ Invite code redeemed during signup") }
-                    await MainActor.run { pendingInviteCode = nil }
-                }
                 
                 await RevenueCatManager.shared.logInFor(appUserId: userId)
                 

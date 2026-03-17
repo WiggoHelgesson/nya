@@ -5,126 +5,30 @@ import Combine
 
 struct LivePhotoCaptureView: View {
     @Binding var capturedImage: UIImage?
-    var onCapture: (() -> Void)? = nil  // Callback when live photo is captured
+    var onCapture: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
     @StateObject private var cameraManager = DualCameraManager()
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var isCapturing = false
+    
+    private var titleText: String {
+        if cameraManager.combinedImage != nil {
+            return "Up&Down Live"
+        } else if cameraManager.frontPreviewImage != nil {
+            return L.t(sv: "Bild på din träning", nb: "Bilde av treningen din")
+        } else {
+            return L.t(sv: "Bild på dig", nb: "Bilde av deg")
+        }
+    }
     
     var body: some View {
         ZStack {
-            // Main camera preview
-            CameraPreviewView(session: cameraManager.session)
-                .ignoresSafeArea()
+            Color.black.ignoresSafeArea()
             
-            // UI Overlay
-            VStack {
-                // Top bar
-                HStack {
-                    // Close button
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    .padding(.leading, 16)
-                    
-                    Spacer()
-                    
-                    // Camera position indicator
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(cameraManager.currentPosition == .back ? Color.white : Color.white.opacity(0.3))
-                            .frame(width: 8, height: 8)
-                        Text(cameraManager.currentPosition == .back ? L.t(sv: "Bakkamera", nb: "Bakkamera") : L.t(sv: "Framkamera", nb: "Frontkamera"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                        Circle()
-                            .fill(cameraManager.currentPosition == .front ? Color.white : Color.white.opacity(0.3))
-                            .frame(width: 8, height: 8)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.4))
-                    .cornerRadius(20)
-                    .padding(.trailing, 16)
-                }
-                .padding(.top, 60)
-                
-                Spacer()
-                
-                // Capture status
-                if isCapturing {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.5)
-                        
-                        Text(cameraManager.capturePhase)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                    .padding(24)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(16)
-                }
-                
-                Spacer()
-                
-                // Up&Down Live label
-                Text("Up&Down Live")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(20)
-                
-                // Bottom controls
-                HStack(spacing: 40) {
-                    // Gallery button
-                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Image(systemName: "photo.on.rectangle")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                    
-                    // Capture button
-                    Button(action: startDualCapture) {
-                        ZStack {
-                            Circle()
-                                .stroke(Color.white, lineWidth: 4)
-                                .frame(width: 80, height: 80)
-                            
-                            Circle()
-                                .fill(isCapturing ? Color.gray : Color.white)
-                                .frame(width: 64, height: 64)
-                        }
-                    }
-                    .disabled(isCapturing)
-                    
-                    // Flip camera button
-                    Button(action: {
-                        cameraManager.flipCamera()
-                    }) {
-                        Image(systemName: "camera.rotate")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .frame(width: 56, height: 56)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                    .disabled(isCapturing)
-                }
-                .padding(.bottom, 50)
-                .padding(.top, 20)
+            if let combined = cameraManager.combinedImage {
+                reviewScreen(image: combined)
+            } else {
+                cameraScreen
             }
         }
         .onAppear {
@@ -138,34 +42,193 @@ struct LivePhotoCaptureView: View {
                     await MainActor.run {
                         let finalImage = createSingleImageOverlay(image: image)
                         capturedImage = finalImage
+                        onCapture?()
                         dismiss()
                     }
                 }
             }
         }
-        .onChange(of: cameraManager.combinedImage) { _, newImage in
-            if let newImage {
-                capturedImage = newImage
-                onCapture?()  // Mark as Up&Down Live photo
-                isCapturing = false
-                dismiss()
+    }
+    
+    // MARK: - Camera Screen
+    
+    private var cameraScreen: some View {
+        ZStack {
+            CameraPreviewView(session: cameraManager.session)
+                .ignoresSafeArea()
+            
+            VStack {
+                // Top bar
+                HStack {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .padding(.leading, 16)
+                    
+                    Spacer()
+                    
+                    Text(titleText)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.4))
+                        .cornerRadius(20)
+                    
+                    Spacer()
+                    
+                    if cameraManager.frontPreviewImage == nil {
+                        Button(action: { cameraManager.flipCamera() }) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                        .padding(.trailing, 16)
+                    } else {
+                        Color.clear.frame(width: 42, height: 42)
+                            .padding(.trailing, 16)
+                    }
+                }
+                .padding(.top, 60)
+                
+                Spacer()
+                
+                // Bottom controls
+                HStack(spacing: 40) {
+                    if cameraManager.frontPreviewImage == nil {
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 56)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
+                        }
+                    } else {
+                        Color.clear.frame(width: 56, height: 56)
+                    }
+                    
+                    Button(action: handleCaptureButton) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white, lineWidth: 4)
+                                .frame(width: 80, height: 80)
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 64, height: 64)
+                        }
+                    }
+                    
+                    Color.clear.frame(width: 56, height: 56)
+                }
+                .padding(.bottom, 50)
+                .padding(.top, 20)
+            }
+            
+            // Selfie overlay after first capture
+            if let selfie = cameraManager.frontPreviewImage {
+                VStack {
+                    HStack {
+                        Image(uiImage: selfie)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 130)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white, lineWidth: 3)
+                            )
+                            .shadow(color: .black.opacity(0.5), radius: 8, x: 2, y: 2)
+                            .padding(.leading, 30)
+                            .padding(.top, 130)
+                        Spacer()
+                    }
+                    Spacer()
+                }
             }
         }
     }
     
-    private func startDualCapture() {
-        isCapturing = true
-        cameraManager.startDualCapture()
+    // MARK: - Review Screen
+    
+    private func reviewScreen(image: UIImage) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .padding(.leading, 16)
+                
+                Spacer()
+                
+                Text("Up&Down Live")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Color.clear.frame(width: 42, height: 42)
+                    .padding(.trailing, 16)
+            }
+            .padding(.top, 60)
+            
+            Spacer()
+            
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal, 20)
+            
+            Spacer()
+            
+            Button(action: {
+                capturedImage = image
+                onCapture?()
+                dismiss()
+            }) {
+                Text(L.t(sv: "Publicera", nb: "Publiser"))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.white)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 50)
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func handleCaptureButton() {
+        if cameraManager.frontPreviewImage == nil {
+            cameraManager.captureFrontPhoto()
+        } else {
+            cameraManager.captureBackPhoto()
+        }
     }
     
     private func createSingleImageOverlay(image: UIImage) -> UIImage {
-        // Use 4:3 aspect ratio to match dual camera format
-        let size = CGSize(width: 1200, height: 900)
+        let size = CGSize(width: 900, height: 1200)
         
         UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
         defer { UIGraphicsEndImageContext() }
         
-        // Draw image - no overlay, just the image
         drawImageFill(image, in: CGRect(origin: .zero, size: size))
         
         return UIGraphicsGetImageFromCurrentImageContext() ?? image
@@ -193,33 +256,32 @@ struct LivePhotoCaptureView: View {
     
 }
 
-// MARK: - Dual Camera Manager (Sequential Capture)
+// MARK: - Dual Camera Manager (Two-Tap Manual Capture)
 
 class DualCameraManager: NSObject, ObservableObject {
     @Published var combinedImage: UIImage?
     @Published var isAuthorized = false
-    @Published var currentPosition: AVCaptureDevice.Position = .back
-    @Published var capturePhase: String = ""
+    @Published var currentPosition: AVCaptureDevice.Position = .front
+    @Published var frontPreviewImage: UIImage?
     
     let session = AVCaptureSession()
     private var photoOutput = AVCapturePhotoOutput()
     
     private var backImage: UIImage?
     private var frontImage: UIImage?
-    private var isCapturingDual = false
-    private var capturedFirstImage = false
+    private var isCapturingFront = true
     
     func checkPermissions() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
-            setupSession(position: .back)
+            setupSession(position: .front)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     self?.isAuthorized = granted
                     if granted {
-                        self?.setupSession(position: .back)
+                        self?.setupSession(position: .front)
                     }
                 }
             }
@@ -232,10 +294,8 @@ class DualCameraManager: NSObject, ObservableObject {
         session.beginConfiguration()
         session.sessionPreset = .photo
         
-        // Remove existing inputs
         session.inputs.forEach { session.removeInput($0) }
         
-        // Add camera input
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
               let input = try? AVCaptureDeviceInput(device: camera) else {
             session.commitConfiguration()
@@ -246,7 +306,6 @@ class DualCameraManager: NSObject, ObservableObject {
             session.addInput(input)
         }
         
-        // Add photo output if not already added
         if !session.outputs.contains(photoOutput) {
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
@@ -271,40 +330,25 @@ class DualCameraManager: NSObject, ObservableObject {
         setupSession(position: newPosition)
     }
     
-    func startDualCapture() {
-        self.backImage = nil
-        self.frontImage = nil
-        self.isCapturingDual = true
-        self.capturedFirstImage = false
-        
-        // Make sure we start with back camera
-        if currentPosition != .back {
-            setupSession(position: .back)
-            // Wait for session to stabilize
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.capturePhoto(phase: L.t(sv: "📸 Tar bild bakåt...", nb: "📸 Tar bilde bakover..."))
-            }
-        } else {
-            capturePhoto(phase: L.t(sv: "📸 Tar bild bakåt...", nb: "📸 Tar bilde bakover..."))
-        }
+    func captureFrontPhoto() {
+        isCapturingFront = true
+        frontImage = nil
+        backImage = nil
+        frontPreviewImage = nil
+        capturePhoto()
     }
     
-    private func capturePhoto(phase: String) {
-        DispatchQueue.main.async {
-            self.capturePhase = phase
-        }
-        
-        // Small delay to ensure camera is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+    func captureBackPhoto() {
+        isCapturingFront = false
+        capturePhoto()
+    }
+    
+    private func capturePhoto() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self = self else { return }
             
-            // Check if we have a valid connection
             guard let connection = self.photoOutput.connection(with: .video), connection.isActive else {
                 print("❌ No active video connection")
-                DispatchQueue.main.async {
-                    self.capturePhase = L.t(sv: "❌ Kamerafel", nb: "❌ Kamerafeil")
-                    self.isCapturingDual = false
-                }
                 return
             }
             
@@ -319,41 +363,30 @@ class DualCameraManager: NSObject, ObservableObject {
             return
         }
         
-        DispatchQueue.main.async {
-            self.capturePhase = L.t(sv: "🎨 Skapar bild...", nb: "🎨 Lager bilde...")
-        }
-        
-        // Use 4:3 aspect ratio (1200x900) - works well with 300px height display
-        let size = CGSize(width: 1200, height: 900)
+        let size = CGSize(width: 900, height: 1200)
         
         UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
         defer { UIGraphicsEndImageContext() }
         
-        // Draw back image (main image) - fill entire canvas
         drawImageFill(backImage, in: CGRect(origin: .zero, size: size))
         
-        // Draw front image (selfie) - positioned so it's visible when cropped
-        // Position further inward to avoid being cut off when displayed
-        let selfieWidth: CGFloat = 220
-        let selfieHeight: CGFloat = 290
+        let selfieWidth: CGFloat = 180
+        let selfieHeight: CGFloat = 240
         let selfieRect = CGRect(
-            x: 130,  // Inward enough to clear rounded-corner clipping in the feed
-            y: 180,
+            x: 50,
+            y: 60,
             width: selfieWidth,
             height: selfieHeight
         )
         
-        // Draw shadow
         let shadowRect = selfieRect.offsetBy(dx: 4, dy: 4)
         UIColor.black.withAlphaComponent(0.5).setFill()
         UIBezierPath(roundedRect: shadowRect, cornerRadius: 20).fill()
         
-        // Draw white border
         let borderRect = selfieRect.insetBy(dx: -4, dy: -4)
         UIColor.white.setFill()
         UIBezierPath(roundedRect: borderRect, cornerRadius: 24).fill()
         
-        // Clip and draw selfie
         let context = UIGraphicsGetCurrentContext()
         context?.saveGState()
         let clipPath = UIBezierPath(roundedRect: selfieRect, cornerRadius: 20)
@@ -361,14 +394,10 @@ class DualCameraManager: NSObject, ObservableObject {
         drawImageFill(frontImage, in: selfieRect)
         context?.restoreGState()
         
-        // NO stats or branding - just the two images!
-        
         let finalImage = UIGraphicsGetImageFromCurrentImageContext()
         
         DispatchQueue.main.async {
             self.combinedImage = finalImage
-            self.isCapturingDual = false
-            self.capturePhase = ""
         }
     }
     
@@ -398,10 +427,6 @@ extension DualCameraManager: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         if let error = error {
             print("❌ Photo capture error: \(error)")
-            DispatchQueue.main.async {
-                self.capturePhase = L.t(sv: "❌ Fel vid fotografering", nb: "❌ Feil ved fotografering")
-                self.isCapturingDual = false
-            }
             return
         }
         
@@ -411,43 +436,26 @@ extension DualCameraManager: AVCapturePhotoCaptureDelegate {
             return
         }
         
-        if !capturedFirstImage {
-            // First image captured (back camera)
-            print("✅ Back camera image captured")
-            backImage = image
-            capturedFirstImage = true
+        if isCapturingFront {
+            print("✅ Front camera (selfie) captured")
             
-            // Now switch to front camera and capture
-            DispatchQueue.main.async {
-                self.capturePhase = L.t(sv: "🔄 Byter till framkamera...", nb: "🔄 Bytter til frontkamera...")
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                self?.setupSession(position: .front)
-                
-                // Wait for front camera to be ready
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                    self?.capturePhoto(phase: L.t(sv: "📸 Tar selfie...", nb: "📸 Tar selfie..."))
-                }
-            }
-        } else {
-            // Second image captured (front camera)
-            print("✅ Front camera image captured")
-            
-            // Fix orientation for front camera (mirror)
             if let cgImage = image.cgImage {
                 frontImage = UIImage(cgImage: cgImage, scale: image.scale, orientation: .leftMirrored)
             } else {
                 frontImage = image
             }
             
-            // Create combined image
-            createCombinedImage()
+            DispatchQueue.main.async {
+                self.frontPreviewImage = self.frontImage
+            }
             
-            // Switch back to back camera for next time
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.setupSession(position: .back)
             }
+        } else {
+            print("✅ Back camera (training) captured")
+            backImage = image
+            createCombinedImage()
         }
     }
 }

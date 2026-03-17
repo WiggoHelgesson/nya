@@ -28,6 +28,7 @@ struct SocialContainerView: View {
     private let fetchThrottleInterval: TimeInterval = 30
     
     @State private var showEditProfile = false
+    @State private var profileUserIdToOpen: String? = nil
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -173,6 +174,7 @@ struct SocialContainerView: View {
                         .background(Color.black)
                     }
                     .buttonStyle(.plain)
+                    .zIndex(1)
                 }
                 
                 SocialView()
@@ -182,6 +184,15 @@ struct SocialContainerView: View {
             .navigationDestination(for: String.self) { conversationId in
                 DMNavigationWrapper(conversationId: conversationId)
                     .environmentObject(authViewModel)
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { profileUserIdToOpen != nil },
+                set: { if !$0 { profileUserIdToOpen = nil } }
+            )) {
+                if let userId = profileUserIdToOpen {
+                    UserProfileView(userId: userId)
+                        .environmentObject(authViewModel)
+                }
             }
         }
         .id(popToRootTrigger)
@@ -209,6 +220,15 @@ struct SocialContainerView: View {
                     dmNavigationPath.append(conversationId)
                 }
                 notificationNav.shouldNavigateToDirectMessage = nil
+            }
+        }
+        .onChange(of: notificationNav.shouldNavigateToUserProfile) { _, userId in
+            if let userId = userId {
+                dmNavigationPath = NavigationPath()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    profileUserIdToOpen = userId
+                }
+                notificationNav.shouldNavigateToUserProfile = nil
             }
         }
     }

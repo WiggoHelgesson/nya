@@ -278,7 +278,9 @@ struct UserProfileView: View {
                 Text(text)
                     .font(.system(size: 14))
                     .foregroundColor(.primary)
+                    .multilineTextAlignment(.leading)
             }
+            Spacer(minLength: 0)
         }
     }
     
@@ -467,8 +469,8 @@ struct UserProfileView: View {
                         .opacity(showHeader ? 1 : 0)
                         
                         if let schoolEmail = verifiedSchoolEmail,
-                           schoolEmail.lowercased().hasSuffix("@elev.danderyd.se") {
-                            Text("Danderyds gymnasium")
+                           let institutionName = SchoolService.institutionName(for: schoolEmail) {
+                            Text(institutionName)
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                                 .opacity(showHeader ? 1 : 0)
@@ -577,28 +579,43 @@ struct UserProfileView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 12)
                     
-                    // MARK: - Mutual Friends + Live Gallery + About/Chart/Compare
-                    Group {
-                        if !isOwnProfile && !mutualFriends.isEmpty {
-                            HStack(alignment: .center, spacing: 8) {
-                                HStack(spacing: -8) {
-                                    ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { index, friend in
-                                        Button { selectedMutualFriendId = friend.id } label: {
-                                            ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
-                                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-                                        }
-                                        .zIndex(Double(3 - index))
+                    if !isOwnProfile && !mutualFriends.isEmpty {
+                        HStack(alignment: .center, spacing: 8) {
+                            HStack(spacing: -8) {
+                                ForEach(Array(mutualFriends.prefix(3).enumerated()), id: \.offset) { index, friend in
+                                    Button { selectedMutualFriendId = friend.id } label: {
+                                        ProfileAvatarView(path: friend.avatarUrl ?? "", size: 28)
+                                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                                     }
+                                    .zIndex(Double(3 - index))
                                 }
-                                
-                                mutualFriendsLabel
-                                    .lineLimit(2)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 8)
-                            .opacity(showStats ? 1 : 0)
+                            
+                            mutualFriendsLabel
+                                .lineLimit(2)
                         }
-                        
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                        .opacity(showStats ? 1 : 0)
+                    }
+
+                    WeeklyHoursChart(
+                        weeklyHours: weeklyHours,
+                        dailyData: dailyActivityData
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .opacity(showChart ? 1 : 0)
+
+                    if !livePhotoPosts.isEmpty {
+                        PublicLiveWidget(posts: livePhotoPosts)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 4)
+                            .opacity(showStats ? 1 : 0)
+                    }
+                    
+                    // MARK: - Live Gallery + About/Chart/Compare
+                    Group {
                         if isOwnProfile || !userEvents.isEmpty {
                             EventsSliderView(
                                 events: userEvents,
@@ -608,22 +625,6 @@ struct UserProfileView: View {
                             )
                             .opacity(showHeader ? 1 : 0)
                         }
-                        
-                        if !livePhotoPosts.isEmpty {
-                            PublicProfileLiveGallery(
-                                posts: livePhotoPosts,
-                                selectedPost: $selectedLivePhotoPost
-                            )
-                            .opacity(showHeader ? 1 : 0)
-                        }
-                        
-                        WeeklyHoursChart(
-                            weeklyHours: weeklyHours,
-                            dailyData: dailyActivityData
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .opacity(showChart ? 1 : 0)
                         
                         // MARK: - Progress Photos Slider
                         if !progressPhotos.isEmpty || isOwnProfile {
@@ -670,6 +671,7 @@ struct UserProfileView: View {
                     Group {
                         if hasAboutData {
                             aboutSection
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                                 .opacity(showHeader ? 1 : 0)
@@ -1377,29 +1379,70 @@ struct ActivityBarChart: View {
 
 // MARK: - Public Profile Live Gallery
 
-struct PublicProfileLiveGallery: View {
+struct PublicLiveWidget: View {
     let posts: [SocialWorkoutPost]
-    @Binding var selectedPost: SocialWorkoutPost?
-    
+    @State private var showCalendar = false
+
+    private var latestPost: SocialWorkoutPost? { posts.first }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                ForEach(posts) { post in
-                    if let userImageUrl = post.userImageUrl {
-                        Button {
-                            selectedPost = post
-                        } label: {
-                            LivePhotoGridImage(path: userImageUrl)
-                                .frame(width: 100, height: 100)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                }
+                Image("23")
+                    .resizable().scaledToFit()
+                    .frame(width: 22, height: 22).cornerRadius(5)
+                Text("Up&Down LIVE")
+                    .font(.system(size: 17, weight: .bold))
+                Spacer()
+                Text("\(posts.count)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+
+            if let imageUrl = latestPost?.userImageUrl {
+                Button { showCalendar = true } label: {
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay(
+                            LivePhotoGridImage(path: imageUrl)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.35))
+                        )
+                        .overlay(
+                            VStack(spacing: 8) {
+                                Image("23").resizable().scaledToFit()
+                                    .frame(width: 44, height: 44).cornerRadius(10)
+                                Text("Up&Down Live")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(14)
         .background(Color(.systemGray6))
+        .cornerRadius(16)
+        .task {
+            guard let url = latestPost?.userImageUrl,
+                  ImageCacheManager.shared.getImage(for: url) == nil,
+                  let imageUrl = URL(string: url) else { return }
+            if let (data, _) = try? await SupabaseConfig.urlSession.data(from: imageUrl),
+               let img = UIImage(data: data) {
+                ImageCacheManager.shared.setImage(img, for: url)
+            }
+        }
+        .sheet(isPresented: $showCalendar) {
+            LiveCalendarView(posts: posts)
+        }
     }
 }
 

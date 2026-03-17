@@ -98,13 +98,6 @@ final class UppyService {
             .execute()
             .value
         
-        // Send push notification
-        try await NotificationService.shared.sendUppyNotification(
-            toUserId: toUserId,
-            fromUserName: fromUserName,
-            uppyCount: allUppys.count
-        )
-        
         // Award bonus points if reached 3 uppys
         if allUppys.count == 3 {
             print("🎉 3 Uppys reached! Awarding 10 bonus points")

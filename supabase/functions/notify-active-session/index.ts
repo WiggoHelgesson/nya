@@ -192,8 +192,8 @@ serve(async (req) => {
       activityText = "skidpass";
     }
 
-    const title = `${firstName} startade ${articleWord} ${activityText}`;
-    const body = "Gå in och pusha på!! 💪";
+    const title = "Nytt träningspass";
+    const body = `${firstName} startade ${articleWord} ${activityText}`;
 
     // Send push notifications to all followers
     const results = await Promise.all(

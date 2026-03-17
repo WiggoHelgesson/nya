@@ -40,9 +40,6 @@ struct ProfileActivitiesView: View {
     @State private var myEvents: [Event] = []
     @State private var showCreateEvent = false
     @State private var selectedEvent: Event? = nil
-    @State private var availableInviteCount = 0
-    @State private var showInviteView = false
-    
     private let statsLoadThrottle: TimeInterval = 60
     
     // Computed property to handle empty or nil name
@@ -167,9 +164,8 @@ struct ProfileActivitiesView: View {
                             .font(.system(size: 22, weight: .bold))
                         
                         if let user = authViewModel.currentUser,
-                           (user.verifiedSchoolEmail?.lowercased().hasSuffix("@elev.danderyd.se") == true
-                            || user.email.lowercased().hasSuffix("@elev.danderyd.se")) {
-                            Text("Danderyds gymnasium")
+                           let name = SchoolService.institutionName(for: user.verifiedSchoolEmail ?? user.email) {
+                            Text(name)
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
                         }
@@ -251,42 +247,34 @@ struct ProfileActivitiesView: View {
                         }
                     }
                     
-                    // MARK: - Invite Friends Button
-                    if availableInviteCount > 0 {
-                        Button {
-                            showInviteView = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "envelope.badge.person.crop")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 36, height: 36)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
-                                
-                                Text(L.t(
-                                    sv: "Bjud in \(availableInviteCount) vän\(availableInviteCount == 1 ? "" : "ner") till Up&Down",
-                                    nb: "Inviter \(availableInviteCount) venn\(availableInviteCount == 1 ? "" : "er") til Up&Down"
-                                ))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(Color(.systemGray3))
-                            }
-                            .padding(12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 0.5)
-                            )
+                    // MARK: - XP Box
+                    HStack(spacing: 16) {
+                        // Logo/Icon
+                        Image("23")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 56, height: 56)
+                            .cornerRadius(10)
+                        
+                        // XP Text
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
+                                .font(.system(size: 18, weight: .bold))
                         }
+                        
+                        Spacer()
                     }
-
+                    .padding(16)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary, lineWidth: 2)
+                    )
+                    
+                    // MARK: - Up&Down Live Gallery
+                    UpAndDownLiveGallery(posts: myPostsViewModel.posts)
+                    
                     // MARK: - Friends Grid
                     if !friendUsers.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -323,31 +311,6 @@ struct ProfileActivitiesView: View {
                         }
                         .padding(.top, 4)
                     }
-                    
-                    // MARK: - XP Box
-                    HStack(spacing: 16) {
-                        // Logo/Icon
-                        Image("23")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 56, height: 56)
-                            .cornerRadius(10)
-                        
-                        // XP Text
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(formatNumber(authViewModel.currentUser?.currentXP ?? 0)) Poäng")
-                                .font(.system(size: 18, weight: .bold))
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(16)
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.primary, lineWidth: 2)
-                    )
                     
                     // MARK: - Action Buttons (2 rows of 2)
                     VStack(spacing: 10) {
@@ -389,9 +352,6 @@ struct ProfileActivitiesView: View {
                         onCreateTapped: { showCreateEvent = true },
                         onEventTapped: { event in selectedEvent = event }
                     )
-                    
-                    // MARK: - Up&Down Live Gallery
-                    UpAndDownLiveGallery(posts: myPostsViewModel.posts)
                     
                     // MARK: - Recovery Zone
                     if let userId = authViewModel.currentUser?.id {
@@ -569,26 +529,12 @@ struct ProfileActivitiesView: View {
                 guard let newItem else { return }
                 Task { await uploadAvatar(newItem) }
             }
-            .navigationDestination(isPresented: $showInviteView) {
-                InviteView()
-                    .environmentObject(authViewModel)
-            }
             .task {
                 // Load banner URL
                 bannerUrl = authViewModel.currentUser?.bannerUrl
                 
                 // Update premium status
                 isPremium = RevenueCatManager.shared.isProMember
-                
-                // Load invite count
-                if let userId = authViewModel.currentUser?.id {
-                    do {
-                        let invites = try await InviteService.shared.getMyInvites(userId: userId)
-                        availableInviteCount = invites.filter { !$0.isUsed }.count
-                    } catch {
-                        print("⚠️ Failed to load invite count: \(error)")
-                    }
-                }
                 
                 // Load profile observer first (non-async)
                 profileObserver = NotificationCenter.default.addObserver(
@@ -950,156 +896,105 @@ struct ImagePicker: UIViewControllerRepresentable {
 }
 
 // MARK: - Up&Down Live Gallery
+// MARK: - Up&Down Live Gallery (compact entry widget)
 struct UpAndDownLiveGallery: View {
     let posts: [SocialWorkoutPost]
-    @State private var showAll = false
-    
-    private let maxVisible = 9
-    
+    @State private var showCalendar = false
+
     private var postsWithImages: [SocialWorkoutPost] {
         posts.filter { post in
-            if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
-                return userImageUrl.contains("live_")
+            if let url = post.userImageUrl, !url.isEmpty {
+                return url.contains("live_")
             }
             return false
         }
     }
-    
-    private var visiblePosts: [SocialWorkoutPost] {
-        showAll ? postsWithImages : Array(postsWithImages.prefix(maxVisible))
+
+    private var latestPost: SocialWorkoutPost? {
+        postsWithImages.first
     }
-    
-    private var imageRows: [[SocialWorkoutPost]] {
-        var rows: [[SocialWorkoutPost]] = []
-        var currentRow: [SocialWorkoutPost] = []
-        
-        for post in visiblePosts {
-            currentRow.append(post)
-            if currentRow.count == 3 {
-                rows.append(currentRow)
-                currentRow = []
-            }
-        }
-        
-        if !currentRow.isEmpty {
-            rows.append(currentRow)
-        }
-        
-        return rows
-    }
-    
-    private let sectionBackground = Color(.systemGray6)
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack(spacing: 8) {
                 Image("23")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 28, height: 28)
-                    .cornerRadius(6)
-                
-                Text("Up&Down Live")
-                    .font(.system(size: 18, weight: .bold))
+                    .frame(width: 22, height: 22)
+                    .cornerRadius(5)
+                Text("Up&Down LIVE")
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.primary)
-                
                 Spacer()
-                
-                Text("\(postsWithImages.count)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
+                if !postsWithImages.isEmpty {
+                    Text("\(postsWithImages.count)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 8)
-            
+
             if postsWithImages.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray.opacity(0.5))
-                    
+                        .font(.system(size: 36))
+                        .foregroundColor(.gray.opacity(0.4))
                     Text(L.t(sv: "Inga Up&Down Live bilder än", nb: "Ingen Up&Down Live-bilder ennå"))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.gray)
-                    
                     Text(L.t(sv: "Ta en bild med Up&Down Live efter ditt nästa pass!", nb: "Ta et bilde med Up&Down Live etter din neste økt!"))
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundColor(.gray.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(Array(imageRows.enumerated()), id: \.offset) { rowIndex, row in
-                        HStack(spacing: 8) {
-                            ForEach(row) { post in
-                                LivePhotoCell(post: post)
+                .padding(.vertical, 32)
+            } else if let latest = latestPost, let imageUrl = latest.userImageUrl {
+                Button { showCalendar = true } label: {
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay(
+                            LivePhotoGridImage(path: imageUrl)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.35))
+                        )
+                        .overlay(
+                            VStack(spacing: 8) {
+                                Image("23")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 44, height: 44)
+                                    .cornerRadius(10)
+                                Text("Up&Down Live")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
                             }
-                            
-                            if row.count < 3 {
-                                ForEach(0..<(3 - row.count), id: \.self) { _ in
-                                    Rectangle()
-                                        .fill(Color.clear)
-                                        .aspectRatio(1, contentMode: .fit)
-                                }
-                            }
-                        }
-                    }
-                    
-                    if !showAll && postsWithImages.count > maxVisible {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showAll = true
-                            }
-                        } label: {
-                            Text(L.t(sv: "Visa mer (\(postsWithImages.count - maxVisible) till)", nb: "Vis mer (\(postsWithImages.count - maxVisible) til)"))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(10)
-                        }
-                        .padding(.horizontal, 4)
-                    }
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .padding(8)
+                .buttonStyle(.plain)
             }
         }
-        .padding(8)
-        .background(sectionBackground)
+        .padding(14)
+        .background(Color(.systemGray6))
         .cornerRadius(16)
-    }
-}
-
-// MARK: - Live Photo Cell
-struct LivePhotoCell: View {
-    let post: SocialWorkoutPost
-    @State private var showDetail = false
-    
-    var body: some View {
-        Button(action: {
-            showDetail = true
-        }) {
-            GeometryReader { geo in
-                // Use userImageUrl for Up&Down Live photos
-                if let userImageUrl = post.userImageUrl, userImageUrl.contains("live_") {
-                    LivePhotoGridImage(path: userImageUrl)
-                        .frame(width: geo.size.width, height: geo.size.width)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(width: geo.size.width, height: geo.size.width)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
+        .task {
+            guard let url = latestPost?.userImageUrl,
+                  ImageCacheManager.shared.getImage(for: url) == nil,
+                  let imageUrl = URL(string: url) else { return }
+            if let (data, _) = try? await SupabaseConfig.urlSession.data(from: imageUrl),
+               let img = UIImage(data: data) {
+                ImageCacheManager.shared.setImage(img, for: url)
             }
-            .aspectRatio(1, contentMode: .fit)
         }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $showDetail) {
-            LivePhotoDetailView(post: post)
+        .sheet(isPresented: $showCalendar) {
+            LiveCalendarView(posts: postsWithImages)
         }
     }
 }
@@ -1107,146 +1002,403 @@ struct LivePhotoCell: View {
 // MARK: - Live Photo Grid Image (fills cell properly)
 struct LivePhotoGridImage: View {
     let path: String
+    var contentMode: ContentMode = .fill
     @State private var image: UIImage?
     @State private var isLoading = true
-    
+
     var body: some View {
         ZStack {
             Color.black
-            
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
             } else if isLoading {
-                ProgressView()
-                    .tint(.white)
+                ProgressView().tint(.white)
             }
         }
-        .task {
-            await loadImage()
-        }
+        .task { await loadImage() }
     }
-    
+
     private func loadImage() async {
-        // Check cache first
         if let cached = ImageCacheManager.shared.getImage(for: path) {
-            await MainActor.run {
-                self.image = cached
-                self.isLoading = false
-            }
+            await MainActor.run { self.image = cached; self.isLoading = false }
             return
         }
-        
-        // Load from URL
-        guard let url = URL(string: path) else {
-            isLoading = false
-            return
-        }
-        
+        guard let url = URL(string: path) else { await MainActor.run { isLoading = false }; return }
         do {
             let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
-            if let loadedImage = UIImage(data: data) {
-                ImageCacheManager.shared.setImage(loadedImage, for: path)
-                await MainActor.run {
-                    self.image = loadedImage
-                    self.isLoading = false
-                }
+            if let loaded = UIImage(data: data) {
+                ImageCacheManager.shared.setImage(loaded, for: path)
+                await MainActor.run { self.image = loaded; self.isLoading = false }
             }
         } catch {
-            await MainActor.run {
-                self.isLoading = false
-            }
+            await MainActor.run { self.isLoading = false }
         }
     }
 }
 
-// MARK: - Live Photo Detail View
-struct LivePhotoDetailView: View {
-    let post: SocialWorkoutPost
+// MARK: - Live Calendar View
+private struct YearMonth: Hashable {
+    let year: Int
+    let month: Int
+}
+
+struct LiveCalendarView: View {
+    let posts: [SocialWorkoutPost]
     @Environment(\.dismiss) private var dismiss
-    
+    @State private var selectedPost: SocialWorkoutPost? = nil
+    @State private var months: [YearMonth] = []
+    @State private var postsByDay: [String: SocialWorkoutPost] = [:]
+
+    private let calendar = Calendar(identifier: .gregorian)
+    private let weekdaySymbols = ["MÅN", "TIS", "ONS", "TORS", "FRE", "LÖR", "SÖN"]
+
+    private let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "sv_SE")
+        f.dateFormat = "MMMM yyyy"
+        return f
+    }()
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
-            VStack {
-                // Close button
+
+            VStack(spacing: 0) {
+                // Navigation bar
                 HStack {
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .medium))
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
-                            .padding(12)
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
+                            .padding(10)
                     }
-                    .padding(.trailing, 16)
-                    .padding(.top, 50)
-                }
-                
-                Spacer()
-                
-                // Image - use userImageUrl for Up&Down Live photos
-                if let userImageUrl = post.userImageUrl, userImageUrl.contains("live_") {
-                    LocalAsyncImage(path: userImageUrl)
-                        .scaledToFit()
-                        .cornerRadius(16)
-                        .padding(.horizontal, 16)
-                }
-                
-                Spacer()
-                
-                // Info
-                VStack(spacing: 8) {
-                    Text(post.title ?? "Träningspass")
-                        .font(.system(size: 18, weight: .bold))
+                    Spacer()
+                    Text("Minnen")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                    
-                    HStack(spacing: 16) {
-                        if let distance = post.distance, distance > 0 {
-                            Label(String(format: "%.2f km", distance), systemImage: "figure.run")
-                                .foregroundColor(.white.opacity(0.8))
+                    Spacer()
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+
+                // Weekday header
+                HStack(spacing: 0) {
+                    ForEach(weekdaySymbols, id: \.self) { day in
+                        Text(day)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 32) {
+                            ForEach(months, id: \.self) { yearMonth in
+                                monthSection(year: yearMonth.year, month: yearMonth.month)
+                                    .id("\(yearMonth.year)-\(yearMonth.month)")
+                            }
                         }
-                        
-                        if let duration = post.duration, duration > 0 {
-                            Label(formatDuration(duration), systemImage: "clock")
-                                .foregroundColor(.white.opacity(0.8))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                    }
+                    .onChange(of: months) { _ in
+                        let now = Date()
+                        let comps = calendar.dateComponents([.year, .month], from: now)
+                        if let y = comps.year, let m = comps.month {
+                            proxy.scrollTo("\(y)-\(m)", anchor: .top)
                         }
                     }
-                    .font(.system(size: 14))
-                    
-                    Text(formatDate(post.createdAt))
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.6))
                 }
-                .padding(.bottom, 50)
+            }
+        }
+        .task {
+            await buildCalendarData()
+        }
+        .sheet(item: $selectedPost) { post in
+            LivePhotoFullscreenView(post: post)
+        }
+    }
+
+    private func buildCalendarData() async {
+        let cal = Calendar(identifier: .gregorian)
+        let postsSnapshot = posts
+
+        let computedMonths: [YearMonth] = await Task.detached(priority: .userInitiated) {
+            guard let first = postsSnapshot.last else { return [] }
+            guard let firstDate = Self.parseDateStatic(first.createdAt) else { return [] }
+            let now = Date()
+            var result: [YearMonth] = []
+            var comps = cal.dateComponents([.year, .month], from: firstDate)
+            let nowComps = cal.dateComponents([.year, .month], from: now)
+            while true {
+                guard let y = comps.year, let m = comps.month else { break }
+                result.append(YearMonth(year: y, month: m))
+                if y == nowComps.year && m == nowComps.month { break }
+                comps.month = m + 1
+                if comps.month! > 12 { comps.month = 1; comps.year = y + 1 }
+            }
+            return result
+        }.value
+
+        let computedPostsByDay: [String: SocialWorkoutPost] = await Task.detached(priority: .userInitiated) {
+            var map: [String: SocialWorkoutPost] = [:]
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            for post in postsSnapshot {
+                if let date = Self.parseDateStatic(post.createdAt) {
+                    let key = fmt.string(from: date)
+                    if map[key] == nil { map[key] = post }
+                }
+            }
+            return map
+        }.value
+
+        await MainActor.run {
+            self.months = computedMonths
+            self.postsByDay = computedPostsByDay
+        }
+    }
+
+    private static func parseDateStatic(_ isoString: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: isoString) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: isoString)
+    }
+
+    @ViewBuilder
+    private func monthSection(year: Int, month: Int) -> some View {
+        let dateForMonth = calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
+        let title = monthFormatter.string(from: dateForMonth).capitalized
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            let days = daysInMonth(year: year, month: month)
+            let firstWeekday = firstWeekdayOffset(year: year, month: month)
+            let totalCells = firstWeekday + days
+            let rows = Int(ceil(Double(totalCells) / 7.0))
+
+            VStack(spacing: 4) {
+                ForEach(0..<rows, id: \.self) { row in
+                    HStack(spacing: 4) {
+                        ForEach(0..<7, id: \.self) { col in
+                            let cellIndex = row * 7 + col
+                            let day = cellIndex - firstWeekday + 1
+                            if day < 1 || day > days {
+                                Color.clear.frame(maxWidth: .infinity).aspectRatio(3/4, contentMode: .fit)
+                            } else {
+                                dayCellView(year: year, month: month, day: day)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-    
-    private func formatDuration(_ seconds: Int) -> String {
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        let secs = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+
+    @ViewBuilder
+    private func dayCellView(year: Int, month: Int, day: Int) -> some View {
+        let key = String(format: "%04d-%02d-%02d", year, month, day)
+        if let post = postsByDay[key], let imageUrl = post.userImageUrl {
+            Button {
+                selectedPost = post
+            } label: {
+                GeometryReader { geo in
+                    ZStack(alignment: .bottom) {
+                        LivePhotoGridImage(path: imageUrl)
+                            .frame(width: geo.size.width, height: geo.size.width * 4 / 3)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        // Day number overlay
+                        Text("\(day)")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.6), radius: 2, x: 0, y: 1)
+                            .padding(.bottom, 4)
+                    }
+                }
+                .aspectRatio(3/4, contentMode: .fit)
+            }
+            .buttonStyle(.plain)
         } else {
-            return String(format: "%d:%02d", minutes, secs)
+            GeometryReader { geo in
+                Text("\(day)")
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
+                    .frame(width: geo.size.width, height: geo.size.width * 4 / 3, alignment: .center)
+            }
+            .aspectRatio(3/4, contentMode: .fit)
         }
     }
-    
-    private func formatDate(_ isoString: String) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        guard let date = isoFormatter.date(from: isoString) else { return "" }
-        
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "d MMM yyyy"
-        return formatter.string(from: date)
+
+    private func daysInMonth(year: Int, month: Int) -> Int {
+        let comps = DateComponents(year: year, month: month)
+        guard let date = calendar.date(from: comps),
+              let range = calendar.range(of: .day, in: .month, for: date) else { return 30 }
+        return range.count
+    }
+
+    // Returns 0-based offset from Monday (Monday = 0)
+    private func firstWeekdayOffset(year: Int, month: Int) -> Int {
+        let comps = DateComponents(year: year, month: month, day: 1)
+        guard let date = calendar.date(from: comps) else { return 0 }
+        // Calendar.weekday: 1=Sun, 2=Mon, …, 7=Sat
+        let raw = calendar.component(.weekday, from: date)
+        return (raw + 5) % 7 // convert to Mon=0
+    }
+
+}
+
+// MARK: - Live Photo Fullscreen View
+struct LivePhotoFullscreenView: View {
+    let post: SocialWorkoutPost
+    @Environment(\.dismiss) private var dismiss
+    @State private var likers: [UserSearchResult] = []
+    @State private var isLoadingLikers = true
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Top bar
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(10)
+                    }
+
+                    Spacer()
+
+                    VStack(spacing: 2) {
+                        Text(formattedWeekday(post.createdAt))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(formattedTime(post.createdAt))
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+
+                    Spacer()
+
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 8)
+
+                // Photo (fit to screen width, natural aspect ratio)
+                if let imageUrl = post.userImageUrl {
+                    LivePhotoGridImage(path: imageUrl, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            LinearGradient(
+                                colors: [.clear, Color.black.opacity(0.25)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                }
+
+                // RealMojis / Likers section
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Text("Up&Down")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("\(post.likeCount ?? 0)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 20)
+
+                    if isLoadingLikers {
+                        HStack {
+                            ProgressView().tint(.white).padding(.horizontal, 20)
+                            Spacer()
+                        }
+                    } else if likers.isEmpty {
+                        Text(L.t(sv: "Inga gillningar än", nb: "Ingen likes ennå"))
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(.horizontal, 20)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                ForEach(likers) { liker in
+                                    VStack(spacing: 6) {
+                                        ProfileAvatarView(
+                                            path: liker.avatarUrl ?? "",
+                                            size: 52
+                                        )
+                                        Text(liker.name.components(separatedBy: " ").first ?? liker.name)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.85))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                }
+                .padding(.top, 16)
+
+                Spacer()
+            }
+        }
+        .task {
+            do {
+                likers = try await SocialService.shared.getTopPostLikers(postId: post.id, limit: 20)
+            } catch {
+                print("⚠️ Failed to load likers: \(error)")
+            }
+            isLoadingLikers = false
+        }
+    }
+
+    private func formattedWeekday(_ iso: String) -> String {
+        guard let date = parseDate(iso) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "sv_SE")
+        f.dateFormat = "EEEE d MMM. yyyy"
+        return f.string(from: date).capitalized
+    }
+
+    private func formattedTime(_ iso: String) -> String {
+        guard let date = parseDate(iso) else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+
+    private func parseDate(_ isoString: String) -> Date? {
+        let formatters: [ISO8601DateFormatter] = [
+            { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f }(),
+            { let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f }(),
+        ]
+        for f in formatters { if let d = f.date(from: isoString) { return d } }
+        return nil
     }
 }
+
+// MARK: - Live Photo Detail View (legacy alias)
+typealias LivePhotoDetailView = LivePhotoFullscreenView
 
 // MARK: - Helper Functions
 func formatNumber(_ number: Int) -> String {

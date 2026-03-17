@@ -23,6 +23,8 @@ struct AppNotification: Identifiable, Codable {
         case coachProgramAssigned
         case trainerChatMessage
         case coachScheduleUpdated
+        case progressPhoto
+        case profileUpdate
         case unknown(String)
         
         init(rawValue: String) {
@@ -36,6 +38,8 @@ struct AppNotification: Identifiable, Codable {
             case "coach_program_assigned": self = .coachProgramAssigned
             case "trainer_chat_message": self = .trainerChatMessage
             case "coach_schedule_updated": self = .coachScheduleUpdated
+            case "progress_photo": self = .progressPhoto
+            case "profile_update": self = .profileUpdate
             default: self = .unknown(rawValue)
             }
         }
@@ -51,6 +55,8 @@ struct AppNotification: Identifiable, Codable {
             case .coachProgramAssigned: return "coach_program_assigned"
             case .trainerChatMessage: return "trainer_chat_message"
             case .coachScheduleUpdated: return "coach_schedule_updated"
+            case .progressPhoto: return "progress_photo"
+            case .profileUpdate: return "profile_update"
             case .unknown(let value): return value
             }
         }
@@ -155,6 +161,10 @@ struct AppNotification: Identifiable, Codable {
             return "\(actorUsername ?? "Din tränare") skickade ett meddelande"
         case .coachScheduleUpdated:
             return "\(actorUsername ?? "Din tränare") uppdaterade ditt schema"
+        case .progressPhoto:
+            return "\(actorUsername ?? "Någon") la till nya progressbilder på sin profil"
+        case .profileUpdate:
+            return "Kolla vad \(actorUsername ?? "någon") har lagt till på sin profil"
         case .unknown:
             return "\(actorUsername ?? "Någon") skickade en ny notis"
         }
@@ -180,6 +190,10 @@ struct AppNotification: Identifiable, Codable {
             return "message.fill"
         case .coachScheduleUpdated:
             return "calendar.badge.clock"
+        case .progressPhoto:
+            return "photo.on.rectangle"
+        case .profileUpdate:
+            return "person.crop.circle.badge.checkmark"
         case .unknown:
             return "bell.fill"
         }
@@ -205,6 +219,10 @@ struct AppNotification: Identifiable, Codable {
             return "blue"
         case .coachScheduleUpdated:
             return "orange"
+        case .progressPhoto:
+            return "teal"
+        case .profileUpdate:
+            return "blue"
         case .unknown:
             return "gray"
         }

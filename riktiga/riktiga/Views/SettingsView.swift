@@ -16,19 +16,19 @@ struct SettingsView: View {
     @State private var showAnnouncement = false
     @State private var hasLoadedOnce = false
     @State private var showReferralView = false
-    @State private var showInviteView = false
     @StateObject private var stravaService = StravaService.shared
     @ObservedObject private var languageManager = LanguageManager.shared
     @State private var showStravaDisconnectConfirmation = false
     @State private var showNutritionOnboarding = false
     @State private var showPersonalDetails = false
+    @State private var showSchoolPicker = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     prenumerationSection
-                    bjudInVannerSection
+                    dinSkolaSection
                     dittKontoSection
                     kopplingarSection
                     sprakSection
@@ -82,10 +82,6 @@ struct SettingsView: View {
             }
             .navigationDestination(isPresented: $showReferralView) {
                 ReferralView()
-                    .environmentObject(authViewModel)
-            }
-            .navigationDestination(isPresented: $showInviteView) {
-                InviteView()
                     .environmentObject(authViewModel)
             }
             .navigationDestination(isPresented: $showPersonalDetails) {
@@ -189,71 +185,56 @@ struct SettingsView: View {
         }
     }
     
-    private var bjudInVannerSection: some View {
+    private var dinSkolaSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L.t(sv: "Bjud in vänner", nb: "Inviter venner"))
+            Text(L.t(sv: "Din skola", nb: "Din skole"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
             
-            VStack(spacing: 1) {
-                Button(action: { showInviteView = true }) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "envelope.badge.person.crop")
-                            .font(.system(size: 20))
-                            .foregroundColor(.primary)
-                            .frame(width: 24)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L.t(sv: "Dina inbjudningar", nb: "Dine invitasjoner"))
-                                .font(.system(size: 16, weight: .medium))
+            Button(action: { showSchoolPicker = true }) {
+                HStack(spacing: 14) {
+                    Image(systemName: "graduationcap.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.primary)
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let user = authViewModel.currentUser,
+                           let schoolName = SchoolService.shared.schoolName(for: user) {
+                            Text(schoolName)
+                                .font(.system(size: 16))
                                 .foregroundColor(.primary)
-                            
-                            Text(L.t(sv: "Bjud in vänner utanför Danderyds Gymnasium", nb: "Inviter venner utenfor Danderyds Gymnasium"))
+                            Text(L.t(sv: "Tryck för att byta skola", nb: "Trykk for å bytte skole"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text(L.t(sv: "Ingen skola vald", nb: "Ingen skole valgt"))
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                            Text(L.t(sv: "Tryck för att välja skola", nb: "Trykk for å velge skole"))
                                 .font(.system(size: 13))
                                 .foregroundColor(.secondary)
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color(.systemGray3))
                     }
-                    .padding(16)
-                    .background(Color(.systemBackground))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(.systemGray3))
                 }
-                
-                Divider().padding(.leading, 54)
-                
-                Button(action: { showReferralView = true }) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 20))
-                            .foregroundColor(.primary)
-                            .frame(width: 24)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(L.t(sv: "Referera en vän och tjäna", nb: "Refer en venn og tjen"))
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-                            
-                            Text(L.t(sv: "Tjäna 40% på alla köp din vän gör", nb: "Tjen 40% på alle kjøp vennen din gjør"))
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color(.systemGray3))
-                    }
-                    .padding(16)
-                    .background(Color(.systemBackground))
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
+            .background(Color(.systemBackground))
             .cornerRadius(12)
+        }
+        .sheet(isPresented: $showSchoolPicker) {
+            SchoolVerificationView(isVerified: .constant(true)) {
+                showSchoolPicker = false
+            }
+            .environmentObject(authViewModel)
         }
     }
     

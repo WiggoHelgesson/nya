@@ -1,13 +1,85 @@
 import Foundation
 import Supabase
 
+struct School: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let type: String
+    let status: String
+    let municipality: String?
+}
+
 class SchoolService {
     static let shared = SchoolService()
     private let supabase = SupabaseConfig.supabase
     
     private init() {}
     
-    static let schoolDomain = "@elev.danderyd.se"
+    // MARK: - Cached school list
+    
+    private static var cachedSchools: [School]?
+    
+    func fetchAllSchools() async -> [School] {
+        if let cached = Self.cachedSchools {
+            return cached
+        }
+        
+        do {
+            let schools: [School] = try await supabase
+                .from("schools")
+                .select("id, name, type, status, municipality")
+                .eq("status", value: "AKTIV")
+                .order("name")
+                .execute()
+                .value
+            
+            Self.cachedSchools = schools
+            return schools
+        } catch {
+            print("⚠️ Failed to fetch schools: \(error)")
+            return Self.fallbackSchools
+        }
+    }
+    
+    static let allowedDomains = AuthViewModel.allowedEmailDomains
+    
+    static func isAllowedDomain(_ email: String) -> Bool {
+        let lower = email.lowercased()
+        return allowedDomains.contains { lower.hasSuffix($0) }
+    }
+    
+    static let institutionNames: [String: String] = [
+        "elev.danderyd.se": "Danderyds gymnasium",
+        "uu.se": "Uppsala universitet",
+        "lu.se": "Lunds universitet",
+        "su.se": "Stockholms universitet",
+        "gu.se": "Göteborgs universitet",
+        "umu.se": "Umeå universitet",
+        "liu.se": "Linköpings universitet",
+        "ki.se": "Karolinska Institutet",
+        "kth.se": "KTH",
+        "chalmers.se": "Chalmers",
+        "ltu.se": "Luleå tekniska universitet",
+        "kau.se": "Karlstads universitet",
+        "lnu.se": "Linnéuniversitetet",
+        "miun.se": "Mittuniversitetet",
+        "mau.se": "Malmö universitet",
+        "slu.se": "Sveriges lantbruksuniversitet",
+        "oru.se": "Örebro universitet",
+        "bth.se": "Blekinge tekniska högskola"
+    ]
+    
+    private static let fallbackSchools: [School] = institutionNames.map { domain, name in
+        School(id: domain, name: name, type: "universitet", status: "AKTIV", municipality: nil)
+    }.sorted { $0.name < $1.name }
+    
+    static func institutionName(for email: String) -> String? {
+        let lower = email.lowercased()
+        for (domain, name) in institutionNames {
+            if lower.hasSuffix(domain) { return name }
+        }
+        return nil
+    }
     
     // MARK: - Verification status
     
@@ -15,13 +87,13 @@ class SchoolService {
         if user.verifiedSchoolEmail != nil {
             return true
         }
-        return user.email.lowercased().hasSuffix(Self.schoolDomain)
+        return Self.isAllowedDomain(user.email)
     }
     
-    // MARK: - Auto-verify users who signed up with school email
+    // MARK: - Auto-verify users who signed up with school/university email
     
     func autoVerifyIfSchoolEmail(userId: String, email: String) async {
-        guard email.lowercased().hasSuffix(Self.schoolDomain) else { return }
+        guard Self.isAllowedDomain(email) else { return }
         
         do {
             try await supabase
@@ -29,7 +101,7 @@ class SchoolService {
                 .update(["verified_school_email": email.lowercased()])
                 .eq("id", value: userId)
                 .execute()
-            print("✅ Auto-verified school email for user \(userId)")
+            print("✅ Auto-verified school/university email for user \(userId)")
         } catch {
             print("⚠️ Failed to auto-verify school email: \(error)")
         }
@@ -40,7 +112,7 @@ class SchoolService {
     func sendVerificationCode(email: String, userId: String) async throws -> Bool {
         let normalizedEmail = email.lowercased().trimmingCharacters(in: .whitespaces)
         
-        guard normalizedEmail.hasSuffix(Self.schoolDomain) else {
+        guard Self.isAllowedDomain(normalizedEmail) else {
             return false
         }
         
@@ -87,7 +159,81 @@ class SchoolService {
         return result.success
     }
     
+    static func verifiedDomain(for user: User) -> String? {
+        let email = user.verifiedSchoolEmail ?? user.email
+        let lower = email.lowercased()
+        
+        if let domainMatch = allowedDomains.first(where: { lower.hasSuffix($0) }) {
+            return domainMatch
+        }
+        
+        if lower.hasPrefix("selected@") {
+            return String(lower.dropFirst("selected@".count))
+        }
+        
+        return nil
+    }
+    
+    func schoolName(for user: User) -> String? {
+        if let name = Self.institutionName(for: user.verifiedSchoolEmail ?? user.email) {
+            return name
+        }
+        
+        let email = (user.verifiedSchoolEmail ?? user.email).lowercased()
+        if email.hasPrefix("selected@") {
+            let schoolId = String(email.dropFirst("selected@".count))
+            return Self.cachedSchools?.first(where: { $0.id == schoolId })?.name
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Assign school directly (no verification)
+    
+    func assignSchool(userId: String, schoolId: String) async {
+        let marker = "selected@\(schoolId)"
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["verified_school_email": marker])
+                .eq("id", value: userId)
+                .execute()
+            print("✅ School assigned: \(schoolId) for user \(userId)")
+        } catch {
+            print("❌ Failed to assign school: \(error)")
+        }
+    }
+    
     // MARK: - School feed
+    
+    private static let feedSelectFields = """
+        id,
+        user_id,
+        activity_type,
+        title,
+        description,
+        distance,
+        duration,
+        image_url,
+        user_image_url,
+        elevation_gain,
+        max_speed,
+        created_at,
+        split_data,
+        exercises_data,
+        pb_exercise_name,
+        pb_value,
+        streak_count,
+        source,
+        device_name,
+        location,
+        trained_with,
+        route_data,
+        is_public,
+        profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
+        workout_post_likes(count),
+        workout_post_comments(count)
+    """
     
     func getSchoolFeed() async throws -> [SocialWorkoutPost] {
         struct UserIdRow: Decodable {
@@ -103,38 +249,35 @@ class SchoolService {
         
         guard !ids.isEmpty else { return [] }
         
-        let selectFields = """
-            id,
-            user_id,
-            activity_type,
-            title,
-            description,
-            distance,
-            duration,
-            image_url,
-            user_image_url,
-            elevation_gain,
-            max_speed,
-            created_at,
-            split_data,
-            exercises_data,
-            pb_exercise_name,
-            pb_value,
-            streak_count,
-            source,
-            device_name,
-            location,
-            trained_with,
-            route_data,
-            is_public,
-            profiles!workout_posts_user_id_fkey(username, avatar_url, is_pro_member),
-            workout_post_likes(count),
-            workout_post_comments(count)
-        """
+        let posts: [SocialWorkoutPost] = try await supabase
+            .from("workout_posts")
+            .select(Self.feedSelectFields)
+            .in("user_id", values: ids)
+            .order("created_at", ascending: false)
+            .limit(50)
+            .execute()
+            .value
+        
+        return posts
+    }
+    
+    func getSchoolFeedForDomain(_ domain: String) async throws -> [SocialWorkoutPost] {
+        struct UserIdRow: Decodable {
+            let user_id: String
+        }
+        
+        let userIds: [UserIdRow] = try await supabase
+            .rpc("get_school_user_ids", params: ["p_domain": domain])
+            .execute()
+            .value
+        
+        let ids = userIds.map { $0.user_id }
+        
+        guard !ids.isEmpty else { return [] }
         
         let posts: [SocialWorkoutPost] = try await supabase
             .from("workout_posts")
-            .select(selectFields)
+            .select(Self.feedSelectFields)
             .in("user_id", values: ids)
             .order("created_at", ascending: false)
             .limit(50)

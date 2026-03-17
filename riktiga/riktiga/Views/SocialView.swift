@@ -35,7 +35,6 @@ struct SocialView: View {
     @State private var isLoadingRecommended = false
     @State private var showPaywall = false
     @State private var lastActiveTime: Date = Date()
-    @State private var showInviteSheet = false
     @State private var showFindFriends = false
     @State private var selectedTab: SocialTab = .feed
     @State private var showCreateNews = false
@@ -104,10 +103,6 @@ struct SocialView: View {
     @State private var isSchoolVerified = false
     @State private var isLoadingSchoolFeed = false
     @State private var schoolVisiblePostCount = 5
-    
-    // Invite banner state
-    @State private var availableInviteCount = 0
-    @State private var showInviteView = false
     
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
@@ -305,11 +300,6 @@ struct SocialView: View {
                                 // MARK: - Friends at gym section
                                 friendsAtGymSection
                                 
-                                // MARK: - Invite friends banner
-                                if availableInviteCount > 0 {
-                                    inviteFriendsBanner
-                                }
-                                
                                 // MARK: - Feed type picker (Vänner / Din skola)
                                 feedTypePicker
                                 
@@ -353,7 +343,6 @@ struct SocialView: View {
             .onAppear {
                 animateContentIn()
                 loadStats()
-                loadInviteCount()
                 Task { await adService.fetchFeedAds() }
             }
         }
@@ -487,19 +476,6 @@ struct SocialView: View {
             
             // Top Navigation Overlay
             HStack {
-                // Left side - Upgrade to PRO (only show if not already Pro)
-                if !RevenueCatManager.shared.isProMember {
-                    Button {
-                        SuperwallService.shared.showPaywall()
-                    } label: {
-                        Text(L.t(sv: "Uppgradera till PRO", nb: "Oppgrader til PRO"))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 4)
-                    }
-                    .padding(.leading, 24)
-                }
-                
                 Spacer()
             }
             .padding(.top, 60)
@@ -780,7 +756,9 @@ struct SocialView: View {
                             onOpenDetail: { tappedPost in selectedPost = tappedPost },
                             onLikeChanged: { _, _, _ in },
                             onCommentCountChanged: { _, _ in },
-                            onPostDeleted: { _ in }
+                            onPostDeleted: { postId in
+                                featuredPosts.removeAll { $0.id == postId }
+                            }
                         )
                         Divider()
                             .background(Color(.systemGray5))
@@ -796,10 +774,6 @@ struct SocialView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // MARK: - Friends at gym section
                     friendsAtGymSection
-                    
-                    if availableInviteCount > 0 {
-                        inviteFriendsBanner
-                    }
                     
                     feedTypePicker
                     
@@ -963,7 +937,7 @@ struct SocialView: View {
                 }
             } label: {
                 VStack(spacing: 6) {
-                    Text(L.t(sv: "Din skola", nb: "Din skole"))
+                    Text(schoolTabLabel)
                         .font(.system(size: 15, weight: selectedFeedType == .school ? .bold : .medium))
                         .foregroundColor(selectedFeedType == .school ? .primary : .secondary)
                     
@@ -1059,6 +1033,14 @@ struct SocialView: View {
         Array(schoolPosts.prefix(schoolVisiblePostCount))
     }
     
+    private var schoolTabLabel: String {
+        if let user = authViewModel.currentUser,
+           let name = SchoolService.shared.schoolName(for: user) {
+            return name
+        }
+        return L.t(sv: "Din skola", nb: "Din skole")
+    }
+    
     private func checkSchoolVerification() {
         guard let user = authViewModel.currentUser else { return }
         isSchoolVerified = SchoolService.shared.isSchoolVerified(user: user)
@@ -1067,7 +1049,13 @@ struct SocialView: View {
     private func loadSchoolFeed() async {
         isLoadingSchoolFeed = true
         do {
-            let posts = try await SchoolService.shared.getSchoolFeed()
+            let posts: [SocialWorkoutPost]
+            if let user = authViewModel.currentUser,
+               let domain = SchoolService.verifiedDomain(for: user) {
+                posts = try await SchoolService.shared.getSchoolFeedForDomain(domain)
+            } else {
+                posts = try await SchoolService.shared.getSchoolFeed()
+            }
             await MainActor.run {
                 schoolPosts = posts
                 isLoadingSchoolFeed = false
@@ -1075,69 +1063,6 @@ struct SocialView: View {
         } catch {
             print("❌ Failed to load school feed: \(error)")
             await MainActor.run { isLoadingSchoolFeed = false }
-        }
-    }
-    
-    // MARK: - Invite Friends Banner (Glass Card)
-    private var inviteFriendsBanner: some View {
-        Button {
-            showInviteView = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "envelope.badge.person.crop")
-                    .font(.system(size: 22))
-                    .foregroundColor(.primary)
-                    .frame(width: 40, height: 40)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L.t(
-                        sv: "Bjud in \(availableInviteCount) vän\(availableInviteCount == 1 ? "" : "ner") till Up&Down",
-                        nb: "Inviter \(availableInviteCount) venn\(availableInviteCount == 1 ? "" : "er") til Up&Down"
-                    ))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                    
-                    Text(L.t(sv: "Dela dina exklusiva inbjudningar", nb: "Del dine eksklusive invitasjoner"))
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Color(.systemGray3))
-            }
-            .padding(14)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 0.5)
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .navigationDestination(isPresented: $showInviteView) {
-            InviteView()
-                .environmentObject(authViewModel)
-        }
-    }
-    
-    private func loadInviteCount() {
-        guard let userId = authViewModel.currentUser?.id else { return }
-        Task {
-            do {
-                let invites = try await InviteService.shared.getMyInvites(userId: userId)
-                let available = invites.filter { !$0.isUsed }.count
-                await MainActor.run {
-                    availableInviteCount = available
-                }
-            } catch {
-                print("⚠️ Failed to load invite count: \(error)")
-            }
         }
     }
     
@@ -1779,36 +1704,84 @@ struct SocialView: View {
     // MARK: - Upload Progress Card
     private var uploadProgressCard: some View {
         HStack(spacing: 14) {
-            if uploadManager.uploadFailed {
-                ZStack {
-                    Circle()
-                        .fill(Color(.systemGray5))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.red)
-                }
-            } else {
+            switch uploadManager.verificationState {
+            case .verifying:
                 ProgressView()
                     .scaleEffect(0.85)
                     .frame(width: 28, height: 28)
+            case .approved:
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.green)
+                }
+            case .rejected:
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.red)
+                }
+            case .none:
+                if uploadManager.uploadFailed {
+                    ZStack {
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.red)
+                    }
+                } else {
+                    ProgressView()
+                        .scaleEffect(0.85)
+                        .frame(width: 28, height: 28)
+                }
             }
             
             VStack(alignment: .leading, spacing: 3) {
-                if uploadManager.uploadFailed {
-                    Text(L.t(sv: "Uppladdning misslyckades", nb: "Opplasting mislyktes"))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.red)
-                } else {
-                    Text(L.t(sv: "Ditt inlägg håller på att publiceras...", nb: "Innlegget ditt publiseres..."))
+                switch uploadManager.verificationState {
+                case .verifying:
+                    Text(L.t(sv: "Vi verifierar att ditt pass är godkänt", nb: "Vi verifiserer at økten din er godkjent"))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
+                case .approved:
+                    Text(L.t(sv: "Godkänt", nb: "Godkjent"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.green)
+                case .rejected:
+                    Text(L.t(sv: "Ej godkänt, ditt inlägg skickas till manuell granskning", nb: "Ikke godkjent, innlegget ditt sendes til manuell gjennomgang"))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.red)
+                case .none:
+                    if uploadManager.uploadFailed {
+                        Text(L.t(sv: "Uppladdning misslyckades", nb: "Opplasting mislyktes"))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.red)
+                    } else {
+                        Text(L.t(sv: "Ditt inlägg håller på att publiceras...", nb: "Innlegget ditt publiseres..."))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             
             Spacer()
             
-            if uploadManager.uploadFailed {
+            if uploadManager.verificationState == .rejected {
+                Button {
+                    uploadManager.dismissVerification()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            } else if uploadManager.uploadFailed {
                 Button {
                     uploadManager.dismissFailure()
                 } label: {
@@ -2251,26 +2224,6 @@ struct SocialView: View {
                         Text(L.t(sv: "Inga rekommendationer just nu", nb: "Ingen anbefalinger akkurat nå"))
                             .font(.system(size: 15))
                             .foregroundColor(.gray)
-                        Text(L.t(sv: "Bjud in dina vänner för att träna tillsammans!", nb: "Inviter vennene dine for å trene sammen!"))
-                            .font(.system(size: 13))
-                            .foregroundColor(.gray.opacity(0.8))
-                    }
-                    
-                    // Invite friends button
-                    Button {
-                        showInviteSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "person.badge.plus")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(L.t(sv: "Bjud in dina vänner", nb: "Inviter vennene dine"))
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.black)
-                        .cornerRadius(25)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -2292,25 +2245,6 @@ struct SocialView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                
-                // Invite button below recommendations
-                Button {
-                    showInviteSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(L.t(sv: "Bjud in fler vänner", nb: "Inviter flere venner"))
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(20)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
             }
         }
         .padding(.vertical, 16)
@@ -2320,9 +2254,6 @@ struct SocialView: View {
                     await loadRecommendedUsers(for: authViewModel.currentUser?.id ?? "")
                 }
             }
-        }
-        .sheet(isPresented: $showInviteSheet) {
-            InviteFriendsSheet()
         }
     }
     
@@ -2488,6 +2419,20 @@ struct SocialPostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerSection
+            
+            if post.moderationStatus == "pending_review" {
+                HStack(spacing: 6) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+                    Text(L.t(sv: "Under granskning", nb: "Under gjennomgang"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
+            
             statsSection
             contentSection
             
@@ -2583,7 +2528,9 @@ struct SocialPostCard: View {
         }
         .confirmationDialog(L.t(sv: "Inläggsalternativ", nb: "Innleggsalternativer"), isPresented: $showMenu, titleVisibility: .hidden) {
             Button(L.t(sv: "Redigera", nb: "Rediger")) {
-                showEditSheet = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showEditSheet = true
+                }
             }
             if canSaveAsRoutine {
                 Button(L.t(sv: "Gör till en rutin", nb: "Gjør til en rutine")) {
@@ -2593,7 +2540,9 @@ struct SocialPostCard: View {
                 }
             }
             Button(L.t(sv: "Ta bort inlägg", nb: "Fjern innlegg"), role: .destructive) {
-                showDeleteAlert = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showDeleteAlert = true
+                }
             }
             Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
         }
@@ -2608,7 +2557,7 @@ struct SocialPostCard: View {
                 deletePost()
             }
         } message: {
-            Text(L.t(sv: "Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.", nb: "Er du sikker på at du vil fjerne dette innlegget? Denne handlingen kan ikke angres."))
+            Text(L.t(sv: "Är du säker på att du vill ta bort detta inlägg? Denna åtgärd kan inte ångras.", nb: "Er du sikker på at du vil fjerne dette innlegget? Denne handlingen kan inte angres."))
         }
         .sheet(isPresented: $showShareSheet) {
             ShareActivityView(post: post)
@@ -2726,6 +2675,12 @@ struct SocialPostCard: View {
                 .onTapGesture {
                     onOpenDetail(post)
                 }
+        } else if post.activityType == "Gympass",
+                  (post.exercises == nil || post.exercises!.isEmpty),
+                  let userImg = post.userImageUrl, !userImg.isEmpty {
+            QuickTrackImageView(userImage: userImg, onTapImage: {
+                onOpenDetail(post)
+            })
         } else {
             // Swipeable images (route and user image)
             SwipeableImageView(routeImage: post.imageUrl, userImage: post.userImageUrl, onTapImage: {
@@ -5394,7 +5349,7 @@ struct GymExercisesListView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(height: hasUserImage ? 360 : 320)
+        .frame(height: hasUserImage ? 460 : 320)
         .padding(.horizontal, 16)
         .task {
             await loadPRs()
@@ -5569,6 +5524,64 @@ struct GymExercisesListView: View {
     }
 }
 
+// MARK: - Quick Track Image View (for quick tracking gym posts without exercises)
+struct QuickTrackImageView: View {
+    let userImage: String
+    var onTapImage: (() -> Void)? = nil
+    
+    private var firstImageUrl: String? {
+        let raw = userImage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+        if raw.hasPrefix("["),
+           let data = raw.data(using: .utf8),
+           let urls = try? JSONDecoder().decode([String].self, from: data),
+           let first = urls.first, !first.isEmpty {
+            return first
+        }
+        return raw
+    }
+    
+    var body: some View {
+        if let imageUrl = firstImageUrl {
+            GeometryReader { geometry in
+                FullFrameAsyncImage(path: imageUrl, height: 460)
+                    .frame(width: geometry.size.width, height: 460)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.2), Color.black.opacity(0.05)],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    )
+                    .overlay(
+                        Text(L.t(sv: "Snabb trackat pass", nb: "Hurtigsporet økt"))
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.5))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                            .padding(16),
+                        alignment: .bottomLeading
+                    )
+                    .overlay(
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onTapImage?()
+                            }
+                            .padding(.horizontal, 60)
+                            .padding(.vertical, 60)
+                    )
+            }
+            .frame(height: 460)
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
 // MARK: - Full Frame Async Image (for gym post images)
 struct FullFrameAsyncImage: View {
     let path: String
@@ -5726,122 +5739,6 @@ struct EmptyStateUserCard: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-    }
-}
-
-// MARK: - Invite Friends Sheet
-
-struct InviteFriendsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    
-    private let appStoreLink = "https://apps.apple.com/se/app/up-down/id6749190145?l=en-GB" // App Store link
-    private var inviteMessage: String { L.t(sv: "Utmana mig i Zonkriget (:", nb: "Utfordre meg i Sonekrigen (:") }
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 12) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.primary)
-                    
-                    Text(L.t(sv: "Bjud in dina vänner", nb: "Inviter vennene dine"))
-                        .font(.system(size: 24, weight: .bold))
-                    
-                    Text(L.t(sv: "Träna tillsammans med dina vänner och tävla om territorier i Zonkriget!", nb: "Tren sammen med vennene dine og konkurrer om territorier i Sonekrigen!"))
-                        .font(.system(size: 15))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-                .padding(.top, 40)
-                
-                Spacer()
-                
-                // Share options
-                VStack(spacing: 16) {
-                    // Share via Messages/SMS
-                    ShareLink(
-                        item: URL(string: appStoreLink)!,
-                        subject: Text(L.t(sv: "Träna med mig!", nb: "Tren med meg!")),
-                        message: Text(inviteMessage)
-                    ) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "message.fill")
-                                .font(.system(size: 20))
-                            Text(L.t(sv: "Dela via meddelande", nb: "Del via melding"))
-                                .font(.system(size: 16, weight: .semibold))
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                        .foregroundColor(.primary)
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // Copy link
-                    Button {
-                        UIPasteboard.general.string = appStoreLink
-                        // Visual feedback could be added here
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "link")
-                                .font(.system(size: 20))
-                            Text(L.t(sv: "Kopiera länk", nb: "Kopier lenke"))
-                                .font(.system(size: 16, weight: .semibold))
-                            Spacer()
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                        .foregroundColor(.primary)
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-                    
-                    // Share via other apps
-                    ShareLink(item: URL(string: appStoreLink)!) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 20))
-                            Text(L.t(sv: "Dela via andra appar", nb: "Del via andre apper"))
-                                .font(.system(size: 16, weight: .semibold))
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.secondary)
-                        }
-                        .foregroundColor(.primary)
-                        .padding(16)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                Spacer()
-                
-                // Info text
-                Text(L.t(sv: "Ju fler vänner, desto roligare träning! 🎉", nb: "Jo flere venner, desto morsommere trening! 🎉"))
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, 20)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                        dismiss()
-                    }
-                    .foregroundColor(.primary)
-                }
-            }
-        }
     }
 }
 
@@ -6287,8 +6184,6 @@ struct FriendsLocationMapView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var region: MKCoordinateRegion
     @State private var selectedFriend: ActiveFriendSession?
-    @State private var showUppyConfirmation = false
-    @State private var isSendingUppy = false
     
     init(friends: [ActiveFriendSession]) {
         self.friends = friends
@@ -6333,10 +6228,7 @@ struct FriendsLocationMapView: View {
             Map(coordinateRegion: $region, annotationItems: friendsWithLocation) { friend in
                         MapAnnotation(coordinate: friend.coordinate!) {
                             Button {
-                                if isGymSession(friend.activityType) {
-                                    selectedFriend = friend
-                                    showUppyConfirmation = true
-                                }
+                                selectedFriend = friend
                             } label: {
                                 VStack(spacing: 4) {
                                     // Friend avatar
@@ -6451,18 +6343,6 @@ struct FriendsLocationMapView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(L.t(sv: "Vänner som tränar", nb: "Venner som trener"))
-        .alert(L.t(sv: "Skicka en Uppy till \(selectedFriend?.userName ?? "")", nb: "Send en Uppy til \(selectedFriend?.userName ?? "")"), isPresented: $showUppyConfirmation) {
-            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {
-                selectedFriend = nil
-            }
-            Button(L.t(sv: "Skicka 💪", nb: "Send 💪")) {
-                if let friend = selectedFriend {
-                    sendUppy(to: friend)
-                }
-            }
-        } message: {
-            Text(L.t(sv: "Heja på din vän under deras gympass!", nb: "Hei på vennen din under treningsøkten!"))
-        }
         .onAppear {
             // Hide the floating add button when map is shown
             NotificationCenter.default.post(name: NSNotification.Name("HideFloatingButton"), object: nil)
@@ -6470,54 +6350,6 @@ struct FriendsLocationMapView: View {
         .onDisappear {
             // Show the floating add button again when leaving map
             NotificationCenter.default.post(name: NSNotification.Name("ShowFloatingButton"), object: nil)
-        }
-    }
-    
-    private func isGymSession(_ activityType: String) -> Bool {
-        let lower = activityType.lowercased()
-        return lower == "gym" || lower == "walking" || lower == "gympass" || lower == "strength"
-    }
-    
-    private func sendUppy(to friend: ActiveFriendSession) {
-        guard let senderId = authViewModel.currentUser?.id,
-              let senderName = authViewModel.currentUser?.name,
-              !isSendingUppy else { return }
-        
-        isSendingUppy = true
-        
-        Task {
-            do {
-                try await UppyService.shared.sendUppy(
-                    sessionId: friend.id,
-                    fromUserId: senderId,
-                    fromUserName: senderName,
-                    fromUserAvatar: authViewModel.currentUser?.avatarUrl,
-                    toUserId: friend.userId,
-                    toUserName: friend.userName
-                )
-                
-                await MainActor.run {
-                    isSendingUppy = false
-                    selectedFriend = nil
-                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                    
-                    // Post notification for real-time update
-                    NotificationCenter.default.post(name: .uppyReceived, object: nil)
-                }
-                
-                print("✅ Uppy sent successfully")
-            } catch UppyError.alreadySent {
-                await MainActor.run {
-                    isSendingUppy = false
-                    selectedFriend = nil
-                }
-                print("⚠️ Already sent Uppy to this session")
-            } catch {
-                print("❌ Failed to send Uppy: \(error)")
-                await MainActor.run {
-                    isSendingUppy = false
-                }
-            }
         }
     }
     

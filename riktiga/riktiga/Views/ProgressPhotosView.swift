@@ -555,6 +555,14 @@ struct AddWeightProgressView: View {
                     photoDate: photoDate
                 )
                 
+                if let user = authViewModel.currentUser {
+                    await PushNotificationService.shared.notifyFollowersAboutProgressPhoto(
+                        userId: user.id,
+                        userName: user.name,
+                        userAvatar: user.avatarUrl
+                    )
+                }
+                
                 await MainActor.run {
                     onPhotoAdded(newPhoto)
                     isSaving = false

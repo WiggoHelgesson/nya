@@ -293,33 +293,6 @@ final class NotificationService {
         )
     }
     
-    // MARK: - Uppy Notification
-    
-    /// Send an Uppy notification when someone sends motivation during workout
-    func sendUppyNotification(
-        toUserId: String,
-        fromUserName: String,
-        uppyCount: Int
-    ) async throws {
-        let title = "\(fromUserName) skickade en Uppy 💪"
-        let body: String
-        
-        if uppyCount >= 3 {
-            body = "Du fick din 3:e Uppy! +10 poäng 🎉"
-        } else {
-            body = "Du har nu \(uppyCount) av 3 Uppys!"
-        }
-        
-        // Send push notification
-        await PushNotificationService.shared.sendRealPushNotification(
-            toUserId: toUserId,
-            title: title,
-            body: body,
-            data: ["type": "uppy", "uppy_count": String(uppyCount)]
-        )
-        
-        print("✅ Sent Uppy push notification to user \(toUserId)")
-    }
 }
 
 
@@ -327,5 +300,4 @@ extension Notification.Name {
     static let profileStatsUpdated = Notification.Name("profileStatsUpdated")
     static let profileImageUpdated = Notification.Name("profileImageUpdated")
     static let savedGymWorkoutCreated = Notification.Name("SavedGymWorkoutCreated")
-    static let uppyReceived = Notification.Name("uppyReceived")
 }

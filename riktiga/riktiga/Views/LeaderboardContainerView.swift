@@ -15,6 +15,12 @@ struct LeaderboardContainerView: View {
                     LeaderboardDetailView(category: category)
                         .environmentObject(authViewModel)
                 }
+                .navigationDestination(for: String.self) { destination in
+                    if destination == "schoolBattle" {
+                        SchoolBattleView()
+                            .environmentObject(authViewModel)
+                    }
+                }
         }
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in

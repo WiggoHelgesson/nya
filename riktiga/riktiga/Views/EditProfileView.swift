@@ -65,6 +65,8 @@ struct EditProfileView: View {
     @State private var confettiCounter = 0
     @State private var previousCompletedSteps = 0
     
+    @State private var hasEditedProfile = false
+    
     // Posts for pinned picker
     @StateObject private var pinnedFeedViewModel = SocialViewModel()
     
@@ -120,6 +122,15 @@ struct EditProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(L.t(sv: "Klar", nb: "Ferdig")) {
+                        if hasEditedProfile, let user = authViewModel.currentUser {
+                            Task {
+                                await PushNotificationService.shared.notifyFollowersAboutProfileUpdate(
+                                    userId: user.id,
+                                    userName: user.name,
+                                    userAvatar: user.avatarUrl
+                                )
+                            }
+                        }
                         dismiss()
                     }
                     .fontWeight(.semibold)
@@ -131,6 +142,7 @@ struct EditProfileView: View {
                     if let data = try? await newItem?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
                         selectedImage = uiImage
+                        hasEditedProfile = true
                         autoSave()
                     }
                 }
@@ -140,6 +152,7 @@ struct EditProfileView: View {
                     if let data = try? await newItem?.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
                         selectedBannerImage = uiImage
+                        hasEditedProfile = true
                         autoSave()
                     }
                 }
@@ -157,14 +170,14 @@ struct EditProfileView: View {
             .sheet(isPresented: $showTrainingGoalSheet) { trainingGoalSheet }
             .sheet(isPresented: $showIdentitySheet) { identitySheet }
             .sheet(isPresented: $showRacesSheet) { racesSheet }
-            .onChange(of: showBioSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showPinnedSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showGymPbSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showRunningPbSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showHomeGymSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showTrainingGoalSheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showIdentitySheet) { _, isOpen in if !isOpen { autoSave() } }
-            .onChange(of: showRacesSheet) { _, isOpen in if !isOpen { autoSave() } }
+            .onChange(of: showBioSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showPinnedSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showGymPbSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showRunningPbSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showHomeGymSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showTrainingGoalSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showIdentitySheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
+            .onChange(of: showRacesSheet) { _, isOpen in if !isOpen { hasEditedProfile = true; autoSave() } }
         }
     }
     
@@ -245,7 +258,7 @@ struct EditProfileView: View {
                 .padding(12)
                 .background(Color(.systemBackground))
                 .cornerRadius(10)
-                .onSubmit { autoSave() }
+                .onSubmit { hasEditedProfile = true; autoSave() }
         }
     }
     
@@ -979,6 +992,14 @@ struct EditProfileView: View {
                     avatarUrl: imageUrl,
                     bannerUrl: newBannerUrl
                 )
+                
+                if let user = authViewModel.currentUser {
+                    await PushNotificationService.shared.notifyFollowersAboutProfileUpdate(
+                        userId: user.id,
+                        userName: user.name,
+                        userAvatar: user.avatarUrl
+                    )
+                }
                 
                 await MainActor.run {
                     isSaving = false

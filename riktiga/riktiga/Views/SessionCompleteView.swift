@@ -425,48 +425,7 @@ struct SessionCompleteView: View {
             .background(Color(.systemGray6))
             .cornerRadius(12)
             
-            // Photo buttons on their own row
-            if sessionImages.isEmpty && sessionImage == nil {
-                HStack(spacing: 10) {
-                    PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 18))
-                                .foregroundColor(.gray)
-                            
-                            Text(L.t(sv: "Lägg till bild", nb: "Legg til bilde"))
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.gray)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                    }
-                    
-                    Button(action: {
-                        showLiveCapture = true
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(.primary)
-                            
-                            Text("UP&DOWN Live")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.black.opacity(0.15), lineWidth: 1)
-                        )
-                    }
-                }
-            } else if !sessionImages.isEmpty {
+            if !sessionImages.isEmpty {
                 multipleImagesView
             } else if let currentImage = sessionImage {
                 ZStack(alignment: .topTrailing) {
@@ -877,17 +836,27 @@ struct SessionCompleteView: View {
             guard !saveButtonTapped else { return }
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
-            saveButtonTapped = true
-            saveWorkout()
+            if isLivePhoto {
+                saveButtonTapped = true
+                saveWorkout()
+            } else {
+                showLiveCapture = true
+            }
         }) {
             HStack {
                 Spacer()
                 if isSaving || saveButtonTapped {
                     ProgressView()
                         .tint(.white)
-                } else {
-                    Text(L.t(sv: "Spara pass", nb: "Lagre økt"))
+                } else if isLivePhoto {
+                    Text(L.t(sv: "Publicera", nb: "Publiser"))
                         .font(.system(size: 17, weight: .semibold))
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "camera.fill")
+                        Text(L.t(sv: "Ta bild", nb: "Ta bilde"))
+                            .font(.system(size: 17, weight: .semibold))
+                    }
                 }
                 Spacer()
             }
@@ -1600,6 +1569,10 @@ struct SessionCompleteView: View {
                 if let img = sessionImage {
                     sessionImages = [img]
                 }
+                // Auto-save now that we have the required live photo
+                guard !saveButtonTapped else { return }
+                saveButtonTapped = true
+                saveWorkout()
             }
         )
     }
@@ -1831,7 +1804,7 @@ struct SessionCompleteView: View {
                 
                 Spacer()
                 
-                Text(L.t(sv: "Spara pass", nb: "Lagre økt"))
+                Text(L.t(sv: "Skapa inlägg", nb: "Opprett innlegg"))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.primary)
                 
@@ -2013,7 +1986,8 @@ struct SessionCompleteView: View {
                 stravaDuration: duration,
                 stravaDistance: distance,
                 stravaRouteCoordinates: routeCoordinates,
-                isPublic: postToSocialFeed
+                isPublic: postToSocialFeed,
+                requiresModeration: isLivePhoto
             )
             
             let sharePost = SocialWorkoutPost(

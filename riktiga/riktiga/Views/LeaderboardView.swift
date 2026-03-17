@@ -10,6 +10,18 @@ enum LeaderboardScope: String, CaseIterable {
         case .school: return L.t(sv: "Din skola", nb: "Din skole")
         }
     }
+    
+    func dynamicLabel(for user: User?) -> String {
+        switch self {
+        case .all: return L.t(sv: "Alla", nb: "Alle")
+        case .school:
+            if let user = user,
+               let name = SchoolService.shared.schoolName(for: user) {
+                return name
+            }
+            return L.t(sv: "Din skola", nb: "Din skole")
+        }
+    }
 }
 
 struct LeaderboardView: View {
@@ -28,6 +40,7 @@ struct LeaderboardView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     header
+                    schoolBattleCard
                     categoryCards
                 }
                 .padding(.bottom, 30)
@@ -73,7 +86,7 @@ struct LeaderboardView: View {
                         selectedScope = scope
                     }
                 } label: {
-                    Text(scope.label)
+                    Text(scope.dynamicLabel(for: authViewModel.currentUser))
                         .font(.system(size: 15, weight: selectedScope == scope ? .semibold : .medium))
                         .foregroundColor(selectedScope == scope ? (isDark ? .black : .white) : .primary)
                         .frame(maxWidth: .infinity)
@@ -93,6 +106,44 @@ struct LeaderboardView: View {
         .padding(.horizontal, 20)
     }
 
+    // MARK: - School Battle Card
+    
+    private var schoolBattleCard: some View {
+        NavigationLink(value: "schoolBattle") {
+            ZStack(alignment: .bottomLeading) {
+                Color.black
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Spacer()
+                    
+                    HStack(spacing: 8) {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.yellow)
+                        Text(L.t(sv: "Skolkampen", nb: "Skolkampen"))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    
+                    HStack(spacing: 4) {
+                        Text(L.t(sv: "Vilken skola lyfter tyngst?", nb: "Hvilken skole løfter tyngst?"))
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.85))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+                }
+                .padding(20)
+            }
+            .frame(height: 140)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+    }
+    
     // MARK: - Category Cards
 
     private var categoryCards: some View {

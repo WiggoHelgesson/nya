@@ -9,9 +9,14 @@ import Supabase
 class PostUploadManager: ObservableObject {
     static let shared = PostUploadManager()
     
+    enum VerificationState {
+        case none, verifying, approved, rejected
+    }
+    
     @Published var uploadingPost: SocialWorkoutPost?
     @Published var isUploading = false
     @Published var uploadFailed = false
+    @Published var verificationState: VerificationState = .none
     
     private var pendingUploadTask: Task<Void, Never>?
     
@@ -37,6 +42,32 @@ class PostUploadManager: ObservableObject {
         let stravaDistance: Double
         let stravaRouteCoordinates: [CLLocationCoordinate2D]
         let isPublic: Bool
+        let requiresModeration: Bool
+        
+        init(post: WorkoutPost, routeImage: UIImage?, userImage: UIImage?, userImages: [UIImage], earnedPoints: Int, isLivePhoto: Bool, activityType: String, exercisesData: [GymExercisePost]?, userId: String?, userName: String?, userAvatarUrl: String?, hasPB: Bool, pbExerciseName: String, pbValue: String, stravaConnected: Bool, stravaTitle: String, stravaDescription: String, stravaDuration: Int, stravaDistance: Double, stravaRouteCoordinates: [CLLocationCoordinate2D], isPublic: Bool, requiresModeration: Bool = false) {
+            self.post = post
+            self.routeImage = routeImage
+            self.userImage = userImage
+            self.userImages = userImages
+            self.earnedPoints = earnedPoints
+            self.isLivePhoto = isLivePhoto
+            self.activityType = activityType
+            self.exercisesData = exercisesData
+            self.userId = userId
+            self.userName = userName
+            self.userAvatarUrl = userAvatarUrl
+            self.hasPB = hasPB
+            self.pbExerciseName = pbExerciseName
+            self.pbValue = pbValue
+            self.stravaConnected = stravaConnected
+            self.stravaTitle = stravaTitle
+            self.stravaDescription = stravaDescription
+            self.stravaDuration = stravaDuration
+            self.stravaDistance = stravaDistance
+            self.stravaRouteCoordinates = stravaRouteCoordinates
+            self.isPublic = isPublic
+            self.requiresModeration = requiresModeration
+        }
     }
     
     func startUpload(context: UploadContext) {
@@ -50,6 +81,7 @@ class PostUploadManager: ObservableObject {
         uploadingPost = placeholderPost
         isUploading = true
         uploadFailed = false
+        verificationState = .none
         
         pendingUploadTask = Task {
             do {
@@ -149,6 +181,36 @@ class PostUploadManager: ObservableObject {
                     )
                 }
                 
+                // AI moderation for live photo posts (runs synchronously so toast updates are visible)
+                if context.requiresModeration, let imageUrl = completedPost?.userImageUrl {
+                    await MainActor.run { self.verificationState = .verifying }
+                    do {
+                        struct ModerateBody: Encodable {
+                            let postId: String
+                            let imageUrl: String
+                        }
+                        struct ModerateResponse: Decodable {
+                            let status: String
+                        }
+                        let response: ModerateResponse = try await SupabaseConfig.supabase.functions
+                            .invoke("moderate-post", options: .init(body: ModerateBody(postId: context.post.id, imageUrl: imageUrl)))
+                        let approved = response.status == "approved"
+                        await MainActor.run {
+                            self.verificationState = approved ? .approved : .rejected
+                        }
+                        if approved {
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            await MainActor.run { self.verificationState = .none }
+                        }
+                        // .rejected stays visible until user dismisses
+                    } catch {
+                        print("⚠️ Moderation check failed, defaulting to approved: \(error)")
+                        await MainActor.run { self.verificationState = .approved }
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        await MainActor.run { self.verificationState = .none }
+                    }
+                }
+                
                 await MainActor.run {
                     if context.isPublic, let post = completedPost {
                         SocialViewModel.shared.insertPostAtTop(post)
@@ -156,7 +218,11 @@ class PostUploadManager: ObservableObject {
                     SocialViewModel.invalidateCache()
                     withAnimation(.easeOut(duration: 0.3)) {
                         self.isUploading = false
-                        self.uploadingPost = nil
+                        // Keep uploadingPost alive when rejected so the banner stays visible
+                        // until the user taps X (dismissVerification clears it)
+                        if self.verificationState != .rejected {
+                            self.uploadingPost = nil
+                        }
                     }
                 }
                 
@@ -172,6 +238,12 @@ class PostUploadManager: ObservableObject {
     
     func dismissFailure() {
         uploadFailed = false
+        uploadingPost = nil
+        verificationState = .none
+    }
+    
+    func dismissVerification() {
+        verificationState = .none
         uploadingPost = nil
     }
 }

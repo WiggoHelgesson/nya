@@ -62,7 +62,7 @@ struct LeaderboardDetailView: View {
     private var scopeTabs: some View {
         HStack(spacing: 0) {
             scopeTab(.all, label: L.t(sv: "Alla", nb: "Alle"))
-            scopeTab(.school, label: L.t(sv: "Din skola", nb: "Din skole"))
+            scopeTab(.school, label: LeaderboardScope.school.dynamicLabel(for: authViewModel.currentUser))
         }
         .padding(.top, 8)
     }

@@ -33,14 +33,34 @@ class AuthViewModel: NSObject, ObservableObject {
     var onGoogleSignInComplete: ((Bool, OnboardingData?, String?) -> Void)? // (success, onboardingData, googleName)
     var pendingGoogleOnboardingData: OnboardingData?
     
-    // Invite system — set before signup to bypass @elev.danderyd.se restriction
+    // Invite system — set before signup to bypass domain restriction
     var pendingInviteCode: String?
     
-    static let allowedEmailDomain = "@elev.danderyd.se"
-    static let domainRestrictionMessage = "Up & Down är just nu exklusivt för studenter. Du behöver en skolmail för att skapa ett konto."
+    static let allowedEmailDomains: [String] = [
+        "elev.danderyd.se",
+        "uu.se",
+        "lu.se",
+        "su.se",
+        "gu.se",
+        "umu.se",
+        "liu.se",
+        "ki.se",
+        "kth.se",
+        "chalmers.se",
+        "ltu.se",
+        "kau.se",
+        "lnu.se",
+        "miun.se",
+        "mau.se",
+        "slu.se",
+        "oru.se",
+        "bth.se"
+    ]
+    static let domainRestrictionMessage = "Up & Down är just nu exklusivt för studenter. Du behöver en skolmail eller universitetsmail för att skapa ett konto."
     
-    func isAllowedEmail(_ email: String) -> Bool {
-        email.lowercased().hasSuffix(Self.allowedEmailDomain)
+    static func isAllowedEmail(_ email: String) -> Bool {
+        let lower = email.lowercased()
+        return allowedEmailDomains.contains { lower.hasSuffix($0) }
     }
     
     override init() {
@@ -367,12 +387,6 @@ class AuthViewModel: NSObject, ObservableObject {
             return
         }
         
-        // Danderyd domain restriction
-        if !isAllowedEmail(trimmedEmail) && pendingInviteCode == nil {
-            errorMessage = Self.domainRestrictionMessage
-            return
-        }
-        
         isLoading = true
         errorMessage = ""
         
@@ -388,13 +402,6 @@ class AuthViewModel: NSObject, ObservableObject {
                 let placeholderUsername = "user-\(userId.prefix(6))"
                 var newUser = User(id: userId, name: placeholderUsername, email: trimmedEmail)
                 try await ProfileService.shared.createUserProfile(newUser)
-                
-                // Redeem invite code if used
-                if let inviteCode = pendingInviteCode {
-                    let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
-                    if redeemed { print("✅ Invite code redeemed during signup") }
-                    await MainActor.run { self.pendingInviteCode = nil }
-                }
                 
                 if let onboardingData {
                     _ = await ProfileService.shared.applyOnboardingData(userId: userId, data: onboardingData)
@@ -631,18 +638,6 @@ class AuthViewModel: NSObject, ObservableObject {
                         // New user OR user who didn't finish onboarding
                         var userForOnboarding: User
                         
-                        // Domain restriction: block non-allowed emails without invite code
-                        // (only existing users with completed onboarding bypass this)
-                        if !self.isAllowedEmail(email) && self.pendingInviteCode == nil {
-                            try? await self.supabase.auth.signOut()
-                            await MainActor.run {
-                                self.errorMessage = Self.domainRestrictionMessage
-                                self.isLoading = false
-                                self.onGoogleSignInComplete?(false, nil, nil)
-                            }
-                            return
-                        }
-                        
                         if let profile = existingProfile {
                             print("🔄 [Google] Profile exists but onboarding not completed")
                             userForOnboarding = profile
@@ -666,24 +661,14 @@ class AuthViewModel: NSObject, ObservableObject {
                             }
                         }
                         
-                        // Redeem invite code if used
-                        if let inviteCode = self.pendingInviteCode {
-                            let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
-                            if redeemed { print("✅ Invite code redeemed during Google signup") }
-                            await MainActor.run { self.pendingInviteCode = nil }
-                        }
-                        
                         await RevenueCatManager.shared.logInFor(appUserId: userId)
                         
                         await MainActor.run {
                             self.currentUser = userForOnboarding
-                            // DON'T set isLoggedIn = true here - wait for onboarding to complete
                             self.isLoading = false
                             
-                            // Set current user for recent exercises (personalized)
                             RecentExerciseStore.shared.setUser(userId: userForOnboarding.id)
                             
-                            // Trigger onboarding for new/incomplete users
                             self.onGoogleSignInComplete?(true, self.pendingGoogleOnboardingData, googleName)
                         }
                     }
@@ -855,18 +840,6 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                     var userForOnboarding: User
                     let appleEmail = email ?? session.user.email ?? ""
                     
-                    // Domain restriction: block non-allowed emails without invite code
-                    // (only existing users with completed onboarding bypass this)
-                    if !self.isAllowedEmail(appleEmail) && self.pendingInviteCode == nil {
-                        try? await self.supabase.auth.signOut()
-                        await MainActor.run {
-                            self.errorMessage = Self.domainRestrictionMessage
-                            self.isLoading = false
-                            self.onAppleSignInComplete?(false, nil, nil, nil)
-                        }
-                        return
-                    }
-                    
                     if let profile = existingProfile {
                         userForOnboarding = profile
                     } else {
@@ -891,13 +864,6 @@ extension AuthViewModel: ASAuthorizationControllerDelegate {
                         if let profile = try await ProfileService.shared.fetchUserProfile(userId: userId) {
                             userForOnboarding = profile
                         }
-                    }
-                    
-                    // Redeem invite code if used
-                    if let inviteCode = self.pendingInviteCode {
-                        let redeemed = await InviteService.shared.redeemInviteCode(code: inviteCode, userId: userId)
-                        if redeemed { print("✅ Invite code redeemed during Apple signup") }
-                        await MainActor.run { self.pendingInviteCode = nil }
                     }
                     
                     await RevenueCatManager.shared.logInFor(appUserId: userId)

@@ -582,6 +582,10 @@ struct NotificationRowStrava: View {
             return L.t(sv: "Nytt meddelande", nb: "Ny melding")
         case .coachScheduleUpdated:
             return L.t(sv: "Schema uppdaterat", nb: "Timeplan oppdatert")
+        case .progressPhoto:
+            return L.t(sv: "Nya progressbilder", nb: "Nye fremgangsbilder")
+        case .profileUpdate:
+            return L.t(sv: "Uppdaterad profil", nb: "Oppdatert profil")
         case .unknown:
             return L.t(sv: "Notis", nb: "Varsel")
         }
@@ -615,6 +619,10 @@ struct NotificationRowStrava: View {
             return L.t(sv: "\(name) skickade ett meddelande", nb: "\(name) sendte en melding")
         case .coachScheduleUpdated:
             return L.t(sv: "\(name) uppdaterade ditt träningsschema", nb: "\(name) oppdaterte treningsplanen din")
+        case .progressPhoto:
+            return L.t(sv: "\(name) la till nya progressbilder på sin profil", nb: "\(name) la til nye fremgangsbilder på profilen sin")
+        case .profileUpdate:
+            return L.t(sv: "Kolla vad \(name) har lagt till på sin profil", nb: "Sjekk hva \(name) har lagt til på profilen sin")
         case .unknown:
             return L.t(sv: "\(name) skickade en notis", nb: "\(name) sendte et varsel")
         }

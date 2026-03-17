@@ -1,6 +1,24 @@
 import Foundation
 import Supabase
 
+struct SchoolLeaderboardEntry: Identifiable, Decodable {
+    let school_domain: String
+    let school_name: String
+    let total_volume: Double
+    let student_count: Int
+    
+    var id: String { school_domain }
+    
+    var displayVolume: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.maximumFractionDigits = 0
+        let formatted = formatter.string(from: NSNumber(value: total_volume)) ?? "\(Int(total_volume))"
+        return "\(formatted) kg"
+    }
+}
+
 struct LeaderboardEntry: Identifiable, Decodable {
     let user_id: String
     let username: String?
@@ -111,6 +129,15 @@ class LeaderboardService {
         }
     }
 
+    func fetchSchoolBattleLeaderboard() async throws -> [SchoolLeaderboardEntry] {
+        let params: [String: AnyJSON] = ["p_month": .string(currentMonth)]
+        let entries: [SchoolLeaderboardEntry] = try await supabase
+            .rpc("get_school_volume_leaderboard", params: params)
+            .execute()
+            .value
+        return entries
+    }
+    
     func fetchSchoolUserIds() async throws -> [String] {
         struct UserIdRow: Decodable {
             let user_id: String

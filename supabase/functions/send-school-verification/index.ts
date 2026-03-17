@@ -30,9 +30,31 @@ serve(async (req) => {
 
     const normalizedEmail = email.toLowerCase().trim()
 
-    if (!normalizedEmail.endsWith('@elev.danderyd.se')) {
+    const allowedDomains = [
+      'elev.danderyd.se',
+      'uu.se',
+      'lu.se',
+      'su.se',
+      'gu.se',
+      'umu.se',
+      'liu.se',
+      'ki.se',
+      'kth.se',
+      'chalmers.se',
+      'ltu.se',
+      'kau.se',
+      'lnu.se',
+      'miun.se',
+      'mau.se',
+      'slu.se',
+      'oru.se',
+      'bth.se',
+    ]
+
+    const isAllowed = allowedDomains.some(domain => normalizedEmail.endsWith(domain))
+    if (!isAllowed) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Email must end with @elev.danderyd.se' }),
+        JSON.stringify({ success: false, error: 'Email must be a Swedish school or university email' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

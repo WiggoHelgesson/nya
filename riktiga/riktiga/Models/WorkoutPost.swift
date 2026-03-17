@@ -24,6 +24,7 @@ struct WorkoutPost: Codable, Identifiable {
     let location: String?  // Gym name or location (e.g., "Nordic Wellness Lund")
     let trainedWith: [TrainedWithPerson]?  // Friends who trained together
     let isPublic: Bool
+    let moderationStatus: String?  // 'approved' or 'pending_review'
     
     struct TrainedWithPerson: Codable, Identifiable, Hashable {
         let id: String
@@ -61,6 +62,7 @@ struct WorkoutPost: Codable, Identifiable {
         case location
         case trainedWith = "trained_with"
         case isPublic = "is_public"
+        case moderationStatus = "moderation_status"
     }
     
     init(from decoder: Decoder) throws {
@@ -88,6 +90,7 @@ struct WorkoutPost: Codable, Identifiable {
         location = try container.decodeIfPresent(String.self, forKey: .location)
         trainedWith = try container.decodeIfPresent([TrainedWithPerson].self, forKey: .trainedWith)
         isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic) ?? true
+        moderationStatus = try container.decodeIfPresent(String.self, forKey: .moderationStatus)
     }
     
     init(id: String = UUID().uuidString,
@@ -111,7 +114,8 @@ struct WorkoutPost: Codable, Identifiable {
          deviceName: String? = nil,
          location: String? = nil,
          trainedWith: [TrainedWithPerson]? = nil,
-         isPublic: Bool = true) {
+         isPublic: Bool = true,
+         moderationStatus: String? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -135,6 +139,7 @@ struct WorkoutPost: Codable, Identifiable {
         self.location = location
         self.trainedWith = trainedWith
         self.isPublic = isPublic
+        self.moderationStatus = moderationStatus
     }
     
     func encode(to encoder: Encoder) throws {
@@ -162,6 +167,7 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(trainedWith, forKey: .trainedWith)
         try container.encode(isPublic, forKey: .isPublic)
+        try container.encodeIfPresent(moderationStatus, forKey: .moderationStatus)
     }
 }
 

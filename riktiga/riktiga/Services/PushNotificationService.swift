@@ -292,11 +292,17 @@ final class PushNotificationService: NSObject {
                         postId: postId
                     )
                     
-                    // Send real iOS push notification
+                    let pushBody: String
+                    if exerciseName.isEmpty || exerciseName == "Gympass", pbValue.isEmpty {
+                        pushBody = "\(userName) tog nytt PB – Gå in och stötta \(userName)s inlägg"
+                    } else {
+                        pushBody = "\(userName) slog nytt PB i \(exerciseName) (\(pbValue)), gå in och supporta!"
+                    }
+                    
                     await sendRealPushNotification(
                         toUserId: followerId,
                         title: "🏆 Nytt PB!",
-                        body: "\(userName) slog nytt PB i \(exerciseName) (\(pbValue)), gå in och supporta!",
+                        body: pushBody,
                         data: ["type": "new_pb", "post_id": postId, "actor_id": userId]
                     )
                 } catch {
@@ -331,6 +337,13 @@ final class PushNotificationService: NSObject {
             let message: String
         }
         
+        let message: String
+        if exerciseName.isEmpty || exerciseName == "Gympass", pbValue.isEmpty {
+            message = "\(fromUserName) tog nytt PB – Gå in och stötta \(fromUserName)s inlägg"
+        } else {
+            message = "\(fromUserName) slog nytt PB i \(exerciseName): \(pbValue)"
+        }
+        
         let payload = NotificationPayload(
             user_id: forUserId,
             type: "new_pb",
@@ -338,7 +351,7 @@ final class PushNotificationService: NSObject {
             actor_name: fromUserName,
             actor_avatar: fromUserAvatar,
             reference_id: postId,
-            message: "\(fromUserName) slog nytt PB i \(exerciseName): \(pbValue)"
+            message: message
         )
         
         try await SupabaseConfig.supabase
@@ -441,6 +454,113 @@ final class PushNotificationService: NSObject {
             actor_avatar_url: fromUserAvatar,
             type: "new_workout",
             post_id: postId
+        )
+        
+        try await SupabaseConfig.supabase
+            .from("notifications")
+            .insert(payload)
+            .execute()
+    }
+    
+    // MARK: - Notify Followers About Progress Photo
+    
+    func notifyFollowersAboutProgressPhoto(
+        userId: String,
+        userName: String,
+        userAvatar: String?
+    ) async {
+        do {
+            let followers = try await SocialService.shared.getFollowers(userId: userId)
+            guard !followers.isEmpty else { return }
+            
+            for followerId in followers {
+                guard followerId != userId else { continue }
+                
+                do {
+                    try await createGenericNotification(
+                        forUserId: followerId,
+                        fromUserId: userId,
+                        fromUserName: userName,
+                        fromUserAvatar: userAvatar,
+                        type: "progress_photo"
+                    )
+                    
+                    await sendRealPushNotification(
+                        toUserId: followerId,
+                        title: "Nya progressbilder",
+                        body: "\(userName) la till nya progressbilder på sin profil",
+                        data: ["type": "progress_photo", "actor_id": userId, "actor_avatar": userAvatar ?? ""]
+                    )
+                } catch {
+                    print("⚠️ [PUSH] Failed to notify follower \(followerId) about progress photo: \(error)")
+                }
+            }
+        } catch {
+            print("❌ [PUSH] Failed to get followers for progress photo notification: \(error)")
+        }
+    }
+    
+    // MARK: - Notify Followers About Profile Update
+    
+    func notifyFollowersAboutProfileUpdate(
+        userId: String,
+        userName: String,
+        userAvatar: String?
+    ) async {
+        do {
+            let followers = try await SocialService.shared.getFollowers(userId: userId)
+            guard !followers.isEmpty else { return }
+            
+            for followerId in followers {
+                guard followerId != userId else { continue }
+                
+                do {
+                    try await createGenericNotification(
+                        forUserId: followerId,
+                        fromUserId: userId,
+                        fromUserName: userName,
+                        fromUserAvatar: userAvatar,
+                        type: "profile_update"
+                    )
+                    
+                    await sendRealPushNotification(
+                        toUserId: followerId,
+                        title: "Uppdaterad profil",
+                        body: "Kolla vad \(userName) har lagt till på sin profil",
+                        data: ["type": "profile_update", "actor_id": userId, "actor_avatar": userAvatar ?? ""]
+                    )
+                } catch {
+                    print("⚠️ [PUSH] Failed to notify follower \(followerId) about profile update: \(error)")
+                }
+            }
+        } catch {
+            print("❌ [PUSH] Failed to get followers for profile update notification: \(error)")
+        }
+    }
+    
+    private func createGenericNotification(
+        forUserId userId: String,
+        fromUserId: String,
+        fromUserName: String,
+        fromUserAvatar: String?,
+        type: String
+    ) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+        
+        struct NotificationPayload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let actor_avatar_url: String?
+            let type: String
+        }
+        
+        let payload = NotificationPayload(
+            user_id: userId,
+            actor_id: fromUserId,
+            actor_username: fromUserName,
+            actor_avatar_url: fromUserAvatar,
+            type: type
         )
         
         try await SupabaseConfig.supabase
@@ -561,6 +681,7 @@ class NotificationNavigationManager: ObservableObject {
     @Published var shouldNavigateToCoachChat = false
     @Published var shouldNavigateToDirectMessage: String? = nil  // conversation_id
     @Published var shouldNavigateToMonthlyReport = false
+    @Published var shouldNavigateToUserProfile: String? = nil
     
     func navigateToNews() {
         DispatchQueue.main.async {
@@ -656,6 +777,15 @@ class NotificationNavigationManager: ObservableObject {
         }
     }
     
+    func navigateToUserProfile(userId: String) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.shouldNavigateToUserProfile = userId
+            }
+        }
+    }
+    
     func resetNavigation() {
         shouldNavigateToNews = false
         shouldNavigateToPost = nil
@@ -666,6 +796,7 @@ class NotificationNavigationManager: ObservableObject {
         shouldNavigateToCoachChat = false
         shouldNavigateToDirectMessage = nil
         shouldNavigateToMonthlyReport = false
+        shouldNavigateToUserProfile = nil
     }
 }
 
@@ -786,6 +917,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 }
             case "monthly_report":
                 NotificationNavigationManager.shared.navigateToMonthlyReport()
+            case "progress_photo", "profile_update":
+                if let actorId = userInfo["actor_id"] as? String {
+                    NotificationNavigationManager.shared.navigateToUserProfile(userId: actorId)
+                }
             default:
                 break
             }

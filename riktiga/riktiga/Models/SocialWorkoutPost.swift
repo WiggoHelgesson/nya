@@ -24,6 +24,7 @@ struct SocialWorkoutPostRaw: Codable {
     let trainedWith: [TrainedWithPerson]?
     let routeData: String?
     let isPublic: Bool?
+    let moderationStatus: String?
     
     // JOIN data (from Supabase query)
     let profiles: ProfileData?
@@ -61,6 +62,7 @@ struct SocialWorkoutPostRaw: Codable {
         case trainedWith = "trained_with"
         case routeData = "route_data"
         case isPublic = "is_public"
+        case moderationStatus = "moderation_status"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -140,6 +142,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let routeData: String?
     
     let isPublic: Bool
+    let moderationStatus: String?
     
     // Computed property to check if it's an external post
     var isExternalPost: Bool {
@@ -186,6 +189,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case deviceName = "device_name"
         case routeData = "route_data"
         case isPublic = "is_public"
+        case moderationStatus = "moderation_status"
     }
     
     // Custom decoder to handle JOIN results
@@ -233,6 +237,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         deviceName = raw.deviceName
         routeData = raw.routeData
         isPublic = raw.isPublic ?? true
+        moderationStatus = raw.moderationStatus
     }
     
     init(from post: WorkoutPost, userName: String? = nil, userAvatarUrl: String? = nil, userIsPro: Bool? = nil, location: String? = nil, strokes: Int? = nil, likeCount: Int = 0, commentCount: Int = 0, isLikedByCurrentUser: Bool = false, source: String? = nil, deviceName: String? = nil, streakCount: Int? = nil, trainedWith: [TrainedWithPerson]? = nil) {
@@ -265,6 +270,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.deviceName = deviceName ?? post.deviceName
         self.routeData = post.routeData
         self.isPublic = post.isPublic
+        self.moderationStatus = post.moderationStatus
     }
 
     // Memberwise convenience initializer to allow updating selective fields
@@ -297,7 +303,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         source: String? = nil,
         deviceName: String? = nil,
         routeData: String? = nil,
-        isPublic: Bool = true
+        isPublic: Bool = true,
+        moderationStatus: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -328,6 +335,7 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.deviceName = deviceName
         self.routeData = routeData
         self.isPublic = isPublic
+        self.moderationStatus = moderationStatus
     }
 }
 

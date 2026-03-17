@@ -87,6 +87,8 @@ struct MainTabView: View {
     @State private var hideFloatingButton = false
     @State private var showIntelligenceSheet = false
     @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0]
+    @State private var showTrackingTypePicker = false
+    @State private var showQuickTracking = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
@@ -165,6 +167,27 @@ struct MainTabView: View {
             }
             .sheet(isPresented: $showIntelligenceSheet) {
                 IntelligenceView()
+            }
+            .sheet(isPresented: $showTrackingTypePicker) {
+                TrackingTypePickerView(
+                    onNormalTracking: {
+                        showTrackingTypePicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            startActivityType = .walking
+                            showStartSession = true
+                        }
+                    },
+                    onQuickTracking: {
+                        showTrackingTypePicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showQuickTracking = true
+                        }
+                    }
+                )
+            }
+            .fullScreenCover(isPresented: $showQuickTracking) {
+                QuickTrackingFlowView()
+                    .environmentObject(authViewModel)
             }
             .onAppear {
                 if hasActiveSession && !showStartSession && !showResumeSession {
@@ -314,8 +337,7 @@ struct MainTabView: View {
                 HStack(spacing: 12) {
                     addMealOption(icon: "dumbbell.fill", title: L.t(sv: "Starta gympass", nb: "Start treningsøkt")) {
                         showAddMealSheet = false
-                        startActivityType = .walking
-                        showStartSession = true
+                        showTrackingTypePicker = true
                     }
                     .scaleEffect(showAddMealSheet ? 1 : 0.8)
                     
