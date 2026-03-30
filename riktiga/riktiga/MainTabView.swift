@@ -86,35 +86,38 @@ struct MainTabView: View {
     @State private var hasCheckedInvitations = false
     @State private var hideFloatingButton = false
     @State private var showIntelligenceSheet = false
-    @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0]
+    @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0]
     @State private var showTrackingTypePicker = false
     @State private var showQuickTracking = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
     // Tab items data - dynamiskt baserat på om användaren har coach
-    private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
+    private var tabItems: [(icon: String, title: String, selectedIcon: String, isCustomImage: Bool)] {
         if hasActiveCoach {
             return [
-                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill"),
-                ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
-                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill", false),
+                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill", false),
+                ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill", false),
+                ("23", "Market", "23", true),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill", false),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill", false)
             ]
         } else {
             return [
-                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill"),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
-                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill", false),
+                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill", false),
+                ("23", "Market", "23", true),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill", false),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill", false)
             ]
         }
     }
     
     // Tab index mapping
-    private var rewardsTabIndex: Int { hasActiveCoach ? 3 : 2 }
-    private var profileTabIndex: Int { hasActiveCoach ? 4 : 3 }
+    private var marketTabIndex: Int { hasActiveCoach ? 3 : 2 }
+    private var rewardsTabIndex: Int { hasActiveCoach ? 4 : 3 }
+    private var profileTabIndex: Int { hasActiveCoach ? 5 : 4 }
     private var coachTabIndex: Int { 2 } // Endast om hasActiveCoach
     
     var body: some View {
@@ -140,6 +143,7 @@ struct MainTabView: View {
                 showFoodScanner: $showFoodScanner,
                 hideFloatingButton: $hideFloatingButton,
                 hasActiveCoach: hasActiveCoach,
+                marketTabIndex: marketTabIndex,
                 rewardsTabIndex: rewardsTabIndex,
                 profileTabIndex: profileTabIndex,
                 coachTabIndex: coachTabIndex
@@ -607,6 +611,19 @@ struct MainTabView: View {
                     }
                 }
                 
+                Tab(value: marketTabIndex) {
+                    MarketContainerView(popToRootTrigger: popToRootTrigger[marketTabIndex] ?? 0)
+                } label: {
+                    Label {
+                        Text("Market")
+                    } icon: {
+                        Image("23")
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+                
                 Tab(L.t(sv: "Belöningar", nb: "Belønninger"), systemImage: "gift.fill", value: rewardsTabIndex) {
                     RewardsContainerView(popToRootTrigger: popToRootTrigger[rewardsTabIndex] ?? 0)
                 }
@@ -670,6 +687,11 @@ struct MainTabView: View {
                         .opacity(selectedTab == 2 ? 1 : 0)
                         .allowsHitTesting(selectedTab == 2 && !showAddMealSheet)
                 }
+                
+                MarketContainerView(popToRootTrigger: popToRootTrigger[marketTabIndex] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == marketTabIndex ? 1 : 0)
+                    .allowsHitTesting(selectedTab == marketTabIndex && !showAddMealSheet)
                 
                 RewardsContainerView(popToRootTrigger: popToRootTrigger[rewardsTabIndex] ?? 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -773,9 +795,9 @@ struct MainTabView: View {
                         selectedIcon: tabItems[index].selectedIcon,
                         title: tabItems[index].title,
                         isSelected: selectedTab == index,
+                        isCustomImage: tabItems[index].isCustomImage,
                         action: {
                             if selectedTab == index {
-                                // Increment trigger to pop to root
                                 popToRootTrigger[index, default: 0] += 1
                             } else {
                                 switchToTab(index)
@@ -998,6 +1020,7 @@ private struct NavigationReceiversModifier: ViewModifier {
     @Binding var showFoodScanner: Bool
     @Binding var hideFloatingButton: Bool
     let hasActiveCoach: Bool
+    let marketTabIndex: Int
     let rewardsTabIndex: Int
     let profileTabIndex: Int
     let coachTabIndex: Int
@@ -1038,6 +1061,11 @@ private struct NavigationReceiversModifier: ViewModifier {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseStartSession"))) { _ in
+                showStartSession = false
+                showResumeSession = false
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToMarket"))) { _ in
+                selectedTab = marketTabIndex
                 showStartSession = false
                 showResumeSession = false
             }
@@ -1171,6 +1199,7 @@ private struct CustomTabBarItem: View {
     let selectedIcon: String
     let title: String
     let isSelected: Bool
+    var isCustomImage: Bool = false
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
     
@@ -1178,16 +1207,25 @@ private struct CustomTabBarItem: View {
     
     var body: some View {
         Button {
-            // Strong haptic feedback on tab selection
             selectionHaptic.prepare()
             selectionHaptic.impactOccurred(intensity: 0.8)
             action()
         } label: {
             VStack(spacing: 5) {
-                Image(systemName: isSelected ? selectedIcon : icon)
-                    .font(.system(size: 24, weight: isSelected ? .medium : .regular))
-                    .foregroundColor(isSelected ? .primary : .gray)
-                    .frame(height: 28)
+                if isCustomImage {
+                    Image(icon)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .opacity(isSelected ? 1.0 : 0.5)
+                        .frame(height: 28)
+                } else {
+                    Image(systemName: isSelected ? selectedIcon : icon)
+                        .font(.system(size: 24, weight: isSelected ? .medium : .regular))
+                        .foregroundColor(isSelected ? .primary : .gray)
+                        .frame(height: 28)
+                }
                 
                 Text(title)
                     .font(.system(size: 11, weight: isSelected ? .medium : .regular))
