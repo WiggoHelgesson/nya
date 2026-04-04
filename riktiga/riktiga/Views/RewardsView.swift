@@ -97,6 +97,15 @@ struct RewardCatalog {
             isBookmarked: false
         ),
         RewardCard(
+            id: 34,
+            brandName: "ZEENZA",
+            discount: "10% rabatt",
+            points: "200 poäng",
+            imageName: "93",
+            category: "Energidryck",
+            isBookmarked: false
+        ),
+        RewardCard(
             id: 32,
             brandName: "ZEN ENERGY",
             discount: "15% rabatt",
@@ -260,6 +269,7 @@ struct RewardsView: View {
     @State private var showRunningSection = true
     @State private var showSkiSection = true
     @State private var showSkeleton = false
+    @State private var showMarketInfo = false
     
     // Adaptive colors
     private var pageBackgroundColor: Color {
@@ -463,6 +473,20 @@ struct RewardsView: View {
         .padding(.vertical, 16)
     }
     
+    private var marketBanner: some View {
+        Button {
+            showMarketInfo = true
+        } label: {
+            Image("94")
+                .resizable()
+                .scaledToFill()
+                .frame(height: 220)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L.t(sv: "Kategorier", nb: "Kategorier"))
@@ -644,6 +668,15 @@ struct RewardsView: View {
                                     .opacity(showHeroBanner ? 1 : 0)
                             }
                             
+                            Image("75")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 200)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                            
                             categoriesSection
                                 .padding(.vertical, 16)
                                 .background(sectionBackgroundColor)
@@ -688,6 +721,9 @@ struct RewardsView: View {
             }
             .sheet(isPresented: $showMyPurchases) {
                 MyPurchasesView()
+            }
+            .sheet(isPresented: $showMarketInfo) {
+                MarketInfoSheet()
             }
             .onAppear {
                 animateRewardsContent()
@@ -1412,6 +1448,8 @@ struct RewardDetailView: View {
             return L.t(sv: "Capstone fokuserar på skidglasögon och tillbehör med magnetiska linser som enkelt anpassas efter ljusförhållanden. Målet är att kombinera stil, komfort och funktion för skidåkare som vill ha premiumkänsla utan att kompromissa.", nb: "Capstone fokuserer på skibriller og tilbehør med magnetiske linser som enkelt tilpasses etter lysforhold. Målet er å kombinere stil, komfort og funksjon for skiløpere som vil ha premiumfølelse uten å kompromisse.")
         case "FUSE ENERGY":
             return L.t(sv: "Fuse Energy ger dig smart energi på ett nytt sätt. Istället för burkar får du en brustablett – med koffein, L-teanin och vitaminer – som du löser i vatten. Resultatet är ren, effektiv energi och skärpt fokus utan socker, krascher eller onödigt släp. Perfekt för träning, studier eller dagar när du behöver ett extra lyft.", nb: "Fuse Energy gir deg smart energi på en ny måte. I stedet for bokser får du en brusetablett – med koffein, L-teanin og vitaminer – som du løser i vann. Resultatet er ren, effektiv energi og skjerpet fokus uten sukker, krasj eller unødvendig motstand. Perfekt for trening, studier eller dager når du trenger et ekstra løft.")
+        case "ZEENZA":
+            return L.t(sv: "Zeenza är ett svenskt dryckesföretag som erbjuder energidryck i form av koncentrat, vilket blandas ut med vatten. Deras produkt fungerar som en koffeinhaltig saft och är ett mer hållbart och kostnadseffektivt alternativ till traditionella energidrycker på burk.\n\nFöretaget fokuserar på att ge flera portioner per flaska och minska både pris och miljöpåverkan jämfört med vanliga energidrycker.", nb: "Zeenza er et svensk drikkevareselskap som tilbyr energidrikk i form av konsentrat, som blandes ut med vann. Produktet fungerer som en koffeinholdig saft og er et mer bærekraftig og kostnadseffektivt alternativ til tradisjonelle energidrikker på boks.\n\nSelskapet fokuserer på å gi flere porsjoner per flaske og redusere både pris og miljøpåvirkning sammenlignet med vanlige energidrikker.")
         case "J.LINDEBERG":
             return L.t(sv: "J.Lindeberg är ett svenskt modevarumärke som grundades 1996 av Johan Lindeberg i Stockholm. Varumärket kombinerar mode, sport och livsstil och är särskilt känt för att blanda skräddat herrmode med influenser från golf, skidåkning och streetwear.\n\nJ.Lindeberg har ett modernt och internationellt uttryck där designen ofta präglas av rena linjer, hög kvalitet och en sportig elegans. Märket riktar sig till personer som vill ha stilrena plagg som fungerar både i vardagen och i mer aktiva sammanhang. I dag säljs J.Lindeberg globalt och är ett välkänt namn inom både mode- och sportsegmentet.", nb: "J.Lindeberg er et svensk motemerke som ble grunnlagt i 1996 av Johan Lindeberg i Stockholm. Merket kombinerer mote, sport og livsstil og er særlig kjent for å blande skreddersydd herremote med påvirkning fra golf, ski og streetwear.\n\nJ.Lindeberg har et moderne og internasjonalt uttrykk der designen ofte preges av rene linjer, høy kvalitet og en sporty eleganse. Merket retter seg mot personer som ønsker stilrene plagg som fungerer både i hverdagen og i mer aktive sammenhenger. I dag selges J.Lindeberg globalt og er et velkjent navn innen både mote- og sportssegmentet.")
         case "CLYRO":
@@ -1457,6 +1495,8 @@ struct RewardDetailView: View {
             return "34"
         case "FUSE ENERGY":
             return "46"
+        case "ZEENZA":
+            return "93"
         case "CLYRO":
             return "39"
         case "Fjällsyn UF":
@@ -1494,6 +1534,8 @@ struct RewardDetailView: View {
             urlString = "https://capstone.nu/"
         case "FUSE ENERGY":
             urlString = "https://fuseenergy.se"
+        case "ZEENZA":
+            urlString = "https://zeenza.se"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":
@@ -1883,6 +1925,8 @@ struct ConfirmationView: View {
             return "CAPSTONE10"
         case "FUSE ENERGY":
             return "Wiggo"
+        case "ZEENZA":
+            return "STUD10"
         case "CLYRO":
             return "Up&Down20"
         case "Fjällsyn UF":
@@ -1922,6 +1966,8 @@ struct ConfirmationView: View {
             urlString = "https://capstone.nu/"
         case "FUSE ENERGY":
             urlString = "https://fuseenergy.se"
+        case "ZEENZA":
+            urlString = "https://zeenza.se"
         case "RETROGOLF":
             urlString = "https://retrogolfacademy.se/"
         case "SCANDIGOLF":
@@ -2089,6 +2135,125 @@ private struct ProBannerView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct MarketInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Image("94")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 200)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                    Text("Up & Down Market")
+                        .font(.system(size: 26, weight: .bold))
+
+                    Text("Up & Down Market är en second hand-plattform där du kan både köpa och sälja tränings- och livsstilsprodukter.\n\nDu säljer dina egna varor och köper från andra användare, medan vi agerar mellanhand för att göra allt tryggt och smidigt.")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        marketInfoBullet(icon: "shippingbox.fill", text: "Leverans: 1–3 dagar")
+                        marketInfoBullet(icon: "arrow.uturn.left.circle.fill", text: "30 dagar öppet köp")
+                        marketInfoBullet(icon: "tag.fill", text: "Få upp till 40% rabatt med poäng")
+                    }
+                    .padding(.vertical, 8)
+
+                    Text("Du tjänar poäng genom att träna i Up & Down-appen och kan sedan använda dem för att få rabatt på dina köp.")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .lineSpacing(4)
+
+                    Text("Rabatter baserat på poäng")
+                        .font(.system(size: 20, weight: .bold))
+                        .padding(.top, 4)
+
+                    discountTable
+                }
+                .padding(20)
+                .padding(.bottom, 40)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func marketInfoBullet(icon: String, text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(.accentColor)
+                .frame(width: 28)
+            Text(text)
+                .font(.system(size: 16, weight: .medium))
+        }
+    }
+
+    private var discountTable: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Poäng")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Gratis")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Pro")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            discountRow(points: "200", free: "5%", pro: "10%")
+            Divider()
+            discountRow(points: "500", free: "10%", pro: "20%")
+            Divider()
+            discountRow(points: "1000", free: "25%", pro: "40%")
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(colorScheme == .dark ? Color(red: 0.15, green: 0.15, blue: 0.15) : Color(red: 0.97, green: 0.97, blue: 0.97))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func discountRow(points: String, free: String, pro: String) -> some View {
+        HStack {
+            Text(points)
+                .font(.system(size: 15))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(free)
+                .font(.system(size: 15))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(pro)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }
 

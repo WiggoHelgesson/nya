@@ -967,6 +967,8 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     private var videoOutput = AVCaptureVideoDataOutput()
     private var currentDevice: AVCaptureDevice?
     private var capturedImage: UIImage?
+    private let sessionQueue = DispatchQueue(label: "com.upanddown.camera.session")
+    private var isSessionStarting = false
     
     // Barcode detection
     private var barcodeRequest: VNDetectBarcodesRequest?
@@ -1032,26 +1034,29 @@ class FoodScannerViewModel: NSObject, ObservableObject {
     }
     
     func startSession() {
-        guard !session.isRunning else {
-            DispatchQueue.main.async { [weak self] in
-                self?.isCameraReady = true
-            }
-            return
+        #if targetEnvironment(simulator)
+        DispatchQueue.main.async { [weak self] in
+            self?.isCameraReady = true
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        return
+        #else
+        sessionQueue.async { [weak self] in
             guard let self = self else { return }
+            guard !self.isSessionStarting, !self.session.isRunning else {
+                DispatchQueue.main.async { self.isCameraReady = true }
+                return
+            }
             
-            // Setup camera on background thread
+            self.isSessionStarting = true
             self.setupCamera()
-            
-            guard !self.session.isRunning else { return }
             self.session.startRunning()
+            self.isSessionStarting = false
             
             DispatchQueue.main.async {
                 self.isCameraReady = true
             }
         }
+        #endif
     }
     
     func stopSession() {
@@ -1059,9 +1064,9 @@ class FoodScannerViewModel: NSObject, ObservableObject {
             self?.isCameraReady = false
         }
         
-        guard session.isRunning else { return }
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.session.stopRunning()
+        sessionQueue.async { [weak self] in
+            guard let self = self, self.session.isRunning else { return }
+            self.session.stopRunning()
         }
     }
     
@@ -1155,7 +1160,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         
         Task {
             do {
-                guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                guard let imageData = image.jpegData(compressionQuality: 0.85) else {
                     throw NSError(domain: "ImageError", code: -1)
                 }
                 
@@ -1486,22 +1491,34 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         switch analysisType {
         case .food:
             prompt = """
-            Analysera denna bild av mat. Identifiera vad för mat det är och uppskatta näringsvärden per portion.
-            
-            Svara ENDAST med JSON i detta format (inga andra tecken):
+            Du är en expert-nutritionist. Analysera bilden noggrant och identifiera VARJE enskild matprodukt du ser.
+
+            Steg-för-steg:
+            1. Lista varje synlig matprodukt separat (t.ex. kyckling, ris, sås, grönsaker)
+            2. Uppskatta vikten i gram för varje produkt baserat på visuella ledtrådar (tallriksstorlek, bestick som referens, tjocklek, höjd)
+            3. Beräkna näringsvärden för varje produkt baserat på uppskattad vikt
+            4. Summera totalen
+
+            VIKTIGT:
+            - Var EXAKT och KONSERVATIV med uppskattningar. Gissa INTE generiska siffror som 500 eller 600 kcal.
+            - En normal portion kyckling är ca 120-150g, en portion ris ca 150-200g kokt, en skiva bröd ca 30-40g.
+            - Om du ser en liten portion, ge lägre siffror. Om du ser en stor portion, ge högre.
+            - Titta noga på MÄNGDEN mat, inte bara typen.
+
+            Svara ENDAST med JSON (inga andra tecken):
             {
-                "name": "Namn på maten på svenska",
+                "name": "Kort beskrivning av måltiden på svenska",
                 "calories": 0,
                 "protein": 0,
                 "carbs": 0,
                 "fat": 0,
-                "serving_size": "Uppskattad portionsstorlek",
+                "serving_size": "Detaljerad uppdelning: t.ex. 130g kyckling + 180g ris + 50g broccoli",
                 "confidence": 0.0
             }
-            
-            - calories, protein, carbs, fat ska vara heltal
-            - confidence ska vara mellan 0.0 och 1.0
-            - Om du inte kan identifiera maten, gissa baserat på vad du ser
+
+            - calories, protein, carbs, fat ska vara heltal (totalsumman av alla produkter)
+            - confidence: 0.0-1.0 (hur säker du är)
+            - serving_size: LISTA varje identifierad produkt med uppskattad vikt
             """
         case .nutritionLabel:
             prompt = """
@@ -1525,7 +1542,7 @@ class FoodScannerViewModel: NSObject, ObservableObject {
         }
         
         let requestBody: [String: Any] = [
-            "model": "gpt-4o-mini",
+            "model": "gpt-4o",
             "messages": [
                 [
                     "role": "user",
@@ -1537,13 +1554,14 @@ class FoodScannerViewModel: NSObject, ObservableObject {
                         [
                             "type": "image_url",
                             "image_url": [
-                                "url": "data:image/jpeg;base64,\(base64Image)"
+                                "url": "data:image/jpeg;base64,\(base64Image)",
+                                "detail": "high"
                             ]
                         ]
                     ]
                 ]
             ],
-            "max_tokens": 500
+            "max_tokens": 1000
         ]
         
         var request = URLRequest(url: url)

@@ -3,11 +3,18 @@ import SwiftUI
 struct ProductDetailView: View {
     let product: ShopifyProduct
     @Binding var showCart: Bool
+    @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var cartManager = CartManager.shared
     @State private var selectedVariant: ShopifyVariant?
     @State private var selectedImageIndex = 0
     @State private var addedToCart = false
     @State private var isFavorite = false
+    @State private var isCheckingOut = false
+    @State private var checkoutURL: URL?
+    @State private var showCheckoutSafari = false
+    @State private var showDiscountTiers = false
+    @State private var isRedeemingDiscount = false
+    @State private var redeemingTierId: UUID?
     @Environment(\.dismiss) private var dismiss
 
     private var variants: [ShopifyVariant] {
@@ -42,9 +49,6 @@ struct ProductDetailView: View {
                     .padding(.top, 20)
                 priceSection
                     .padding(.top, 8)
-                discountBanner
-                    .padding(.top, 16)
-                    .padding(.horizontal, 16)
                 actionButtons
                     .padding(.top, 16)
                     .padding(.horizontal, 16)
@@ -69,6 +73,28 @@ struct ProductDetailView: View {
                 selectedVariant = product.firstAvailableVariant ?? variants.first
             }
         }
+        .fullScreenCover(isPresented: $showCheckoutSafari) {
+            if let url = checkoutURL {
+                SafariView(url: url)
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    private var currentXP: Int {
+        authViewModel.currentUser?.currentXP ?? 0
+    }
+
+    private var isPro: Bool {
+        authViewModel.currentUser?.isProMember ?? false
+    }
+
+    private var productPrice: Double {
+        Double(selectedVariant?.price.amount ?? product.minPrice) ?? 0
+    }
+
+    private var productCurrency: String {
+        selectedVariant?.price.currencyCode ?? product.currencyCode
     }
 
     // MARK: - Image Carousel
@@ -164,34 +190,41 @@ struct ProductDetailView: View {
         .padding(.horizontal, 16)
     }
 
-    // MARK: - Discount Banner
-
-    private var discountBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "tag")
-                .font(.system(size: 16))
-                .foregroundColor(.primary)
-
-            (Text(L.t(sv: "10% rabatt på din första order — Använd koden ", nb: "10% rabatt på din første ordre — Bruk koden "))
-                .font(.system(size: 14))
-             + Text("UPDOWN10")
-                .font(.system(size: 14, weight: .bold)))
-                .foregroundColor(.primary)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
         VStack(spacing: 10) {
+            // 1. Buy Now
             Button {
                 guard let variant = selectedVariant ?? product.firstAvailableVariant else { return }
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                Task { await buyNow(variantId: variant.id) }
+            } label: {
+                HStack(spacing: 8) {
+                    if isCheckingOut {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 14))
+                        Text(L.t(sv: "Köp nu", nb: "Kjøp nå"))
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .disabled(isCheckingOut || selectedVariant?.availableForSale == false)
+
+            // 2. Points discount dropdown
+            pointsDiscountDropdown
+
+            // 3. Add to cart
+            Button {
+                guard let variant = selectedVariant ?? product.firstAvailableVariant else { return }
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 Task {
                     await cartManager.addToCart(variantId: variant.id)
                     withAnimation(.spring(response: 0.3)) { addedToCart = true }
@@ -201,8 +234,7 @@ struct ProductDetailView: View {
             } label: {
                 HStack(spacing: 8) {
                     if cartManager.isLoading {
-                        ProgressView()
-                            .tint(.white)
+                        ProgressView().tint(.primary)
                     } else if addedToCart {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
@@ -215,17 +247,24 @@ struct ProductDetailView: View {
                             .font(.system(size: 16, weight: .semibold))
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundColor(addedToCart ? .white : .primary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(addedToCart ? Color.green : Color.black)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.vertical, 14)
+                .background(
+                    Group {
+                        if addedToCart {
+                            RoundedRectangle(cornerRadius: 14).fill(Color.green)
+                        } else {
+                            RoundedRectangle(cornerRadius: 14).stroke(Color(.systemGray3), lineWidth: 1)
+                        }
+                    }
+                )
             }
             .disabled(cartManager.isLoading || selectedVariant?.availableForSale == false)
 
+            // 4. Favorite
             Button {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 withAnimation(.spring(response: 0.3)) { isFavorite.toggle() }
             } label: {
                 HStack(spacing: 8) {
@@ -243,6 +282,167 @@ struct ProductDetailView: View {
                         .stroke(Color(.systemGray3), lineWidth: 1)
                 )
             }
+        }
+    }
+
+    // MARK: - Points Discount Dropdown
+
+    private var pointsDiscountDropdown: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { showDiscountTiers.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13))
+                        .foregroundColor(.orange)
+
+                    Text(L.t(
+                        sv: "Har du poäng? Se rabatterat pris",
+                        nb: "Har du poeng? Se rabattert pris"
+                    ))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text("\(currentXP) XP")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.orange)
+
+                    Image(systemName: showDiscountTiers ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+
+            if showDiscountTiers {
+                VStack(spacing: 0) {
+                    Divider().padding(.horizontal, 14)
+
+                    ForEach(PointsDiscountService.tiers) { tier in
+                        let percent = tier.percent(isPro: isPro)
+                        let discounted = productPrice * (1.0 - Double(percent) / 100.0)
+                        let canAfford = currentXP >= tier.xpCost
+                        let isRedeeming = redeemingTierId == tier.id
+
+                        VStack(spacing: 0) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Text("\(tier.xpCost) XP")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(canAfford ? .primary : .gray)
+
+                                        Text("\(percent)%")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(canAfford ? Color.orange : Color.gray.opacity(0.4))
+                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    }
+
+                                    HStack(spacing: 4) {
+                                        Text("\(Int(productPrice)) \(productCurrency)")
+                                            .font(.system(size: 13))
+                                            .strikethrough()
+                                            .foregroundColor(.gray)
+
+                                        Text("\(Int(discounted)) \(productCurrency)")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(canAfford ? .primary : .gray)
+                                    }
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    guard canAfford else { return }
+                                    guard let variant = selectedVariant ?? product.firstAvailableVariant else { return }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    Task { await buyWithDiscount(variantId: variant.id, tier: tier) }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if isRedeeming {
+                                            ProgressView()
+                                                .tint(.white)
+                                                .scaleEffect(0.7)
+                                        } else {
+                                            Text(L.t(sv: "Köp", nb: "Kjøp"))
+                                                .font(.system(size: 13, weight: .bold))
+                                        }
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(width: 64, height: 34)
+                                    .background(canAfford ? Color.black : Color.gray.opacity(0.3))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .disabled(!canAfford || isRedeemingDiscount)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+
+                            if tier.xpCost != PointsDiscountService.tiers.last?.xpCost {
+                                Divider().padding(.horizontal, 14)
+                            }
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray6).opacity(0.6))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.separator).opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Checkout Helpers
+
+    private func buyNow(variantId: String) async {
+        isCheckingOut = true
+        defer { isCheckingOut = false }
+
+        do {
+            let cart = try await ShopifyService.shared.cartCreate(variantId: variantId, quantity: 1)
+            guard let url = URL(string: cart.checkoutUrl) else { return }
+            checkoutURL = url
+            showCheckoutSafari = true
+        } catch {
+            print("Buy now error: \(error.localizedDescription)")
+        }
+    }
+
+    private func buyWithDiscount(variantId: String, tier: DiscountTier) async {
+        isRedeemingDiscount = true
+        redeemingTierId = tier.id
+        defer {
+            isRedeemingDiscount = false
+            redeemingTierId = nil
+        }
+
+        do {
+            guard let userId = authViewModel.currentUser?.id else { return }
+            let discount = try await PointsDiscountService.shared.redeemDiscount(
+                userId: userId, tier: tier, isPro: isPro
+            )
+            let cart = try await ShopifyService.shared.cartCreate(variantId: variantId, quantity: 1)
+            let updatedCart = try await ShopifyService.shared.cartDiscountCodesUpdate(
+                cartId: cart.id, discountCodes: [discount.code]
+            )
+            guard let url = URL(string: updatedCart.checkoutUrl) else { return }
+            checkoutURL = url
+            showCheckoutSafari = true
+        } catch {
+            print("Discount checkout error: \(error.localizedDescription)")
         }
     }
 

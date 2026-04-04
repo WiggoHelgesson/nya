@@ -30,12 +30,15 @@ struct LeaderboardView: View {
     @State private var selectedScope: LeaderboardScope = .all
     @State private var schoolUserIds: [String]? = nil
     @State private var isLoadingSchoolIds = false
+    var embedded: Bool = false
 
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         VStack(spacing: 0) {
-            StravaStyleHeaderView(pageTitle: L.t(sv: "Topplistor", nb: "Topplister"))
+            if !embedded {
+                StravaStyleHeaderView(pageTitle: L.t(sv: "Topplistor", nb: "Topplister"))
+            }
             
             ScrollView {
                 VStack(spacing: 20) {

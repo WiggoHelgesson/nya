@@ -10,7 +10,7 @@ struct SessionCompleteView: View {
     let activity: ActivityType
     let distance: Double
     let duration: Int
-    let earnedPoints: Int
+    @State var earnedPoints: Int
     let routeImage: UIImage?
     let routeCoordinates: [CLLocationCoordinate2D]  // Route coordinates for interactive map
     let elevationGain: Double?
@@ -53,6 +53,7 @@ struct SessionCompleteView: View {
     @State private var showLiveCapture = false
     @State private var difficultyRating: Double = 0.5  // 0 = Lätt, 1 = Svårt
     @State private var isLivePhoto = false  // Track if image was taken with Up&Down Live
+    @State private var showNoPhotoWarning = false
     @State private var postToSocialFeed = true
     
     // PB (Personal Best) tracking
@@ -157,6 +158,22 @@ struct SessionCompleteView: View {
                     }
                 }
             }
+        }
+        .alert(
+            L.t(sv: "Inga poäng", nb: "Ingen poeng"),
+            isPresented: $showNoPhotoWarning
+        ) {
+            Button(L.t(sv: "Publicera ändå", nb: "Publiser likevel")) {
+                earnedPoints = 0
+                saveButtonTapped = true
+                saveWorkout()
+            }
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+        } message: {
+            Text(L.t(
+                sv: "Du får inga poäng om du publicerar utan bild — Detta för vi ej kan verifiera att du varit på gymmet",
+                nb: "Du får ingen poeng om du publiserer uten bilde — Dette fordi vi ikke kan verifisere at du har vært på treningssenteret"
+            ))
         }
         .onAppear {
             // If a live photo was taken during the session, use it
@@ -832,49 +849,92 @@ struct SessionCompleteView: View {
     
     // MARK: - Gym Save Button
     private var gymSaveButton: some View {
-        Button(action: {
-            guard !saveButtonTapped else { return }
-            let generator = UIImpactFeedbackGenerator(style: .medium)
-            generator.impactOccurred()
-            if isLivePhoto {
-                saveButtonTapped = true
-                saveWorkout()
-            } else {
-                showLiveCapture = true
-            }
-        }) {
-            HStack {
-                Spacer()
-                if isSaving || saveButtonTapped {
-                    ProgressView()
-                        .tint(.white)
-                } else if isLivePhoto {
-                    Text(L.t(sv: "Publicera", nb: "Publiser"))
-                        .font(.system(size: 17, weight: .semibold))
-                } else {
-                    HStack(spacing: 8) {
-                        Image(systemName: "camera.fill")
-                        Text(L.t(sv: "Ta bild", nb: "Ta bilde"))
-                            .font(.system(size: 17, weight: .semibold))
+        VStack(spacing: 12) {
+            if isLivePhoto || saveButtonTapped {
+                Button(action: {
+                    guard !saveButtonTapped else { return }
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    saveButtonTapped = true
+                    saveWorkout()
+                }) {
+                    HStack {
+                        Spacer()
+                        if isSaving || saveButtonTapped {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text(L.t(sv: "Publicera", nb: "Publiser"))
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        Spacer()
                     }
+                    .frame(height: 54)
+                    .contentShape(Rectangle())
                 }
-                Spacer()
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(saveButtonTapped ? Color.gray : Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(14)
+                .disabled(saveButtonTapped)
+                .opacity(saveButtonTapped ? 0.7 : 1.0)
+                .allowsHitTesting(!saveButtonTapped)
+            } else {
+                Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                    showLiveCapture = true
+                }) {
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 8) {
+                            Image(systemName: "camera.fill")
+                            Text(L.t(sv: "Ta bild", nb: "Ta bilde"))
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        Spacer()
+                    }
+                    .frame(height: 54)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(14)
+
+                Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showNoPhotoWarning = true
+                }) {
+                    HStack {
+                        Spacer()
+                        Text(L.t(sv: "Publicera utan bild", nb: "Publiser uten bilde"))
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer()
+                    }
+                    .frame(height: 54)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(Color(.systemBackground))
+                .foregroundColor(.primary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.primary.opacity(0.3), lineWidth: 1.5)
+                )
+                .cornerRadius(14)
             }
-            .frame(height: 54)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-        .frame(height: 54)
-        .background(saveButtonTapped ? Color.gray : Color.black)
-        .foregroundColor(.white)
-        .cornerRadius(14)
-        .disabled(saveButtonTapped)
-        .opacity(saveButtonTapped ? 0.7 : 1.0)
         .padding(.horizontal, 16)
         .padding(.top, 32)
         .padding(.bottom, 40)
-        .allowsHitTesting(!saveButtonTapped)
     }
     
     // MARK: - PB Button Section
@@ -1569,10 +1629,6 @@ struct SessionCompleteView: View {
                 if let img = sessionImage {
                     sessionImages = [img]
                 }
-                // Auto-save now that we have the required live photo
-                guard !saveButtonTapped else { return }
-                saveButtonTapped = true
-                saveWorkout()
             }
         )
     }

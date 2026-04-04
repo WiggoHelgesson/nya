@@ -299,6 +299,7 @@ struct SocialView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 // MARK: - Friends at gym section
                                 friendsAtGymSection
+                                leaderboardLink
                                 
                                 // MARK: - Feed type picker (Vänner / Din skola)
                                 feedTypePicker
@@ -774,6 +775,7 @@ struct SocialView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // MARK: - Friends at gym section
                     friendsAtGymSection
+                    leaderboardLink
                     
                     feedTypePicker
                     
@@ -903,6 +905,33 @@ struct SocialView: View {
         }
     }
     
+    // MARK: - Leaderboard Link
+    private var leaderboardLink: some View {
+        NavigationLink(destination: LeaderboardDetailView(category: .workouts).environmentObject(authViewModel)) {
+            HStack(spacing: 8) {
+                Image(systemName: "trophy")
+                    .font(.system(size: 14))
+                    .foregroundColor(.primary)
+
+                Text(L.t(
+                    sv: "Se topplistan för denna månaden",
+                    nb: "Se topplisten for denne måneden"
+                ))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary.opacity(0.5))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Feed Type Picker (Vänner / Din skola)
     private var feedTypePicker: some View {
         HStack(spacing: 0) {

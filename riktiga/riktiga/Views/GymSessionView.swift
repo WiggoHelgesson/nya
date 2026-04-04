@@ -1494,11 +1494,116 @@ struct ExercisePickerView: View {
         ]
     }
     
-    // Fallback popular exercises (used when no database data exists yet)
-    private let fallbackPopularIds: Set<String> = [
-        "0025", "0007", "0032", "0047", "0083", "0095", "0129", "0148",
-        "0161", "0175", "0192", "0210", "0227", "0251", "0262", "0289"
+    // Curated core exercises that always sort to the top within their category
+    private let coreExerciseIds: Set<String> = [
+        // Chest
+        "0025", "0047", "0033", "0289", "0314", "0308", "0319", "0251", "0662", "1270", "0375",
+        // Back
+        "0027", "0032", "0652", "0673", "0861", "0238", "0095", "0406", "1349", "0573",
+        // Legs
+        "0102", "0042", "0760", "0585", "0586", "0085", "0336", "0743", "0770", "0413", "1760",
+        "0117", "3236", "2368",
+        // Shoulders
+        "0334", "0310", "0178", "0120", "0383", "0091", "2137",
+        // Biceps
+        "0031", "0294", "0313", "0868", "0297", "0447", "0318", "0165", "0195", "0285",
+        // Triceps
+        "0201", "0814", "0060", "0194", "0333", "1719",
+        // Core
+        "0871", "3665", "0472", "0687", "0001", "0689", "0857",
+        // Cardio
+        "0685", "0003"
     ]
+    
+    private let searchAliases: [String: [String]] = [
+        "benkpress": ["bench press"],
+        "bänkpress": ["bench press"],
+        "knäböj": ["squat"],
+        "marklyft": ["deadlift"],
+        "axelpress": ["shoulder press", "overhead press", "military press"],
+        "militärpress": ["military press", "overhead press"],
+        "rodd": ["row"],
+        "hantelrodd": ["dumbbell row"],
+        "bicepscurl": ["biceps curl", "bicep curl", "curl"],
+        "biceps": ["biceps curl", "curl", "biceps"],
+        "triceps": ["triceps", "tricep", "pushdown", "extension"],
+        "bröstpress": ["bench press", "chest press"],
+        "bröstflyes": ["fly", "cable fly", "crossover"],
+        "latsdrag": ["lat pulldown", "pulldown"],
+        "pulldown": ["pulldown", "lat pulldown"],
+        "chins": ["pull-up", "chin-up", "chin up"],
+        "chinups": ["pull-up", "chin-up"],
+        "pullups": ["pull-up", "pull up"],
+        "armhävningar": ["push-up", "push up"],
+        "armhävning": ["push-up", "push up"],
+        "pushups": ["push-up", "push up"],
+        "dips": ["dip"],
+        "sidolyft": ["lateral raise"],
+        "främre höjning": ["front raise"],
+        "plankan": ["plank"],
+        "planka": ["plank"],
+        "situps": ["sit-up", "sit up", "crunch"],
+        "benspark": ["leg extension"],
+        "benböj": ["leg curl"],
+        "bencurl": ["leg curl"],
+        "benpress": ["leg press"],
+        "vadpress": ["calf raise"],
+        "vader": ["calf raise", "calf"],
+        "höftlyft": ["hip thrust"],
+        "utfall": ["lunge"],
+        "rygglyft": ["back extension"],
+        "axlar": ["shoulder", "delt", "lateral raise"],
+        "mage": ["crunch", "sit-up", "plank", "leg raise"],
+        "rumpa": ["glute", "hip thrust", "squat"],
+        "rygg": ["row", "pull", "lat", "back"],
+        "bröst": ["bench", "chest", "fly", "push-up"],
+        "facepull": ["face pull"],
+        "facepulls": ["face pull"],
+        "skuldra": ["shoulder", "delt"],
+        "skulderpress": ["shoulder press"],
+        "hammer curl": ["hammer curl"],
+        "hammarcurl": ["hammer curl"],
+        "preacher": ["preacher curl"],
+        "cable": ["cable"],
+        "hantel": ["dumbbell"],
+        "skivstång": ["barbell"],
+    ]
+    
+    private func normalizeForSearch(_ text: String) -> String {
+        return text.lowercased()
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+    
+    private func exerciseMatchesSearch(_ exercise: ExerciseDBExercise, query: String) -> Bool {
+        let normalizedQuery = normalizeForSearch(query)
+        let normalizedName = normalizeForSearch(exercise.name)
+        let normalizedDisplay = normalizeForSearch(exercise.displayName)
+        
+        if normalizedName.contains(normalizedQuery) || normalizedDisplay.contains(normalizedQuery) {
+            return true
+        }
+        
+        // Check Swedish aliases
+        for (alias, englishTerms) in searchAliases {
+            if normalizedQuery.contains(normalizeForSearch(alias)) {
+                for term in englishTerms {
+                    if normalizedName.contains(normalizeForSearch(term)) {
+                        return true
+                    }
+                }
+            }
+        }
+        
+        // Check target muscle and body part
+        if exercise.target.lowercased().contains(normalizedQuery) ||
+           exercise.bodyPart.lowercased().contains(normalizedQuery) ||
+           exercise.swedishBodyPart.lowercased().contains(normalizedQuery) {
+            return true
+        }
+        
+        return false
+    }
     
     var filteredExercises: [ExerciseDBExercise] {
         var result = exercises
@@ -1510,7 +1615,6 @@ struct ExercisePickerView: View {
                 let recentIds = RecentExerciseStore.shared.loadAll()
                 let topRecent = Array(recentIds.prefix(20))
                 result = result.filter { topRecent.contains($0.id) }
-                // Sort by recency order
                 result.sort { a, b in
                     let aIndex = topRecent.firstIndex(of: a.id) ?? Int.max
                     let bIndex = topRecent.firstIndex(of: b.id) ?? Int.max
@@ -1526,9 +1630,14 @@ struct ExercisePickerView: View {
             result = result.filter { favoriteStore.isFavorite($0.id) }
         }
         
-        // Filter by search text
+        // Filter by equipment
+        if let equipment = selectedEquipment {
+            result = result.filter { $0.equipment.lowercased() == equipment.lowercased() }
+        }
+        
+        // Filter by search text (with aliases and normalization)
         if !searchText.isEmpty {
-            result = result.filter { $0.displayName.localizedCaseInsensitiveContains(searchText) }
+            result = result.filter { exerciseMatchesSearch($0, query: searchText) }
         }
         
         // Sort by popularity if no quick filter (quick filter already sorted)
@@ -1549,15 +1658,15 @@ struct ExercisePickerView: View {
             // Recent exercises first (user's own history)
             if aRecent != bRecent { return aRecent }
             
+            // Core exercises next (curated common exercises)
+            let aCore = coreExerciseIds.contains(a.id)
+            let bCore = coreExerciseIds.contains(b.id)
+            if aCore != bCore { return aCore }
+            
             // Smart ranking (global popularity + trending combined)
             let aRank = popularityRanking[a.id] ?? Int.max
             let bRank = popularityRanking[b.id] ?? Int.max
             if aRank != bRank { return aRank < bRank }
-            
-            // Fallback to static popular list if no database data
-            let aFallback = fallbackPopularIds.contains(a.id)
-            let bFallback = fallbackPopularIds.contains(b.id)
-            if aFallback != bFallback { return aFallback }
             
             // Then alphabetically
             return a.displayName < b.displayName
@@ -1644,7 +1753,7 @@ struct ExercisePickerView: View {
                     ForEach(muscleCategories, id: \.apiValue) { category in
                         Button(action: {
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                quickFilter = nil // Clear quick filter when selecting category
+                                quickFilter = nil
                                 if category.apiValue == "all" {
                                     selectedCategory = nil
                                     Task {
@@ -1675,9 +1784,28 @@ struct ExercisePickerView: View {
                                 .cornerRadius(20)
                         }
                     }
+                    
+                    Divider()
+                        .frame(height: 24)
+                    
+                    Button(action: {
+                        showEquipmentSheet = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "line.3.horizontal.decrease")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(selectedEquipment?.capitalized ?? L.t(sv: "Utrustning", nb: "Utstyr"))
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        }
+                        .foregroundColor(selectedEquipment != nil ? .white : .black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(selectedEquipment != nil ? Color.black : Color(.systemGray6))
+                        .cornerRadius(20)
+                    }
                 }
-                                        .padding(.horizontal, 16)
-                                }
+                .padding(.horizontal, 16)
+            }
             .padding(.top, 12)
             
             // Quick filter buttons (Senast använda / Tidigare använt)

@@ -30,8 +30,7 @@ BEGIN
     WHERE to_char(wp.created_at::timestamptz, 'YYYY-MM') = p_month
       AND (p_user_ids IS NULL OR CAST(wp.user_id AS TEXT) = ANY(p_user_ids))
     GROUP BY wp.user_id, p.username, p.avatar_url, p.is_pro_member
-    ORDER BY COUNT(*) DESC
-    LIMIT 20;
+    ORDER BY COUNT(*) DESC;
 END;
 $$;
 
@@ -60,8 +59,7 @@ BEGIN
       AND wp.distance > 0
       AND (p_user_ids IS NULL OR CAST(wp.user_id AS TEXT) = ANY(p_user_ids))
     GROUP BY wp.user_id, p.username, p.avatar_url, p.is_pro_member
-    ORDER BY SUM(wp.distance) DESC
-    LIMIT 20;
+    ORDER BY SUM(wp.distance) DESC;
 END;
 $$;
 
@@ -89,7 +87,6 @@ BEGIN
       AND wp.exercises_data IS NOT NULL
       AND (p_user_ids IS NULL OR CAST(wp.user_id AS TEXT) = ANY(p_user_ids))
     GROUP BY wp.user_id, p.username, p.avatar_url, p.is_pro_member
-    ORDER BY SUM(calculate_workout_volume(wp.exercises_data)) DESC
-    LIMIT 20;
+    ORDER BY SUM(calculate_workout_volume(wp.exercises_data)) DESC;
 END;
 $$;

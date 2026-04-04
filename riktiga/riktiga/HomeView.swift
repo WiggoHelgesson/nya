@@ -128,6 +128,7 @@ struct DailySummary {
 
 // MARK: - Calorie Tracker Home View (Cal AI Style)
 struct HomeView: View {
+    var embedded: Bool = false
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var viewModel = CalorieTrackerViewModel()
@@ -194,10 +195,11 @@ struct HomeView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // MARK: - Standard App Header
-            SimpleAppHeader()
-                .environmentObject(authViewModel)
-                .zIndex(2)
+            if !embedded {
+                SimpleAppHeader()
+                    .environmentObject(authViewModel)
+                    .zIndex(2)
+            }
             
             ZStack {
                 Color(.systemGroupedBackground)

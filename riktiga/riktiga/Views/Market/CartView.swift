@@ -10,6 +10,8 @@ struct CartView: View {
     @State private var isRedeemingDiscount = false
     @State private var discountApplied: String?
     @State private var discountError: String?
+    @State private var pendingTier: DiscountTier?
+    @State private var showRedeemConfirmation = false
 
     private var cartLines: [ShopifyCartLine] {
         cartManager.cart?.lines.edges.map(\.node) ?? []
@@ -43,6 +45,27 @@ struct CartView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+        }
+        .alert(
+            L.t(sv: "Är du säker?", nb: "Er du sikker?"),
+            isPresented: $showRedeemConfirmation
+        ) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {
+                pendingTier = nil
+            }
+            Button(L.t(sv: "Lås upp", nb: "Lås opp")) {
+                if let tier = pendingTier {
+                    Task { await redeemTier(tier) }
+                    pendingTier = nil
+                }
+            }
+        } message: {
+            if let tier = pendingTier {
+                Text(L.t(
+                    sv: "Dina \(tier.xpCost) poäng kommer försvinna om du fortsätter nu.",
+                    nb: "Dine \(tier.xpCost) poeng vil forsvinne hvis du fortsetter nå."
+                ))
             }
         }
         .sheet(isPresented: $showCheckout) {
@@ -149,7 +172,8 @@ struct CartView: View {
                     } else {
                         ForEach(tiers) { tier in
                             Button {
-                                Task { await redeemTier(tier) }
+                                pendingTier = tier
+                                showRedeemConfirmation = true
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {

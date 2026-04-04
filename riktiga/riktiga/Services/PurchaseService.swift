@@ -166,6 +166,8 @@ class PurchaseService: ObservableObject {
             return "1EFN34345G1J"
         case "FUSE ENERGY":
             return "UPDOWN10"
+        case "ZEENZA":
+            return "STUD10"
         case "XEEIL":
             return "UPDOWN15"
             

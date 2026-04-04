@@ -1,5 +1,17 @@
 import SwiftUI
 
+enum RewardsTab: String, CaseIterable {
+    case beloningar = "Beloningar"
+    case hittaTranare = "HittaTranare"
+
+    var displayName: String {
+        switch self {
+        case .beloningar: return L.t(sv: "Belöningar", nb: "Belønninger")
+        case .hittaTranare: return L.t(sv: "Hitta tränare", nb: "Finn trener")
+        }
+    }
+}
+
 struct RewardsContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     let popToRootTrigger: Int
@@ -9,6 +21,7 @@ struct RewardsContainerView: View {
     @State private var isFetchingUnread = false
     @State private var navigationPath = NavigationPath()
     @State private var lastUnreadFetch: Date = .distantPast
+    @State private var selectedRewardsTab: RewardsTab = .beloningar
     @StateObject private var dmService = DirectMessageService.shared
     
     private let fetchThrottleInterval: TimeInterval = 30
@@ -131,14 +144,24 @@ struct RewardsContainerView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 16)
+                    rewardsTabPicker
+
+                    Rectangle()
+                        .fill(Color.primary)
+                        .frame(height: 0.5)
+                        .opacity(0.1)
                 }
                 .background(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 .zIndex(2)
                 
-                // Content (no tabs needed)
-                RewardsView()
-                    .environmentObject(authViewModel)
+                if selectedRewardsTab == .beloningar {
+                    RewardsView()
+                        .environmentObject(authViewModel)
+                } else {
+                    FindTrainerView()
+                        .environmentObject(authViewModel)
+                }
             }
             .navigationBarHidden(true)
         }
@@ -166,10 +189,36 @@ struct RewardsContainerView: View {
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
+            selectedRewardsTab = .beloningar
             NotificationCenter.default.post(name: NSNotification.Name("PopToRootBeloningar"), object: nil)
         }
     }
     
+    private var rewardsTabPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(RewardsTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedRewardsTab = tab
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.displayName)
+                            .font(.system(size: 15, weight: selectedRewardsTab == tab ? .semibold : .regular))
+                            .foregroundColor(selectedRewardsTab == tab ? .primary : .gray)
+
+                        Rectangle()
+                            .fill(selectedRewardsTab == tab ? Color.primary : Color.clear)
+                            .frame(height: 2)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
     private func throttledRefresh() async {
         guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
         lastUnreadFetch = Date()

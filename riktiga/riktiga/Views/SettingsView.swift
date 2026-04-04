@@ -255,6 +255,12 @@ struct SettingsView: View {
                 Button(action: openHealthSettings) {
                     NewSettingsRow(icon: "heart.fill", title: "Apple Health")
                 }
+                
+                SettingsItemDivider()
+                
+                Button(action: { showReferralView = true }) {
+                    NewSettingsRow(icon: "megaphone", title: L.t(sv: "Affiliate-program", nb: "Affiliateprogram"))
+                }
             }
             .background(Color(.systemBackground))
             .cornerRadius(12)

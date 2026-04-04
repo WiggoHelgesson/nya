@@ -67,7 +67,7 @@ struct MainTabView: View {
     @State private var showStartSession = false
     @State private var startActivityType: ActivityType? = .running
     @State private var showResumeSession = false
-    @State private var selectedTab = 0  // 0=Hem, 1=Kalorier, (2=Coach om aktiv), 2/3=Belöningar, 3/4=Profil
+    @State private var selectedTab = 0
     @State private var previousTab = 0
     @State private var autoPresentedActiveSession = false
     @State private var showDiscardConfirmation = false
@@ -93,32 +93,33 @@ struct MainTabView: View {
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
     // Tab items data - dynamiskt baserat på om användaren har coach
-    private var tabItems: [(icon: String, title: String, selectedIcon: String, isCustomImage: Bool)] {
+    private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
         if hasActiveCoach {
             return [
-                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill", false),
-                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill", false),
-                ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill", false),
-                ("23", "Market", "23", true),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill", false),
-                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill", false)
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
+                ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
+                ("figure.golf", "Market", "figure.golf"),
+                ("record.circle", L.t(sv: "Tracka", nb: "Track"), "record.circle"),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill"),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         } else {
             return [
-                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill", false),
-                ("trophy", L.t(sv: "Topplistor", nb: "Topplister"), "trophy.fill", false),
-                ("23", "Market", "23", true),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill", false),
-                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill", false)
+                ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
+                ("figure.golf", "Market", "figure.golf"),
+                ("record.circle", L.t(sv: "Tracka", nb: "Track"), "record.circle"),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill"),
+                ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         }
     }
     
     // Tab index mapping
-    private var marketTabIndex: Int { hasActiveCoach ? 3 : 2 }
+    private var marketTabIndex: Int { hasActiveCoach ? 2 : 1 }
+    private var trackaTabIndex: Int { hasActiveCoach ? 3 : 2 }
     private var rewardsTabIndex: Int { hasActiveCoach ? 4 : 3 }
     private var profileTabIndex: Int { hasActiveCoach ? 5 : 4 }
-    private var coachTabIndex: Int { 2 } // Endast om hasActiveCoach
+    private var coachTabIndex: Int { 1 }
     
     var body: some View {
         mainContent
@@ -130,7 +131,7 @@ struct MainTabView: View {
                 showProWelcome: $showProWelcome,
                 startActivityType: startActivityType,
                 coachWorkoutToStart: coachWorkoutToStart,
-                initialScannerMode: initialScannerMode,
+                initialScannerMode: $initialScannerMode,
                 authViewModel: authViewModel
             ))
             .modifier(NavigationReceiversModifier(
@@ -156,9 +157,11 @@ struct MainTabView: View {
                 showResumeSession: $showResumeSession,
                 showProWelcome: $showProWelcome,
                 previousTab: $previousTab,
+                showTrackingTypePicker: $showTrackingTypePicker,
                 hasActiveCoach: hasActiveCoach,
                 notificationNav: notificationNav,
-                coachTabIndex: coachTabIndex
+                coachTabIndex: coachTabIndex,
+                trackaTabIndex: trackaTabIndex
             ))
             .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
                 UsernameRequiredView().environmentObject(authViewModel)
@@ -173,21 +176,44 @@ struct MainTabView: View {
                 IntelligenceView()
             }
             .sheet(isPresented: $showTrackingTypePicker) {
-                TrackingTypePickerView(
-                    onNormalTracking: {
+                TrackingChoiceSheet(
+                    onGym: {
                         showTrackingTypePicker = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             startActivityType = .walking
                             showStartSession = true
                         }
                     },
-                    onQuickTracking: {
+                    onQuickGym: {
                         showTrackingTypePicker = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             showQuickTracking = true
                         }
+                    },
+                    onRunning: {
+                        showTrackingTypePicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            startActivityType = .running
+                            showStartSession = true
+                        }
+                    },
+                    onScanBarcode: {
+                        showTrackingTypePicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            initialScannerMode = .barcode
+                            showFoodScanner = true
+                        }
+                    },
+                    onTrackCalories: {
+                        showTrackingTypePicker = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            initialScannerMode = .ai
+                            showFoodScanner = true
+                        }
                     }
                 )
+                .presentationDetents([.height(340)])
+                .presentationDragIndicator(.visible)
             }
             .fullScreenCover(isPresented: $showQuickTracking) {
                 QuickTrackingFlowView()
@@ -601,13 +627,9 @@ struct MainTabView: View {
                     SocialContainerView(popToRootTrigger: popToRootTrigger[0] ?? 0)
                 }
                 
-                Tab(L.t(sv: "Topplistor", nb: "Topplister"), systemImage: "trophy.fill", value: 1) {
-                    LeaderboardContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
-                }
-                
                 if hasActiveCoach {
-                    Tab(L.t(sv: "Coach", nb: "Coach"), systemImage: "person.badge.shield.checkmark.fill", value: 2) {
-                        CoachTabView(popToRootTrigger: popToRootTrigger[2] ?? 0)
+                    Tab(L.t(sv: "Coach", nb: "Coach"), systemImage: "person.badge.shield.checkmark.fill", value: coachTabIndex) {
+                        CoachTabView(popToRootTrigger: popToRootTrigger[coachTabIndex] ?? 0)
                     }
                 }
                 
@@ -617,11 +639,12 @@ struct MainTabView: View {
                     Label {
                         Text("Market")
                     } icon: {
-                        Image("23")
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        Image(systemName: "figure.golf")
                     }
+                }
+                
+                Tab(L.t(sv: "Tracka", nb: "Track"), systemImage: "record.circle", value: trackaTabIndex) {
+                    Color.clear
                 }
                 
                 Tab(L.t(sv: "Belöningar", nb: "Belønninger"), systemImage: "gift.fill", value: rewardsTabIndex) {
@@ -633,25 +656,7 @@ struct MainTabView: View {
                 }
             }
             
-            if showAddMealSheet {
-                addMealOverlay
-            }
-            
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
-                        floatingAddButton
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding(.trailing, 16)
-                .padding(.bottom, 72)
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
-            
-            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+            if sessionManager.hasActiveSession && !showStartSession && !showResumeSession {
                 VStack {
                     Spacer()
                     activeSessionBanner
@@ -663,7 +668,6 @@ struct MainTabView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeInOut(duration: 0.15), value: selectedTab)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
-        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
     }
     
     // MARK: - Custom Tab View (pre-iOS 26)
@@ -676,16 +680,11 @@ struct MainTabView: View {
                     .opacity(selectedTab == 0 ? 1 : 0)
                     .allowsHitTesting(selectedTab == 0 && !showAddMealSheet)
                 
-                LeaderboardContainerView(popToRootTrigger: popToRootTrigger[1] ?? 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(selectedTab == 1 ? 1 : 0)
-                    .allowsHitTesting(selectedTab == 1 && !showAddMealSheet)
-                
                 if hasActiveCoach {
-                    CoachTabView(popToRootTrigger: popToRootTrigger[2] ?? 0)
+                    CoachTabView(popToRootTrigger: popToRootTrigger[coachTabIndex] ?? 0)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .opacity(selectedTab == 2 ? 1 : 0)
-                        .allowsHitTesting(selectedTab == 2 && !showAddMealSheet)
+                        .opacity(selectedTab == coachTabIndex ? 1 : 0)
+                        .allowsHitTesting(selectedTab == coachTabIndex && !showAddMealSheet)
                 }
                 
                 MarketContainerView(popToRootTrigger: popToRootTrigger[marketTabIndex] ?? 0)
@@ -703,28 +702,8 @@ struct MainTabView: View {
                     .opacity(selectedTab == profileTabIndex ? 1 : 0)
                     .allowsHitTesting(selectedTab == profileTabIndex && !showAddMealSheet)
                 
-                // Add Meal Overlay
-                addMealOverlay
-                    .opacity(showAddMealSheet ? 1 : 0)
-                    .allowsHitTesting(showAddMealSheet)
-                
-                // Floating + button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        if !showAddMealSheet && navigationTracker.isAtRootView && !hideFloatingButton {
-                            floatingAddButton
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 12)
-                }
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: navigationTracker.isAtRootView)
-                
                 // Floating active session banner
-                if sessionManager.hasActiveSession && !showStartSession && !showResumeSession && !showAddMealSheet {
+                if sessionManager.hasActiveSession && !showStartSession && !showResumeSession {
                     VStack {
                         Spacer()
                         activeSessionBanner
@@ -741,7 +720,6 @@ struct MainTabView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeInOut(duration: 0.15), value: selectedTab)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
-        .animation(.easeOut(duration: 0.15), value: showAddMealSheet)
         .animation(.easeInOut(duration: 0.25), value: navigationTracker.hideTabBar)
     }
     
@@ -795,7 +773,7 @@ struct MainTabView: View {
                         selectedIcon: tabItems[index].selectedIcon,
                         title: tabItems[index].title,
                         isSelected: selectedTab == index,
-                        isCustomImage: tabItems[index].isCustomImage,
+                        useTextIcon: false,
                         action: {
                             if selectedTab == index {
                                 popToRootTrigger[index, default: 0] += 1
@@ -980,7 +958,7 @@ private struct FullScreenCoversModifier: ViewModifier {
     @Binding var showProWelcome: Bool
     let startActivityType: ActivityType?
     let coachWorkoutToStart: SavedGymWorkout?
-    let initialScannerMode: FoodScanMode
+    @Binding var initialScannerMode: FoodScanMode
     let authViewModel: AuthViewModel
     
     func body(content: Content) -> some View {
@@ -1075,7 +1053,7 @@ private struct NavigationReceiversModifier: ViewModifier {
                 showResumeSession = false
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToKalorier"))) { _ in
-                selectedTab = 1
+                selectedTab = 0
                 showStartSession = false
                 showResumeSession = false
             }
@@ -1122,9 +1100,11 @@ private struct StateObserversModifier: ViewModifier {
     @Binding var showResumeSession: Bool
     @Binding var showProWelcome: Bool
     @Binding var previousTab: Int
+    @Binding var showTrackingTypePicker: Bool
     let hasActiveCoach: Bool
     let notificationNav: NotificationNavigationManager
     let coachTabIndex: Int
+    let trackaTabIndex: Int
     
     func body(content: Content) -> some View {
         content
@@ -1177,6 +1157,13 @@ private struct StateObserversModifier: ViewModifier {
                 }
             }
             .onChange(of: selectedTab) { oldTab, newTab in
+                if newTab == trackaTabIndex {
+                    Task { @MainActor in
+                        selectedTab = oldTab
+                    }
+                    showTrackingTypePicker = true
+                    return
+                }
                 if oldTab != newTab {
                     let tabHaptic = UIImpactFeedbackGenerator(style: .medium)
                     tabHaptic.prepare()
@@ -1199,9 +1186,18 @@ private struct CustomTabBarItem: View {
     let selectedIcon: String
     let title: String
     let isSelected: Bool
-    var isCustomImage: Bool = false
+    let useTextIcon: Bool
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    
+    init(icon: String, selectedIcon: String, title: String, isSelected: Bool, useTextIcon: Bool = false, action: @escaping () -> Void) {
+        self.icon = icon
+        self.selectedIcon = selectedIcon
+        self.title = title
+        self.isSelected = isSelected
+        self.useTextIcon = useTextIcon
+        self.action = action
+    }
     
     private let selectionHaptic = UIImpactFeedbackGenerator(style: .medium)
     
@@ -1212,13 +1208,10 @@ private struct CustomTabBarItem: View {
             action()
         } label: {
             VStack(spacing: 5) {
-                if isCustomImage {
-                    Image(icon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .opacity(isSelected ? 1.0 : 0.5)
+                if useTextIcon {
+                    Text(icon)
+                        .font(.system(size: 16, weight: isSelected ? .black : .bold))
+                        .foregroundColor(isSelected ? .primary : .gray)
                         .frame(height: 28)
                 } else {
                     Image(systemName: isSelected ? selectedIcon : icon)
@@ -1289,6 +1282,159 @@ private struct TabSkeletonView: View {
 }
 
 // MARK: - Skeleton Box Component
+// MARK: - Tracking Choice Sheet
+private struct TrackingChoiceSheet: View {
+    let onGym: () -> Void
+    let onQuickGym: () -> Void
+    let onRunning: () -> Void
+    let onScanBarcode: () -> Void
+    let onTrackCalories: () -> Void
+    @State private var showGymOptions = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 8)
+
+            HStack(spacing: 16) {
+                choiceButton(
+                    icon: "dumbbell.fill",
+                    title: L.t(sv: "Gympass", nb: "Treningsøkt"),
+                    action: { showGymOptions = true }
+                )
+
+                choiceButton(
+                    icon: "figure.run",
+                    title: L.t(sv: "Löppass", nb: "Løpeøkt"),
+                    action: onRunning
+                )
+            }
+            .padding(.horizontal, 20)
+
+            HStack(spacing: 16) {
+                choiceButton(
+                    icon: "barcode.viewfinder",
+                    title: L.t(sv: "Scanna streckkod", nb: "Skann strekkode"),
+                    action: onScanBarcode
+                )
+
+                choiceButton(
+                    icon: "fork.knife",
+                    title: L.t(sv: "Tracka kalorier", nb: "Track kalorier"),
+                    action: onTrackCalories
+                )
+            }
+            .padding(.horizontal, 20)
+
+            Spacer()
+        }
+        .sheet(isPresented: $showGymOptions) {
+            GymTypeSheet(onSelect: { type in
+                showGymOptions = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    if type == .quick {
+                        onQuickGym()
+                    } else {
+                        onGym()
+                    }
+                }
+            })
+            .presentationDetents([.height(280)])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private func choiceButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        } label: {
+            VStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 28))
+                    .foregroundColor(.primary)
+
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Gym Type Sheet
+private enum GymTrackingType {
+    case normal, quick
+}
+
+private struct GymTypeSheet: View {
+    let onSelect: (GymTrackingType) -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(L.t(sv: "Välj typ av gympass", nb: "Velg type treningsøkt"))
+                .font(.system(size: 20, weight: .bold))
+                .padding(.top, 24)
+
+            Text(L.t(
+                sv: "Vanligt gympass ger mest poäng",
+                nb: "Vanlig treningsøkt gir mest poeng"
+            ))
+            .font(.system(size: 13))
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 32)
+
+            HStack(spacing: 16) {
+                gymOptionButton(
+                    icon: "dumbbell.fill",
+                    title: L.t(sv: "Vanligt gympass", nb: "Vanlig treningsøkt"),
+                    action: { onSelect(.normal) }
+                )
+
+                gymOptionButton(
+                    icon: "bolt.fill",
+                    title: L.t(sv: "Snabbtrackat gympass", nb: "Hurtigtracking"),
+                    action: { onSelect(.quick) }
+                )
+            }
+            .padding(.horizontal, 20)
+
+            Spacer()
+        }
+    }
+
+    private func gymOptionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            action()
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 26))
+                    .foregroundColor(.primary)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct SkeletonBox: View {
     let width: CGFloat
     let height: CGFloat
