@@ -308,7 +308,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
                 
                 let isInVehicle = detectVehicleMovement(speed)
-                if currentActivityType != "Skidåkning" && isInVehicle {
+                if isInVehicle {
                     latestVehicleDetected = true
                     lastLocation = location
                     continue
@@ -323,35 +323,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                     totalDistance += distanceFromLast
                     latestDistance = totalDistance / 1000.0
                     
-                    if currentActivityType == "Skidåkning" {
-                        updateSpeedHistory(speed)
-                        let avgSpeed = speedHistory.isEmpty ? 0 : speedHistory.reduce(0, +) / Double(speedHistory.count)
-                        let speedVariance = speedHistory.isEmpty ? 0 : speedHistory.map { pow($0 - avgSpeed, 2) }.reduce(0, +) / Double(speedHistory.count)
-                        
-                        isOnLift = avgSpeed > 10.0 && speedVariance < 5.0 && speedHistory.count >= 5
-                        
-                        if !isOnLift {
-                            if let lastAlt = lastValidAltitude, location.altitude > 0 {
-                                let altitudeDiff = location.altitude - lastAlt
-                                if altitudeDiff > 0 {
-                                    elevationGain += altitudeDiff
-                                    latestElevationGain = elevationGain
-                                }
-                                lastValidAltitude = location.altitude
-                            } else if location.altitude > 0 {
-                                lastValidAltitude = location.altitude
-                            }
-                            
-                            if speed > maxSpeed {
-                                maxSpeed = speed
-                                latestMaxSpeed = speed
-                            }
-                        }
-                    } else {
-                        if speed > maxSpeed {
-                            maxSpeed = speed
-                            latestMaxSpeed = speed
-                        }
+                    if speed > maxSpeed {
+                        maxSpeed = speed
+                        latestMaxSpeed = speed
                     }
                     
                     if let lastRoutePoint = batchedRoutePoints.last ?? routeCoordinates.last {

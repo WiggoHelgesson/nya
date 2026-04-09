@@ -18,6 +18,7 @@ struct AppNotification: Identifiable, Codable {
         case comment
         case follow
         case newWorkout
+        case newPB
         case reply
         case coachInvitation
         case coachProgramAssigned
@@ -33,6 +34,7 @@ struct AppNotification: Identifiable, Codable {
             case "comment": self = .comment
             case "follow": self = .follow
             case "new_workout": self = .newWorkout
+            case "new_pb": self = .newPB
             case "reply": self = .reply
             case "coach_invitation": self = .coachInvitation
             case "coach_program_assigned": self = .coachProgramAssigned
@@ -50,6 +52,7 @@ struct AppNotification: Identifiable, Codable {
             case .comment: return "comment"
             case .follow: return "follow"
             case .newWorkout: return "new_workout"
+            case .newPB: return "new_pb"
             case .reply: return "reply"
             case .coachInvitation: return "coach_invitation"
             case .coachProgramAssigned: return "coach_program_assigned"
@@ -148,6 +151,8 @@ struct AppNotification: Identifiable, Codable {
             return "\(actorUsername ?? "Någon") började följa dig"
         case .newWorkout:
             return "\(actorUsername ?? "Någon") har avslutat ett träningspass! 🏃"
+        case .newPB:
+            return "\(actorUsername ?? "Någon") tog nytt PB! 🏆"
         case .reply:
             if let text = commentText, !text.isEmpty {
                 return "\(actorUsername ?? "Någon") svarade: \"\(text)\""
@@ -180,6 +185,8 @@ struct AppNotification: Identifiable, Codable {
             return "person.fill.badge.plus"
         case .newWorkout:
             return "figure.run"
+        case .newPB:
+            return "trophy.fill"
         case .reply:
             return "arrowshape.turn.up.left.fill"
         case .coachInvitation:
@@ -209,6 +216,8 @@ struct AppNotification: Identifiable, Codable {
             return "green"
         case .newWorkout:
             return "orange"
+        case .newPB:
+            return "yellow"
         case .reply:
             return "purple"
         case .coachInvitation:

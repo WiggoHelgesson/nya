@@ -7,7 +7,6 @@ struct WorkoutCelebrationView: View {
     
     @Environment(\.dismiss) private var dismiss
     @StateObject private var insightsLoader: ShareInsightsLoader
-    @State private var showConfetti = false
     @State private var selectedTemplateIndex = 0
     @State private var coverImage: UIImage?
     @State private var showAlert = false
@@ -40,13 +39,6 @@ struct WorkoutCelebrationView: View {
             // Background
             Color(.systemBackground)
                 .ignoresSafeArea()
-            
-            // Confetti overlay
-            if showConfetti {
-                ConfettiView()
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
             
             VStack(spacing: 0) {
                 // Header with title and emoji
@@ -153,21 +145,6 @@ struct WorkoutCelebrationView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 20)
                     .padding(.bottom, 40)
-                }
-            }
-        }
-        .onAppear {
-            // Start confetti after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation {
-                    showConfetti = true
-                }
-            }
-            
-            // Stop confetti after 3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.3) {
-                withAnimation {
-                    showConfetti = false
                 }
             }
         }

@@ -290,6 +290,15 @@ struct NotificationsView: View {
                     showCoachPrograms = true
                 }
                 
+            case .newPB, .newWorkout:
+                await MainActor.run {
+                    if let postId = notification.postId {
+                        NotificationNavigationManager.shared.navigateToPost(postId: postId)
+                    } else if !notification.actorId.isEmpty {
+                        selectedProfileId = notification.actorId
+                    }
+                }
+                
             default:
                 await MainActor.run {
                     if !notification.actorId.isEmpty {
@@ -574,6 +583,8 @@ struct NotificationRowStrava: View {
             return L.t(sv: "Svar på din kommentar", nb: "Svar på din kommentar")
         case .newWorkout:
             return L.t(sv: "Nytt träningspass", nb: "Ny treningsøkt")
+        case .newPB:
+            return L.t(sv: "Nytt PB!", nb: "Ny PB!")
         case .coachInvitation:
             return L.t(sv: "Coach-inbjudan", nb: "Trener-invitasjon")
         case .coachProgramAssigned:
@@ -611,6 +622,8 @@ struct NotificationRowStrava: View {
             return L.t(sv: "\(name) svarade på din kommentar", nb: "\(name) svarte på kommentaren din")
         case .newWorkout:
             return L.t(sv: "\(name) har avslutat ett träningspass!", nb: "\(name) har fullført en treningsøkt!")
+        case .newPB:
+            return L.t(sv: "\(name) tog nytt PB! 🏆", nb: "\(name) tok ny PB! 🏆")
         case .coachInvitation:
             return L.t(sv: "\(name) vill coacha dig! Tryck för att svara.", nb: "\(name) vil coache deg! Trykk for å svare.")
         case .coachProgramAssigned:

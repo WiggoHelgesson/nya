@@ -136,9 +136,16 @@ final class ActiveSessionService {
             
             print("✅ Successfully saved active session to database for user \(userId)")
             
-            // Schedule reminder notifications for active session (1h and 5h)
-            await MainActor.run {
-                NotificationManager.shared.scheduleActiveSessionReminders()
+            // Schedule reminder notifications only for gym sessions
+            if activityType.lowercased() == "gym" {
+                let sessionLat = location?.coordinate.latitude
+                let sessionLon = location?.coordinate.longitude
+                await MainActor.run {
+                    NotificationManager.shared.scheduleActiveSessionReminders()
+                    if let lat = sessionLat, let lon = sessionLon {
+                        NotificationManager.shared.scheduleGymExitNotification(latitude: lat, longitude: lon)
+                    }
+                }
             }
             
             // Fetch the session ID
@@ -261,6 +268,7 @@ final class ActiveSessionService {
         // Cancel the active session reminder notifications
         await MainActor.run {
             NotificationManager.shared.cancelActiveSessionReminders()
+            NotificationManager.shared.cancelGymExitNotification()
         }
         
         print("✅ Ended active session for user \(userId)")

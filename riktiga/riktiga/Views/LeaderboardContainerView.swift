@@ -7,20 +7,24 @@ struct LeaderboardContainerView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            LeaderboardView()
-                .environmentObject(authViewModel)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: LeaderboardCategory.self) { category in
-                    LeaderboardDetailView(category: category)
+            VStack(spacing: 0) {
+                StravaStyleHeaderView(pageTitle: L.t(sv: "Topplistor", nb: "Topplister"))
+
+                LeaderboardView()
+                    .environmentObject(authViewModel)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: LeaderboardCategory.self) { category in
+                LeaderboardDetailView(category: category)
+                    .environmentObject(authViewModel)
+            }
+            .navigationDestination(for: String.self) { destination in
+                if destination == "schoolBattle" {
+                    SchoolBattleView()
                         .environmentObject(authViewModel)
                 }
-                .navigationDestination(for: String.self) { destination in
-                    if destination == "schoolBattle" {
-                        SchoolBattleView()
-                            .environmentObject(authViewModel)
-                    }
-                }
+            }
         }
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in

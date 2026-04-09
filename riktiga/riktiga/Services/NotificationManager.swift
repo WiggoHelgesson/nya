@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import UIKit
+import CoreLocation
 
 private extension UNNotificationAttachment {
     func copy(index: Int) throws -> UNNotificationAttachment {
@@ -282,6 +283,42 @@ final class NotificationManager {
             "active-session-reminder-5h"
         ])
         print("🔕 Active session reminders cancelled")
+    }
+    
+    // MARK: - Gym Exit Location Notification
+    
+    /// Schedule a notification that fires when the user leaves the gym area (~200m radius)
+    func scheduleGymExitNotification(latitude: Double, longitude: Double) {
+        cancelGymExitNotification()
+        
+        let content = UNMutableNotificationContent()
+        content.title = "Gymmar du fortfarande?"
+        content.body = "Det verkar som att du lämnat gymmet. Glöm inte att avsluta passet."
+        content.sound = .default
+        content.userInfo = ["type": "gym_exit_reminder"]
+        
+        let center = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let region = CLCircularRegion(center: center, radius: 200, identifier: "gym-session-region")
+        region.notifyOnExit = true
+        region.notifyOnEntry = false
+        
+        let trigger = UNLocationNotificationTrigger(region: region, repeats: false)
+        let request = UNNotificationRequest(identifier: "gym-exit-reminder", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Failed to schedule gym exit notification: \(error)")
+            } else {
+                print("✅ Gym exit notification scheduled (200m radius)")
+            }
+        }
+    }
+    
+    /// Cancel the gym exit location notification
+    func cancelGymExitNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
+            "gym-exit-reminder"
+        ])
     }
     
     // MARK: - Monthly Report Notification

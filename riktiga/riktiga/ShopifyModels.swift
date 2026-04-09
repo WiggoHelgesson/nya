@@ -222,3 +222,21 @@ struct ShopifyUserError: Decodable {
     let field: [String]?
     let message: String
 }
+
+// MARK: - Market Category
+
+struct MarketCategory: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let icon: String
+
+    static let all = MarketCategory(id: "all", name: "Alla", icon: "square.grid.2x2")
+
+    static let defaultCategories: [MarketCategory] = [
+        .all,
+        MarketCategory(id: "clothing", name: "Kläder", icon: "tshirt"),
+        MarketCategory(id: "accessories", name: "Accessoarer", icon: "bag"),
+        MarketCategory(id: "supplements", name: "Kosttillskott", icon: "pill"),
+        MarketCategory(id: "equipment", name: "Utrustning", icon: "dumbbell"),
+    ]
+}

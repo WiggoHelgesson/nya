@@ -62,20 +62,8 @@ class MapSnapshotService {
                 return
             }
             
-            // Determine if we should fill the polygon based on activity
-            let shouldFill: Bool
-            if let activity = activity {
-                switch activity {
-                case .golf, .hiking, .skiing:
-                    shouldFill = true
-                default:
-                    shouldFill = false
-                }
-            } else {
-                shouldFill = false
-            }
+            let shouldFill = false
             
-            // Draw the route on the snapshot
             let image = self.drawRoute(on: snapshot, with: routeCoordinates, shouldFill: shouldFill, activity: activity)
             completion(image)
         }
@@ -227,18 +215,7 @@ extension UIColor {
 
 extension ActivityType {
     var territoryUIColor: UIColor {
-        switch self {
-        case .running:
-            return .systemOrange
-        case .golf:
-            return .systemBlue
-        case .skiing:
-            return .systemTeal
-        case .hiking:
-            return .systemBrown
-        case .walking:
-            return .systemRed
-        }
+        return .systemOrange
     }
 }
 

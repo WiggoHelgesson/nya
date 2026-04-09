@@ -1,22 +1,9 @@
 import SwiftUI
 
-enum HomeTab: String, CaseIterable {
-    case hem = "Hem"
-    case kalorier = "Kalorier"
-
-    var displayName: String {
-        switch self {
-        case .hem: return L.t(sv: "Hem", nb: "Hjem")
-        case .kalorier: return L.t(sv: "Kalorier", nb: "Kalorier")
-        }
-    }
-}
-
 struct SocialContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var notificationNav = NotificationNavigationManager.shared
     let popToRootTrigger: Int
-    @State private var selectedTab: HomeTab = .hem
     @State private var showFindFriends = false
     @State private var unreadNotifications = 0
     @State private var isFetchingUnread = false
@@ -141,8 +128,7 @@ struct SocialContainerView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 16)
                     
-                    homeTabPicker
-
+                    // Bottom separator
                     Rectangle()
                         .fill(Color.primary)
                         .frame(height: 0.5)
@@ -152,7 +138,7 @@ struct SocialContainerView: View {
                 .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 .zIndex(2)
                 
-                if selectedTab == .hem && profileCompletedSteps < 3 {
+                if profileCompletedSteps < 3 {
                     Button {
                         showEditProfile = true
                     } label: {
@@ -178,27 +164,13 @@ struct SocialContainerView: View {
                     .zIndex(1)
                 }
                 
-                if selectedTab == .hem {
-                    SocialView()
-                        .environmentObject(authViewModel)
-                } else {
-                    HomeView(embedded: true)
-                        .environmentObject(authViewModel)
-                }
-            }
-            .navigationBarHidden(true)
-            .navigationDestination(for: LeaderboardCategory.self) { category in
-                LeaderboardDetailView(category: category)
+                SocialView()
                     .environmentObject(authViewModel)
             }
-            .navigationDestination(for: String.self) { destination in
-                if destination == "schoolBattle" {
-                    SchoolBattleView()
-                        .environmentObject(authViewModel)
-                } else {
-                    DMNavigationWrapper(conversationId: destination)
-                        .environmentObject(authViewModel)
-                }
+            .navigationBarHidden(true)
+            .navigationDestination(for: String.self) { conversationId in
+                DMNavigationWrapper(conversationId: conversationId)
+                    .environmentObject(authViewModel)
             }
             .navigationDestination(isPresented: Binding(
                 get: { profileUserIdToOpen != nil },
@@ -222,7 +194,6 @@ struct SocialContainerView: View {
         }
         .onChange(of: popToRootTrigger) { _, _ in
             dmNavigationPath = NavigationPath()
-            selectedTab = .hem
             NotificationCenter.default.post(name: NSNotification.Name("PopToRootHem"), object: nil)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
@@ -248,31 +219,6 @@ struct SocialContainerView: View {
         }
     }
     
-    private var homeTabPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(HomeTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTab = tab
-                    }
-                } label: {
-                    VStack(spacing: 8) {
-                        Text(tab.displayName)
-                            .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
-                            .foregroundColor(selectedTab == tab ? .primary : .gray)
-
-                        Rectangle()
-                            .fill(selectedTab == tab ? Color.primary : Color.clear)
-                            .frame(height: 2)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
     private func throttledRefresh() async {
         guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
         lastUnreadFetch = Date()

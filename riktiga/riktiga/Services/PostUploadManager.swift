@@ -132,15 +132,27 @@ class PostUploadManager: ObservableObject {
                     }
                 }
                 
-                if context.hasPB, let userId = context.userId {
-                    await PushNotificationService.shared.notifyFollowersAboutPB(
-                        userId: userId,
-                        userName: context.userName ?? "En användare",
-                        userAvatar: context.userAvatarUrl,
-                        exerciseName: context.pbExerciseName,
-                        pbValue: context.pbValue,
-                        postId: context.post.id
-                    )
+                if context.isPublic, let userId = context.userId,
+                   context.activityType == "Gympass", let exercises = context.exercisesData {
+                    ExercisePRService.shared.clearCache()
+                    for exercise in exercises {
+                        let pr = await ExercisePRService.shared.calculatePR(
+                            for: exercise, userId: userId, postDate: Date()
+                        )
+                        if pr.hasWeightPR, let maxKg = exercise.kg.max(), maxKg > 0 {
+                            let formattedKg = maxKg.truncatingRemainder(dividingBy: 1) == 0
+                                ? String(format: "%.0f", maxKg)
+                                : String(format: "%.1f", maxKg)
+                            await PushNotificationService.shared.notifyFollowersAboutPB(
+                                userId: userId,
+                                userName: context.userName ?? "En användare",
+                                userAvatar: context.userAvatarUrl,
+                                exerciseName: exercise.name,
+                                pbValue: "\(formattedKg) kg",
+                                postId: context.post.id
+                            )
+                        }
+                    }
                 }
                 
                 if context.stravaConnected {

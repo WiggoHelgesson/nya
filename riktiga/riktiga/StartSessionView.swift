@@ -689,6 +689,7 @@ struct SessionMapView: View {
     @State private var hasShownSpeedWarning = false
     @State private var showVehicleDetectedAlert = false
     @State private var showEndSessionConfirmation = false
+    @State private var showNoDistanceAlert = false
     @State private var trackingStoppedDueToSpeed = false
     private let maxSpeedRunning: Double = 25.0 // km/h
     private let maxSpeedGolf: Double = 12.0 // km/h
@@ -1278,6 +1279,9 @@ struct SessionMapView: View {
                 checkAndEndSession()
             }
         }
+        .alert(L.t(sv: "Du kan ej avsluta när ingen distans är detekterad", nb: "Du kan ikke avslutte når ingen distanse er registrert"), isPresented: $showNoDistanceAlert) {
+            Button("Okej", role: .cancel) { }
+        }
         .alert(L.t(sv: "Fordon detekterat", nb: "Kjøretøy oppdaget"), isPresented: $showVehicleDetectedAlert) {
             Button("OK") {
                 // User acknowledges - session is paused but NOT dismissed
@@ -1304,8 +1308,8 @@ struct SessionMapView: View {
                 earnedPoints: earnedPoints,
                 routeImage: routeImage,
                 routeCoordinates: locationManager.routeCoordinates,
-                elevationGain: (selectedActivity ?? activity) == .skiing && locationManager.elevationGain > 0 ? locationManager.elevationGain : nil,
-                maxSpeed: (selectedActivity ?? activity) == .skiing && locationManager.maxSpeed > 0 ? locationManager.maxSpeed : nil,
+                elevationGain: nil,
+                maxSpeed: nil,
                 completedSplits: completedSplits,
                 gymExercises: nil,
                 sessionLivePhoto: sessionLivePhoto,
@@ -1434,11 +1438,9 @@ struct SessionMapView: View {
     
     private func checkSpeedForCheating(currentSpeed: Double) {
         let currentActivity = selectedActivity ?? activity
-        // Only check for running and golf (not skiing or other activities)
-        guard currentActivity == .running || currentActivity == .golf else { return }
+        guard currentActivity != .walking else { return }
         
-        // Get the appropriate speed limit for the activity
-        let maxSpeed = currentActivity == .running ? maxSpeedRunning : maxSpeedGolf
+        let maxSpeed = maxSpeedRunning
         
         if currentSpeed > maxSpeed {
             // Speed is above threshold
@@ -1624,6 +1626,11 @@ struct SessionMapView: View {
     }
     
     func checkAndEndSession() {
+        let distanceActivities: [ActivityType] = [.running, .golf, .hiking, .skiing]
+        if distanceActivities.contains(activity) && locationManager.distance < 0.01 {
+            showNoDistanceAlert = true
+            return
+        }
         endSession()
     }
     
@@ -1633,6 +1640,7 @@ struct SessionMapView: View {
         
         // Cancel any active session reminder notifications
         NotificationManager.shared.cancelActiveSessionReminders()
+        NotificationManager.shared.cancelGymExitNotification()
         
         guard let userId = authViewModel.currentUser?.id else {
             print("⚠️ No user ID found in endSession")
@@ -1692,9 +1700,9 @@ struct SessionMapView: View {
     private func distancePointMultiplier() -> Double {
         switch activity {
         case .running, .golf, .hiking, .skiing:
-            return 2.5 // 0.25 XP per 100 m
+            return 10.0
         default:
-            return 15.0 // kvar för andra aktiviteter om de använder distanspoäng
+            return 15.0
         }
     }
 

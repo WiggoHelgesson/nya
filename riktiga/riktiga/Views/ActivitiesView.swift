@@ -262,6 +262,27 @@ struct WorkoutPostCard: View {
                             }
                             statColumn(title: L.t(sv: "Volym", nb: "Volum"), value: volume)
                         }
+                    } else if post.activityType == "Golfrunda" {
+                        if let strokes = post.golfStrokes {
+                            statColumn(title: L.t(sv: "Slag", nb: "Slag"), value: "\(strokes)")
+                        }
+                        
+                        if let holes = post.golfHoles {
+                            if post.golfStrokes != nil {
+                                Divider().frame(height: 40)
+                            }
+                            statColumn(title: L.t(sv: "Hål", nb: "Hull"), value: "\(holes)")
+                        }
+                        
+                        if let duration = post.duration {
+                            Divider().frame(height: 40)
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
+                        }
+                        
+                        if let distance = post.distance {
+                            Divider().frame(height: 40)
+                            statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", distance))
+                        }
                     } else {
                         if let distance = post.distance {
                             statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", distance))
@@ -274,7 +295,6 @@ struct WorkoutPostCard: View {
                             }
                             statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
                         }
-                        // Show elevation for skiing and hiking
                         if (post.activityType == "Skidåkning" || post.activityType == "Bestiga berg"),
                            let elevationGain = post.elevationGain, elevationGain > 0 {
                             if post.distance != nil || post.duration != nil {

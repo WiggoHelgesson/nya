@@ -168,6 +168,7 @@ struct HomeView: View {
     
     // Nutrition onboarding for existing users
     @State private var showNutritionOnboarding = false
+    @State private var showNutritionSettings = false
     
     // AI text food search
     @State private var aiTextInput: String = ""
@@ -242,6 +243,20 @@ struct HomeView: View {
                                     .fill(Color(.systemBackground))
                                     .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
                             )
+                            
+                            Button {
+                                showNutritionSettings = true
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.gray)
+                                    .padding(10)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(.systemBackground))
+                                            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                                    )
+                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -416,6 +431,10 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showNutritionOnboarding) {
             ExistingUserNutritionOnboardingView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showNutritionSettings) {
+            NutritionSettingsView()
                 .environmentObject(authViewModel)
         }
         .onChange(of: analyzingManager.showPaywallForLimit) { _, newValue in

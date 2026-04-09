@@ -55,6 +55,10 @@ struct SessionCompleteView: View {
     @State private var isLivePhoto = false  // Track if image was taken with Up&Down Live
     @State private var showNoPhotoWarning = false
     @State private var postToSocialFeed = true
+    @State private var showPointsPopup = false
+    @State private var dailyLimitReached = false
+    @State private var golfHoles: Int = 18
+    @State private var golfStrokes: Int = 72
     
     // PB (Personal Best) tracking
     @State private var showPBSheet = false
@@ -146,17 +150,32 @@ struct SessionCompleteView: View {
         .fullScreenCover(isPresented: $showCelebration) {
             if let sharePost = celebrationPost {
                 WorkoutCelebrationView(post: sharePost) {
-                    // On dismiss from celebration view - delay to let animation complete
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showCelebration = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeIn(duration: 0.2)) {
+                                showPointsPopup = true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .overlay {
+            if showPointsPopup {
+                PointsEarnedPopup(earnedPoints: earnedPoints, dailyLimitReached: dailyLimitReached) {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        showPointsPopup = false
+                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         isPresented = false
                         onComplete()
-                        
-                        // Navigate to social tab
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             NotificationCenter.default.post(name: NSNotification.Name("NavigateToSocial"), object: nil)
                         }
                     }
                 }
+                .transition(.opacity)
             }
         }
         .alert(
@@ -294,12 +313,74 @@ struct SessionCompleteView: View {
             VStack(spacing: 24) {
                 titleSection
                 difficultySliderSection
+                if activity == .golf {
+                    golfSection
+                }
                 descriptionSection
                 photoOptionsSection
                 socialFeedToggle
                 saveButton
             }
         }
+    }
+    
+    // MARK: - Golf Section
+    private var golfSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L.t(sv: "Hur många hål körde du?", nb: "Hvor mange hull spilte du?"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.primary)
+            
+            HStack(spacing: 12) {
+                golfHoleButton(holes: 9)
+                golfHoleButton(holes: 18)
+            }
+            
+            Text(L.t(sv: "Hur många slag slog du?", nb: "Hvor mange slag slo du?"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.primary)
+                .padding(.top, 4)
+            
+            Picker("", selection: $golfStrokes) {
+                ForEach(golfStrokesRange, id: \.self) { value in
+                    Text("\(value)")
+                        .tag(value)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(height: 120)
+            .clipped()
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    private func golfHoleButton(holes: Int) -> some View {
+        let isSelected = golfHoles == holes
+        return Button {
+            golfHoles = holes
+            let range = holes == 9 ? 25...70 : 50...140
+            if !range.contains(golfStrokes) {
+                golfStrokes = holes == 9 ? 42 : 72
+            }
+        } label: {
+            Text("\(holes) " + L.t(sv: "Hål", nb: "Hull"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(isSelected ? .white : .primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected ? Color.black : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSelected ? Color.black : Color.gray.opacity(0.3), lineWidth: 1.5)
+                )
+        }
+    }
+    
+    private var golfStrokesRange: ClosedRange<Int> {
+        golfHoles == 9 ? 25...70 : 50...140
     }
     
     // MARK: - Gym Content Section (Strava-style)
@@ -1912,7 +1993,12 @@ struct SessionCompleteView: View {
                 let alreadyAwarded = UserDefaults.standard.integer(forKey: key)
                 let remaining = max(0, 50 - alreadyAwarded)
                 pointsToAward = min(pointsToAward, remaining)
+                if remaining == 0 && earnedPoints > 0 {
+                    await MainActor.run { dailyLimitReached = true }
+                }
             }
+            
+            print("[Points] earnedPoints=\(earnedPoints), pointsToAward=\(pointsToAward), activity=\(activity.rawValue)")
             
             let finalTitle = title.isEmpty ? defaultTitle : title
             
@@ -2003,7 +2089,9 @@ struct SessionCompleteView: View {
                 streakCount: currentStreak > 0 ? currentStreak : nil,
                 location: workoutLocation,
                 trainedWith: trainedWithData,
-                isPublic: postToSocialFeed
+                isPublic: postToSocialFeed,
+                golfHoles: activity == .golf ? golfHoles : nil,
+                golfStrokes: activity == .golf ? golfStrokes : nil
             )
             
             // Save template (fast, non-blocking)
@@ -2345,4 +2433,144 @@ extension Color {
         onDelete: {}
     )
     .environmentObject(AuthViewModel())
+}
+
+// MARK: - Points Earned Popup
+struct PointsEarnedPopup: View {
+    let earnedPoints: Int
+    var dailyLimitReached: Bool = false
+    let onDismiss: () -> Void
+    
+    @State private var weeklyWorkouts: Int = 0
+    @State private var appear = false
+    
+    private let weeklyGoal = 5
+    private let bonusPoints = 50
+    private let accent = Color(.label)
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture {}
+            
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 20) {
+                    if earnedPoints == 0 && dailyLimitReached {
+                        Text(L.t(sv: "Din dagliga limit är nådd", nb: "Din daglige grense er nådd"))
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Color(.label))
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text(L.t(sv: "Du har precis tjänat", nb: "Du har nettopp tjent"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(Color(.label))
+                        
+                        HStack(spacing: 4) {
+                            Text("+\(earnedPoints)")
+                                .font(.system(size: 52, weight: .bold, design: .rounded))
+                                .foregroundColor(accent)
+                            
+                            Text("P")
+                                .font(.system(size: 52, weight: .bold, design: .rounded))
+                                .foregroundColor(accent)
+                        }
+                    }
+                    
+                    VStack(spacing: 10) {
+                        weeklyProgressText
+                        
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(.systemGray5))
+                                    .frame(height: 8)
+                                
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(accent)
+                                    .frame(width: geo.size.width * CGFloat(min(weeklyWorkouts, weeklyGoal)) / CGFloat(weeklyGoal), height: 8)
+                            }
+                        }
+                        .frame(height: 8)
+                        .padding(.horizontal, 24)
+                    }
+                    
+                    if weeklyWorkouts < weeklyGoal {
+                        Text(L.t(
+                            sv: "\(bonusPoints) poäng bonus om du kör alla \(weeklyGoal) pass",
+                            nb: "\(bonusPoints) poeng bonus om du kjører alle \(weeklyGoal) økter"
+                        ))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(Color(.secondaryLabel))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    } else {
+                        Text(L.t(
+                            sv: "Grattis! Du har klarat veckans mål!",
+                            nb: "Gratulerer! Du har klart ukens mål!"
+                        ))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.green)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    }
+                    
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Text("Ok")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Color(.label))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(.systemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color(.systemGray4), lineWidth: 1)
+                            )
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+                }
+                .padding(.top, 28)
+                .padding(.bottom, 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(Color(.systemBackground))
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 32)
+                .opacity(appear ? 1 : 0)
+                .offset(y: appear ? 0 : 60)
+            }
+        }
+        .onAppear {
+            let streakInfo = StreakManager.shared.getCurrentStreak()
+            weeklyWorkouts = streakInfo.completedDaysThisWeek.count
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                appear = true
+            }
+        }
+    }
+    
+    private var weeklyProgressText: some View {
+        let completed = min(weeklyWorkouts, weeklyGoal)
+        return (
+            Text("\(completed) av \(weeklyGoal)")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(accent)
+            +
+            Text(L.t(
+                sv: " genomförda pass den här veckan",
+                nb: " gjennomførte økter denne uken"
+            ))
+            .font(.system(size: 15, weight: .regular))
+            .foregroundColor(Color(.secondaryLabel))
+        )
+        .multilineTextAlignment(.center)
+    }
 }

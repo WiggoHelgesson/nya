@@ -25,6 +25,8 @@ struct WorkoutPost: Codable, Identifiable {
     let trainedWith: [TrainedWithPerson]?  // Friends who trained together
     let isPublic: Bool
     let moderationStatus: String?  // 'approved' or 'pending_review'
+    let golfHoles: Int?
+    let golfStrokes: Int?
     
     struct TrainedWithPerson: Codable, Identifiable, Hashable {
         let id: String
@@ -63,6 +65,8 @@ struct WorkoutPost: Codable, Identifiable {
         case trainedWith = "trained_with"
         case isPublic = "is_public"
         case moderationStatus = "moderation_status"
+        case golfHoles = "golf_holes"
+        case golfStrokes = "golf_strokes"
     }
     
     init(from decoder: Decoder) throws {
@@ -91,6 +95,8 @@ struct WorkoutPost: Codable, Identifiable {
         trainedWith = try container.decodeIfPresent([TrainedWithPerson].self, forKey: .trainedWith)
         isPublic = try container.decodeIfPresent(Bool.self, forKey: .isPublic) ?? true
         moderationStatus = try container.decodeIfPresent(String.self, forKey: .moderationStatus)
+        golfHoles = try container.decodeIfPresent(Int.self, forKey: .golfHoles)
+        golfStrokes = try container.decodeIfPresent(Int.self, forKey: .golfStrokes)
     }
     
     init(id: String = UUID().uuidString,
@@ -115,7 +121,9 @@ struct WorkoutPost: Codable, Identifiable {
          location: String? = nil,
          trainedWith: [TrainedWithPerson]? = nil,
          isPublic: Bool = true,
-         moderationStatus: String? = nil) {
+         moderationStatus: String? = nil,
+         golfHoles: Int? = nil,
+         golfStrokes: Int? = nil) {
         self.id = id
         self.userId = userId
         self.activityType = activityType
@@ -140,6 +148,8 @@ struct WorkoutPost: Codable, Identifiable {
         self.trainedWith = trainedWith
         self.isPublic = isPublic
         self.moderationStatus = moderationStatus
+        self.golfHoles = golfHoles
+        self.golfStrokes = golfStrokes
     }
     
     func encode(to encoder: Encoder) throws {
@@ -168,6 +178,8 @@ struct WorkoutPost: Codable, Identifiable {
         try container.encodeIfPresent(trainedWith, forKey: .trainedWith)
         try container.encode(isPublic, forKey: .isPublic)
         try container.encodeIfPresent(moderationStatus, forKey: .moderationStatus)
+        try container.encodeIfPresent(golfHoles, forKey: .golfHoles)
+        try container.encodeIfPresent(golfStrokes, forKey: .golfStrokes)
     }
 }
 

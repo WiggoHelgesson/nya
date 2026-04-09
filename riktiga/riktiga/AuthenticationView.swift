@@ -9,12 +9,10 @@ import Contacts
 
 // MARK: - New Unified Onboarding Steps
 private enum OnboardingStep: Int, CaseIterable, Identifiable {
-    case school
     case name
     case profilePicture
     case gender
     case workouts
-    case community
     case heightWeight
     case birthday
     case motivation  // NEW: Shows motivation comparison
@@ -29,12 +27,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .school: return L.t(sv: "Välj din skola", nb: "Velg skolen din")
         case .name: return L.t(sv: "Välj användarnamn", nb: "Velg brukernavn")
         case .profilePicture: return L.t(sv: "Lägg till profilbild", nb: "Legg til profilbilde")
         case .gender: return L.t(sv: "Välj ditt kön", nb: "Velg ditt kjønn")
         case .workouts: return L.t(sv: "Hur många pass tränar du per vecka?", nb: "Hvor mange økter trener du per uke?")
-        case .community: return L.t(sv: "Välkommen till gemenskapen", nb: "Velkommen til fellesskapet")
         case .heightWeight: return L.t(sv: "Längd & vikt", nb: "Høyde & vekt")
         case .birthday: return L.t(sv: "Hur gammal är du?", nb: "Hvor gammel er du?")
         case .motivation: return L.t(sv: "Få 2x så mycket motivation genom att träna med Up&Down", nb: "Få 2x så mye motivasjon ved å trene med Up&Down")
@@ -49,12 +45,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     
     var subtitle: String {
         switch self {
-        case .school: return L.t(sv: "Genom att välja din skola ser du inlägg från andra personer från din skola & du är med i tävlingar mot andra skolor", nb: "Ved å velge skolen din ser du innlegg fra andre på skolen din og deltar i konkurranser mot andre skoler")
         case .name: return L.t(sv: "Välj ett användarnamn som visas för andra.", nb: "Velg et brukernavn som vises for andre.")
         case .profilePicture: return L.t(sv: "Allt blir roligare med en profilbild.", nb: "Alt blir morsommere med et profilbilde.")
         case .gender: return L.t(sv: "Vi använder denna datan för att anpassa dig till rätt topplistor.", nb: "Vi bruker disse dataene for å tilpasse deg til riktige topplister.")
         case .workouts: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
-        case .community: return ""
         case .heightWeight: return L.t(sv: "Detta används för att kalibrera din personliga plan.", nb: "Dette brukes for å kalibrere din personlige plan.")
         case .birthday: return L.t(sv: "Vi använder denna datan för att personalisera din statistik och hålla yngre användare säkra.", nb: "Vi bruker disse dataene for å tilpasse statistikken din og holde yngre brukere trygge.")
         case .motivation: return ""
@@ -543,65 +537,6 @@ struct AuthenticationView: View {
         return emailValid && signupPassword.count >= 6
     }
     
-    // MARK: - Community Fullscreen Step
-    private var communityStepView: some View {
-        ZStack {
-            Image("91")
-                .resizable()
-                .scaledToFill()
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            
-            LinearGradient(
-                colors: [
-                    .clear,
-                    .clear,
-                    .black.opacity(0.3),
-                    .black.opacity(0.7),
-                    .black.opacity(0.85)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            
-            VStack {
-                Spacer()
-                
-                VStack(spacing: 12) {
-                    Text(L.t(sv: "Välkommen till gemenskapen", nb: "Velkommen til fellesskapet"))
-                        .font(.system(size: 26, weight: .heavy))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                    
-                    Text(L.t(sv: "Tusentals svenskar använder Up&Down och är redo att stötta dig!", nb: "Tusenvis av nordmenn bruker Up&Down og er klare til å støtte deg!"))
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.9))
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 32)
-                
-                Button {
-                    continueFromStep(.community)
-                } label: {
-                    Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 16)
-            }
-            .padding(.bottom, 16)
-        }
-        .ignoresSafeArea()
-        .opacity(contentOpacity)
-        .offset(y: contentOffset)
-    }
-    
     // MARK: - Welcome Fullscreen Step
     private var welcomeStepView: some View {
         ZStack {
@@ -670,9 +605,7 @@ struct AuthenticationView: View {
     // MARK: - Onboarding View
     private func onboardingView(for step: OnboardingStep) -> some View {
         Group {
-            if step == .community {
-                communityStepView
-            } else if step == .welcome {
+            if step == .welcome {
                 welcomeStepView
             } else {
                 standardOnboardingView(for: step)
@@ -765,8 +698,6 @@ struct AuthenticationView: View {
     @ViewBuilder
     private func onboardingContent(for step: OnboardingStep) -> some View {
             switch step {
-            case .school:
-            schoolStepContent
         case .name:
             nameStepContent
         case .profilePicture:
@@ -779,8 +710,6 @@ struct AuthenticationView: View {
             genderStepContent
         case .workouts:
             workoutsStepContent
-        case .community:
-            EmptyView()
         case .heightWeight:
             heightWeightStepContent
         case .birthday:
@@ -799,96 +728,6 @@ struct AuthenticationView: View {
     }
     
     // MARK: - Step Contents
-    
-    private var schoolStepContent: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 15))
-                TextField(L.t(sv: "Sök skola...", nb: "Søk skole..."), text: $onboardingSchoolSearch)
-                    .font(.system(size: 16))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if !onboardingSchoolSearch.isEmpty {
-                    Button {
-                        onboardingSchoolSearch = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .padding(12)
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
-            
-            Button {
-                onboardingSelectedSchoolDomain = nil
-                goToNextStep()
-            } label: {
-                Text(L.t(sv: "Hoppa över", nb: "Hopp over"))
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(secondaryTextColor)
-            }
-            
-            if isLoadingSchools {
-                ProgressView()
-                    .padding(.top, 40)
-                Spacer()
-            } else {
-                let filtered = onboardingSchoolSearch.isEmpty ? onboardingSchoolList : onboardingSchoolList.filter {
-                    $0.name.localizedCaseInsensitiveContains(onboardingSchoolSearch) ||
-                    ($0.municipality?.localizedCaseInsensitiveContains(onboardingSchoolSearch) ?? false)
-                }
-                
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        ForEach(filtered) { school in
-                            let isSelected = onboardingSelectedSchoolDomain == school.id
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    onboardingSelectedSchoolDomain = school.id
-                                }
-                            } label: {
-                                HStack {
-                                    Text(school.name)
-                                        .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
-                                        .foregroundColor(isSelected ? primaryTextColor : secondaryTextColor)
-                                        .lineLimit(1)
-                                    
-                                    Spacer()
-                                    
-                                    if isSelected {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(selectedCardBackgroundColor)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(isSelected ? selectedCardBackgroundColor.opacity(0.1) : Color(.systemGray6))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(isSelected ? selectedCardBackgroundColor : Color.clear, lineWidth: 1.5)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-        }
-        .task {
-            guard onboardingSchoolList.isEmpty else { return }
-            isLoadingSchools = true
-            onboardingSchoolList = await SchoolService.shared.fetchAllSchools()
-            isLoadingSchools = false
-        }
-    }
     
     private var nameStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1033,11 +872,6 @@ struct AuthenticationView: View {
         }
     }
     
-    // School selection (onboarding)
-    @State private var onboardingSchoolSearch: String = ""
-    @State private var onboardingSelectedSchoolDomain: String? = nil
-    @State private var onboardingSchoolList: [School] = []
-    @State private var isLoadingSchools = false
     
     // MARK: - Referral Code Step
     @State private var referralCodeInput: String = ""
@@ -1719,8 +1553,6 @@ struct AuthenticationView: View {
     // MARK: - Helper Functions
     private func canContinue(_ step: OnboardingStep) -> Bool {
         switch step {
-        case .school:
-            return onboardingSelectedSchoolDomain != nil
         case .name:
             return !data.firstName.trimmingCharacters(in: .whitespaces).isEmpty &&
                    data.firstName.count >= 2 &&
@@ -1728,11 +1560,10 @@ struct AuthenticationView: View {
                    !isCheckingUsername
         case .profilePicture:
             return selectedProfileImage != nil
-        case .referralCode: return true // Always can continue (optional step)
+        case .referralCode: return true
         case .rating: return true
         case .gender: return !data.gender.isEmpty
         case .workouts: return !data.workoutsPerWeek.isEmpty
-        case .community: return true
         case .heightWeight: return true
         case .birthday: return true
         case .motivation: return motivationAnimationComplete
@@ -1756,18 +1587,6 @@ struct AuthenticationView: View {
         hapticFeedback()
         
         switch step {
-        case .school:
-            if let schoolId = onboardingSelectedSchoolDomain,
-               let userId = authViewModel.currentUser?.id {
-                Task {
-                    await SchoolService.shared.assignSchool(userId: userId, schoolId: schoolId)
-                    if var user = authViewModel.currentUser {
-                        user.verifiedSchoolEmail = "selected@\(schoolId)"
-                        await MainActor.run { authViewModel.currentUser = user }
-                    }
-                }
-            }
-            goToNextStep()
         case .profilePicture:
             // Save profile image to data
             print("📸 Saving profile image from selectedProfileImage: \(selectedProfileImage != nil ? "YES" : "NO")")

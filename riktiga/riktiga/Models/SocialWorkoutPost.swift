@@ -25,6 +25,8 @@ struct SocialWorkoutPostRaw: Codable {
     let routeData: String?
     let isPublic: Bool?
     let moderationStatus: String?
+    let golfHoles: Int?
+    let golfStrokes: Int?
     
     // JOIN data (from Supabase query)
     let profiles: ProfileData?
@@ -63,6 +65,8 @@ struct SocialWorkoutPostRaw: Codable {
         case routeData = "route_data"
         case isPublic = "is_public"
         case moderationStatus = "moderation_status"
+        case golfHoles = "golf_holes"
+        case golfStrokes = "golf_strokes"
         case profiles
         case workoutPostLikes = "workout_post_likes"
         case workoutPostComments = "workout_post_comments"
@@ -120,6 +124,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
     let userIsPro: Bool?
     let location: String?
     let strokes: Int?
+    let golfHoles: Int?
+    let golfStrokes: Int?
     let likeCount: Int?
     let commentCount: Int?
     let isLikedByCurrentUser: Bool?
@@ -176,6 +182,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         case userIsPro = "user_is_pro"
         case location
         case strokes
+        case golfHoles = "golf_holes"
+        case golfStrokes = "golf_strokes"
         case likeCount = "like_count"
         case commentCount = "comment_count"
         case isLikedByCurrentUser = "is_liked_by_current_user"
@@ -214,7 +222,9 @@ struct SocialWorkoutPost: Codable, Identifiable {
         userAvatarUrl = raw.profiles?.avatarUrl ?? raw.userAvatarUrl
         userIsPro = raw.profiles?.isProMember ?? raw.userIsPro
         location = raw.location
-        strokes = nil
+        strokes = raw.golfStrokes
+        golfHoles = raw.golfHoles
+        golfStrokes = raw.golfStrokes
         
         // Map like and comment counts, with cache fallbacks
         likeCount = raw.workoutPostLikes?.first?.count ?? raw.likeCount ?? 0
@@ -255,8 +265,10 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.userName = userName
         self.userAvatarUrl = userAvatarUrl
         self.userIsPro = userIsPro
-        self.location = location ?? post.location // Use provided location or fall back to post.location
-        self.strokes = strokes
+        self.location = location ?? post.location
+        self.strokes = strokes ?? post.golfStrokes
+        self.golfHoles = post.golfHoles
+        self.golfStrokes = post.golfStrokes
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser
@@ -291,6 +303,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         userIsPro: Bool?,
         location: String?,
         strokes: Int?,
+        golfHoles: Int? = nil,
+        golfStrokes: Int? = nil,
         likeCount: Int?,
         commentCount: Int?,
         isLikedByCurrentUser: Bool?,
@@ -322,6 +336,8 @@ struct SocialWorkoutPost: Codable, Identifiable {
         self.userIsPro = userIsPro
         self.location = location
         self.strokes = strokes
+        self.golfHoles = golfHoles
+        self.golfStrokes = golfStrokes
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.isLikedByCurrentUser = isLikedByCurrentUser

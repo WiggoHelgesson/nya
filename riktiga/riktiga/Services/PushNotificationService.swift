@@ -292,17 +292,12 @@ final class PushNotificationService: NSObject {
                         postId: postId
                     )
                     
-                    let pushBody: String
-                    if exerciseName.isEmpty || exerciseName == "Gympass", pbValue.isEmpty {
-                        pushBody = "\(userName) tog nytt PB – Gå in och stötta \(userName)s inlägg"
-                    } else {
-                        pushBody = "\(userName) slog nytt PB i \(exerciseName) (\(pbValue)), gå in och supporta!"
-                    }
+                    let firstName = userName.components(separatedBy: " ").first ?? userName
                     
                     await sendRealPushNotification(
                         toUserId: followerId,
-                        title: "🏆 Nytt PB!",
-                        body: pushBody,
+                        title: "\(firstName) tog nytt PB!",
+                        body: "\(firstName) tog precis \(pbValue) i \(exerciseName)",
                         data: ["type": "new_pb", "post_id": postId, "actor_id": userId]
                     )
                 } catch {
@@ -331,27 +326,18 @@ final class PushNotificationService: NSObject {
             let user_id: String
             let type: String
             let actor_id: String
-            let actor_name: String
-            let actor_avatar: String?
-            let reference_id: String
-            let message: String
-        }
-        
-        let message: String
-        if exerciseName.isEmpty || exerciseName == "Gympass", pbValue.isEmpty {
-            message = "\(fromUserName) tog nytt PB – Gå in och stötta \(fromUserName)s inlägg"
-        } else {
-            message = "\(fromUserName) slog nytt PB i \(exerciseName): \(pbValue)"
+            let actor_username: String
+            let actor_avatar_url: String?
+            let post_id: String
         }
         
         let payload = NotificationPayload(
             user_id: forUserId,
             type: "new_pb",
             actor_id: fromUserId,
-            actor_name: fromUserName,
-            actor_avatar: fromUserAvatar,
-            reference_id: postId,
-            message: message
+            actor_username: fromUserName,
+            actor_avatar_url: fromUserAvatar,
+            post_id: postId
         )
         
         try await SupabaseConfig.supabase
@@ -884,7 +870,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             switch type {
             case "news":
                 NotificationNavigationManager.shared.navigateToNews()
-            case "new_workout", "like":
+            case "new_workout", "new_pb", "like":
                 if let postId = userInfo["post_id"] as? String {
                     NotificationNavigationManager.shared.navigateToPost(postId: postId)
                 }

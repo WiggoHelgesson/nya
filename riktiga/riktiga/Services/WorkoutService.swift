@@ -318,7 +318,9 @@ class WorkoutService {
             streakCount: post.streakCount,
             location: post.location,
             trainedWith: post.trainedWith,
-            isPublic: post.isPublic
+            isPublic: post.isPublic,
+            golfHoles: post.golfHoles,
+            golfStrokes: post.golfStrokes
         )
         
         do {
@@ -403,6 +405,15 @@ class WorkoutService {
             }
             
             minimalPost["is_public"] = DynamicEncodable(postToSave.isPublic)
+            
+            if let golfHoles = postToSave.golfHoles {
+                minimalPost["golf_holes"] = DynamicEncodable(golfHoles)
+            }
+            if let golfStrokes = postToSave.golfStrokes {
+                minimalPost["golf_strokes"] = DynamicEncodable(golfStrokes)
+            }
+            
+            print("⛳ Golf data: holes=\(postToSave.golfHoles as Any), strokes=\(postToSave.golfStrokes as Any)")
             
             try await supabase
                 .from("workout_posts")

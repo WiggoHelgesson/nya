@@ -136,6 +136,61 @@ class ShopifyService {
         return response.product
     }
 
+    // MARK: - Collection Products
+
+    func fetchCollectionProducts(handle: String, first: Int = 20) async throws -> [ShopifyProduct] {
+        let query = """
+        query GetCollectionProducts($handle: String!, $first: Int!) {
+            collection(handle: $handle) {
+                products(first: $first) {
+                    edges {
+                        node {
+                            id
+                            title
+                            handle
+                            description
+                            productType
+                            vendor
+                            tags
+                            images(first: 10) {
+                                edges { node { url altText } }
+                            }
+                            variants(first: 30) {
+                                edges {
+                                    node {
+                                        id
+                                        title
+                                        availableForSale
+                                        price { amount currencyCode }
+                                        selectedOptions { name value }
+                                    }
+                                }
+                            }
+                            priceRange {
+                                minVariantPrice { amount currencyCode }
+                                maxVariantPrice { amount currencyCode }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        struct CollectionResponse: Decodable {
+            let collection: CollectionNode?
+        }
+        struct CollectionNode: Decodable {
+            let products: ShopifyConnection<ShopifyProduct>
+        }
+
+        let vars: [String: Any] = ["handle": handle, "first": first]
+        let result: CollectionResponse = try await execute(query: query, variables: vars)
+
+        guard let collection = result.collection else { return [] }
+        return collection.products.edges.map(\.node)
+    }
+
     // MARK: - Cart
 
     func cartCreate(variantId: String, quantity: Int = 1) async throws -> ShopifyCart {

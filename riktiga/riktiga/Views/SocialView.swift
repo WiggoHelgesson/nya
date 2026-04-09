@@ -46,6 +46,9 @@ struct SocialView: View {
     @State private var pendingPostNavigation: String? = nil
     @State private var navigationPath = NavigationPath()
     @State private var featuredPosts: [SocialWorkoutPost] = []
+    @State private var collectionProducts: [ShopifyProduct] = []
+    @State private var selectedShopProduct: ShopifyProduct?
+    @State private var showCartFromFeed = false
     @State private var isLoadingFeatured = false
     @State private var carouselIndex = 0
     @State private var weeklyActivities: Int = 0
@@ -95,14 +98,6 @@ struct SocialView: View {
     // Friend location map state
     @State private var showFriendsMap = false
     
-    // School feed state
-    enum FeedType { case friends, school }
-    @State private var selectedFeedType: FeedType = .friends
-    @State private var schoolPosts: [SocialWorkoutPost] = []
-    @State private var showSchoolVerification = false
-    @State private var isSchoolVerified = false
-    @State private var isLoadingSchoolFeed = false
-    @State private var schoolVisiblePostCount = 5
     
     private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
@@ -156,12 +151,25 @@ struct SocialView: View {
                     RealtimeSocialService.shared.startListening()
                 }
             }
+            .task {
+                do {
+                    let products = try await ShopifyService.shared.fetchCollectionProducts(handle: "up-down")
+                    await MainActor.run { collectionProducts = products }
+                } catch {
+                    print("[CollectionSlider] ERROR: \(error)")
+                }
+            }
             .onDisappear {
                 // Stop real-time updates when view disappears
                 RealtimeSocialService.shared.stopListening()
             }
             .sheet(isPresented: $showCreateNews) {
                 CreateNewsView(newsViewModel: newsViewModel)
+            }
+            .sheet(item: $selectedShopProduct) { product in
+                NavigationStack {
+                    ProductDetailView(product: product, showCart: $showCartFromFeed)
+                }
             }
             .navigationDestination(isPresented: $showFriendsMap) {
                 FriendsLocationMapView(friends: activeFriends)
@@ -301,24 +309,15 @@ struct SocialView: View {
                                 friendsAtGymSection
                                 leaderboardLink
                                 
-                                // MARK: - Feed type picker (Vänner / Din skola)
-                                feedTypePicker
-                                
                                 // MARK: - Upload progress indicator
-                                if uploadManager.uploadingPost != nil && selectedFeedType == .friends {
+                                if uploadManager.uploadingPost != nil {
                                     uploadProgressCard
                                 }
                                 
-                                // Separator line between picker and posts
                                 Divider()
                                     .background(Color(.systemGray5))
                                 
-                                // Show feed based on selected type
-                                if selectedFeedType == .friends {
-                                    feedContent
-                                } else {
-                                    schoolFeedContent
-                                }
+                                feedContent
                             }
                         }
                     }
@@ -777,14 +776,8 @@ struct SocialView: View {
                     friendsAtGymSection
                     leaderboardLink
                     
-                    feedTypePicker
-                    
-                    if selectedFeedType == .friends {
-                        feedContent
-                            .opacity(showPosts ? 1 : 0)
-                    } else {
-                        schoolFeedContent
-                    }
+                    feedContent
+                        .opacity(showPosts ? 1 : 0)
                 }
             }
             .onChange(of: highlightedPostId) { _, postId in
@@ -932,169 +925,6 @@ struct SocialView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Feed Type Picker (Vänner / Din skola)
-    private var feedTypePicker: some View {
-        HStack(spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedFeedType = .friends
-                }
-            } label: {
-                VStack(spacing: 6) {
-                    Text(L.t(sv: "Vänner", nb: "Venner"))
-                        .font(.system(size: 15, weight: selectedFeedType == .friends ? .bold : .medium))
-                        .foregroundColor(selectedFeedType == .friends ? .primary : .secondary)
-                    
-                    Rectangle()
-                        .fill(selectedFeedType == .friends ? Color.primary : Color.clear)
-                        .frame(height: 2)
-                }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-            }
-            
-            Button {
-                if isSchoolVerified {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedFeedType = .school
-                    }
-                    if schoolPosts.isEmpty && !isLoadingSchoolFeed {
-                        Task { await loadSchoolFeed() }
-                    }
-                } else {
-                    showSchoolVerification = true
-                }
-            } label: {
-                VStack(spacing: 6) {
-                    Text(schoolTabLabel)
-                        .font(.system(size: 15, weight: selectedFeedType == .school ? .bold : .medium))
-                        .foregroundColor(selectedFeedType == .school ? .primary : .secondary)
-                    
-                    Rectangle()
-                        .fill(selectedFeedType == .school ? Color.primary : Color.clear)
-                        .frame(height: 2)
-                }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, 16)
-        .sheet(isPresented: $showSchoolVerification) {
-            SchoolVerificationView(
-                isVerified: $isSchoolVerified,
-                onVerified: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedFeedType = .school
-                    }
-                    Task { await loadSchoolFeed() }
-                }
-            )
-            .environmentObject(authViewModel)
-        }
-        .onAppear {
-            checkSchoolVerification()
-        }
-    }
-    
-    // MARK: - School Feed Content
-    private var schoolFeedContent: some View {
-        LazyVStack(spacing: 0) {
-            if isLoadingSchoolFeed && schoolPosts.isEmpty {
-                VStack(spacing: 16) {
-                    ProgressView()
-                    Text(L.t(sv: "Laddar skolflödet...", nb: "Laster skolfeeden..."))
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else if schoolPosts.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "building.columns")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                    Text(L.t(sv: "Inga inlägg från din skola ännu", nb: "Ingen innlegg fra skolen din ennå"))
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                ForEach(Array(schoolPostsToDisplay.enumerated()), id: \.element.id) { index, post in
-                    VStack(spacing: 0) {
-                        SocialPostCard(
-                            post: post,
-                            onOpenDetail: { tappedPost in selectedPost = tappedPost },
-                            onLikeChanged: { postId, isLiked, count in
-                                if let idx = schoolPosts.firstIndex(where: { $0.id == postId }) {
-                                    schoolPosts[idx] = schoolPosts[idx]
-                                }
-                            },
-                            onCommentCountChanged: { _, _ in },
-                            onPostDeleted: { postId in
-                                schoolPosts.removeAll { $0.id == postId }
-                            }
-                        )
-                        .id("school_\(post.id)")
-                        
-                        Divider()
-                            .background(Color(.systemGray5))
-                    }
-                    .onAppear {
-                        if index >= schoolVisiblePostCount - 2,
-                           schoolVisiblePostCount < schoolPosts.count {
-                            schoolVisiblePostCount += 5
-                        }
-                    }
-                }
-                
-                if schoolVisiblePostCount >= schoolPosts.count {
-                    Text(L.t(sv: "Inga fler inlägg", nb: "Ingen flere innlegg"))
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .padding()
-                }
-            }
-        }
-    }
-    
-    private var schoolPostsToDisplay: [SocialWorkoutPost] {
-        Array(schoolPosts.prefix(schoolVisiblePostCount))
-    }
-    
-    private var schoolTabLabel: String {
-        if let user = authViewModel.currentUser,
-           let name = SchoolService.shared.schoolName(for: user) {
-            return name
-        }
-        return L.t(sv: "Din skola", nb: "Din skole")
-    }
-    
-    private func checkSchoolVerification() {
-        guard let user = authViewModel.currentUser else { return }
-        isSchoolVerified = SchoolService.shared.isSchoolVerified(user: user)
-    }
-    
-    private func loadSchoolFeed() async {
-        isLoadingSchoolFeed = true
-        do {
-            let posts: [SocialWorkoutPost]
-            if let user = authViewModel.currentUser,
-               let domain = SchoolService.verifiedDomain(for: user) {
-                posts = try await SchoolService.shared.getSchoolFeedForDomain(domain)
-            } else {
-                posts = try await SchoolService.shared.getSchoolFeed()
-            }
-            await MainActor.run {
-                schoolPosts = posts
-                isLoadingSchoolFeed = false
-            }
-        } catch {
-            print("❌ Failed to load school feed: \(error)")
-            await MainActor.run { isLoadingSchoolFeed = false }
-        }
-    }
-    
     // Helper view for friend at gym card
     private func friendAtGymCard(imageContent: AnyView, name: String, duration: String?, onTap: (() -> Void)?) -> some View {
         VStack(spacing: 8) {
@@ -1830,6 +1660,72 @@ struct SocialView: View {
         .animation(.easeInOut(duration: 0.3), value: uploadManager.uploadingPost?.id)
     }
     
+    // MARK: - Collection Slider
+    
+    private var collectionSliderSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Up&Down")
+                    .font(.system(size: 18, weight: .bold))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(collectionProducts) { product in
+                        Button {
+                            selectedShopProduct = product
+                        } label: {
+                            collectionProductCard(product: product)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.vertical, 16)
+        .background(Color(.systemBackground))
+    }
+    
+    private func collectionProductCard(product: ShopifyProduct) -> some View {
+        let screenWidth = UIScreen.main.bounds.width
+        let cardWidth = (screenWidth - 52) / 3
+        
+        return VStack(alignment: .leading, spacing: 6) {
+            if let imageUrl = product.images.edges.first?.node.url, let url = URL(string: imageUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    default:
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                    }
+                }
+                .frame(width: cardWidth, height: cardWidth * 1.2)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemGray5))
+                    .frame(width: cardWidth, height: cardWidth * 1.2)
+            }
+            
+            Text(product.title)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .foregroundColor(.primary)
+            
+            Text(product.formattedPrice)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .frame(width: cardWidth)
+    }
+    
     // MARK: - Feed Content
     private var feedContent: some View {
         LazyVStack(spacing: 0, pinnedViews: []) {
@@ -1888,7 +1784,14 @@ struct SocialView: View {
                         .background(Color(.systemGray5))
                 }
                 
-                // Removed recommended friends section
+                // Collection product slider after 4th post
+                if index == 3, !collectionProducts.isEmpty {
+                    collectionSliderSection
+                        .opacity(showPosts ? 1 : 0)
+                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
+                    Divider()
+                        .background(Color(.systemGray5))
+                }
                 
                 // Become a trainer promo after 10th post
                 if index == 9 {
@@ -2825,6 +2728,22 @@ struct SocialPostCard: View {
                             }
                             .frame(alignment: .leading)
                             .padding(.vertical, 8)
+                        }
+                    } else if post.activityType == "Golfrunda" {
+                        if let strokes = post.golfStrokes {
+                            statColumn(title: L.t(sv: "Slag", nb: "Slag"), value: "\(strokes)")
+                        }
+                        
+                        if let holes = post.golfHoles {
+                            statColumn(title: L.t(sv: "Hål", nb: "Hull"), value: "\(holes)")
+                        }
+                        
+                        if let duration = post.duration {
+                            statColumn(title: L.t(sv: "Tid", nb: "Tid"), value: formatDuration(duration))
+                        }
+                        
+                        if let distance = post.distance {
+                            statColumn(title: L.t(sv: "Distans", nb: "Distanse"), value: String(format: "%.2f km", distance))
                         }
                     } else {
                         if let distance = post.distance {

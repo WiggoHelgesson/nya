@@ -493,15 +493,19 @@ class GymSessionViewModel: ObservableObject {
         }
         
         let volume = totalVolume
-        let pointsFromVolume = Int(volume / 160.0)
+        let hasExercises = !exercises.isEmpty
+        let basePoints = hasExercises ? 10 : 0
+        let volumeBonus = Int(volume / 100.0)
         
         // Max 30 points per gym session
-        var earnedXP = min(30, pointsFromVolume)
+        var earnedXP = min(30, basePoints + volumeBonus)
         
-        // Check daily limit (max 30 points per day from gym)
+        // Check daily limit (max 50 points per day from gym)
         let todayGymXP = GymXPTracker.shared.getTodayGymXP()
-        let remainingDailyAllowance = max(0, 30 - todayGymXP)
+        let remainingDailyAllowance = max(0, 50 - todayGymXP)
         earnedXP = min(earnedXP, remainingDailyAllowance)
+        
+        print("[GymXP] exercises=\(exercises.count), volume=\(volume), base=\(basePoints), volBonus=\(volumeBonus), todayXP=\(todayGymXP), remaining=\(remainingDailyAllowance), final=\(earnedXP)")
         
         if isPro {
             earnedXP = Int(Double(earnedXP) * 1.5)
