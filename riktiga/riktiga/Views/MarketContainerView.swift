@@ -11,7 +11,8 @@ struct MarketContainerView: View {
     let popToRootTrigger: Int
     @State private var navigationPath = NavigationPath()
     @State private var showCart = false
-    @State private var selectedMarketTab: MarketTab = .sell
+    @State private var selectedMarketTab: MarketTab = .buy
+    @State private var showConsignmentSellFlow = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -19,12 +20,7 @@ struct MarketContainerView: View {
                 headerBar
                 marketTabPicker
 
-                if selectedMarketTab == .buy {
-                    comingSoonPlaceholder
-                } else {
-                    SellView()
-                        .environmentObject(authViewModel)
-                }
+                comingSoonPlaceholder
             }
             .navigationBarHidden(true)
             .navigationDestination(for: ShopifyProduct.self) { product in
@@ -34,9 +30,30 @@ struct MarketContainerView: View {
         .sheet(isPresented: $showCart) {
             CartView()
         }
+        .fullScreenCover(isPresented: $showConsignmentSellFlow, onDismiss: {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                selectedMarketTab = .buy
+            }
+        }) {
+            SellBagProductContainer(showCart: $showCart) {
+                showConsignmentSellFlow = false
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    selectedMarketTab = .buy
+                }
+            }
+            .environmentObject(authViewModel)
+        }
+        .onChange(of: selectedMarketTab) { _, tab in
+            if tab == .sell {
+                showConsignmentSellFlow = true
+            } else {
+                showConsignmentSellFlow = false
+            }
+        }
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
-            selectedMarketTab = .sell
+            showConsignmentSellFlow = false
+            selectedMarketTab = .buy
         }
     }
 

@@ -37,14 +37,26 @@ class ShopifyService {
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("[ShopifyService] HTTP ERROR \(code) — body: \(rawBody.prefix(500))")
             throw ShopifyError.httpError(code)
         }
 
-        let gql = try decoder.decode(GraphQLResponse<T>.self, from: data)
+        let gql: GraphQLResponse<T>
+        do {
+            gql = try decoder.decode(GraphQLResponse<T>.self, from: data)
+        } catch {
+            let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            print("[ShopifyService] DECODE ERROR: \(error)")
+            print("[ShopifyService] Raw JSON: \(rawBody.prefix(800))")
+            throw error
+        }
         if let errors = gql.errors, !errors.isEmpty {
+            print("[ShopifyService] GraphQL ERRORS: \(errors.map(\.message).joined(separator: ", "))")
             throw ShopifyError.graphQL(errors.map(\.message).joined(separator: ", "))
         }
         guard let result = gql.data else {
+            print("[ShopifyService] WARNING: gql.data is nil (no errors reported)")
             throw ShopifyError.noData
         }
         return result
@@ -81,6 +93,7 @@ class ShopifyService {
                       availableForSale
                       price { amount currencyCode }
                       selectedOptions { name value }
+                      image { url altText }
                     }
                   }
                 }
@@ -121,6 +134,7 @@ class ShopifyService {
                   availableForSale
                   price { amount currencyCode }
                   selectedOptions { name value }
+                  image { url altText }
                 }
               }
             }
@@ -139,6 +153,7 @@ class ShopifyService {
     // MARK: - Collection Products
 
     func fetchCollectionProducts(handle: String, first: Int = 20) async throws -> [ShopifyProduct] {
+        print("[ShopifyService] fetchCollectionProducts START — handle='\(handle)', first=\(first)")
         let query = """
         query GetCollectionProducts($handle: String!, $first: Int!) {
             collection(handle: $handle) {
@@ -163,6 +178,7 @@ class ShopifyService {
                                         availableForSale
                                         price { amount currencyCode }
                                         selectedOptions { name value }
+                                        image { url altText }
                                     }
                                 }
                             }
@@ -185,10 +201,17 @@ class ShopifyService {
         }
 
         let vars: [String: Any] = ["handle": handle, "first": first]
+        print("[ShopifyService] Executing GraphQL query for collection '\(handle)'...")
         let result: CollectionResponse = try await execute(query: query, variables: vars)
 
-        guard let collection = result.collection else { return [] }
-        return collection.products.edges.map(\.node)
+        if let collection = result.collection {
+            let products = collection.products.edges.map(\.node)
+            print("[ShopifyService] Collection '\(handle)' found — \(products.count) products")
+            return products
+        } else {
+            print("[ShopifyService] WARNING: collection '\(handle)' returned nil — check handle spelling in Shopify admin")
+            return []
+        }
     }
 
     // MARK: - Cart

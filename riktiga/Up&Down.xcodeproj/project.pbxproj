@@ -13,6 +13,8 @@
 		86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAC2EACDAA400064CAA /* ReceiptParser */; };
 		86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EAE2EACDAA400064CAA /* RevenueCat */; };
 		86158EB12EACDAA400064CAC /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 86158EB02EACDAA400064CAB /* RevenueCatUI */; };
+		861981FC2F927F4C003B399E /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 861981FB2F927F4C003B399E /* GoogleMobileAds */; };
+		861981FF2F927F58003B399E /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = 861981FE2F927F58003B399E /* GoogleUserMessagingPlatform */; };
 		8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8631B5092ECA305300EBACD6 /* OpenAISwift */; };
 		86672E182F2C0573001DA9A3 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 86672E172F2C0573001DA9A3 /* GoogleSignIn */; };
 		86672E1A2F2C0573001DA9A3 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 86672E192F2C0573001DA9A3 /* GoogleSignInSwift */; };
@@ -168,11 +170,13 @@
 				86D759BF2EDC536B00CE3755 /* StripeCardScan in Frameworks */,
 				8631B50A2ECA305300EBACD6 /* OpenAISwift in Frameworks */,
 				86B269B32EAA5E2D00A4EC93 /* PostgREST in Frameworks */,
+				861981FC2F927F4C003B399E /* GoogleMobileAds in Frameworks */,
 				8699E37D2F1D91B700AC7ADF /* SuperwallKit in Frameworks */,
 				86B269B12EAA5E2D00A4EC93 /* Functions in Frameworks */,
 				86D759C12EDC536B00CE3755 /* StripeConnect in Frameworks */,
 				86B269BA2EAA5E3900A4EC93 /* Supabase in Frameworks */,
 				86158EAD2EACDAA400064CAA /* ReceiptParser in Frameworks */,
+				861981FF2F927F58003B399E /* GoogleUserMessagingPlatform in Frameworks */,
 				86D759BB2EDC536B00CE3755 /* Stripe in Frameworks */,
 				86D759CB2EDC5BC300CE3755 /* StripePaymentSheet in Frameworks */,
 				86158EAF2EACDAA400064CAA /* RevenueCat in Frameworks */,
@@ -313,6 +317,8 @@
 				86672E172F2C0573001DA9A3 /* GoogleSignIn */,
 				86672E192F2C0573001DA9A3 /* GoogleSignInSwift */,
 				86CFETTI2F3A0002001ABCD1 /* ConfettiSwiftUI */,
+				861981FB2F927F4C003B399E /* GoogleMobileAds */,
+				861981FE2F927F58003B399E /* GoogleUserMessagingPlatform */,
 			);
 			productName = "Up&Down";
 			productReference = 86B269892EAA2EBB00A4EC93 /* Up&Down.app */;
@@ -357,6 +363,8 @@
 				8699E37B2F1D91B700AC7ADF /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 				86672E162F2C0573001DA9A3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				86CFETTI2F3A0001001ABCD1 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */,
+				861981FA2F927F4C003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				861981FD2F927F58003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 86B2698A2EAA2EBB00A4EC93 /* Products */;
@@ -437,7 +445,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
@@ -449,7 +457,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -467,7 +475,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
@@ -479,7 +487,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.NotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -500,7 +508,7 @@
 				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
@@ -512,7 +520,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -533,7 +541,7 @@
 				CODE_SIGN_ENTITLEMENTS = UpDownLiveActivityExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = UpDownLiveActivity/Info.plist;
@@ -545,7 +553,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				PRODUCT_BUNDLE_IDENTIFIER = roboreabapp.productions.UpDownLiveActivity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -691,7 +699,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -724,7 +732,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -770,7 +778,7 @@
 				CODE_SIGN_ENTITLEMENTS = riktiga/riktiga.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 170;
+				CURRENT_PROJECT_VERSION = 172;
 				DEVELOPMENT_TEAM = NRPNN9U77T;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -803,7 +811,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 170;
+				MARKETING_VERSION = 172;
 				NSAppleMusicUsageDescription = "Denna app kan använda Apple Music för att spela musik under träningspass.";
 				NSBluetoothAlwaysUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
 				NSBluetoothPeripheralUsageDescription = "Denna app behöver tillgång till Bluetooth för att ansluta till träningsutrustning.";
@@ -895,6 +903,22 @@
 				minimumVersion = 5.45.0;
 			};
 		};
+		861981FA2F927F4C003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.2.0;
+			};
+		};
+		861981FD2F927F58003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-user-messaging-platform";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 		8631B5082ECA305300EBACD6 /* XCRemoteSwiftPackageReference "openaiSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/adamrushy/openaiSwift";
@@ -965,6 +989,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 86158EAB2EACDAA400064CAA /* XCRemoteSwiftPackageReference "purchases-ios" */;
 			productName = RevenueCatUI;
+		};
+		861981FB2F927F4C003B399E /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 861981FA2F927F4C003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+		861981FE2F927F58003B399E /* GoogleUserMessagingPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 861981FD2F927F58003B399E /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
+			productName = GoogleUserMessagingPlatform;
 		};
 		8631B5092ECA305300EBACD6 /* OpenAISwift */ = {
 			isa = XCSwiftPackageProductDependency;

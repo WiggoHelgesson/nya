@@ -60,6 +60,7 @@ struct ShopifyVariant: Identifiable, Decodable {
     let availableForSale: Bool
     let price: ShopifyMoney
     let selectedOptions: [ShopifyOption]
+    let image: ShopifyImage?
 
     var formattedPrice: String {
         let amount = Double(price.amount) ?? 0

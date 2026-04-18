@@ -2,11 +2,13 @@ import SwiftUI
 
 struct ProductGridView: View {
     @Binding var showCart: Bool
+    @Binding var marketSubTab: Int
+    /// Opens the full-screen AI sell flow (parent presents `SellFlowView`).
+    var onOpenSellFlow: (() -> Void)? = nil
     @ObservedObject private var cartManager = CartManager.shared
     @State private var products: [ShopifyProduct] = []
     @State private var searchText = ""
-    @State private var selectedTab = "Alla"
-    @State private var selectedSubcategory: String?
+    @State private var selectedCategory = "Alla"
     @State private var isLoading = true
     @State private var hasNextPage = false
     @State private var endCursor: String?
@@ -15,22 +17,21 @@ struct ProductGridView: View {
     @State private var showMarketInfo = false
     @FocusState private var isSearchFocused: Bool
 
+    private let categoryNames = ["Alla", "Löpning & Gym", "Vardag", "Golf/Premium Sport"]
+
+    private let categoryBrands: [String: [String]] = [
+        "Löpning & Gym": ["Gymshark", "Nike", "Under Armour", "Adidas", "YoungLA", "Vanquish Fitness"],
+        "Vardag": ["Nike", "Adidas", "New Balance", "Puma", "Carhartt", "The North Face"],
+        "Golf/Premium Sport": ["J.Lindeberg", "Callaway", "Nike Golf", "Adidas Golf", "TaylorMade"]
+    ]
+
     private let popularBrands = [
-        "Nike", "Adidas", "J.Lindeberg", "Puma", "Under Armour",
-        "The North Face", "Salomon", "Helly Hansen", "Peak Performance", "Craft"
+        "Nike", "Adidas", "J.Lindeberg", "Gymshark", "Under Armour",
+        "New Balance", "Puma", "The North Face", "Callaway", "Carhartt"
     ]
     private let popularSearches = [
         "Löparskor", "Tights", "Träningströja", "Jacka", "Shorts",
         "Hoodie", "Ryggsäck", "Sportbh"
-    ]
-
-    private let tabs = ["Alla", "Herr", "Dam", "Accessoarer", "Skor"]
-
-    private let subcategories: [(icon: String, title: String, query: String)] = [
-        ("figure.golf", "Golf", "Golf"),
-        ("dumbbell", "Gym", "Gym"),
-        ("figure.run", "Löpning", "Löpning"),
-        ("figure.open.water.swim", "Triathlon", "Triathlon")
     ]
 
     private let columns = [
@@ -54,15 +55,8 @@ struct ProductGridView: View {
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
 
-                        sectionTitle(L.t(sv: "Utforska kategorier", nb: "Utforsk kategorier"))
-                            .padding(.top, 20)
-
-                        tabBar
-                            .padding(.top, 8)
-
-                        categoryBoxes
-                            .padding(.top, 12)
-                            .padding(.horizontal, 16)
+                        categoryChips
+                            .padding(.top, 16)
 
                         if isLoading && products.isEmpty {
                             loadingGrid
@@ -77,11 +71,28 @@ struct ProductGridView: View {
                 .refreshable {
                     await loadProducts(reset: true)
                 }
+                .onChange(of: searchText) { _, _ in
+                    products = filterProducts(allCollectionProducts)
+                }
+                .onChange(of: selectedCategory) { _, _ in
+                    products = filterProducts(allCollectionProducts)
+                }
             }
         }
         .background(Color(.systemBackground))
         .sheet(isPresented: $showMarketInfo) {
             MarketInfoSheet()
+        }
+        .alert(
+            L.t(sv: "Kommer snart", nb: "Kommer snart"),
+            isPresented: $showSearchComingSoon
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(L.t(
+                sv: "Denna funktionen lanseras inom kort när fler produkter finns tillgängliga",
+                nb: "Denne funksjonen lanseres snart når flere produkter er tilgjengelige"
+            ))
         }
         .task {
             if products.isEmpty { await loadProducts(reset: true) }
@@ -90,9 +101,11 @@ struct ProductGridView: View {
 
     // MARK: - Search
 
+    @State private var showSearchComingSoon = false
+
     private var searchBar: some View {
         Button {
-            showSearchOverlay = true
+            showSearchComingSoon = true
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
@@ -250,70 +263,36 @@ struct ProductGridView: View {
         }
     }
 
-    // MARK: - Tab Bar (underline style)
+    // MARK: - Category Chips
 
-    private var tabBar: some View {
+    private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 24) {
-                ForEach(tabs, id: \.self) { tab in
+            HStack(spacing: 10) {
+                ForEach(categoryNames, id: \.self) { name in
+                    let isEnabled = name == "Alla"
                     Button {
-                        selectedTab = tab
-                        selectedSubcategory = nil
-                        Task { await loadProducts(reset: true) }
-                    } label: {
-                        VStack(spacing: 6) {
-                            Text(tab)
-                                .font(.system(size: 15, weight: selectedTab == tab ? .semibold : .regular))
-                                .foregroundColor(selectedTab == tab ? .primary : .gray)
-
-                            Rectangle()
-                                .fill(selectedTab == tab ? Color.primary : Color.clear)
-                                .frame(height: 2)
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedCategory = name
                         }
+                    } label: {
+                        Text(name)
+                            .font(.system(size: 14, weight: selectedCategory == name ? .semibold : .medium))
+                            .foregroundColor(
+                                selectedCategory == name ? .white :
+                                isEnabled ? .primary : .primary.opacity(0.35)
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(
+                                selectedCategory == name
+                                    ? Capsule().fill(Color.black)
+                                    : Capsule().fill(Color(.systemGray6))
+                            )
                     }
+                    .disabled(!isEnabled)
                 }
             }
             .padding(.horizontal, 16)
-        }
-    }
-
-    // MARK: - Category Boxes
-
-    private var categoryBoxes: some View {
-        let boxColumns = [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ]
-
-        return LazyVGrid(columns: boxColumns, spacing: 10) {
-            ForEach(subcategories, id: \.title) { cat in
-                Button {
-                    if selectedSubcategory == cat.query {
-                        selectedSubcategory = nil
-                    } else {
-                        selectedSubcategory = cat.query
-                    }
-                    Task { await loadProducts(reset: true) }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: cat.icon)
-                            .font(.system(size: 18))
-                            .foregroundColor(.primary)
-                            .frame(width: 28)
-
-                        Text(cat.title)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 14)
-                    .background(selectedSubcategory == cat.query ? Color(.systemGray4) : Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-            }
         }
     }
 
@@ -352,11 +331,6 @@ struct ProductGridView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-
-            if !sliderProducts.isEmpty {
-                recommendedSlider
-                    .padding(.top, 24)
-            }
 
             if !midProducts.isEmpty {
                 LazyVGrid(columns: columns, spacing: 16) {
@@ -415,40 +389,7 @@ struct ProductGridView: View {
                 HStack(spacing: 12) {
                     ForEach(sliderProducts) { product in
                         NavigationLink(value: product) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    if let imageURL = product.firstImage {
-                                        AsyncImage(url: imageURL) { phase in
-                                            switch phase {
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .scaledToFill()
-                                            case .failure:
-                                                sliderPlaceholder
-                                            default:
-                                                ProgressView()
-                                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                            }
-                                        }
-                                        .frame(width: 140, height: 140)
-                                        .clipped()
-                                    } else {
-                                        sliderPlaceholder
-                                    }
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                                Text(product.title)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
-
-                                Text(product.formattedPrice)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.primary)
-                            }
-                            .frame(width: 140)
+                            SliderProductCard(product: product)
                         }
                         .buttonStyle(.plain)
                     }
@@ -472,40 +413,38 @@ struct ProductGridView: View {
     // MARK: - Sell Bag Promo
 
     private var sellBagPromo: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(L.t(sv: "Första påsen gratis", nb: "Første posen gratis"))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.primary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L.t(sv: "Ge dina gamla sportprodukter ett nytt liv", nb: "Gi de gamle sportproduktene dine nytt liv"))
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
 
-                Text(L.t(
-                    sv: "Att sälja dina gamla saker har aldrig varit enklare. Allt du behöver göra är att packa en Up&Down-påse. Första påsen är gratis – därefter 19 kr st.",
-                    nb: "Å selge de gamle tingene dine har aldri vært enklere. Alt du trenger å gjøre er å pakke en Up&Down-pose. Første posen er gratis – deretter 19 kr stk."
-                ))
-                .font(.system(size: 15))
-                .foregroundColor(.secondary)
+            Text(L.t(
+                sv: "Sälj det du inte längre använder och bli betald. Beställ en Up&Down-påse, packa den och skicka – vi sköter resten.",
+                nb: "Selg det du ikke lenger bruker og bli betalt. Bestill en Up&Down-pose, pakk den og send – vi tar oss av resten."
+            ))
+            .font(.system(size: 15))
+            .foregroundColor(.secondary)
 
-                Button {
-                } label: {
-                    Text(L.t(sv: "Beställ påse", nb: "Bestill pose"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
+            Button {
+                if let onOpenSellFlow {
+                    onOpenSellFlow()
+                } else {
+                    withAnimation(.easeInOut(duration: 0.2)) { marketSubTab = 1 }
                 }
-                .padding(.top, 4)
+            } label: {
+                Text(L.t(sv: "Beställ påse", nb: "Bestill pose"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
             }
-            .padding(20)
-
-            Image("75")
-                .resizable()
-                .scaledToFill()
-                .frame(height: 220)
-                .clipped()
+            .padding(.top, 4)
         }
+        .padding(20)
         .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Loading / Empty
@@ -535,30 +474,25 @@ struct ProductGridView: View {
 
     // MARK: - Data
 
+    @State private var allCollectionProducts: [ShopifyProduct] = []
+
     private func loadProducts(reset: Bool) async {
         if reset {
             isLoading = true
-            endCursor = nil
         }
 
-        let query = buildQuery()
         do {
-            let result = try await ShopifyService.shared.fetchProducts(first: 20, query: query, after: reset ? nil : endCursor)
-            let newProducts = result.edges.map(\.node)
+            let fetched = try await ShopifyService.shared.fetchCollectionProducts(handle: "up-down", first: 50)
 
             await MainActor.run {
-                if reset {
-                    products = newProducts
-                } else {
-                    products.append(contentsOf: newProducts)
-                }
-                hasNextPage = result.pageInfo?.hasNextPage ?? false
-                endCursor = result.pageInfo?.endCursor
+                allCollectionProducts = fetched
+                products = filterProducts(fetched)
+                hasNextPage = false
                 isLoading = false
                 isLoadingMore = false
             }
         } catch {
-            print("❌ Failed to load products: \(error)")
+            print("Failed to load collection products: \(error)")
             await MainActor.run {
                 isLoading = false
                 isLoadingMore = false
@@ -566,18 +500,25 @@ struct ProductGridView: View {
         }
     }
 
-    private func loadMore() async {
-        guard !isLoadingMore, hasNextPage else { return }
-        isLoadingMore = true
-        await loadProducts(reset: false)
-    }
+    private func loadMore() async { }
 
-    private func buildQuery() -> String? {
-        var parts: [String] = []
-        if !searchText.isEmpty { parts.append(searchText) }
-        if selectedTab != "Alla" { parts.append("tag:\(selectedTab)") }
-        if let sub = selectedSubcategory { parts.append("product_type:\(sub)") }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    private func filterProducts(_ source: [ShopifyProduct]) -> [ShopifyProduct] {
+        var filtered = source
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            filtered = filtered.filter {
+                $0.title.lowercased().contains(query) ||
+                $0.vendor.lowercased().contains(query) ||
+                $0.productType.lowercased().contains(query) ||
+                $0.tags.contains(where: { $0.lowercased().contains(query) })
+            }
+        }
+        if selectedCategory != "Alla", let brands = categoryBrands[selectedCategory] {
+            filtered = filtered.filter { product in
+                brands.contains(where: { $0.caseInsensitiveCompare(product.vendor) == .orderedSame })
+            }
+        }
+        return filtered
     }
 }
 
@@ -585,74 +526,72 @@ struct ProductGridView: View {
 
 struct ProductCard: View {
     let product: ShopifyProduct
-    @State private var isFavorite = false
+    @State private var cachedImage: UIImage?
+    @State private var imageLoading = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomTrailing) {
-                if let imageURL = product.firstImage {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        case .failure:
-                            imagePlaceholder
-                        default:
-                            ProgressView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                    }
-                    .frame(height: 200)
-                    .clipped()
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let uiImage = cachedImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else if imageLoading {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .overlay { ProgressView().tint(.gray) }
                 } else {
                     imagePlaceholder
-                        .frame(height: 200)
                 }
-
-                Button {
-                    withAnimation(.spring(response: 0.3)) { isFavorite.toggle() }
-                } label: {
-                    Image(systemName: isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 16))
-                        .foregroundColor(isFavorite ? .red : .gray)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                }
-                .padding(8)
             }
+            .frame(height: 200)
+            .frame(maxWidth: .infinity)
+            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .onAppear { loadImage() }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(product.title)
-                    .font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(product.formattedPrice)
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.primary)
-                    .lineLimit(1)
 
-                Text(product.vendor + ", " + product.productType)
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
+                Text(product.title)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
-                    Image(systemName: "shippingbox")
-                        .font(.system(size: 10))
-                    Text(L.t(sv: "Snabb leverans", nb: "Rask levering"))
-                        .font(.system(size: 11))
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("I lager")
+                        .font(.system(size: 12, weight: .semibold))
                 }
-                .foregroundColor(.gray)
-                .padding(.top, 2)
-
-                Text(product.formattedPrice)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.primary)
-                    .padding(.top, 2)
+                .foregroundColor(Color(red: 10/255, green: 140/255, blue: 80/255))
+                .padding(.top, 1)
             }
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 2)
+        }
+    }
+
+    private func loadImage() {
+        guard let urlString = product.images.edges.first?.node.url, !urlString.isEmpty else { return }
+        if let cached = ImageCacheManager.shared.getImage(for: urlString) {
+            cachedImage = cached
+            return
+        }
+        imageLoading = true
+        Task {
+            do {
+                let image = try await ImageCacheManager.shared.downloadAndCacheImage(from: urlString)
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        cachedImage = image
+                        imageLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run { imageLoading = false }
+            }
         }
     }
 
@@ -664,6 +603,67 @@ struct ProductCard: View {
                     .foregroundColor(.gray)
                     .font(.system(size: 24))
             }
+    }
+}
+
+// MARK: - Slider Product Card
+
+private struct SliderProductCard: View {
+    let product: ShopifyProduct
+    @State private var cachedImage: UIImage?
+    @State private var imageLoading = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Group {
+                if let uiImage = cachedImage {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else if imageLoading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    Rectangle().fill(Color(.systemGray5))
+                        .overlay { Image(systemName: "photo").foregroundColor(.gray).font(.system(size: 20)) }
+                }
+            }
+            .frame(width: 140, height: 140)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .onAppear { loadImage() }
+
+            Text(product.title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            Text(product.formattedPrice)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .frame(width: 140)
+    }
+
+    private func loadImage() {
+        guard let urlString = product.images.edges.first?.node.url, !urlString.isEmpty else { return }
+        if let cached = ImageCacheManager.shared.getImage(for: urlString) {
+            cachedImage = cached
+            return
+        }
+        imageLoading = true
+        Task {
+            do {
+                let image = try await ImageCacheManager.shared.downloadAndCacheImage(from: urlString)
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        cachedImage = image
+                        imageLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run { imageLoading = false }
+            }
+        }
     }
 }
 

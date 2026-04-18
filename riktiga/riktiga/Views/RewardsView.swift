@@ -662,7 +662,9 @@ struct RewardsView: View {
                         .pageEntrance()
                         
                         LazyVStack(spacing: 12) {
-                            if !adService.bannerAds.isEmpty {
+                            // Pro members don't see banner ads.
+                            if !adService.bannerAds.isEmpty,
+                               !(authViewModel.currentUser?.isProMember ?? false) {
                                 bannerAdSection
                                     .background(sectionBackgroundColor)
                                     .opacity(showHeroBanner ? 1 : 0)

@@ -207,7 +207,7 @@ struct HomeView: View {
                     .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 18) {
                         // Scroll offset detector
                         GeometryReader { geometry in
                             Color.clear.preference(
@@ -217,124 +217,115 @@ struct HomeView: View {
                         }
                         .frame(height: 0)
                         
-                        // MARK: - App Logo & Streak
-                        HStack {
-                            Image("23")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 44, height: 44)
-                                .cornerRadius(10)
-                            
-                            Spacer()
-                            
-                            // Streak badge
-                            HStack(spacing: 4) {
-                                Image(systemName: "flame.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.orange)
-                                Text("\(streakCount)")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundColor(.primary)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(Color(.systemBackground))
-                                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-                            )
-                            
-                            Button {
-                                showNutritionSettings = true
-                            } label: {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.gray)
-                                    .padding(10)
-                                    .background(
-                                        Circle()
-                                            .fill(Color(.systemBackground))
-                                            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-                                    )
+                        // MARK: - Översikt (logo, streak, settings)
+                        VStack(alignment: .leading, spacing: 8) {
+                            DashboardSectionHeader(title: L.t(sv: "Översikt", nb: "Oversikt"))
+                            DashboardSectionCard(verticalPadding: 14) {
+                                homeLogoStreakRow
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                        .padding(.horizontal, 16)
                         .pageEntrance()
                         
-                        // MARK: - Week Calendar
-                        weekCalendarView
+                        // MARK: - Vecka
+                        VStack(alignment: .leading, spacing: 8) {
+                            DashboardSectionHeader(title: L.t(sv: "Vecka", nb: "Uke"))
+                            DashboardSectionCard(verticalPadding: 10) {
+                                weekCalendarView
+                            }
+                        }
+                        .padding(.horizontal, 16)
                         .opacity(showCalendar ? 1 : 0)
                         .pageEntrance(delay: 0.05)
-                    
-                    // MARK: - Calorie Card
-                    calorieTrackerCard
+                        
+                        // MARK: - Kalorier & makro
+                        VStack(alignment: .leading, spacing: 8) {
+                            DashboardSectionHeader(title: L.t(sv: "Kalorier & makro", nb: "Kalorier & makro"))
+                            DashboardSectionCard {
+                                homeNutritionCardBody
+                            }
+                        }
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
                         .opacity(showCards ? 1 : 0)
                         .pageEntrance(delay: 0.08)
-                    
-                    // MARK: - Macro Cards
-                    macroCardsRow
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .opacity(showCards ? 1 : 0)
-                        .pageEntrance(delay: 0.12)
-                    
-                    // MARK: - AI Text Food Input
-                    aiTextInputSection
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
-                    
-                    // Limit reached message
-                    if !canUseAITextForFree {
-                        Button {
-                            SuperwallService.shared.showPaywall()
-                        } label: {
-                            Text(L.t(sv: "Din maxgräns är nådd. Uppgradera till Pro för full tillgång till kaloritracking med AI", nb: "Din maksgrense er nådd. Oppgrader til Pro for full tilgang til kaloritelling med AI"))
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 6)
+                        
+                        // MARK: - Logga måltid (AI + manuellt)
+                        VStack(alignment: .leading, spacing: 8) {
+                            DashboardSectionHeader(title: L.t(sv: "Logga måltid", nb: "Logg måltid")) {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showFoodScanner = true
+                                } label: {
+                                    Label(
+                                        L.t(sv: "Skanna", nb: "Skann"),
+                                        systemImage: "camera.viewfinder"
+                                    )
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            DashboardSectionCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    aiTextInputSection
+                                    
+                                    if !canUseAITextForFree {
+                                        Button {
+                                            SuperwallService.shared.showPaywall()
+                                        } label: {
+                                            Text(L.t(sv: "Din maxgräns är nådd. Uppgradera till Pro för full tillgång till kaloritracking med AI", nb: "Din maksgrense er nådd. Oppgrader til Pro for full tilgang til kaloritelling med AI"))
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.secondary)
+                                                .multilineTextAlignment(.center)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                    }
+                                    
+                                    Divider()
+                                        .background(Color(.separator))
+                                    
+                                    Button {
+                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        showManualFoodEntry = true
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "square.and.pencil")
+                                                .font(.system(size: 14, weight: .medium))
+                                            Text(L.t(sv: "Registrera måltid manuellt", nb: "Registrer måltid manuelt"))
+                                                .font(.system(size: 14, weight: .medium))
+                                        }
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         }
-                    }
-                    
-                    // Manual food entry button
-                    Button {
-                        showManualFoodEntry = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(L.t(sv: "Registrera måltid manuellt", nb: "Registrer måltid manuelt"))
-                                .font(.system(size: 14, weight: .medium))
-                        }
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(.systemBackground))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-                                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
-                        )
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    
-                    // MARK: - AI Analyzing Section
-                    if analyzingManager.isAnalyzing || analyzingManager.result != nil || analyzingManager.noFoodDetected || analyzingManager.limitReached {
-                        aiAnalyzingSection
+                        .padding(.horizontal, 16)
+                        
+                        // MARK: - AI-bildanalys
+                        if analyzingManager.isAnalyzing || analyzingManager.result != nil || analyzingManager.noFoodDetected || analyzingManager.limitReached {
+                            VStack(alignment: .leading, spacing: 8) {
+                                DashboardSectionHeader(title: L.t(sv: "AI-bildanalys", nb: "AI-bildeanalyse"))
+                                DashboardSectionCard {
+                                    aiAnalyzingSection
+                                }
+                            }
                             .padding(.horizontal, 16)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .scale(scale: 0.95)),
                                 removal: .opacity
                             ))
-                    }
-                    
-                    // MARK: - Recently Logged Section
-                    recentlyLoggedSection
+                        }
+                        
+                        // MARK: - Nyligen uppladdat
+                        VStack(alignment: .leading, spacing: 8) {
+                            DashboardSectionHeader(title: L.t(sv: "Nyligen uppladdat", nb: "Nylig lastet opp"))
+                            DashboardSectionCard(verticalPadding: 12) {
+                                recentlyLoggedSectionContent
+                            }
+                        }
                         .padding(.horizontal, 16)
                         .opacity(showRecent ? 1 : 0)
                     
@@ -560,6 +551,198 @@ struct HomeView: View {
         }
     }
     
+    // MARK: - Home dashboard sections
+    private var homeLogoStreakRow: some View {
+        HStack {
+            Image("23")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .cornerRadius(10)
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.orange)
+                Text("\(streakCount)")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color(.tertiarySystemGroupedBackground))
+            )
+            
+            Button {
+                showNutritionSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.gray)
+                    .padding(10)
+                    .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var homeNutritionCardBody: some View {
+        if viewModel.isLoadingDailySummary {
+            VStack(alignment: .leading, spacing: 14) {
+                calorieCardLoadingPlaceholder
+                Divider().background(Color(.separator))
+                macroRowLoadingPlaceholder
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                calorieTrackerCard
+                Divider().background(Color(.separator))
+                macroCardsRow
+            }
+        }
+    }
+    
+    private var calorieCardLoadingPlaceholder: some View {
+        HStack(spacing: 24) {
+            VStack(alignment: .leading, spacing: 10) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                    .frame(width: 120, height: 48)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.1 : 0.06))
+                    .frame(width: 160, height: 18)
+            }
+            Spacer()
+            Circle()
+                .stroke(Color.primary.opacity(0.08), lineWidth: 12)
+                .frame(width: 108, height: 108)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(L.t(sv: "Laddar kalorier", nb: "Laster kalorier")))
+    }
+    
+    private var macroRowLoadingPlaceholder: some View {
+        HStack(spacing: 10) {
+            ForEach(0..<3, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                    .frame(height: 120)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var recentlyLoggedSectionContent: some View {
+        if viewModel.isLoadingRecentLogs && viewModel.recentLogs.isEmpty {
+            recentLogsLoadingPlaceholder
+        } else if viewModel.recentLogs.isEmpty {
+            recentlyLoggedEmptyState
+        } else {
+            VStack(spacing: 12) {
+                ForEach(Array(viewModel.recentLogs.enumerated()), id: \.element.id) { index, log in
+                    recentlyLoggedRow(for: log, index: index)
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.recentLogs.map { $0.id })
+        }
+    }
+    
+    private var recentLogsLoadingPlaceholder: some View {
+        VStack(spacing: 12) {
+            ForEach(0..<4, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08))
+                    .frame(height: 72)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(L.t(sv: "Laddar måltider", nb: "Laster måltider")))
+    }
+    
+    private var recentlyLoggedEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "fork.knife.circle")
+                .font(.system(size: 40))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text(L.t(sv: "Inga loggade måltider", nb: "Ingen loggede måltider"))
+                .font(.system(size: 15))
+                .foregroundColor(.secondary)
+            
+            Text(L.t(sv: "Tryck på + för att logga din första måltid", nb: "Trykk på + for å logge ditt første måltid"))
+                .font(.system(size: 13))
+                .foregroundColor(.secondary.opacity(0.85))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
+            removal: .opacity.combined(with: .scale(scale: 0.95))
+        ))
+    }
+    
+    @ViewBuilder
+    private func recentlyLoggedRow(for log: CalorieTrackerViewModel.LogEntry, index: Int) -> some View {
+        switch log {
+        case .food(let entry):
+            FoodLogCardView(entry: entry)
+                .overlay {
+                    if isLoadingHealthAnalysis && loadingBarcodeEntryId == entry.id {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color.black.opacity(0.3))
+                            .overlay {
+                                ProgressView()
+                                    .tint(.white)
+                                    .scaleEffect(1.2)
+                            }
+                    }
+                }
+                .onTapGesture {
+                    if let barcode = entry.barcode, !barcode.isEmpty {
+                        isLoadingHealthAnalysis = true
+                        loadingBarcodeEntryId = entry.id
+                        Task {
+                            do {
+                                let analysis = try await ProductHealthService.shared.analyzeBarcode(barcode)
+                                await MainActor.run {
+                                    isLoadingHealthAnalysis = false
+                                    loadingBarcodeEntryId = nil
+                                    healthAnalysisForResult = analysis
+                                    showHealthResult = true
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    isLoadingHealthAnalysis = false
+                                    loadingBarcodeEntryId = nil
+                                    selectedFoodLog = entry
+                                }
+                            }
+                        }
+                    } else {
+                        selectedFoodLog = entry
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
+        case .activity(let entry):
+            ActivityLogCardView(entry: entry)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
+        }
+    }
+    
     // MARK: - Calorie Tracker Card
     private var calorieTrackerCard: some View {
         Button {
@@ -620,11 +803,7 @@ struct HomeView: View {
                         .foregroundColor(.primary)
                 }
             }
-            .padding(28)
-            .background(Color(.systemBackground))
-            .cornerRadius(22)
-            .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.04), radius: 16, x: 0, y: 4)
+            .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
     }
@@ -750,13 +929,13 @@ struct HomeView: View {
                 Spacer()
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity)
-        .frame(height: 130)
-        .background(Color(.systemBackground))
-        .cornerRadius(18)
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
+        .frame(height: 124)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.tertiarySystemGroupedBackground))
+        }
     }
     
     // MARK: - AI Text Food Input Section
@@ -864,13 +1043,11 @@ struct HomeView: View {
                             .foregroundColor(.red)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.systemBackground))
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-                        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(.tertiarySystemGroupedBackground))
                 )
             }
             .buttonStyle(.plain)
@@ -1081,97 +1258,6 @@ struct HomeView: View {
                 }
             }
         }
-    }
-    
-    // MARK: - Recently Logged Section
-    private var recentlyLoggedSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L.t(sv: "Nyligen uppladdat", nb: "Nylig lastet opp"))
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.primary)
-            
-            if viewModel.recentLogs.isEmpty {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "fork.knife.circle")
-                        .font(.system(size: 40))
-                        .foregroundColor(.gray.opacity(0.5))
-                    
-                    Text(L.t(sv: "Inga loggade måltider", nb: "Ingen loggede måltider"))
-                        .font(.system(size: 15))
-                        .foregroundColor(.gray)
-                    
-                    Text(L.t(sv: "Tryck på + för att logga din första måltid", nb: "Trykk på + for å logge ditt første måltid"))
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 30)
-                .background(Color(.systemBackground))
-                .cornerRadius(20)
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.gray.opacity(0.1), lineWidth: 1))
-                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 3)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.95)).combined(with: .offset(y: 10)),
-                    removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
-            } else {
-                ForEach(Array(viewModel.recentLogs.enumerated()), id: \.element.id) { index, log in
-                    switch log {
-                    case .food(let entry):
-                        FoodLogCardView(entry: entry)
-                            .overlay {
-                                if isLoadingHealthAnalysis && loadingBarcodeEntryId == entry.id {
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .fill(Color.black.opacity(0.3))
-                                        .overlay {
-                                            ProgressView()
-                                                .tint(.white)
-                                                .scaleEffect(1.2)
-                                        }
-                                }
-                            }
-                            .onTapGesture {
-                                if let barcode = entry.barcode, !barcode.isEmpty {
-                                    isLoadingHealthAnalysis = true
-                                    loadingBarcodeEntryId = entry.id
-                                    Task {
-                                        do {
-                                            let analysis = try await ProductHealthService.shared.analyzeBarcode(barcode)
-                                            await MainActor.run {
-                                                isLoadingHealthAnalysis = false
-                                                loadingBarcodeEntryId = nil
-                                                healthAnalysisForResult = analysis
-                                                showHealthResult = true
-                                            }
-                                        } catch {
-                                            await MainActor.run {
-                                                isLoadingHealthAnalysis = false
-                                                loadingBarcodeEntryId = nil
-                                                selectedFoodLog = entry
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    selectedFoodLog = entry
-                                }
-                            }
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95))
-                            ))
-                    case .activity(let entry):
-                        ActivityLogCardView(entry: entry)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 15)).animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.05)),
-                                removal: .opacity.combined(with: .scale(scale: 0.95))
-                            ))
-                    }
-                }
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.recentLogs.map { $0.id })
     }
     
     // MARK: - Animation
@@ -1782,6 +1868,10 @@ class CalorieTrackerViewModel: ObservableObject {
     @Published var weeks: [WeekInfo] = []
     @Published var recentLogs: [LogEntry] = []
     @Published var currentWeekIndex: Int = 0
+    /// True while the selected day’s summary is being fetched from the network.
+    @Published private(set) var isLoadingDailySummary = false
+    /// True while the “recent logs” list for the selected day is being fetched.
+    @Published private(set) var isLoadingRecentLogs = false
     
     private var userId: String?
     private let healthStore = HKHealthStore()
@@ -2061,13 +2151,19 @@ class CalorieTrackerViewModel: ObservableObject {
     }
     
     private func loadDailySummary(for date: Date) {
-        guard let userId = userId else { return }
+        guard let userId = userId else {
+            Task { @MainActor in
+                isLoadingDailySummary = false
+            }
+            return
+        }
         
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
         
         Task {
+            await MainActor.run { isLoadingDailySummary = true }
             do {
                 // Fetch food logs for the day
                 let foodLogs: [FoodLogEntry] = try await SupabaseConfig.supabase
@@ -2147,17 +2243,24 @@ class CalorieTrackerViewModel: ObservableObject {
             } catch {
                 print("❌ Error loading daily summary: \(error)")
             }
+            await MainActor.run { isLoadingDailySummary = false }
         }
     }
     
     private func loadRecentLogs() {
-        guard let userId = userId else { return }
+        guard let userId = userId else {
+            Task { @MainActor in
+                isLoadingRecentLogs = false
+            }
+            return
+        }
         
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: selectedDate)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
         
         Task {
+            await MainActor.run { isLoadingRecentLogs = true }
             do {
                 let foodLogs: [FoodLogEntry] = try await SupabaseConfig.supabase
                     .from("food_logs")
@@ -2196,6 +2299,7 @@ class CalorieTrackerViewModel: ObservableObject {
             } catch {
                 print("❌ Error loading recent logs: \(error)")
             }
+            await MainActor.run { isLoadingRecentLogs = false }
         }
     }
     

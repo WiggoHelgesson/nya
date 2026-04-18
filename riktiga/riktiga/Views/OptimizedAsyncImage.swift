@@ -183,7 +183,7 @@ class ImageCacheManager {
     /// High-priority prefetch for immediately visible images (first few posts)
     func prefetchHighPriority(urls: [String]) async {
         await withTaskGroup(of: Void.self) { group in
-            for url in urls.prefix(5) where !url.isEmpty {
+            for url in urls.prefix(12) where !url.isEmpty {
                 if hasImage(for: url) { continue }
                 
                 group.addTask {

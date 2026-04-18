@@ -52,12 +52,7 @@ struct FindTrainerView: View {
                                 }
                             }
                             .padding(.horizontal, 16)
-                            
-                            // "Become a trainer" promo – full width
-                            BecomeTrainerPromoCard()
-                                .padding(.horizontal, 16)
-                                .padding(.top, 24)
-                                .padding(.bottom, 100)
+                            .padding(.bottom, 100)
                         }
                     }
                 }
@@ -303,60 +298,6 @@ struct TrainerGridCard: View {
         if days < 7 { return L.t(sv: "\(days) d sedan", nb: "\(days) d siden") }
         if days < 30 { return L.t(sv: "\(days / 7) v sedan", nb: "\(days / 7) u siden") }
         return L.t(sv: "\(days / 30) mån sedan", nb: "\(days / 30) mnd siden")
-    }
-}
-
-// MARK: - Become a Trainer Promo Card (full-width)
-
-struct BecomeTrainerPromoCard: View {
-    var body: some View {
-        Button {
-            if let url = URL(string: "https://upanddowncoach.com/") {
-                UIApplication.shared.open(url)
-            }
-        } label: {
-            VStack(spacing: 0) {
-                // Image
-                Image("81")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 200)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                
-                // Text content
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L.t(sv: "Signa upp dig\nsom tränare", nb: "Meld deg på\nsom trener"))
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.black)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    Text(L.t(sv: "Dela dina kunskaper, tips & bli betald", nb: "Del kunnskapen din, tips og bli betalt"))
-                        .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.7))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    // CTA button
-                    HStack {
-                        Spacer()
-                        Text(L.t(sv: "Mer information", nb: "Mer informasjon"))
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(.vertical, 14)
-                    .background(Color.black)
-                    .cornerRadius(28)
-                    .padding(.top, 8)
-                }
-                .padding(20)
-                .background(Color(red: 0.98, green: 0.93, blue: 0.87))
-            }
-            .cornerRadius(16)
-            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
     }
 }
 

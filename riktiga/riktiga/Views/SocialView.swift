@@ -24,6 +24,8 @@ struct SocialView: View {
     @StateObject private var celebrationManager = CelebrationManager.shared
     @ObservedObject private var uploadManager = PostUploadManager.shared
     @ObservedObject private var adService = AdService.shared
+    @ObservedObject private var adMobService = AdMobService.shared
+    @ObservedObject private var launchCoordinator = AppLaunchCoordinator.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var visiblePostCount = 5 // Start with 5 posts
@@ -94,12 +96,19 @@ struct SocialView: View {
     
     // Timer for active friends refresh
     @State private var activeFriendsRefreshTimer: Timer?
+
+    // Timestamp guards so the preload run by AppLaunchCoordinator is not
+    // duplicated the moment SocialView's own .task/.onAppear fires.
+    @State private var lastStoriesFetch: Date?
+    @State private var lastActiveFriendsFetch: Date?
+    @State private var lastCollectionFetch: Date?
+    @State private var lastFeedAdsFetch: Date?
+    private let preloadDedupeWindow: TimeInterval = 30
     
     // Friend location map state
     @State private var showFriendsMap = false
     
     
-    private let brandLogos = BrandLogoItem.all
     private let sessionRefreshThreshold: TimeInterval = 120 // Refresh if inactive for 2+ minutes
     private let adminEmail = "info@bylito.se"
     
@@ -151,12 +160,29 @@ struct SocialView: View {
                     RealtimeSocialService.shared.startListening()
                 }
             }
-            .task {
-                do {
-                    let products = try await ShopifyService.shared.fetchCollectionProducts(handle: "up-down")
-                    await MainActor.run { collectionProducts = products }
-                } catch {
-                    print("[CollectionSlider] ERROR: \(error)")
+            .onAppear {
+                print("[CollectionSlider] >>> onAppear TRIGGERED <<<")
+                if let last = lastCollectionFetch, Date().timeIntervalSince(last) < preloadDedupeWindow, !collectionProducts.isEmpty {
+                    print("[CollectionSlider] >>> skip — warmed \(Int(Date().timeIntervalSince(last)))s ago <<<")
+                    return
+                }
+                Task {
+                    print("[CollectionSlider] >>> FETCH STARTING handle='up-down' <<<")
+                    do {
+                        let products = try await ShopifyService.shared.fetchCollectionProducts(handle: "up-down")
+                        print("[CollectionSlider] >>> FETCHED \(products.count) products <<<")
+                        for (i, p) in products.prefix(5).enumerated() {
+                            print("[CollectionSlider]   [\(i)] \(p.title) — images: \(p.images.edges.count)")
+                        }
+                        collectionProducts = products
+                        lastCollectionFetch = Date()
+                        let imageUrls = products.compactMap { $0.images.edges.first?.node.url }
+                        ImageCacheManager.shared.prefetch(urls: imageUrls)
+                        print("[CollectionSlider] >>> State updated, collectionProducts.count = \(collectionProducts.count) <<<")
+                    } catch {
+                        print("[CollectionSlider] >>> FETCH FAILED: \(error) <<<")
+                        print("[CollectionSlider] >>> ERROR detail: \(String(describing: error)) <<<")
+                    }
                 }
             }
             .onDisappear {
@@ -278,56 +304,61 @@ struct SocialView: View {
     private var mainContent: some View {
         GeometryReader { geometry in
             let topInset = geometry.safeAreaInsets.top
-            
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Hero Banner Section - extends behind status bar via negative padding
-                    heroBannerSection
-                        .padding(.top, -topInset)
-                        .zIndex(2)
-                        .pageEntrance()
-                    
-                    // Overlapping Friends & Stats section
-                    friendsAndStatsSection
-                        .offset(y: -40)
-                        .zIndex(3)
-                        .pageEntrance(delay: 0.05)
-                    
+
+            ZStack {
+                ScrollView {
                     VStack(spacing: 0) {
-                        // Show skeleton only when we have no posts to display yet
-                        if socialViewModel.posts.isEmpty && (!hasInitiallyLoaded || socialViewModel.isLoading) {
-                            loadingView
-                        } else if socialViewModel.posts.isEmpty && !featuredPosts.isEmpty {
-                            // Show featured posts when user has no following
-                            featuredPostsContent
-                        } else if socialViewModel.posts.isEmpty && hasInitiallyLoaded {
-                            emptyStateView
-                        } else {
-                            // Feed content directly here instead of scrollContent to avoid nested scrolls
-                            VStack(alignment: .leading, spacing: 0) {
-                                // MARK: - Friends at gym section
-                                friendsAtGymSection
-                                leaderboardLink
-                                
-                                // MARK: - Upload progress indicator
-                                if uploadManager.uploadingPost != nil {
-                                    uploadProgressCard
+                        // Hero Banner Section - extends behind status bar via negative padding
+                        heroBannerSection
+                            .padding(.top, -topInset)
+                            .zIndex(2)
+
+                        // Overlapping Friends & Stats section
+                        friendsAndStatsSection
+                            .offset(y: -40)
+                            .zIndex(3)
+
+                        VStack(spacing: 0) {
+                            if socialViewModel.posts.isEmpty && (!hasInitiallyLoaded || socialViewModel.isLoading) {
+                                loadingView
+                            } else if socialViewModel.posts.isEmpty && hasInitiallyLoaded {
+                                emptyStateView
+                            } else {
+                                // Feed content directly here instead of scrollContent to avoid nested scrolls
+                                VStack(alignment: .leading, spacing: 0) {
+                                    // MARK: - Friends at gym section
+                                    friendsAtGymSection
+
+                                    // MARK: - Upload progress indicator
+                                    if uploadManager.uploadingPost != nil {
+                                        uploadProgressCard
+                                    }
+
+                                    Divider()
+                                        .background(Color(.systemGray5))
+
+                                    feedContent
                                 }
-                                
-                                Divider()
-                                    .background(Color(.systemGray5))
-                                
-                                feedContent
                             }
                         }
+                        .padding(.top, -30) // Adjust for the overlapping section
                     }
-                    .padding(.top, -30) // Adjust for the overlapping section
+                    // Fade the entire page body in as one block when the
+                    // launch coordinator signals ready, so hero, stats and
+                    // feed appear together with no movement.
+                    .opacity(launchCoordinator.isReady ? 1 : 0)
+                }
+                .scrollClipDisabled()
+                .refreshable {
+                    await refreshData()
+                }
+
+                if !launchCoordinator.isReady {
+                    FeedLoadingGear()
+                        .transition(.opacity)
                 }
             }
-            .scrollClipDisabled()
-            .refreshable {
-                await refreshData()
-            }
+            .animation(.smooth(duration: 0.5), value: launchCoordinator.isReady)
             .navigationDestination(isPresented: $showNotifications) {
                 NotificationsView(onDismiss: {
                     showNotifications = false
@@ -343,7 +374,12 @@ struct SocialView: View {
             .onAppear {
                 animateContentIn()
                 loadStats()
-                Task { await adService.fetchFeedAds() }
+                if let last = lastFeedAdsFetch, Date().timeIntervalSince(last) < preloadDedupeWindow {
+                    // warmed recently by AppLaunchCoordinator — skip
+                } else {
+                    lastFeedAdsFetch = Date()
+                    Task { await adService.fetchFeedAds() }
+                }
             }
         }
     }
@@ -420,8 +456,14 @@ struct SocialView: View {
                 .padding(.trailing, 20)
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
-                .background(Color(.systemBackground))
-                .cornerRadius(28)
+                .background {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color(.systemBackground))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                }
                 .shadow(color: Color.black.opacity(0.1), radius: 15, x: 0, y: 8)
             }
             .buttonStyle(.plain)
@@ -439,8 +481,14 @@ struct SocialView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
-            .background(Color(.systemBackground))
-            .cornerRadius(28)
+            .background {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(.systemBackground))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            }
             .shadow(color: Color.black.opacity(0.1), radius: 15, x: 0, y: 8)
         }
         .padding(.horizontal, 12)
@@ -676,29 +724,42 @@ struct SocialView: View {
         showPosts = true
     }
     
+    /// Centered rotating gear shown while AppLaunchCoordinator warms up the
+    /// first tab's data. Replaces the feed area only — header, hero, stats and
+    /// bottom tab bar remain visible.
+    private var feedLoadingGear: some View {
+        FeedLoadingGear()
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 320)
+            .padding(.top, 40)
+    }
+
     private var loadingView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Skeleton for "Vänner som tränar" section
-            VStack(alignment: .leading, spacing: 12) {
-                SkeletonLine(width: 160, height: 20)
-                
-                HStack(spacing: 12) {
-                    SkeletonCircle(size: 48)
-                    VStack(alignment: .leading, spacing: 6) {
-                        SkeletonLine(width: 200, height: 14)
-                        SkeletonLine(width: 140, height: 12)
+        VStack(alignment: .leading, spacing: 10) {
+            // Skeleton for "Vänner som tränar" section — matches real layout
+            SkeletonLine(width: 160, height: 16)
+                .padding(.horizontal, 16)
+            
+            DashboardSectionCard(horizontalPadding: 16, verticalPadding: 14) {
+                HStack(spacing: 16) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        VStack(spacing: 8) {
+                            SkeletonCircle(size: 60)
+                            SkeletonLine(width: 48, height: 10)
+                        }
                     }
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
             
             Divider()
                 .background(Color(.systemGray5))
+                .padding(.top, 6)
             
             // Skeleton posts
             SkeletonFeedView(postCount: 4)
         }
+        .padding(.top, 4)
     }
     
     private var emptyStateView: some View {
@@ -710,11 +771,11 @@ struct SocialView: View {
                     .font(.system(size: 64))
                     .foregroundColor(.gray.opacity(0.6))
                 
-                Text(L.t(sv: "Inga inlägg än", nb: "Ingen innlegg ennå"))
-                    .font(.system(size: 24, weight: .bold))
-                
-                Text(L.t(sv: "Följ andra användare för att se deras inlägg i ditt flöde", nb: "Følg andre brukere for å se innleggene deres i feeden din"))
-                    .font(.system(size: 15))
+                Text(L.t(
+                    sv: "Tracka en aktivitet eller följ dina vänner för att se inlägg",
+                    nb: "Track en aktivitet eller følg vennene dine for å se innlegg"
+                ))
+                    .font(.system(size: 16))
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -725,7 +786,7 @@ struct SocialView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 16, weight: .semibold))
-                        Text(L.t(sv: "Lägg till vänner", nb: "Legg til venner"))
+                        Text(L.t(sv: "Hitta vänner", nb: "Finn venner"))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -774,7 +835,6 @@ struct SocialView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // MARK: - Friends at gym section
                     friendsAtGymSection
-                    leaderboardLink
                     
                     feedContent
                         .opacity(showPosts ? 1 : 0)
@@ -807,86 +867,102 @@ struct SocialView: View {
     
     // MARK: - Friends at Gym Section
     private var friendsAtGymSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L.t(sv: "Vänner som tränar", nb: "Venner som trener"))
-                    .font(.system(size: 20, weight: .bold))
-                
-                Text(L.t(sv: "Tryck på dina vänner för att se exakt vart de tränar", nb: "Trykk på vennene dine for å se nøyaktig hvor de trener"))
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            DashboardSectionHeader(title: L.t(sv: "Vänner som tränar", nb: "Venner som trener")) {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showFriendsMap = true
+                } label: {
+                    Label(
+                        L.t(sv: "Karta", nb: "Kart"),
+                        systemImage: "map"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .pageEntrance(delay: 0.1)
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    friendAtGymCard(
-                        imageContent: AnyView(
-                            Image("23")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 60, height: 60)
-                                .clipShape(Circle())
-                        ),
-                        name: "Up&Down",
-                        duration: nil,
-                        onTap: {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            showFriendsMap = true
-                        }
-                    )
+            DashboardSectionCard(horizontalPadding: 0, verticalPadding: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L.t(sv: "Tryck på dina vänner för att se exakt vart de tränar", nb: "Trykk på vennene dine for å se nøyaktig hvor de trener"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
                     
-                    if activeFriends.isEmpty && !isLoadingActiveFriends {
-                        Text(L.t(sv: "Inga av dina vänner tränar just nu", nb: "Ingen av vennene dine trener akkurat nå"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.leading, 8)
-                            .frame(height: 60)
-                    } else {
-                        ForEach(activeFriends) { friend in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
                             friendAtGymCard(
                                 imageContent: AnyView(
-                                    AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(friend.avatarUrl ?? ""))) { phase in
-                                        switch phase {
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .scaledToFill()
-                                        case .failure(_), .empty:
-                                            Circle()
-                                                .fill(Color.gray.opacity(0.3))
-                                                .overlay(
-                                                    Image(systemName: "person.fill")
-                                                        .font(.system(size: 24))
-                                                        .foregroundColor(.gray)
-                                                )
-                                        @unknown default:
-                                            Circle()
-                                                .fill(Color.gray.opacity(0.3))
-                                        }
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .clipShape(Circle())
+                                    Image("23")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 60, height: 60)
+                                        .clipShape(Circle())
                                 ),
-                                name: friend.userName.components(separatedBy: " ").first ?? friend.userName,
-                                duration: friend.formattedDuration,
+                                name: "Up&Down",
+                                duration: nil,
                                 onTap: {
                                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                     showFriendsMap = true
                                 }
                             )
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            
+                            if activeFriends.isEmpty && !isLoadingActiveFriends {
+                                Text(L.t(sv: "Inga av dina vänner tränar just nu", nb: "Ingen av vennene dine trener akkurat nå"))
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .padding(.leading, 8)
+                                    .frame(height: 60)
+                            } else {
+                                ForEach(activeFriends) { friend in
+                                    friendAtGymCard(
+                                        imageContent: AnyView(
+                                            AsyncImage(url: URL(string: SupabaseConfig.rewriteURL(friend.avatarUrl ?? ""))) { phase in
+                                                switch phase {
+                                                case .success(let image):
+                                                    image
+                                                        .resizable()
+                                                        .scaledToFill()
+                                                case .failure(_), .empty:
+                                                    Circle()
+                                                        .fill(Color.gray.opacity(0.3))
+                                                        .overlay(
+                                                            Image(systemName: "person.fill")
+                                                                .font(.system(size: 24))
+                                                                .foregroundColor(.gray)
+                                                        )
+                                                @unknown default:
+                                                    Circle()
+                                                        .fill(Color.gray.opacity(0.3))
+                                                }
+                                            }
+                                            .frame(width: 60, height: 60)
+                                            .clipShape(Circle())
+                                        ),
+                                        name: friend.userName.components(separatedBy: " ").first ?? friend.userName,
+                                        duration: friend.formattedDuration,
+                                        onTap: {
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                            showFriendsMap = true
+                                        }
+                                    )
+                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                                }
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 4)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
             }
+            .padding(.horizontal, 16)
             .pageEntrance(delay: 0.15)
         }
-        .padding(.vertical, 8)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
         .task {
             await loadActiveFriendsData()
         }
@@ -1020,6 +1096,11 @@ struct SocialView: View {
     
     private func loadActiveFriendsData() async {
         guard let userId = authViewModel.currentUser?.id else { return }
+
+        if let last = lastActiveFriendsFetch, Date().timeIntervalSince(last) < preloadDedupeWindow {
+            return
+        }
+        lastActiveFriendsFetch = Date()
         
         // Only show loading indicator on first load (when we have no data yet)
         let isFirstLoad = activeFriends.isEmpty && !isLoadingActiveFriends
@@ -1349,6 +1430,11 @@ struct SocialView: View {
     
     // MARK: - Load Stories
     private func loadStories(userId: String) async {
+        if let last = lastStoriesFetch, Date().timeIntervalSince(last) < preloadDedupeWindow,
+           !myStories.isEmpty || !friendsStories.isEmpty {
+            return
+        }
+        lastStoriesFetch = Date()
         isLoadingStories = true
         
         // Load my stories (always try this)
@@ -1694,25 +1780,11 @@ struct SocialView: View {
         let cardWidth = (screenWidth - 52) / 3
         
         return VStack(alignment: .leading, spacing: 6) {
-            if let imageUrl = product.images.edges.first?.node.url, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    default:
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                    }
-                }
-                .frame(width: cardWidth, height: cardWidth * 1.2)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray5))
-                    .frame(width: cardWidth, height: cardWidth * 1.2)
-            }
+            CachedCollectionImage(
+                urlString: product.images.edges.first?.node.url ?? "",
+                width: cardWidth,
+                height: cardWidth * 1.2
+            )
             
             Text(product.title)
                 .font(.system(size: 11, weight: .medium))
@@ -1763,55 +1835,41 @@ struct SocialView: View {
                     }
                 }
                 
-                // Pro upgrade banner after 8th post
-                // Only show for non-Pro members
-                if index == 7, !(authViewModel.currentUser?.isProMember ?? false) {
-                    ProUpgradeBanner(onTap: {
-                        showPaywall = true
-                    })
-                    .opacity(showPosts ? 1 : 0)
-                    .animation(.smooth(duration: 0.4).delay(0.2), value: showPosts)
-                    Divider()
-                        .background(Color(.systemGray5))
+                // Google AdMob native ads: first ad after the 2nd post
+                // (index 1), then every 4th post after that
+                // (index 5, 9, 13, ...). Pro members never see ads.
+                #if canImport(GoogleMobileAds)
+                if !(authViewModel.currentUser?.isProMember ?? false),
+                   let slot = adSlotIndex(forPostIndex: index) {
+                    let hasSlot = adMobService.nativeAds.indices.contains(slot)
+                    if hasSlot {
+                        removeAdsPromoButton
+                            .opacity(showPosts ? 1 : 0)
+                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
+                        NativeAdCard(nativeAd: adMobService.nativeAds[slot])
+                            .frame(maxWidth: .infinity)
+                            .opacity(showPosts ? 1 : 0)
+                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
+                            .onAppear {
+                                AdFeedDiagnostics.logFill(slot: slot, loadedCount: adMobService.nativeAds.count)
+                            }
+                        Divider()
+                            .background(Color(.systemGray5))
+                    } else {
+                        Color.clear
+                            .frame(width: 0, height: 0)
+                            .onAppear {
+                                AdFeedDiagnostics.logMiss(
+                                    slot: slot,
+                                    isPro: false,
+                                    isInitialized: adMobService.isInitialized,
+                                    loadedCount: adMobService.nativeAds.count
+                                )
+                            }
+                    }
                 }
+                #endif
                 
-                // Dynamic ad after 4th post
-                if index == 3, let feedAd = adService.feedAds.first {
-                    FeedAdCard(ad: feedAd)
-                        .opacity(showPosts ? 1 : 0)
-                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    Divider()
-                        .background(Color(.systemGray5))
-                }
-                
-                // Collection product slider after 4th post
-                if index == 3, !collectionProducts.isEmpty {
-                    collectionSliderSection
-                        .opacity(showPosts ? 1 : 0)
-                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    Divider()
-                        .background(Color(.systemGray5))
-                }
-                
-                // Become a trainer promo after 10th post
-                if index == 9 {
-                    BecomeTrainerPromoCard()
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .opacity(showPosts ? 1 : 0)
-                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    Divider()
-                        .background(Color(.systemGray5))
-                }
-                
-                // Visa varumärkesslider efter andra inlägget
-                if index == 1, shouldShowBrandSlider {
-                    brandSliderInlineSection
-                        .opacity(showPosts ? 1 : 0)
-                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                    Divider()
-                        .background(Color(.systemGray5))
-                }
             }
             
             if isLoadingMore {
@@ -2074,10 +2132,6 @@ struct SocialView: View {
         isLoadingRecommended || !recommendedUsersWithPhoto.isEmpty
     }
     
-    private var shouldShowBrandSlider: Bool {
-        postsToDisplay.count >= 5
-    }
-    
     @ViewBuilder
     private var recommendedFriendsInlineSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2189,52 +2243,51 @@ struct SocialView: View {
         }
     }
     
-    private var brandSliderInlineSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L.t(sv: "Varumärken", nb: "Merkevarer"))
-                    .font(.system(size: 18, weight: .bold))
-                
-                Text(L.t(sv: "Få rabatter hos dessa varumärken genom att samla poäng genom dina gympass", nb: "Få rabatter hos disse merkevarene ved å samle poeng gjennom treningsøktene dine"))
-                    .font(.system(size: 14, weight: .regular))
+    // MARK: - AdMob slot helpers
+
+    /// Maps a feed post index to a native ad slot index.
+    /// First ad after the 2nd post (post index 1 → slot 0), then one ad every
+    /// 4 posts after that: index 5 → slot 1, 9 → slot 2, 13 → slot 3, …
+    /// Returns nil for post indices that shouldn't display an ad.
+    private func adSlotIndex(forPostIndex index: Int) -> Int? {
+        guard index >= 1, (index - 1) % 4 == 0 else { return nil }
+        return (index - 1) / 4
+    }
+
+    /// Promo row shown directly above every native ad, giving the user an
+    /// obvious way to upgrade to Pro and stop seeing ads. Opens the
+    /// Superwall paywall via the existing `showPaywall` state + onChange hook.
+    @ViewBuilder
+    private var removeAdsPromoButton: some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: 10) {
+                Image("upanddownlog")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text(L.t(
+                    sv: "Bli Pro medlem och slipp annonser",
+                    nb: "Bli Pro-medlem og slipp annonser"
+                ))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 16)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(brandLogos) { brand in
-                        Button(action: navigateToRewards) {
-                            VStack(spacing: 8) {
-                                Image(brand.imageName)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 60, height: 60)
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                                    )
-                                
-                                Text(brand.name.capitalized)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .lineLimit(1)
-                                    .foregroundColor(.primary)
-                            }
-                            .frame(width: 90)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 4)
-            }
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.systemGray6))
         }
-        .padding(.vertical, 20)
-        .background(Color(.systemBackground))
+        .buttonStyle(.plain)
+        .padding(.bottom, 6)
     }
-    
+
     private func toggleRecommendedFollow(for userId: String) {
         guard let currentUserId = authViewModel.currentUser?.id else { return }
         let isCurrentlyFollowing = recommendedFollowingStatus[userId] ?? false
@@ -3272,28 +3325,26 @@ private extension SocialPostCard {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
-            } else {
-                Text(L.t(sv: "Bli först att gilla", nb: "Bli den første til å like"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.gray)
             }
-            
+
             Spacer()
-            
-            NavigationLink(destination: CommentsView(post: post) {
-                commentCount += 1
-                onCommentCountChanged(post.id, commentCount)
+
+            if commentCount > 0 {
+                NavigationLink(destination: CommentsView(post: post) {
+                    commentCount += 1
+                    onCommentCountChanged(post.id, commentCount)
+                }
+                .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
+                .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+                ) {
+                    Text(commentCountText)
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: commentCount)
+                }
+                .buttonStyle(.plain)
             }
-            .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
-            .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
-            ) {
-                Text(L.t(sv: "\(commentCount) kommentarer", nb: "\(commentCount) kommentarer"))
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                    .contentTransition(.numericText())
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: commentCount)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -3302,6 +3353,12 @@ private extension SocialPostCard {
     
     var likeCountText: String {
         likeCount == 1 ? L.t(sv: "1 like", nb: "1 like") : L.t(sv: "\(likeCount) likes", nb: "\(likeCount) likes")
+    }
+
+    var commentCountText: String {
+        commentCount == 1
+            ? L.t(sv: "1 kommentar", nb: "1 kommentar")
+            : L.t(sv: "\(commentCount) kommentarer", nb: "\(commentCount) kommentarer")
     }
 }
 
@@ -4155,6 +4212,58 @@ struct CommentRow: View {
     }
 }
 
+// MARK: - Cached Collection Image
+
+private struct CachedCollectionImage: View {
+    let urlString: String
+    let width: CGFloat
+    let height: CGFloat
+    @State private var loadedImage: UIImage?
+    @State private var isLoading = true
+
+    var body: some View {
+        Group {
+            if let img = loadedImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else if isLoading {
+                Rectangle()
+                    .fill(Color(.systemGray5))
+                    .overlay { ProgressView().tint(.gray).scaleEffect(0.7) }
+            } else {
+                Rectangle()
+                    .fill(Color(.systemGray5))
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onAppear { loadImage() }
+    }
+
+    private func loadImage() {
+        guard !urlString.isEmpty else { isLoading = false; return }
+        if let cached = ImageCacheManager.shared.getImage(for: urlString) {
+            loadedImage = cached
+            isLoading = false
+            return
+        }
+        Task {
+            do {
+                let image = try await ImageCacheManager.shared.downloadAndCacheImage(from: urlString)
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        loadedImage = image
+                        isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run { isLoading = false }
+            }
+        }
+    }
+}
+
 @MainActor
 class SocialViewModel: ObservableObject {
     // Shared instance for cache management
@@ -4185,6 +4294,22 @@ class SocialViewModel: ObservableObject {
         withAnimation(.easeOut(duration: 0.3)) {
             posts.insert(post, at: 0)
         }
+    }
+
+    /// Synchronously populate `posts` from disk cache (even if expired) so
+    /// the UI can render content without waiting for the network. Returns
+    /// true when cache was applied. Used by AppLaunchCoordinator to skip the
+    /// feed loading gear on warm starts.
+    @discardableResult
+    func hydrateFromCache(userId: String) -> Bool {
+        guard let cached = AppCacheManager.shared.getCachedSocialFeed(userId: userId, allowExpired: true),
+              !cached.isEmpty else {
+            return false
+        }
+        currentUserId = userId
+        posts = sortedByDateDesc(cached)
+        isLoading = false
+        return true
     }
     
     private struct AuthorMetadata {
@@ -4421,6 +4546,7 @@ class SocialViewModel: ObservableObject {
                     }
                     self.isLoading = false
                     self.prefetchAvatars(for: fetchedPosts)
+                    self.prefetchPostMedia(for: fetchedPosts)
                 }
             } catch {
                 print("Error fetching social feed: \(error)")
@@ -4531,7 +4657,17 @@ class SocialViewModel: ObservableObject {
                 
                 Task.detached(priority: .utility) {
                     let allAvatarUrls = sortedPosts.prefix(10).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
-                    await ImageCacheManager.shared.prefetchHighPriority(urls: allAvatarUrls)
+                    let allPostMediaKeys: [String] = sortedPosts.prefix(8).flatMap { post -> [String] in
+                        var keys: [String] = []
+                        if let img = post.imageUrl, !img.isEmpty {
+                            keys.append(LocalAsyncImage.cacheKey(for: img))
+                        }
+                        if let userImg = post.userImageUrl, !userImg.isEmpty {
+                            keys.append(LocalAsyncImage.cacheKey(for: userImg))
+                        }
+                        return keys
+                    }.filter { $0.hasPrefix("http") }
+                    await ImageCacheManager.shared.prefetchHighPriority(urls: allAvatarUrls + allPostMediaKeys)
                 }
                 Task { await self.enrichAuthorMetadataIfNeeded() }
             } else {
@@ -4651,12 +4787,23 @@ class SocialViewModel: ObservableObject {
                 
                 let sorted = sortedByDateDesc(fetchedPosts)
                 
-                // Prefetch first 5 avatars with HIGH priority BEFORE showing posts
+                // Prefetch first 5 avatars + post media with HIGH priority BEFORE showing posts
                 let firstAvatarUrls = sorted.prefix(5).compactMap { $0.userAvatarUrl }.filter { !$0.isEmpty }
-                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls)
+                let firstPostMediaKeys: [String] = sorted.prefix(5).flatMap { post -> [String] in
+                    var keys: [String] = []
+                    if let img = post.imageUrl, !img.isEmpty {
+                        keys.append(LocalAsyncImage.cacheKey(for: img))
+                    }
+                    if let userImg = post.userImageUrl, !userImg.isEmpty {
+                        keys.append(LocalAsyncImage.cacheKey(for: userImg))
+                    }
+                    return keys
+                }.filter { $0.hasPrefix("http") }
+                await ImageCacheManager.shared.prefetchHighPriority(urls: firstAvatarUrls + firstPostMediaKeys)
                 
                 posts = sorted
                 prefetchAvatars(for: posts) // Prefetch rest in background
+                prefetchPostMedia(for: posts)
                 lastSuccessfulFetch = Date()
                 AppCacheManager.shared.saveSocialFeed(sorted, userId: userId)
                 Task { await self.enrichAuthorMetadataIfNeeded() }
@@ -4709,6 +4856,7 @@ class SocialViewModel: ObservableObject {
                 }
                 self.isLoading = false
                 self.prefetchAvatars(for: fetchedPosts)
+                self.prefetchPostMedia(for: fetchedPosts)
             }
         } catch is CancellationError {
             await MainActor.run { self.isLoading = false }
@@ -4814,6 +4962,51 @@ class SocialViewModel: ObservableObject {
         // Prefetch the rest with normal priority
         if urls.count > 5 {
             ImageCacheManager.shared.prefetch(urls: Array(urls.dropFirst(5)))
+        }
+    }
+
+    /// Prefetch post media (imageUrl + userImageUrl) so feed cards can render
+    /// from cache instead of showing a loading placeholder on first scroll.
+    ///
+    /// Uses `LocalAsyncImage.cacheKey(for:)` so the stored entry shares the
+    /// exact key that `LocalAsyncImage` and `FullFrameAsyncImage` look up at
+    /// render time.
+    private func prefetchPostMedia(for posts: [SocialWorkoutPost]) {
+        guard !posts.isEmpty else { return }
+
+        let mediaKeys: [String] = posts.prefix(8).flatMap { post -> [String] in
+            var keys: [String] = []
+            if let img = post.imageUrl, !img.isEmpty {
+                keys.append(LocalAsyncImage.cacheKey(for: img))
+            }
+            if let userImg = post.userImageUrl, !userImg.isEmpty {
+                keys.append(LocalAsyncImage.cacheKey(for: userImg))
+            }
+            return keys
+        }.filter { $0.hasPrefix("http") }
+
+        if !mediaKeys.isEmpty {
+            Task {
+                await ImageCacheManager.shared.prefetchHighPriority(urls: mediaKeys)
+            }
+        }
+
+        // Lower priority for posts further down the feed
+        if posts.count > 8 {
+            let tailKeys: [String] = posts.dropFirst(8).flatMap { post -> [String] in
+                var keys: [String] = []
+                if let img = post.imageUrl, !img.isEmpty {
+                    keys.append(LocalAsyncImage.cacheKey(for: img))
+                }
+                if let userImg = post.userImageUrl, !userImg.isEmpty {
+                    keys.append(LocalAsyncImage.cacheKey(for: userImg))
+                }
+                return keys
+            }.filter { $0.hasPrefix("http") }
+
+            if !tailKeys.isEmpty {
+                ImageCacheManager.shared.prefetch(urls: tailKeys)
+            }
         }
     }
     
@@ -5537,14 +5730,30 @@ struct FullFrameAsyncImage: View {
     @State private var image: UIImage?
     @State private var isLoading = true
     @State private var loadFailed = false
-    
+
+    init(path: String, height: CGFloat) {
+        self.path = path
+        self.height = height
+        // Prime from cache synchronously so already-loaded images never flash.
+        // Use the shared cache key so prefetchers and LocalAsyncImage write/read the same entry.
+        let key = LocalAsyncImage.cacheKey(for: path)
+        if !key.isEmpty, let cached = ImageCacheManager.shared.getImage(for: key) {
+            _image = State(initialValue: cached)
+            _isLoading = State(initialValue: false)
+        }
+    }
+
     // Check if this is a live photo (has selfie overlay on left side)
     private var isLivePhoto: Bool {
         path.contains("live_")
     }
-    
+
     var body: some View {
-        Group {
+        ZStack {
+            Rectangle()
+                .fill(Color(.systemGray5))
+                .frame(height: height)
+
             if let image = image {
                 if isLivePhoto {
                     Image(uiImage: image)
@@ -5553,6 +5762,7 @@ struct FullFrameAsyncImage: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: height)
                         .background(Color.black)
+                        .transition(.opacity)
                 } else {
                     Image(uiImage: image)
                         .resizable()
@@ -5560,57 +5770,47 @@ struct FullFrameAsyncImage: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .frame(height: height)
                         .clipped()
+                        .transition(.opacity)
                 }
-            } else if isLoading {
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: height)
-                    .overlay(ProgressView().scaleEffect(0.8))
             } else if loadFailed {
-                Rectangle()
-                    .fill(Color(.systemGray6))
-                    .frame(height: height)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "photo")
-                                .foregroundColor(.gray)
-                                .font(.system(size: 28))
-                        }
-                    )
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray6))
-                    .frame(height: height)
+                Image(systemName: "photo")
+                    .foregroundColor(.gray)
+                    .font(.system(size: 28))
             }
         }
         .task {
+            if image != nil { return }
             await loadImage()
         }
     }
-    
+
     private func loadImage() async {
         guard !path.isEmpty else {
             loadFailed = true
             isLoading = false
             return
         }
-        
-        // Check cache first
-        if let cached = ImageCacheManager.shared.getImage(for: path) {
+
+        let cacheKey = LocalAsyncImage.cacheKey(for: path)
+
+        // Check cache first (synchronous mem + disk)
+        if let cached = ImageCacheManager.shared.getImage(for: cacheKey) {
             image = cached
             isLoading = false
             return
         }
-        
+
         // Try to load from URL
         if let url = URL(string: path) {
             do {
                 let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
                 if let downloadedImage = UIImage(data: data) {
-                    ImageCacheManager.shared.setImage(downloadedImage, for: path)
+                    ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
                     await MainActor.run {
-                        self.image = downloadedImage
-                        self.isLoading = false
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            self.image = downloadedImage
+                            self.isLoading = false
+                        }
                     }
                     return
                 }
@@ -5618,27 +5818,29 @@ struct FullFrameAsyncImage: View {
                 print("❌ Failed to load image: \(error)")
             }
         }
-        
+
         // Try Supabase storage
         do {
             let filename = path.contains("/") ? String(path.split(separator: "/").last ?? "") : path
             let signedURL = try await SupabaseConfig.supabase.storage
                 .from("workout-images")
                 .createSignedURL(path: filename, expiresIn: 3600)
-            
+
             let (data, _) = try await SupabaseConfig.urlSession.data(from: signedURL)
             if let downloadedImage = UIImage(data: data) {
-                ImageCacheManager.shared.setImage(downloadedImage, for: path)
+                ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
                 await MainActor.run {
-                    self.image = downloadedImage
-                    self.isLoading = false
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        self.image = downloadedImage
+                        self.isLoading = false
+                    }
                 }
                 return
             }
         } catch {
             print("❌ Supabase image load failed: \(error)")
         }
-        
+
         await MainActor.run {
             loadFailed = true
             isLoading = false
@@ -6039,90 +6241,6 @@ private struct FeedAdCard: View {
         if let url = ad.ctaURL {
             UIApplication.shared.open(url)
         }
-    }
-}
-
-// MARK: - Pro Upgrade Banner
-private struct ProUpgradeBanner: View {
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                // Background gradient (Black to Silver)
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.1),
-                        Color(red: 0.3, green: 0.3, blue: 0.3),
-                        Color(red: 0.5, green: 0.5, blue: 0.5),
-                        Color(red: 0.3, green: 0.3, blue: 0.3),
-                        Color(red: 0.1, green: 0.1, blue: 0.1)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                
-                // Content
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L.t(sv: "UPPGRADERA TILL", nb: "OPPGRADER TIL"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
-                            .tracking(1.2)
-                        
-                        Text(L.t(sv: "PRO MEDLEMSKAP", nb: "PRO MEDLEMSKAP"))
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        // CTA Button (White)
-                        HStack(spacing: 6) {
-                            Text(L.t(sv: "LÄS MER", nb: "LES MER"))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.black)
-                            
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.black)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                        .cornerRadius(25)
-                    }
-                    
-                    Spacer()
-                    
-                    // App Logo
-                    Image("23")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100, height: 100)
-                        .cornerRadius(20)
-                        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-                }
-                .padding(24)
-            }
-            .frame(height: 160)
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: .black.opacity(0.4), radius: 15, x: 0, y: 8)
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 }
 

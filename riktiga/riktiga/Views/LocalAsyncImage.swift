@@ -7,7 +7,55 @@ struct LocalAsyncImage: View {
     @State private var image: UIImage?
     @State private var isLoading = true
     @State private var loadFailed = false
-    
+
+    init(path: String) {
+        self.path = path
+        if let cached = Self.cachedImage(for: path) {
+            _image = State(initialValue: cached)
+            _isLoading = State(initialValue: false)
+            _loadFailed = State(initialValue: false)
+        }
+    }
+
+    /// Compute the normalized cache key for a given source `path`.
+    /// Mirrors the URL resolution + query-stripping done in `loadImage()`
+    /// so prefetchers, inits, and the actual download share one key.
+    static func cacheKey(for path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        let supabaseStorageBuckets = ["banners/", "avatars/", "workout-images/"]
+        let isSupabaseRelativePath = supabaseStorageBuckets.contains { trimmed.hasPrefix($0) }
+
+        let effectivePath: String
+        if isSupabaseRelativePath {
+            let bucket: String
+            if trimmed.hasPrefix("banners/") {
+                bucket = "avatars"
+            } else if trimmed.hasPrefix("avatars/") {
+                bucket = "avatars"
+            } else {
+                bucket = "workout-images"
+            }
+            effectivePath = "\(SupabaseConfig.storageBaseURL)/\(bucket)/\(trimmed)"
+        } else {
+            effectivePath = SupabaseConfig.rewriteURL(trimmed)
+        }
+
+        if effectivePath.hasPrefix("http") {
+            return effectivePath.components(separatedBy: "?")[0]
+        }
+        return effectivePath
+    }
+
+    /// Synchronous cache lookup used by `init` to skip loading UI entirely
+    /// when the image is already in memory/disk.
+    private static func cachedImage(for path: String) -> UIImage? {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return ImageCacheManager.shared.getImage(for: cacheKey(for: trimmed))
+    }
+
     private func loadImageFromSupabaseStorage(filename: String, originalPath: String) async throws {
         print("🔄 Attempting to load \(filename) using Supabase client...")
         
@@ -30,17 +78,19 @@ struct LocalAsyncImage: View {
             request.timeoutInterval = 10
             
             let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
-            
+
             guard let downloadedImage = UIImage(data: data) else {
                 throw NSError(domain: "InvalidImage", code: 1)
             }
-            
+
             // Cache using the original path as key
             ImageCacheManager.shared.setImage(downloadedImage, for: originalPath)
-            
+
             await MainActor.run {
-                self.image = downloadedImage
-                self.isLoading = false
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.image = downloadedImage
+                    self.isLoading = false
+                }
                 print("✅ Successfully loaded image using signed URL: \(filename)")
             }
         } catch {
@@ -54,26 +104,21 @@ struct LocalAsyncImage: View {
     }
     
     var body: some View {
-        Group {
+        ZStack {
+            Rectangle()
+                .fill(Color(.systemGray5))
+
             if let image = image {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-            } else if isLoading {
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .overlay(ProgressView().scaleEffect(0.8))
-            } else if loadFailed {
-                // Plain gray background when image fails to load
-                Rectangle()
-                    .fill(Color(.systemGray4))
-            } else {
-                // Fallback - treat as failed, plain gray background
-                Rectangle()
-                    .fill(Color(.systemGray4))
+                    .transition(.opacity)
             }
         }
         .task {
+            // Skip loading if init already primed from cache
+            if image != nil { return }
+
             // Handle empty path immediately
             if path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 isLoading = false
@@ -83,16 +128,24 @@ struct LocalAsyncImage: View {
             await loadImage()
         }
         .onChange(of: path) { _, newPath in
-            image = nil
             loadFailed = false
-            
+
             // Handle empty path immediately
             if newPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                image = nil
                 isLoading = false
                 loadFailed = true
                 return
             }
-            
+
+            // Try synchronous cache hit first so we don't flicker
+            if let cached = Self.cachedImage(for: newPath) {
+                image = cached
+                isLoading = false
+                return
+            }
+
+            image = nil
             isLoading = true
             Task {
                 await loadImage()
@@ -136,18 +189,10 @@ struct LocalAsyncImage: View {
         #if DEBUG
         print("📷 [LOCAL] path=\(path.prefix(80)) → effective=\(effectivePath.prefix(80))")
         #endif
-        
-        // Create cache key by normalizing the URL
-        let cacheKey: String = {
-            if effectivePath.hasPrefix("http") {
-                // For URLs, remove query parameters to use consistent cache key
-                return effectivePath.components(separatedBy: "?")[0]
-            } else {
-                // For local paths, use the full path
-                return effectivePath
-            }
-        }()
-        
+
+        // Create cache key (shared with Self.cacheKey(for:) for prefetch/init consistency)
+        let cacheKey = Self.cacheKey(for: path)
+
         // Check cache first
         if let cachedImage = ImageCacheManager.shared.getImage(for: cacheKey) {
             await MainActor.run {
@@ -201,10 +246,12 @@ struct LocalAsyncImage: View {
                 if let downloadedImage = UIImage(data: data) {
                     // Cache the image using the normalized key (without query params)
                     ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
-                    
+
                     await MainActor.run {
-                        self.image = downloadedImage
-                        self.isLoading = false
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            self.image = downloadedImage
+                            self.isLoading = false
+                        }
                         print("✅ Downloaded and cached image: \(cacheKey)")
                     }
                 } else {
@@ -271,10 +318,12 @@ struct LocalAsyncImage: View {
                         if httpResponse.statusCode == 200, let downloadedImage = UIImage(data: data) {
                             // Cache using the original path as key
                             ImageCacheManager.shared.setImage(downloadedImage, for: path)
-                            
+
                             await MainActor.run {
-                                self.image = downloadedImage
-                                self.isLoading = false
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    self.image = downloadedImage
+                                    self.isLoading = false
+                                }
                                 print("✅ Successfully loaded image from Supabase Storage: \(filename)")
                             }
                         } else if httpResponse.statusCode == 404 {
@@ -310,10 +359,12 @@ struct LocalAsyncImage: View {
                        let uiImage = UIImage(data: imageData) {
                         // Cache the local image using the full path
                         ImageCacheManager.shared.setImage(uiImage, for: path)
-                        
+
                         await MainActor.run {
-                            self.image = uiImage
-                            self.isLoading = false
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                self.image = uiImage
+                                self.isLoading = false
+                            }
                             print("✅ Successfully loaded local image from: \(path)")
                         }
                     } else {

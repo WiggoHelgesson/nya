@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
     @State private var showAdmin = false
+    @State private var showConsignmentAdmin = false
     @State private var showAnnouncement = false
     @State private var hasLoadedOnce = false
     @State private var showReferralView = false
@@ -77,6 +78,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showAdmin) {
                 AdminTrainerApprovalsView()
             }
+            .sheet(isPresented: $showConsignmentAdmin) {
+                ConsignmentSubmissionsAdminView()
+            }
             .sheet(isPresented: $showAnnouncement) {
                 AdminAnnouncementView()
             }
@@ -95,7 +99,11 @@ struct SettingsView: View {
             .task {
                 guard !hasLoadedOnce else { return }
                 hasLoadedOnce = true
-                
+
+                // Refresha DB-Pro (profiles.is_pro_member) så manuellt
+                // granted Pro syns utan app-restart.
+                await authViewModel.refreshProStatusFromDatabase()
+
                 if !isPremium && !isLoadingPremium {
                     await RevenueCatManager.shared.syncAndRefresh()
                 }
@@ -494,6 +502,12 @@ struct SettingsView: View {
                 VStack(spacing: 0) {
                     Button(action: { showAdmin = true }) {
                         NewSettingsRow(icon: "person.badge.key", title: L.t(sv: "Admin (ansökningar)", nb: "Admin (søknader)"))
+                    }
+                    
+                    SettingsItemDivider()
+                    
+                    Button(action: { showConsignmentAdmin = true }) {
+                        NewSettingsRow(icon: "shippingbox.circle", title: L.t(sv: "Admin (AI-sälj)", nb: "Admin (AI-salg)"))
                     }
                     
                     SettingsItemDivider()

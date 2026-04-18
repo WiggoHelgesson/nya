@@ -10,28 +10,20 @@ struct RewardsContainerView: View {
     @State private var navigationPath = NavigationPath()
     @State private var lastUnreadFetch: Date = .distantPast
     @StateObject private var dmService = DirectMessageService.shared
-    
-    @State private var selectedTab = 0
-    @ObservedObject private var cartManager = CartManager.shared
-    @State private var showCart = false
-    @State private var marketSubTab = 0
-    
+
     private let fetchThrottleInterval: TimeInterval = 30
-    
+
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
     }
-    
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
-                // MARK: - Header
                 VStack(spacing: 0) {
                     ZStack {
                         if isPremium {
-                            Text(selectedTab == 0
-                                 ? L.t(sv: "Belöningar", nb: "Belønninger")
-                                 : "Up&Down Market")
+                            Text(L.t(sv: "Belöningar", nb: "Belønninger"))
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.primary)
                         } else {
@@ -51,7 +43,7 @@ struct RewardsContainerView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        
+
                         HStack {
                             HStack(spacing: 10) {
                                 Button {
@@ -64,7 +56,7 @@ struct RewardsContainerView: View {
                                         )
                                 }
                                 .buttonStyle(.plain)
-                                
+
                                 NavigationLink(destination: FindFriendsView().environmentObject(authViewModel)) {
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 20, weight: .regular))
@@ -74,16 +66,16 @@ struct RewardsContainerView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
-                            
+
                             Spacer()
-                            
+
                             HStack(spacing: 12) {
                                 NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
                                     ZStack(alignment: .topTrailing) {
                                         Image(systemName: "bubble.left.and.bubble.right")
                                             .font(.system(size: 20, weight: .regular))
                                             .foregroundColor(.primary)
-                                        
+
                                         if unreadMessages > 0 {
                                             Circle()
                                                 .fill(Color.black)
@@ -100,7 +92,7 @@ struct RewardsContainerView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
-                                
+
                                 NavigationLink(destination: NotificationsView(onDismiss: {
                                     Task { await refreshUnreadCount() }
                                 }).environmentObject(authViewModel)) {
@@ -108,7 +100,7 @@ struct RewardsContainerView: View {
                                         Image(systemName: "bell")
                                             .font(.system(size: 22, weight: .regular))
                                             .foregroundColor(.primary)
-                                        
+
                                         if unreadNotifications > 0 {
                                             Circle()
                                                 .fill(Color.black)
@@ -131,36 +123,20 @@ struct RewardsContainerView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 12)
-                    
-                    // MARK: - Tab Picker (Belöningar / Up&Down Market)
-                    rewardsTabPicker
+
+                    Rectangle()
+                        .fill(Color.primary)
+                        .frame(height: 0.5)
+                        .opacity(0.1)
                 }
                 .background(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
                 .zIndex(2)
-                
-                // MARK: - Content
-                if selectedTab == 0 {
-                    RewardsView()
-                        .environmentObject(authViewModel)
-                } else {
-                    VStack(spacing: 0) {
-                        marketSubTabPicker
-                        
-                        if marketSubTab == 0 {
-                            ProductGridView(showCart: $showCart)
-                                .environmentObject(authViewModel)
-                        } else {
-                            sellPlaceholderView
-                        }
-                    }
-                }
-            }
-            .navigationBarHidden(true)
-            .navigationDestination(for: ShopifyProduct.self) { product in
-                ProductDetailView(product: product, showCart: $showCart)
+
+                RewardsView()
                     .environmentObject(authViewModel)
             }
+            .navigationBarHidden(true)
         }
         .sheet(isPresented: $showPublicProfile) {
             if let userId = authViewModel.currentUser?.id {
@@ -177,10 +153,6 @@ struct RewardsContainerView: View {
                 }
             }
         }
-        .sheet(isPresented: $showCart) {
-            CartView()
-                .environmentObject(authViewModel)
-        }
         .task {
             await throttledRefresh()
         }
@@ -190,97 +162,17 @@ struct RewardsContainerView: View {
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
-            selectedTab = 0
-            marketSubTab = 0
             NotificationCenter.default.post(name: NSNotification.Name("PopToRootBeloningar"), object: nil)
         }
     }
-    
-    // MARK: - Rewards / Market Tab Picker
-    
-    private var rewardsTabPicker: some View {
-        HStack(spacing: 0) {
-            rewardsTabButton(L.t(sv: "Belöningar", nb: "Belønninger"), index: 0)
-            rewardsTabButton("Up&Down Market", index: 1)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 8)
-    }
-    
-    private func rewardsTabButton(_ title: String, index: Int) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = index }
-        } label: {
-            Text(title)
-                .font(.system(size: 14, weight: selectedTab == index ? .bold : .medium))
-                .foregroundColor(selectedTab == index ? .primary : .secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    selectedTab == index
-                        ? RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(.systemGray5))
-                        : nil
-                )
-        }
-        .buttonStyle(.plain)
-    }
-    
-    // MARK: - Market Sub-Tab Picker (Köp / Sälj)
-    
-    private var marketSubTabPicker: some View {
-        HStack(spacing: 0) {
-            marketSubTabButton(L.t(sv: "Köp", nb: "Kjøp"), index: 0)
-            marketSubTabButton(L.t(sv: "Sälj", nb: "Selg"), index: 1)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-    }
-    
-    private func marketSubTabButton(_ title: String, index: Int) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { marketSubTab = index }
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: marketSubTab == index ? .bold : .medium))
-                .foregroundColor(marketSubTab == index ? .primary : .secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(
-                    marketSubTab == index
-                        ? RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(.systemGray5))
-                        : nil
-                )
-        }
-        .buttonStyle(.plain)
-    }
-    
-    // MARK: - Sell Placeholder
-    
-    private var sellPlaceholderView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "tag")
-                .font(.system(size: 40))
-                .foregroundColor(.gray.opacity(0.5))
-            Text(L.t(sv: "Sälj - Kommer snart", nb: "Selg - Kommer snart"))
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.secondary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
-    // MARK: - Network
-    
+
     private func throttledRefresh() async {
         guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
         lastUnreadFetch = Date()
         await refreshUnreadCount()
         await refreshUnreadMessages()
     }
-    
+
     private func refreshUnreadCount() async {
         guard !isFetchingUnread else { return }
         guard let userId = authViewModel.currentUser?.id else {
@@ -294,11 +186,11 @@ struct RewardsContainerView: View {
                 unreadNotifications = count
             }
         } catch {
-            print("⚠️ Failed to fetch unread notifications: \(error)")
+            print("Failed to fetch unread notifications: \(error)")
         }
         isFetchingUnread = false
     }
-    
+
     private func refreshUnreadMessages() async {
         await dmService.fetchTotalUnreadCount()
         await MainActor.run {

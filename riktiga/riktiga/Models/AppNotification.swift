@@ -10,6 +10,7 @@ struct AppNotification: Identifiable, Codable {
     let type: NotificationType
     let postId: String?
     let commentText: String?
+    let relatedId: String?
     let createdAt: String
     var isRead: Bool
     
@@ -26,6 +27,9 @@ struct AppNotification: Identifiable, Codable {
         case coachScheduleUpdated
         case progressPhoto
         case profileUpdate
+        case consignmentApproved
+        case consignmentRejected
+        case consignmentLabelReady
         case unknown(String)
         
         init(rawValue: String) {
@@ -42,6 +46,9 @@ struct AppNotification: Identifiable, Codable {
             case "coach_schedule_updated": self = .coachScheduleUpdated
             case "progress_photo": self = .progressPhoto
             case "profile_update": self = .profileUpdate
+            case "consignment_approved": self = .consignmentApproved
+            case "consignment_rejected": self = .consignmentRejected
+            case "consignment_label_ready": self = .consignmentLabelReady
             default: self = .unknown(rawValue)
             }
         }
@@ -60,6 +67,9 @@ struct AppNotification: Identifiable, Codable {
             case .coachScheduleUpdated: return "coach_schedule_updated"
             case .progressPhoto: return "progress_photo"
             case .profileUpdate: return "profile_update"
+            case .consignmentApproved: return "consignment_approved"
+            case .consignmentRejected: return "consignment_rejected"
+            case .consignmentLabelReady: return "consignment_label_ready"
             case .unknown(let value): return value
             }
         }
@@ -84,6 +94,7 @@ struct AppNotification: Identifiable, Codable {
         case type
         case postId = "post_id"
         case commentText = "comment_text"
+        case relatedId = "related_id"
         case createdAt = "created_at"
         case isRead = "is_read"
     }
@@ -97,6 +108,7 @@ struct AppNotification: Identifiable, Codable {
          type: NotificationType,
          postId: String?,
          commentText: String?,
+         relatedId: String? = nil,
          createdAt: String,
          isRead: Bool) {
         self.id = id
@@ -108,6 +120,7 @@ struct AppNotification: Identifiable, Codable {
         self.type = type
         self.postId = postId
         self.commentText = commentText
+        self.relatedId = relatedId
         self.createdAt = createdAt
         self.isRead = isRead
     }
@@ -126,6 +139,7 @@ struct AppNotification: Identifiable, Codable {
         
         self.postId = try container.decodeIfPresent(String.self, forKey: .postId)
         self.commentText = try container.decodeIfPresent(String.self, forKey: .commentText)
+        self.relatedId = try container.decodeIfPresent(String.self, forKey: .relatedId)
         
         if let createdAtString = try container.decodeIfPresent(String.self, forKey: .createdAt) {
             self.createdAt = createdAtString
@@ -170,6 +184,12 @@ struct AppNotification: Identifiable, Codable {
             return "\(actorUsername ?? "Någon") la till nya progressbilder på sin profil"
         case .profileUpdate:
             return "Kolla vad \(actorUsername ?? "någon") har lagt till på sin profil"
+        case .consignmentApproved:
+            return "Din vara är godkänd! Fyll i avsändaradress så ordnar vi fraktsedeln."
+        case .consignmentRejected:
+            return "Din vara avvisades — öppna ansökan för detaljer."
+        case .consignmentLabelReady:
+            return "Din fraktsedel är klar — öppna ansökan och posta paketet."
         case .unknown:
             return "\(actorUsername ?? "Någon") skickade en ny notis"
         }
@@ -201,6 +221,12 @@ struct AppNotification: Identifiable, Codable {
             return "photo.on.rectangle"
         case .profileUpdate:
             return "person.crop.circle.badge.checkmark"
+        case .consignmentApproved:
+            return "shippingbox.fill"
+        case .consignmentRejected:
+            return "shippingbox"
+        case .consignmentLabelReady:
+            return "doc.text.fill"
         case .unknown:
             return "bell.fill"
         }
@@ -231,6 +257,12 @@ struct AppNotification: Identifiable, Codable {
         case .progressPhoto:
             return "teal"
         case .profileUpdate:
+            return "blue"
+        case .consignmentApproved:
+            return "green"
+        case .consignmentRejected:
+            return "red"
+        case .consignmentLabelReady:
             return "blue"
         case .unknown:
             return "gray"

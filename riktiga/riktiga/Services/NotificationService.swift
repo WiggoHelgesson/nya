@@ -292,7 +292,112 @@ final class NotificationService {
             data: ["type": "follow", "actor_id": followedByUserId, "actor_avatar": followedByUserAvatar ?? ""]
         )
     }
-    
+
+    /// Create a consignment status notification (admin approved or rejected a submission)
+    func createConsignmentStatusNotification(
+        userId: String,
+        status: String,
+        submissionId: String? = nil,
+        finalPriceRange: String? = nil
+    ) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+
+        let type = status == "accepted" ? "consignment_approved" : "consignment_rejected"
+        let title: String
+        let body: String
+        if status == "accepted" {
+            title = "Din vara är godkänd!"
+            body = "Fyll i avsändaradress så ordnar vi fraktsedeln"
+        } else {
+            title = "Din vara avvisades"
+            body = "Öppna ansökan för detaljer"
+        }
+
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let type: String
+            let related_id: String?
+        }
+
+        let actorId = (try? await supabase.auth.session.user.id.uuidString) ?? userId
+        let payload = Payload(
+            user_id: userId,
+            actor_id: actorId,
+            actor_username: "Up&Down",
+            type: type,
+            related_id: submissionId
+        )
+
+        do {
+            try await supabase
+                .from("notifications")
+                .insert(payload)
+                .execute()
+            print("✅ Created consignment status notification (\(type))")
+        } catch {
+            print("⚠️ Failed to insert consignment notification row: \(error)")
+        }
+
+        var data: [String: String] = ["type": type]
+        if let submissionId { data["submission_id"] = submissionId }
+        if let finalPriceRange, status == "accepted" {
+            data["final_price_range"] = finalPriceRange
+        }
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: title,
+            body: body,
+            data: data
+        )
+    }
+
+    /// Notify the seller that their shipping label PDF is ready to download.
+    func createConsignmentLabelReadyNotification(
+        userId: String,
+        submissionId: String
+    ) async throws {
+        try await AuthSessionManager.shared.ensureValidSession()
+
+        struct Payload: Encodable {
+            let user_id: String
+            let actor_id: String
+            let actor_username: String
+            let type: String
+            let related_id: String
+        }
+
+        let actorId = (try? await supabase.auth.session.user.id.uuidString) ?? userId
+        let payload = Payload(
+            user_id: userId,
+            actor_id: actorId,
+            actor_username: "Up&Down",
+            type: "consignment_label_ready",
+            related_id: submissionId
+        )
+
+        do {
+            try await supabase
+                .from("notifications")
+                .insert(payload)
+                .execute()
+            print("✅ Created consignment label-ready notification")
+        } catch {
+            print("⚠️ Failed to insert label-ready notification row: \(error)")
+        }
+
+        await PushNotificationService.shared.sendRealPushNotification(
+            toUserId: userId,
+            title: "Din fraktsedel är klar",
+            body: "Öppna ansökan och posta paketet",
+            data: [
+                "type": "consignment_label_ready",
+                "submission_id": submissionId
+            ]
+        )
+    }
+
 }
 
 

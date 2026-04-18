@@ -150,7 +150,14 @@ struct AuthenticationView: View {
     @State private var showOnboardingPaywall = false
     @State private var onboardingDataReady = false
     
-    private let heroImages = ["84", "83", "85", "86"]
+    @State private var showRegisterSheet = false
+    @State private var showLoginSheet = false
+    @State private var topSliderOffset: CGFloat = 0
+    @State private var bottomSliderOffset: CGFloat = 0
+    
+    private let heroImages = ["95", "96", "97", "98", "99", "100"]
+    private let sliderImages1 = ["95", "98", "96", "100", "97", "99", "95", "98"]
+    private let sliderImages2 = ["99", "97", "100", "96", "98", "95", "99", "97"]
     private let onboardingSteps = OnboardingStep.allCases
     private let totalSteps = OnboardingStep.allCases.count
     
@@ -165,6 +172,12 @@ struct AuthenticationView: View {
     private var selectedCardBackgroundColor: Color { isDarkMode ? .white : .black }
     private var selectedCardTextColor: Color { isDarkMode ? .black : .white }
     private var unselectedCardTextColor: Color { isDarkMode ? .white : .black }
+    private var landingBackgroundColor: Color { Color(red: 0.984, green: 0.98, blue: 0.968) }
+    private var landingPrimaryTextColor: Color { Color(red: 0.11, green: 0.11, blue: 0.1) }
+    private var landingSecondaryTextColor: Color { Color(red: 0.46, green: 0.46, blue: 0.44) }
+    private var landingAccentColor: Color { .black }
+    private var landingAccentBorderColor: Color { Color.black.opacity(0.24) }
+    private var authSheetBackgroundColor: Color { .white }
     
     var body: some View {
         ZStack {
@@ -263,109 +276,239 @@ struct AuthenticationView: View {
         }
     }
     
+    // MARK: - Animated Image Slider Row
+    private func sliderRow(images: [String], offset: CGFloat, imageHeight: CGFloat = 180) -> some View {
+        let imageWidth: CGFloat = 136
+        let spacing: CGFloat = 12
+        
+        return HStack(spacing: spacing) {
+            ForEach(0..<images.count * 2, id: \.self) { i in
+                Image(images[i % images.count])
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: imageWidth, height: imageHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .shadow(color: .black.opacity(0.08), radius: 14, x: 0, y: 8)
+            }
+        }
+        .offset(x: offset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+    
     // MARK: - Landing View
     private var landingView: some View {
         VStack(spacing: 0) {
-            Spacer()
+            VStack(spacing: 16) {
+                sliderRow(images: sliderImages1, offset: topSliderOffset, imageHeight: 188)
+                sliderRow(images: sliderImages2, offset: bottomSliderOffset, imageHeight: 188)
+            }
+            .padding(.top, 28)
+            .onAppear {
+                let imageWidth: CGFloat = 136
+                let spacing: CGFloat = 12
+                let totalWidth = CGFloat(sliderImages1.count) * (imageWidth + spacing)
+                topSliderOffset = 0
+                bottomSliderOffset = -totalWidth / 2
+                withAnimation(.linear(duration: 80).repeatForever(autoreverses: false)) {
+                    topSliderOffset = -totalWidth
+                }
+                withAnimation(.linear(duration: 86).repeatForever(autoreverses: false)) {
+                    bottomSliderOffset = (-totalWidth / 2) + totalWidth
+                }
+            }
+            .padding(.horizontal, -6)
             
-            VStack(spacing: 24) {
-                Image("upanddownlog")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 90, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+            Spacer(minLength: 64)
+            
+            VStack(spacing: 18) {
+                Text("Vi gör sport billigt.")
+                    .font(.system(size: 33, weight: .semibold, design: .serif))
+                    .tracking(-0.9)
+                    .foregroundColor(landingPrimaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 320)
                 
-                VStack(spacing: 8) {
-                    Text(L.t(sv: "Skapa ditt konto", nb: "Opprett kontoen din"))
-                        .font(.system(size: 26, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(primaryTextColor)
-                    
-                    Text(L.t(sv: "Sveriges sociala träningsapp. Vi gör träningen billigare, roligare & mer social", nb: "Sveriges sosiale treningsapp. Vi gjør treningen billigere, morsommere & mer sosial"))
-                        .font(.system(size: 15))
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(secondaryTextColor)
+                Text("Tracka pass. Dela. Tjäna. Spara.")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(landingSecondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .frame(maxWidth: 280)
+            }
+            .padding(.horizontal, 28)
+            
+            Spacer(minLength: 48)
+            
+            VStack(spacing: 12) {
+                Button {
+                    showRegisterSheet = true
+                } label: {
+                    Text("Registrera dig på Up&Down")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 17)
+                        .background(landingAccentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.16), radius: 16, x: 0, y: 8)
                 }
                 
-                VStack(spacing: 12) {
-                    Button {
-                        authViewModel.signInWithApple()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 20, weight: .medium))
-                            Text(L.t(sv: "Fortsätt med Apple", nb: "Fortsett med Apple"))
-                                .font(.system(size: 17, weight: .medium))
-                        }
-                        .foregroundColor(primaryTextColor)
+                Button {
+                    showLoginSheet = true
+                } label: {
+                    Text("Jag har redan ett konto")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(landingAccentColor)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(landingAccentBorderColor, lineWidth: 1.5)
+                                )
+                        )
+                }
+                
+                if authViewModel.isLoading {
+                    ProgressView()
+                        .padding(.top, 4)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
+        }
+        .background(landingBackgroundColor.ignoresSafeArea())
+        .sheet(isPresented: $showRegisterSheet) {
+            authSheet(isLogin: false)
+        }
+        .sheet(isPresented: $showLoginSheet) {
+            authSheet(isLogin: true)
+        }
+    }
+    
+    // MARK: - Auth Bottom Sheet
+    private func authSheet(isLogin: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                
+                Button {
+                    if isLogin {
+                        showLoginSheet = false
+                    } else {
+                        showRegisterSheet = false
                     }
-                    .disabled(authViewModel.isLoading)
-                    
-                    Button {
-                        authViewModel.signInWithGoogle(onboardingData: OnboardingData())
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image("78")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 20, height: 20)
-                            Text(L.t(sv: "Fortsätt med Google", nb: "Fortsett med Google"))
-                                .font(.system(size: 17, weight: .medium))
-                        }
-                        .foregroundColor(primaryTextColor)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 30).stroke(Color(.systemGray3), lineWidth: 1))
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(landingPrimaryTextColor)
+                        .frame(width: 28, height: 28)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+            
+            VStack(spacing: 10) {
+                Text(isLogin ? "Logga in på Up&Down" : "Registrera dig på Up&Down")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(landingPrimaryTextColor)
+                    .multilineTextAlignment(.center)
+                
+                Text("Enklast är att använda ditt Apple-ID.")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(landingPrimaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 4)
+            
+            VStack(spacing: 14) {
+                Button {
+                    authViewModel.signInWithApple()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 18, weight: .medium))
+                        Text("Fortsätt med Apple")
+                            .font(.system(size: 17, weight: .semibold))
                     }
-                    .disabled(authViewModel.isLoading)
-                    
-                    Button {
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .disabled(authViewModel.isLoading)
+                .padding(.top, 26)
+                
+                HStack {
+                    Rectangle().fill(Color.black.opacity(0.12)).frame(height: 1)
+                    Text("eller")
+                        .font(.system(size: 13))
+                        .foregroundColor(landingSecondaryTextColor)
+                    Rectangle().fill(Color.black.opacity(0.12)).frame(height: 1)
+                }
+                .padding(.vertical, 6)
+                
+                Button {
+                    authViewModel.signInWithGoogle(onboardingData: OnboardingData())
+                } label: {
+                    HStack(spacing: 10) {
+                        Image("78")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                        Text("Fortsätt med Google")
+                            .font(.system(size: 17, weight: .medium))
+                    }
+                    .foregroundColor(landingPrimaryTextColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.black.opacity(0.18), lineWidth: 1)
+                    )
+                }
+                .disabled(authViewModel.isLoading)
+                
+                Button {
+                    if isLogin {
+                        showLoginSheet = false
+                        showLanding = false
+                        showSignupForm = false
+                    } else {
+                        showRegisterSheet = false
                         showLanding = false
                         showSignupForm = true
-                    } label: {
-                        Text(L.t(sv: "Skapa konto med mail", nb: "Opprett konto med e-post"))
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(buttonTextColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(buttonBackgroundColor)
-                            .clipShape(Capsule())
                     }
-                    
-                    if !authViewModel.errorMessage.isEmpty {
-                        Text(authViewModel.errorMessage)
-                            .font(.system(size: 14))
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                    }
-                    
-                    if authViewModel.isLoading {
-                        ProgressView()
-                            .padding(.top, 4)
-                    }
+                    authViewModel.errorMessage = ""
+                } label: {
+                    Text("Fortsätt med e-post")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.black.opacity(0.78))
                 }
-                .padding(.horizontal, 24)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 16)
             
-            Spacer()
-            
-            Button {
-                showLanding = false
-                showSignupForm = false
-                authViewModel.errorMessage = ""
-            } label: {
-                Text(L.t(sv: "Har du redan ett konto? Logga in", nb: "Har du allerede en konto? Logg inn"))
-                    .font(.system(size: 15))
-                    .foregroundColor(secondaryTextColor)
+            if authViewModel.isLoading {
+                ProgressView()
+                    .padding(.top, 18)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            
+            Spacer(minLength: 28)
         }
-        .background(backgroundColor)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(authSheetBackgroundColor)
+        .presentationDetents([.height(388)])
+        .presentationBackground(authSheetBackgroundColor)
+        .presentationCornerRadius(24)
+        .presentationDragIndicator(.hidden)
     }
     
     // MARK: - Login Form View

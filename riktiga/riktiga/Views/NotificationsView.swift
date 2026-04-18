@@ -14,6 +14,9 @@ struct NotificationsView: View {
     @State private var hasMarkedAsRead = false
     @State private var showCoachInvitation: CoachInvitation?
     @State private var showCoachPrograms = false
+    @State private var consignmentAddressSubmissionId: UUID?
+    @State private var consignmentLabelSubmissionId: UUID?
+    @State private var showMyConsignmentSubmissions = false
     var onDismiss: (() -> Void)? = nil
     
     var body: some View {
@@ -165,6 +168,20 @@ struct NotificationsView: View {
             CoachProgramsListView()
                 .environmentObject(authViewModel)
         }
+        .sheet(isPresented: Binding(
+            get: { consignmentAddressSubmissionId != nil },
+            set: { if !$0 { consignmentAddressSubmissionId = nil } }
+        )) {
+            if let submissionId = consignmentAddressSubmissionId {
+                ConsignmentShippingAddressView(submissionId: submissionId)
+            }
+        }
+        .sheet(isPresented: $showMyConsignmentSubmissions) {
+            MyConsignmentSubmissionsView(
+                autoOpenLabelForSubmissionId: consignmentLabelSubmissionId
+            )
+            .environmentObject(authViewModel)
+        }
     }
     
     private var emptyStateView: some View {
@@ -298,7 +315,31 @@ struct NotificationsView: View {
                         selectedProfileId = notification.actorId
                     }
                 }
-                
+
+            case .consignmentApproved:
+                await MainActor.run {
+                    if let related = notification.relatedId, let submissionId = UUID(uuidString: related) {
+                        consignmentAddressSubmissionId = submissionId
+                    } else {
+                        showMyConsignmentSubmissions = true
+                    }
+                }
+
+            case .consignmentLabelReady:
+                await MainActor.run {
+                    if let related = notification.relatedId, let submissionId = UUID(uuidString: related) {
+                        consignmentLabelSubmissionId = submissionId
+                    } else {
+                        consignmentLabelSubmissionId = nil
+                    }
+                    showMyConsignmentSubmissions = true
+                }
+
+            case .consignmentRejected:
+                await MainActor.run {
+                    showMyConsignmentSubmissions = true
+                }
+
             default:
                 await MainActor.run {
                     if !notification.actorId.isEmpty {
@@ -597,6 +638,12 @@ struct NotificationRowStrava: View {
             return L.t(sv: "Nya progressbilder", nb: "Nye fremgangsbilder")
         case .profileUpdate:
             return L.t(sv: "Uppdaterad profil", nb: "Oppdatert profil")
+        case .consignmentApproved:
+            return L.t(sv: "Din vara är godkänd!", nb: "Varen din er godkjent!")
+        case .consignmentRejected:
+            return L.t(sv: "Din vara avvisades", nb: "Varen din ble avvist")
+        case .consignmentLabelReady:
+            return L.t(sv: "Din fraktsedel är klar", nb: "Fraktseddelen din er klar")
         case .unknown:
             return L.t(sv: "Notis", nb: "Varsel")
         }
@@ -636,6 +683,21 @@ struct NotificationRowStrava: View {
             return L.t(sv: "\(name) la till nya progressbilder på sin profil", nb: "\(name) la til nye fremgangsbilder på profilen sin")
         case .profileUpdate:
             return L.t(sv: "Kolla vad \(name) har lagt till på sin profil", nb: "Sjekk hva \(name) har lagt til på profilen sin")
+        case .consignmentApproved:
+            return L.t(
+                sv: "Fyll i avsändaradress så ordnar vi fraktsedeln",
+                nb: "Fyll inn avsenderadresse så ordner vi fraktseddelen"
+            )
+        case .consignmentRejected:
+            return L.t(
+                sv: "Öppna ansökan för detaljer",
+                nb: "Åpne søknaden for detaljer"
+            )
+        case .consignmentLabelReady:
+            return L.t(
+                sv: "Öppna ansökan och posta paketet",
+                nb: "Åpne søknaden og send pakken"
+            )
         case .unknown:
             return L.t(sv: "\(name) skickade en notis", nb: "\(name) sendte et varsel")
         }

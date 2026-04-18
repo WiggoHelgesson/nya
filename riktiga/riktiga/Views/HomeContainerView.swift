@@ -135,6 +135,11 @@ struct SimpleAppHeader: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 16)
+            
+            Rectangle()
+                .fill(Color.primary)
+                .frame(height: 0.5)
+                .opacity(0.1)
         }
         .background(Color(.systemBackground))
         .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)

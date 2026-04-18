@@ -1,0 +1,14 @@
+---
+description: Enforces the correct project path for all agents
+globs: ["**/*.swift"]
+alwaysApply: true
+---
+
+# Project Path Rule
+
+All Swift source code is located at `/Users/wiggohelgesson/Projects/riktiga/riktiga/riktiga/`.
+This is the ONLY correct path. **Never** edit files under `/Users/wiggohelgesson/Desktop/riktiga`.
+
+The Xcode project is at `/Users/wiggohelgesson/Projects/riktiga/riktiga/Up&Down.xcodeproj`.
+
+When searching for or editing files, always use paths rooted in `/Users/wiggohelgesson/Projects/riktiga/`.

@@ -17,12 +17,14 @@ struct UpAndDownApp: App {
     @StateObject var authViewModel = AuthViewModel()
     @StateObject var versionService = AppVersionService.shared
     @StateObject var deepLinkHandler = DeepLinkHandler.shared
+    @StateObject private var launchCoordinator = AppLaunchCoordinator.shared
     @State private var showSplash = true
     @State private var splashMinTimeElapsed = false
     @State private var showOptionalUpdate = false
     @State private var showAdPopup = false
     @ObservedObject private var adService = AdService.shared
     @StateObject private var networkMonitor = NetworkMonitor.shared
+    @Environment(\.scenePhase) private var scenePhase
     
     init() {
         // Configure Stripe
@@ -100,6 +102,22 @@ struct UpAndDownApp: App {
                     case .upToDate, .error:
                         mainAppView
                     }
+                }
+            }
+            .onChange(of: authViewModel.isLoggedIn) { oldValue, newValue in
+                // Reset the launch gate on logout so the next login triggers
+                // a fresh preload cycle instead of reusing the stale ready state.
+                if oldValue == true && newValue == false {
+                    launchCoordinator.reset()
+                    launchCoordinator.markReadyImmediately()
+                }
+            }
+            // Refresh Pro-status från Supabase varje gång appen lyfts fram
+            // från bakgrund, så att manuellt granted is_pro_member syns
+            // utan att användaren behöver starta om appen.
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active, authViewModel.isLoggedIn {
+                    Task { await authViewModel.refreshProStatusFromDatabase() }
                 }
             }
             // Handle deep links (password reset, Insert Affiliate, Strava, Google Sign-In, etc.)
@@ -189,7 +207,9 @@ struct UpAndDownApp: App {
         withAnimation(.smooth(duration: 0.6)) {
             showSplash = false
         }
-        if adService.popupAd != nil {
+        // Pro members never see the popup ad.
+        let isPro = authViewModel.currentUser?.isProMember ?? false
+        if !isPro, adService.popupAd != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showAdPopup = true
             }
@@ -208,6 +228,20 @@ struct UpAndDownApp: App {
                     NotificationManager.shared.scheduleMonthlyReportNotifications(avatarUrl: authViewModel.currentUser?.avatarUrl)
                     WidgetSyncService.shared.syncStreakData()
                     LiveActivityManager.shared.cleanupOrphanedActivities()
+
+                    // Kick off the warmup that drives the AppLoadingOverlay
+                    // so the feed, stories, active friends, Shopify collection
+                    // and feed ads are ready the moment the overlay fades out.
+                    if let userId = authViewModel.currentUser?.id {
+                        Task { await launchCoordinator.start(userId: userId) }
+                    } else {
+                        launchCoordinator.markReadyImmediately()
+                    }
+
+                    // TEMP: bootstrap AdMob for all users (Pro-gate disabled for testing).
+                    let isPro = authViewModel.currentUser?.isProMember ?? false
+                    print("[AdMob] Triggering bootstrap from mainAppView.onAppear — userId=\(authViewModel.currentUser?.id ?? "<nil>") isPro=\(isPro) (Pro gate temporarily disabled)")
+                    Task { await AdMobService.shared.bootstrap() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NetworkMonitor.networkRestoredNotification)) { _ in
                     Task {
@@ -218,6 +252,11 @@ struct UpAndDownApp: App {
         } else {
             AuthenticationView()
                 .environmentObject(authViewModel)
+                .onAppear {
+                    // No data to preload before the auth screen — let the
+                    // overlay dismiss instantly if it was ever visible.
+                    launchCoordinator.markReadyImmediately()
+                }
         }
     }
 }

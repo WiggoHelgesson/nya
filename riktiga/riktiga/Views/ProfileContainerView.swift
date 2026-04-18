@@ -15,7 +15,7 @@ enum ProfileTab: String, CaseIterable {
 struct ProfileContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     let popToRootTrigger: Int
-    @State private var selectedTab: ProfileTab = .statistik
+    @State private var selectedTab: ProfileTab = .aktiviteter
     @State private var showSettings = false
     @State private var navigationPath = NavigationPath()
     @State private var showPublicProfile = false
