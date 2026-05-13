@@ -593,9 +593,10 @@ struct RewardsView: View {
                             HStack {
                                 // Points display
                                 HStack(spacing: 8) {
-                                    Image(systemName: "gift.fill")
-                                        .foregroundColor(colorScheme == .dark ? .black : .white)
-                                        .font(.system(size: 16))
+                                    Image("101")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
                                     
                                     Text("\(authViewModel.currentUser?.currentXP ?? 0)")
                                         .font(.system(size: 16, weight: .medium))
@@ -1032,9 +1033,10 @@ struct ModernRewardCard: View {
                 
                 // Points badge
                 HStack(spacing: 4) {
-                    Image(systemName: "gift.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(primaryTextColor)
+                    Image("101")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
                     
                     Text("200")
                         .font(.system(size: 15, weight: .bold))
@@ -1164,9 +1166,10 @@ struct FullScreenRewardCard: View {
                     .clipped()
                 
                 HStack(spacing: 6) {
-                    Image(systemName: "gift.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
+                    Image("101")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
                     
                     Text(reward.points)
                         .font(.system(size: 13, weight: .semibold))
@@ -2166,7 +2169,14 @@ struct MarketInfoSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         marketInfoBullet(icon: "shippingbox.fill", text: "Leverans: 1–3 dagar")
                         marketInfoBullet(icon: "arrow.uturn.left.circle.fill", text: "30 dagar öppet köp")
-                        marketInfoBullet(icon: "tag.fill", text: "Få upp till 40% rabatt med poäng")
+                        HStack(spacing: 12) {
+                            Image("101")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                            Text("Få upp till 40% rabatt med poäng")
+                                .font(.system(size: 16, weight: .medium))
+                        }
                     }
                     .padding(.vertical, 8)
 
@@ -2232,7 +2242,7 @@ struct MarketInfoSheet: View {
             Divider()
             discountRow(points: "500", free: "10%", pro: "20%")
             Divider()
-            discountRow(points: "1000", free: "25%", pro: "40%")
+            discountRow(points: "1000", free: "20%", pro: "40%")
         }
         .background(
             RoundedRectangle(cornerRadius: 14)

@@ -4,7 +4,7 @@ import Combine
 
 // MARK: - Direct Message Models
 
-struct DirectConversation: Identifiable, Codable, Equatable {
+struct DirectConversation: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     let createdAt: Date?
     let lastMessageAt: Date?
@@ -12,6 +12,7 @@ struct DirectConversation: Identifiable, Codable, Equatable {
     let isGroup: Bool?
     let groupName: String?
     let groupImageUrl: String?
+    let listingId: UUID?
     let otherUserId: String?
     let otherUsername: String?
     let otherAvatarUrl: String?
@@ -31,6 +32,7 @@ struct DirectConversation: Identifiable, Codable, Equatable {
         case isGroup = "is_group"
         case groupName = "group_name"
         case groupImageUrl = "group_image_url"
+        case listingId = "listing_id"
         case otherUserId = "other_user_id"
         case otherUsername = "other_username"
         case otherAvatarUrl = "other_avatar_url"
@@ -41,6 +43,34 @@ struct DirectConversation: Identifiable, Codable, Equatable {
         case lastMessageSenderId = "last_message_sender_id"
         case lastMessageSenderName = "last_message_sender_name"
         case unreadCount = "unread_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        lastMessageAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageAt)
+        createdBy = try c.decodeIfPresent(String.self, forKey: .createdBy)
+        isGroup = try c.decodeIfPresent(Bool.self, forKey: .isGroup)
+        groupName = try c.decodeIfPresent(String.self, forKey: .groupName)
+        groupImageUrl = try c.decodeIfPresent(String.self, forKey: .groupImageUrl)
+        // listing_id is new and may not exist until the migration ran;
+        // decodeIfPresent lets older backends keep working.
+        listingId = try c.decodeIfPresent(UUID.self, forKey: .listingId)
+        otherUserId = try c.decodeIfPresent(String.self, forKey: .otherUserId)
+        otherUsername = try c.decodeIfPresent(String.self, forKey: .otherUsername)
+        otherAvatarUrl = try c.decodeIfPresent(String.self, forKey: .otherAvatarUrl)
+        groupParticipantNames = try c.decodeIfPresent(String.self, forKey: .groupParticipantNames)
+        memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount)
+        isMuted = try c.decodeIfPresent(Bool.self, forKey: .isMuted)
+        lastMessage = try c.decodeIfPresent(String.self, forKey: .lastMessage)
+        lastMessageSenderId = try c.decodeIfPresent(String.self, forKey: .lastMessageSenderId)
+        lastMessageSenderName = try c.decodeIfPresent(String.self, forKey: .lastMessageSenderName)
+        unreadCount = try c.decodeIfPresent(Int.self, forKey: .unreadCount)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
     
     /// Display name: group name or other user's name
@@ -70,12 +100,50 @@ struct DirectMessage: Identifiable, Codable, Equatable {
     var isImage: Bool { messageType == "image" }
     var isGif: Bool { messageType == "gif" }
     var isMediaMessage: Bool { isImage || isGif }
+    var isOfferAccepted: Bool { messageType == "offer_accepted" }
+    var isOfferCaptured: Bool { messageType == "offer_captured" }
+    var isOfferSystemMessage: Bool { isOfferAccepted || isOfferCaptured }
+
+    var isShippingLabelReady: Bool { messageType == "shipping_label_ready" }
+    var isShippingInTransit: Bool { messageType == "shipping_in_transit" }
+    var isShippingSystemMessage: Bool { isShippingLabelReady || isShippingInTransit }
+    var isPurchaseCompleted: Bool { messageType == "purchase_completed" }
+    var isSellerPacked: Bool { messageType == "seller_packed" }
     
     /// Parse the JSON message body for gym invites
     var gymInviteData: GymInviteData? {
         guard isGymInvite else { return nil }
         guard let data = message.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(GymInviteData.self, from: data)
+    }
+
+    /// Parse the JSON payload stored in `message` for offer cards.
+    /// See `accept-marketplace-offer` / `finalize-marketplace-offer`.
+    var offerCardData: OfferCardData? {
+        guard isOfferSystemMessage else { return nil }
+        guard let data = message.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(OfferCardData.self, from: data)
+    }
+
+    /// Parse the JSON payload stored in `message` for shipping cards.
+    /// See `book-marketplace-shipping`.
+    var shippingCardData: ShippingCardData? {
+        guard isShippingSystemMessage else { return nil }
+        guard let data = message.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ShippingCardData.self, from: data)
+    }
+
+    /// System message after Köp nu / prisförslag capture (`stripe-webhook` / `finalize-marketplace-offer`).
+    var purchaseCardData: PurchaseCardData? {
+        guard isPurchaseCompleted else { return nil }
+        guard let data = message.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(PurchaseCardData.self, from: data)
+    }
+
+    var sellerPackedData: SellerPackedCardData? {
+        guard isSellerPacked else { return nil }
+        guard let data = message.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(SellerPackedCardData.self, from: data)
     }
     
     enum CodingKeys: String, CodingKey {
@@ -87,6 +155,108 @@ struct DirectMessage: Identifiable, Codable, Equatable {
         case imageUrl = "image_url"
         case isRead = "is_read"
         case createdAt = "created_at"
+    }
+}
+
+// MARK: - Offer Card Data (system messages in listing chats)
+
+/// Payload embedded in the `message` field for system DMs with
+/// `message_type == "offer_accepted"` or `"offer_captured"`. Inserted by
+/// the `accept-marketplace-offer` / `finalize-marketplace-offer` edge
+/// functions. The buyer-side chat renders these as a "Slutför köp"-card
+/// and a confirmation card respectively.
+struct OfferCardData: Codable {
+    let kind: String
+    let offerId: UUID
+    let listingId: UUID
+    let listingTitle: String?
+    let offeredPriceSek: Int?
+    let amountBuyerTotalOre: Int?
+    let sellerId: UUID?
+    let buyerId: UUID?
+    let orderId: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case offerId = "offer_id"
+        case listingId = "listing_id"
+        case listingTitle = "listing_title"
+        case offeredPriceSek = "offered_price_sek"
+        case amountBuyerTotalOre = "amount_buyer_total_ore"
+        case sellerId = "seller_id"
+        case buyerId = "buyer_id"
+        case orderId = "order_id"
+    }
+}
+
+// MARK: - Shipping Card Data (system messages from book-marketplace-shipping)
+
+/// Payload embedded in the `message` field for shipping system DMs.
+/// `shipping_label_ready` is sent to the seller (with QR + PDF link),
+/// `shipping_in_transit` is sent to the buyer (tracking link, ETA).
+struct ShippingCardData: Codable {
+    let kind: String
+    let orderId: UUID
+    let listingId: UUID?
+    let listingTitle: String?
+    let carrier: String?
+    let serviceCode: String?
+    let trackingNumber: String?
+    let trackingUrl: String?
+    let labelUrl: String?
+    let qrPayload: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case orderId = "order_id"
+        case listingId = "listing_id"
+        case listingTitle = "listing_title"
+        case carrier
+        case serviceCode = "service_code"
+        case trackingNumber = "tracking_number"
+        case trackingUrl = "tracking_url"
+        case labelUrl = "label_url"
+        case qrPayload = "qr_payload"
+    }
+}
+
+// MARK: - Purchase completed card (marketplace)
+
+struct SellerPackedCardData: Codable {
+    let kind: String
+    let orderId: UUID
+    let listingId: UUID?
+    let listingTitle: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case orderId = "order_id"
+        case listingId = "listing_id"
+        case listingTitle = "listing_title"
+    }
+}
+
+struct PurchaseCardData: Codable {
+    let kind: String
+    let orderId: UUID
+    let listingId: UUID
+    let listingTitle: String?
+    let buyerId: UUID
+    let buyerUsername: String?
+    let sellerId: UUID
+    let amountItemOre: Int?
+    let shipByDeadline: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case orderId = "order_id"
+        case listingId = "listing_id"
+        case listingTitle = "listing_title"
+        case buyerId = "buyer_id"
+        case buyerUsername = "buyer_username"
+        case sellerId = "seller_id"
+        case amountItemOre = "amount_item_ore"
+        case shipByDeadline = "ship_by_deadline"
     }
 }
 
@@ -220,6 +390,42 @@ struct ReactionGroup: Identifiable, Equatable {
     var id: String { emoji }
 }
 
+// MARK: - Listing Inbox Group
+
+/// One marketplace listing together with all chats (per buyer) tied to it.
+/// Used to build the two-level Meddelanden inbox: Bild 1 (annons-översikt)
+/// listar `[ListingInboxGroup]`, Bild 2 pushar en grupp och visar
+/// `group.conversations`.
+struct ListingInboxGroup: Identifiable, Hashable {
+    let listingId: UUID
+    let title: String
+    let coverUrl: String?
+    let isSold: Bool
+    /// Redan sorterade nyast först.
+    let conversations: [DirectConversation]
+
+    var id: UUID { listingId }
+
+    var conversationCount: Int { conversations.count }
+
+    var unreadCount: Int {
+        conversations.reduce(0) { $0 + ($1.unreadCount ?? 0) }
+    }
+
+    var latestAt: Date? { conversations.first?.lastMessageAt }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(listingId)
+    }
+
+    static func == (lhs: ListingInboxGroup, rhs: ListingInboxGroup) -> Bool {
+        lhs.listingId == rhs.listingId &&
+        lhs.unreadCount == rhs.unreadCount &&
+        lhs.conversations.count == rhs.conversations.count &&
+        lhs.latestAt == rhs.latestAt
+    }
+}
+
 // MARK: - Direct Message Service
 
 final class DirectMessageService: ObservableObject {
@@ -242,30 +448,40 @@ final class DirectMessageService: ObservableObject {
     
     // MARK: - Get or Create Conversation
     
-    func getOrCreateConversation(withUserId otherUserId: String) async throws -> UUID {
+    func getOrCreateConversation(
+        withUserId otherUserId: String,
+        listingId: UUID? = nil
+    ) async throws -> UUID {
         guard let currentUserId = try? await supabase.auth.session.user.id else {
             throw DirectMessageError.notAuthenticated
         }
         
         try await AuthSessionManager.shared.ensureValidSession()
         
-        // Try to find existing conversation using the SQL function
+        // Try to find existing conversation using the SQL function.
+        // The 3-arg variant (user1, user2, listing_id) matches NULL against
+        // NULL so legacy coach/trainer threads still resolve correctly.
+        var rpcParams: [String: AnyJSON] = [
+            "p_user1": AnyJSON.string(currentUserId.uuidString),
+            "p_user2": AnyJSON.string(otherUserId)
+        ]
+        if let listingId = listingId {
+            rpcParams["p_listing"] = AnyJSON.string(listingId.uuidString)
+        } else {
+            rpcParams["p_listing"] = AnyJSON.null
+        }
+
         let response = try await supabase.database
-            .rpc("find_direct_conversation", params: [
-                "p_user1": AnyJSON.string(currentUserId.uuidString),
-                "p_user2": AnyJSON.string(otherUserId)
-            ])
+            .rpc("find_direct_conversation", params: rpcParams)
             .execute()
         
-        // The RPC returns a single UUID or null – parse from the raw JSON
         if let jsonString = String(data: response.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
            jsonString != "null",
            jsonString != "\"\"",
            !jsonString.isEmpty {
-            // Remove surrounding quotes if present (e.g. "\"uuid-string\"")
             let cleaned = jsonString.replacingOccurrences(of: "\"", with: "")
             if let existingId = UUID(uuidString: cleaned) {
-                print("💬 Found existing conversation: \(existingId)")
+                print("💬 Found existing conversation: \(existingId) (listing: \(listingId?.uuidString ?? "nil"))")
                 return existingId
             }
         }
@@ -273,6 +489,7 @@ final class DirectMessageService: ObservableObject {
         // Create new conversation
         struct NewConversation: Encodable {
             let created_by: String
+            let listing_id: String?
         }
         
         struct ConversationResponse: Decodable {
@@ -281,7 +498,10 @@ final class DirectMessageService: ObservableObject {
         
         let conversation: ConversationResponse = try await supabase.database
             .from("direct_conversations")
-            .insert(NewConversation(created_by: currentUserId.uuidString))
+            .insert(NewConversation(
+                created_by: currentUserId.uuidString,
+                listing_id: listingId?.uuidString
+            ))
             .select("id")
             .single()
             .execute()
@@ -375,7 +595,76 @@ final class DirectMessageService: ObservableObject {
         
         return result
     }
-    
+
+    // MARK: - Fetch Listing Inbox (grouped by annons)
+
+    /// Hämtar alla `direct_conversations_with_info` som har ett `listing_id`,
+    /// batch-hämtar annons-metadata (titel / cover / sold_at) och grupperar
+    /// klient-sidan. Används för Meddelanden-tabben (Bild 1).
+    func fetchListingInboxGroups() async throws -> [ListingInboxGroup] {
+        try await AuthSessionManager.shared.ensureValidSession()
+
+        // Alla listing-trådar för inloggad användare.
+        let all: [DirectConversation] = try await supabase.database
+            .from("direct_conversations_with_info")
+            .select()
+            .not("listing_id", operator: .is, value: "null")
+            .order("last_message_at", ascending: false)
+            .execute()
+            .value
+
+        guard !all.isEmpty else { return [] }
+
+        // Samla unika listing-id:n och batch-hämta annons-metadata.
+        let listingIds = Array(Set(all.compactMap { $0.listingId }))
+        if listingIds.isEmpty { return [] }
+
+        struct ListingMeta: Decodable {
+            let id: UUID
+            let title: String?
+            let category: String
+            let image_urls: [String]
+            let sold_at: String?
+        }
+
+        let metas: [ListingMeta] = (try? await supabase.database
+            .from("consignment_submissions")
+            .select("id, title, category, image_urls, sold_at")
+            .in("id", values: listingIds.map { $0.uuidString })
+            .execute()
+            .value) ?? []
+
+        let metaById: [UUID: ListingMeta] = Dictionary(uniqueKeysWithValues: metas.map { ($0.id, $0) })
+
+        // Gruppera konversationer per listing, behåll senaste-först sortering.
+        var buckets: [UUID: [DirectConversation]] = [:]
+        var order: [UUID] = []
+        for convo in all {
+            guard let lid = convo.listingId else { continue }
+            if buckets[lid] == nil {
+                buckets[lid] = []
+                order.append(lid)
+            }
+            buckets[lid]?.append(convo)
+        }
+
+        let groups: [ListingInboxGroup] = order.map { lid in
+            let meta = metaById[lid]
+            let title = (meta?.title?.isEmpty == false ? meta?.title : nil)
+                ?? meta?.category
+                ?? "Annons"
+            return ListingInboxGroup(
+                listingId: lid,
+                title: title,
+                coverUrl: meta?.image_urls.first,
+                isSold: meta?.sold_at != nil,
+                conversations: buckets[lid] ?? []
+            )
+        }
+
+        return groups
+    }
+
     // MARK: - Fetch Messages
     
     func fetchMessages(conversationId: UUID) async throws -> [DirectMessage] {

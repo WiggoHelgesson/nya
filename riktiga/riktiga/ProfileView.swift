@@ -6,13 +6,18 @@ import Supabase
 struct ProfileActivitiesView: View {
     var onPublicProfileTapped: (() -> Void)? = nil
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var showMyPurchases = false
-    @State private var showMySubmissions = false
     @StateObject private var myPostsViewModel = SocialViewModel()
+    @State private var showMyPurchases = false
     @State private var selectedPost: SocialWorkoutPost?
     @State private var navigationPath = NavigationPath()
     @State private var showRoutines = false
     @State private var showSharedRoutines = false
+    @State private var showBrandRewards = false
+    @State private var showMyPayouts = false
+    @State private var followersCount: Int = 0
+    @State private var followingCount: Int = 0
+    @State private var showFollowersList = false
+    @State private var showFollowingList = false
 
     var body: some View {
         ZStack {
@@ -25,29 +30,61 @@ struct ProfileActivitiesView: View {
                     VStack(spacing: 16) {
                     // MARK: - Profile Menu
                     VStack(spacing: 8) {
-                        ProfileMenuSectionHeader(title: L.t(sv: "Mina annonser & betalningar", nb: "Mine annonser og betalinger"))
-                        VStack(spacing: 0) {
-                            ProfileMenuRow(
-                                icon: "shippingbox",
-                                title: L.t(sv: "Mina inskickade produkter", nb: "Mine innsendte produkter")
-                            ) {
-                                showMySubmissions = true
+                        // MARKET HIDDEN: Sektionen "Mina utbetalningar & köp" är dold tills
+                        // marketplace lanseras. State (`showMyPurchases`, `showMyPayouts`)
+                        // och tillhörande .sheet-modifierare bevaras längre ner i vyn så att
+                        // det räcker att flippa flaggan nedan när vi vill visa raderna igen.
+                        if false {
+                            ProfileMenuSectionHeader(title: L.t(sv: "Mina utbetalningar & köp", nb: "Mine utbetalinger og kjøp"))
+                            VStack(spacing: 0) {
+                                ProfileMenuRow(
+                                    icon: "creditcard",
+                                    title: L.t(sv: "Mina utbetalningar", nb: "Mine utbetalinger")
+                                ) {
+                                    showMyPayouts = true
+                                }
+                                Divider()
+                                ProfileMenuRow(
+                                    icon: "cart",
+                                    title: L.t(sv: "Mina köp", nb: "Mine kjøp")
+                                ) {
+                                    showMyPurchases = true
+                                }
                             }
-                            Divider()
-                            ProfileMenuRow(
-                                icon: "cart",
-                                title: L.t(sv: "Mina köp", nb: "Mine kjøp")
-                            ) {
-                                showMyPurchases = true
-                            }
+                            .background(Color(.systemBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
-                        .background(Color(.systemBackground))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        
+
+                        // MARKET HIDDEN: "Belöningar"-sektionen med "Rabatter hos
+                        // varumärken" är dold tills feature lanseras igen. State
+                        // (`showBrandRewards`) och tillhörande .sheet bevaras längre
+                        // ner i vyn.
+                        if false {
+                            ProfileMenuSectionHeader(title: L.t(sv: "Belöningar", nb: "Belønninger"))
+                                .padding(.top, 8)
+                            VStack(spacing: 0) {
+                                ProfileMenuRow(
+                                    icon: "gift",
+                                    title: L.t(sv: "Rabatter hos varumärken", nb: "Rabatter hos merker")
+                                ) {
+                                    showBrandRewards = true
+                                }
+                            }
+                            .background(Color(.systemBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        profileSummaryCard
+                            .padding(.top, 4)
+
                         ProfileMenuSectionHeader(title: L.t(sv: "Gym", nb: "Gym"))
                             .padding(.top, 8)
                         VStack(spacing: 0) {
@@ -113,7 +150,7 @@ struct ProfileActivitiesView: View {
                             .padding(.vertical, 40)
                         } else {
                             LazyVStack(spacing: 0) {
-                                ForEach(myPostsViewModel.posts) { post in
+                                ForEach(Array(myPostsViewModel.posts.enumerated()), id: \.element.id) { index, post in
                                     SocialPostCard(
                                         post: post,
                                         onOpenDetail: { tappedPost in selectedPost = tappedPost },
@@ -130,6 +167,16 @@ struct ProfileActivitiesView: View {
                                     .id(post.id) // Stable identity for better diffing
                                     Divider()
                                         .background(Color(.systemGray5))
+
+                                    if index == 1 {
+                                        Image("108")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxWidth: .infinity)
+                                            .accessibilityHidden(true)
+                                        Divider()
+                                            .background(Color(.systemGray5))
+                                    }
                                 }
                             }
                         }
@@ -145,11 +192,14 @@ struct ProfileActivitiesView: View {
                 WorkoutDetailView(post: post)
             }
             .sheet(isPresented: $showMyPurchases) {
-                MyPurchasesView()
-            }
-            .sheet(isPresented: $showMySubmissions) {
-                MyConsignmentSubmissionsView()
+                MarketplacePurchasesView()
                     .environmentObject(authViewModel)
+            }
+            .sheet(isPresented: $showMyPayouts) {
+                NavigationStack {
+                    SellerBalanceView()
+                        .environmentObject(authViewModel)
+                }
             }
             .sheet(isPresented: $showRoutines) {
                 NavigationStack {
@@ -163,6 +213,35 @@ struct ProfileActivitiesView: View {
                         .environmentObject(authViewModel)
                 }
             }
+            .sheet(isPresented: $showFollowersList) {
+                NavigationStack {
+                    FollowListView(
+                        userId: authViewModel.currentUser?.id ?? "",
+                        listType: .followers
+                    )
+                    .environmentObject(authViewModel)
+                }
+            }
+            .sheet(isPresented: $showFollowingList) {
+                NavigationStack {
+                    FollowListView(
+                        userId: authViewModel.currentUser?.id ?? "",
+                        listType: .following
+                    )
+                    .environmentObject(authViewModel)
+                }
+            }
+            .sheet(isPresented: $showBrandRewards) {
+                RewardsContainerView(popToRootTrigger: 0)
+                    .environmentObject(authViewModel)
+                    .presentationDragIndicator(.visible)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenBrandRewards"))) { _ in
+                showBrandRewards = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMyPurchases"))) { _ in
+                showMyPurchases = true
+            }
             .task {
                 do {
                     try await AuthSessionManager.shared.ensureValidSession()
@@ -171,7 +250,9 @@ struct ProfileActivitiesView: View {
                 }
 
                 if let userId = authViewModel.currentUser?.id {
-                    await myPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
+                    async let postsTask: Void = myPostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
+                    async let statsTask: Void = loadFollowStats()
+                    _ = await (postsTask, statsTask)
                     await prefetchPostImages()
                 }
             }
@@ -181,6 +262,142 @@ struct ProfileActivitiesView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("PopToRootProfil"))) { _ in
                 navigationPath = NavigationPath()
             }
+    }
+
+    // MARK: - Profile Summary Card
+
+    /// Antal pass = antal egna inlägg i feeden (samma logik som
+    /// UserProfileView.workoutsCount).
+    private var workoutsCount: Int {
+        myPostsViewModel.posts.count
+    }
+
+    /// Total kg lyft – summerar `kg * reps` över alla sets, exercises och
+    /// posts. Matchar beräkningen i StatisticsView.totalKgLifted.
+    private var totalKgLifted: Double {
+        myPostsViewModel.posts.reduce(0.0) { total, post in
+            guard let exercises = post.exercises else { return total }
+            let postKg = exercises.reduce(0.0) { exerciseTotal, exercise in
+                let exerciseVolume = zip(exercise.kg, exercise.reps).reduce(0.0) { setTotal, pair in
+                    setTotal + (pair.0 * Double(pair.1))
+                }
+                return exerciseTotal + exerciseVolume
+            }
+            return total + postKg
+        }
+    }
+
+    private func formatKg(_ kg: Double) -> String {
+        if kg >= 1000 {
+            return String(format: "%.1fk", kg / 1000)
+        } else {
+            return String(format: "%.0f", kg)
+        }
+    }
+
+    private var profileSummaryCard: some View {
+        let user = authViewModel.currentUser
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ProfileImage(
+                    url: user?.avatarUrl,
+                    size: 64,
+                    isPro: user?.isProMember ?? false
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(user?.name ?? L.t(sv: "Användare", nb: "Bruker"))
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+
+                        if user?.isProMember == true {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 0) {
+                summaryStat(value: "\(workoutsCount)", label: L.t(sv: "Pass", nb: "Økter"))
+
+                Button {
+                    showFollowersList = true
+                } label: {
+                    summaryStat(value: "\(followersCount)", label: L.t(sv: "Följare", nb: "Følgere"))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showFollowingList = true
+                } label: {
+                    summaryStat(value: "\(followingCount)", label: L.t(sv: "Följer", nb: "Følger"))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                onPublicProfileTapped?()
+            } label: {
+                Text(L.t(sv: "Se publik profil", nb: "Se offentlig profil"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.primary.opacity(0.18), lineWidth: 1.5)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+    }
+
+    private func summaryStat(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.primary)
+                .contentTransition(.numericText())
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func loadFollowStats() async {
+        guard let userId = authViewModel.currentUser?.id else { return }
+
+        if let snap = UserProfileCache.shared.snapshot(for: userId) {
+            followersCount = snap.followersCount
+            followingCount = snap.followingCount
+        }
+
+        async let followersTask = SocialService.shared.getFollowers(userId: userId)
+        async let followingTask = SocialService.shared.getFollowing(userId: userId)
+        let followerIds = (try? await followersTask) ?? []
+        let followingIds = (try? await followingTask) ?? []
+
+        await MainActor.run {
+            followersCount = followerIds.count
+            followingCount = followingIds.count
+            UserProfileCache.shared.update(userId: userId) { snap in
+                snap.followersCount = followerIds.count
+                snap.followingCount = followingIds.count
+            }
+        }
     }
 
     /// Prefetch images for posts to speed up display

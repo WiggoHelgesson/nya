@@ -312,7 +312,7 @@ struct MessagesListView: View {
                     }
                     
                     if let lastMessage = conversation.lastMessage, !lastMessage.isEmpty {
-                        Text(lastMessage)
+                        Text(MessagePreviewFormatter.preview(from: lastMessage))
                             .font(.system(size: 13, weight: (conversation.unreadCount ?? 0) > 0 ? .medium : .regular))
                             .foregroundColor((conversation.unreadCount ?? 0) > 0 ? .primary : .secondary)
                             .lineLimit(1)
@@ -562,32 +562,8 @@ struct ConversationRow: View {
         (conversation.unreadCount ?? 0) > 0
     }
     
-    /// Format last message - detect special message types and show friendly text
     private func formattedLastMessage(_ message: String) -> String {
-        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Detect training invite JSON (starts with { and contains "gym", "date", "time")
-        if trimmed.hasPrefix("{"),
-           trimmed.contains("\"gym\""),
-           trimmed.contains("\"date\""),
-           trimmed.contains("\"time\"") {
-            // Try to parse activity type for a more specific preview
-            if let data = trimmed.data(using: .utf8),
-               let invite = try? JSONDecoder().decode(GymInviteData.self, from: data) {
-                return L.t(sv: "Skickade ett träningsförslag: \(invite.resolvedActivityType.displayName) \(invite.resolvedActivityType.emoji)", nb: "Sendte et treningsforslag: \(invite.resolvedActivityType.displayName) \(invite.resolvedActivityType.emoji)")
-            }
-            return L.t(sv: "Skickade ett träningsförslag 💪", nb: "Sendte et treningsforslag 💪")
-        }
-        
-        // Detect training invite response
-        if trimmed == "accepted" {
-            return L.t(sv: "Godkände träningsförslaget ✅", nb: "Godkjente treningsforslaget ✅")
-        }
-        if trimmed == "declined" {
-            return L.t(sv: "Avböjde träningsförslaget", nb: "Avslo treningsforslaget")
-        }
-        
-        return message
+        MessagePreviewFormatter.preview(from: message)
     }
     
     private func formatTime(_ date: Date) -> String {

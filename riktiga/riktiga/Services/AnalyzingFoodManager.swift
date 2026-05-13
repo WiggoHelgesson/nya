@@ -82,8 +82,8 @@ class AnalyzingFoodManager: ObservableObject {
         }
         
         let content = UNMutableNotificationContent()
-        content.title = "Din analys är klar"
-        content.body = "Din analys är redo att läggas in!"
+        content.title = "Up&Down"
+        content.body = "Din analys är klar – redo att läggas in!"
         content.sound = .default
         
         // Add food name as subtitle if available

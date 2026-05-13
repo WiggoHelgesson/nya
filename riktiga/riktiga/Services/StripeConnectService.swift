@@ -224,6 +224,88 @@ final class StripeConnectService {
         return decoded
     }
     
+    // MARK: - Seller (marketplace) variants
+
+    /// Creates an Express Connect account for a community marketplace seller
+    /// (lives on `public.profiles`, not `trainer_profiles`).
+    func createSellerConnectAccount(userId: String, email: String) async throws -> CreateAccountResponse {
+        let url = URL(string: "\(baseURL)/create-seller-connect-account")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "userId": userId,
+            "email": email,
+            "country": "SE"
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
+        let decoded = try JSONDecoder().decode(CreateAccountResponse.self, from: data)
+
+        if !decoded.success {
+            throw StripeConnectError.apiError(decoded.error ?? "Unknown error")
+        }
+        return decoded
+    }
+
+    /// Fetches account status for a seller and keeps `profiles.stripe_*` in sync.
+    func getSellerAccountStatus(stripeAccountId: String, sellerId: String) async throws -> AccountStatusResponse {
+        let url = URL(string: "\(baseURL)/get-account-status")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "stripeAccountId": stripeAccountId,
+            "sellerId": sellerId
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
+        let decoded = try JSONDecoder().decode(AccountStatusResponse.self, from: data)
+
+        if !decoded.success {
+            throw StripeConnectError.apiError(decoded.error ?? "Unknown error")
+        }
+        return decoded
+    }
+
+    struct PendingPayoutsResponse: Codable {
+        let success: Bool
+        let processed: Int?
+        let failed: Int?
+        let error: String?
+    }
+
+    /// Triggers manual transfers for any held marketplace orders that belong
+    /// to this seller. Safe to call multiple times (idempotent via `stripe_transfer_id`).
+    @discardableResult
+    func triggerPendingPayouts(sellerId: String) async throws -> PendingPayoutsResponse {
+        let url = URL(string: "\(baseURL)/process-pending-seller-payouts")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = ["sellerId": sellerId]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, _) = try await SupabaseConfig.urlSession.data(for: request)
+        let decoded = try JSONDecoder().decode(PendingPayoutsResponse.self, from: data)
+
+        if !decoded.success {
+            throw StripeConnectError.apiError(decoded.error ?? "Unknown error")
+        }
+        return decoded
+    }
+
     // MARK: - Helper: Format Balance
     
     /// Formats a balance amount in öre to a readable string

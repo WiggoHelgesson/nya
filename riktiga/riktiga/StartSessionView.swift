@@ -948,7 +948,6 @@ struct SessionMapView: View {
                                         generator.prepare()
                                         generator.impactOccurred(intensity: 1.0)
                                         Task {
-                                            await TrackingPermissionManager.shared.requestPermissionIfNeeded()
                                             await MainActor.run {
                                                 isSessionEnding = false
                                                 sessionManager.beginSession()
@@ -1117,7 +1116,6 @@ struct SessionMapView: View {
                                         generator.prepare()
                                         generator.impactOccurred(intensity: 1.0)
                                         Task {
-                                            await TrackingPermissionManager.shared.requestPermissionIfNeeded()
                                             await MainActor.run {
                                                 let activeActivity = selectedActivity ?? activity
                                                 isSessionEnding = false

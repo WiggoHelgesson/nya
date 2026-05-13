@@ -7,6 +7,16 @@ class ExerciseDBService {
     
     private init() {}
     
+    private var exercisesById: [String: ExerciseDBExercise]?
+    
+    /// Bundled `exercises.json` may omit `gifUrl`; use this for metadata when needed.
+    func exercise(byId id: String) -> ExerciseDBExercise? {
+        if exercisesById == nil {
+            exercisesById = Dictionary(uniqueKeysWithValues: loadBundledExercises().map { ($0.id, $0) })
+        }
+        return exercisesById?[id]
+    }
+    
     private func loadBundledExercises() -> [ExerciseDBExercise] {
         if let cached = cachedExercises {
             return cached
@@ -75,6 +85,7 @@ struct ExerciseDBExercise: Codable, Identifiable {
     let target: String
     let secondaryMuscles: [String]?
     let instructions: [String]?
+    /// Optional CDN URL from API or future `exercises.json` enrichment; when absent, `safeGifUrl` uses the GitHub static image.
     let gifUrl: String?
     
     enum CodingKeys: String, CodingKey {
@@ -101,10 +112,28 @@ struct ExerciseDBExercise: Codable, Identifiable {
         if let gif = gifUrl, !gif.isEmpty {
             return gif
         }
-        let githubName = name
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-        return "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/\(githubName)/images/0.jpg"
+        return Self.githubFallbackImageURL(forExerciseName: name)
+    }
+    
+    /// Folder names on GitHub use Title_Case with underscores, e.g. `3_4_Sit-Up`. Images live at `…/Folder/0.jpg` (not `images/0.jpg`).
+    static func githubFolderName(forExerciseName name: String) -> String {
+        let withSpacesForSlash = name.replacingOccurrences(of: "/", with: " ")
+        let words = withSpacesForSlash.split(whereSeparator: { $0.isWhitespace })
+        return words.map { word in
+            String(word).split(separator: "-", omittingEmptySubsequences: false)
+                .map { segment in
+                    guard !segment.isEmpty else { return "" }
+                    return segment.prefix(1).uppercased() + segment.dropFirst().lowercased()
+                }
+                .filter { !$0.isEmpty }
+                .joined(separator: "-")
+        }
+        .joined(separator: "_")
+    }
+    
+    static func githubFallbackImageURL(forExerciseName name: String) -> String {
+        let folder = githubFolderName(forExerciseName: name)
+        return "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/\(folder)/0.jpg"
     }
 }
 

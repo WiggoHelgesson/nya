@@ -354,8 +354,8 @@ final class GymLocationManager: NSObject, ObservableObject {
         }
         
         let content = UNMutableNotificationContent()
-        content.title = "Dags för gym? 💪"
-        content.body = "Glöm inte tracka passet 🏋️"
+        content.title = "Up&Down"
+        content.body = "Dags för gym? 💪 Glöm inte tracka passet 🏋️"
         content.sound = .default
         content.userInfo = ["type": "gym_reminder"]
         

@@ -22,27 +22,7 @@ struct RewardsContainerView: View {
             VStack(spacing: 0) {
                 VStack(spacing: 0) {
                     ZStack {
-                        if isPremium {
-                            Text(L.t(sv: "Belöningar", nb: "Belønninger"))
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.primary)
-                        } else {
-                            Button {
-                                SuperwallService.shared.showPaywall()
-                            } label: {
-                                Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 9)
-                                    .background(
-                                        LinearGradient(colors: [.black, Color(white: 0.55)],
-                                                       startPoint: .leading, endPoint: .trailing)
-                                    )
-                                    .cornerRadius(20)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        PointsBadge(points: authViewModel.currentUser?.currentXP ?? 0)
 
                         HStack {
                             HStack(spacing: 10) {

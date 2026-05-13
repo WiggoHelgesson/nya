@@ -4210,8 +4210,8 @@ struct StatExerciseRow: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 // Exercise image from API
-                if let exerciseId = history.exerciseId {
-                    ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                if history.exerciseId != nil || !history.name.isEmpty {
+                    ExerciseGIFView(exerciseId: history.exerciseId ?? "", gifUrl: nil, exerciseName: history.name)
                         .frame(width: 56, height: 56)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
@@ -4584,8 +4584,8 @@ private struct CleanExerciseRow: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 // Exercise image from API
-                if let exerciseId = history.exerciseId {
-                    ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                if history.exerciseId != nil || !history.name.isEmpty {
+                    ExerciseGIFView(exerciseId: history.exerciseId ?? "", gifUrl: nil, exerciseName: history.name)
                         .frame(width: 56, height: 56)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
@@ -4756,8 +4756,8 @@ struct StatExerciseDetailView: View {
     private var heroCard: some View {
         VStack(spacing: 16) {
             // Exercise image
-            if let exerciseId = history.exerciseId {
-                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+            if history.exerciseId != nil || !history.name.isEmpty {
+                ExerciseGIFView(exerciseId: history.exerciseId ?? "", gifUrl: nil, exerciseName: history.name)
                     .frame(width: 120, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
             } else {
@@ -5070,8 +5070,8 @@ struct OneRMPredictionRow: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 // Exercise GIF with clean rounded corners
-                if let exerciseId = history.exerciseId {
-                    ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                if history.exerciseId != nil || !history.name.isEmpty {
+                    ExerciseGIFView(exerciseId: history.exerciseId ?? "", gifUrl: nil, exerciseName: history.name)
                         .frame(width: 52, height: 52)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
@@ -5337,8 +5337,8 @@ struct OneRepMaxDetailView: View {
     private var heroCard: some View {
         VStack(spacing: 16) {
             // Exercise GIF with clean rounded corners
-            if let exerciseId = history.exerciseId {
-                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+            if history.exerciseId != nil || !history.name.isEmpty {
+                ExerciseGIFView(exerciseId: history.exerciseId ?? "", gifUrl: nil, exerciseName: history.name)
                     .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
             } else {
@@ -5801,8 +5801,8 @@ struct TopExerciseRow: View {
             HStack(spacing: 14) {
                 // Exercise GIF or fallback with rank badge
                 ZStack(alignment: .bottomTrailing) {
-                    if let exerciseId = exerciseId {
-                        ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+                    if exerciseId != nil || !exercise.name.isEmpty {
+                        ExerciseGIFView(exerciseId: exerciseId ?? "", gifUrl: nil, exerciseName: exercise.name)
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     } else {

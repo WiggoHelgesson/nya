@@ -17,6 +17,19 @@ struct ConsignmentSubmissionsAdminView: View {
     @State private var editedCarrier: String = ""
     @State private var editedTracking: String = ""
 
+    // Manual-shipping fallback for marketplace orders whose carrier
+    // booking failed in `book-marketplace-shipping`.
+    @State private var manualOrders: [MarketplaceOrderRow] = []
+    @State private var manualOrderImporting: UUID?
+    @State private var manualOrderUploadError: String?
+    @State private var manualOrderTracking: [UUID: String] = [:]
+    @State private var manualOrderTrackingUrl: [UUID: String] = [:]
+    @State private var markingShippedId: UUID?
+
+    // Open marketplace disputes that need admin resolution.
+    @State private var openDisputeCount: Int = 0
+    @State private var showDisputesView: Bool = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -30,17 +43,56 @@ struct ConsignmentSubmissionsAdminView: View {
                         .foregroundStyle(.red)
                 }
 
+                if openDisputeCount > 0 {
+                    Section {
+                        Button {
+                            showDisputesView = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "exclamationmark.bubble.fill")
+                                    .foregroundStyle(.red)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L.t(sv: "Öppna tvister", nb: "Åpne tvister"))
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text("\(openDisputeCount) väntar på beslut")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+
+                if !manualOrders.isEmpty {
+                    Section(header: Text(L.t(
+                        sv: "Manuell fraktsedel krävs",
+                        nb: "Manuell fraktseddel kreves"
+                    ))) {
+                        ForEach(manualOrders) { order in
+                            manualOrderRow(order: order)
+                        }
+                        if let manualOrderUploadError {
+                            Text(manualOrderUploadError)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+
                 ForEach(rows, id: \.id) { row in
                     Button {
                         selectedDetailId = row.id
-                        editedPrice = row.finalPriceRange ?? row.aiPayload.priceRangeLabel
+                        editedPrice = row.finalPriceRange ?? row.priceSEK.map { "\($0) kr" } ?? ""
                         editedNotes = row.adminNotes ?? ""
                         editedCarrier = row.shippingCarrier ?? ""
                         editedTracking = row.shippingTrackingNumber ?? ""
                         uploadError = nil
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(row.aiPayload.title.isEmpty ? row.aiPayload.productName : row.aiPayload.title)
+                            Text((row.title?.isEmpty == false ? row.title! : row.category))
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.primary)
                             Text(row.category)
@@ -56,6 +108,9 @@ struct ConsignmentSubmissionsAdminView: View {
             }
             .navigationTitle(L.t(sv: "Inköp / AI-förslag", nb: "Innkjøp / AI-forslag"))
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showDisputesView) {
+                AdminDisputesView()
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L.t(sv: "Stäng", nb: "Lukk")) { dismiss() }
@@ -89,17 +144,11 @@ struct ConsignmentSubmissionsAdminView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     TabView {
                         ForEach(row.imageUrls, id: \.self) { url in
-                            AsyncImage(url: URL(string: url)) { phase in
-                                switch phase {
-                                case .success(let img):
-                                    img.resizable().scaledToFit()
-                                case .failure:
-                                    Color.gray.opacity(0.2)
-                                default:
-                                    ProgressView()
-                                }
+                            CachedRemoteImage(url: url) {
+                                Color.gray.opacity(0.2).overlay(ProgressView())
                             }
                             .frame(maxHeight: 280)
+                            .clipped()
                         }
                     }
                     .tabViewStyle(.page)
@@ -107,14 +156,17 @@ struct ConsignmentSubmissionsAdminView: View {
 
                     Group {
                         labeled(L.t(sv: "Kategori", nb: "Kategori"), row.category)
-                        labeled(L.t(sv: "Användarens märke", nb: "Brukerens merke"), row.userBrand ?? "—")
-                        labeled(L.t(sv: "Användarens skick", nb: "Brukerens stand"), row.userCondition ?? "—")
-                        labeled(L.t(sv: "AI produkt", nb: "AI produkt"), row.aiPayload.productName)
-                        labeled(L.t(sv: "AI skick", nb: "AI stand"), row.aiPayload.condition)
-                        labeled(L.t(sv: "AI prisintervall", nb: "AI prisintervall"), row.aiPayload.priceRangeLabel)
-                        labeled(L.t(sv: "AI utbetalning", nb: "AI utbetaling"), row.aiPayload.sellerPayoutRange)
-                        Text(row.aiPayload.description)
-                            .font(.system(size: 14))
+                        labeled(L.t(sv: "Titel", nb: "Tittel"), row.title ?? "—")
+                        labeled(L.t(sv: "Märke", nb: "Merke"), row.userBrand ?? "—")
+                        labeled(L.t(sv: "Skick", nb: "Stand"), SellCondition.localizedTitle(raw: row.userCondition) ?? "—")
+                        labeled(L.t(sv: "Pris", nb: "Pris"), row.priceSEK.map { "\($0) kr" } ?? "—")
+                        labeled(L.t(sv: "Material", nb: "Materiale"), row.material ?? "—")
+                        labeled(L.t(sv: "Färger", nb: "Farger"), row.colors.isEmpty ? "—" : row.colors.joined(separator: ", "))
+                        labeled(L.t(sv: "Paketstorlek", nb: "Pakkestørrelse"), row.packageSize ?? "—")
+                        if let description = row.description, !description.isEmpty {
+                            Text(description)
+                                .font(.system(size: 14))
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -357,10 +409,210 @@ struct ConsignmentSubmissionsAdminView: View {
             let list = try await ConsignmentAdminService.shared.fetchSubmissions(
                 status: filterPendingOnly ? "pending" : nil
             )
-            await MainActor.run { rows = list }
+            await MainActor.run {
+                rows = list
+                ImageCacheManager.shared.prefetch(urls: list.flatMap { $0.imageUrls })
+            }
         } catch {
             await MainActor.run { errorText = error.localizedDescription }
         }
+
+        // Load marketplace orders that need a manually uploaded label
+        // (automated booking failed). Best-effort — admins may not be the
+        // ones using this view, so we silently swallow RLS-deny errors.
+        if let manual = try? await MarketplaceOrdersService.shared.fetchManualShippingOrders() {
+            await MainActor.run {
+                manualOrders = manual
+            }
+        } else {
+            await MainActor.run { manualOrders = [] }
+        }
+
+        // Count open disputes for the toolbar entry. Best-effort.
+        if let open = try? await MarketplaceOrdersService.shared.fetchOpenDisputes() {
+            await MainActor.run { openDisputeCount = open.count }
+        } else {
+            await MainActor.run { openDisputeCount = 0 }
+        }
+    }
+
+    // MARK: - Manual marketplace order shipping fallback
+
+    @ViewBuilder
+    private func manualOrderRow(order: MarketplaceOrderRow) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "shippingbox.and.arrow.backward.fill")
+                    .foregroundStyle(.orange)
+                Text(L.t(sv: "Order", nb: "Ordre") + " \(order.id.uuidString.prefix(8))")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text(MarketplacePricing.formatSEK(Double(order.amountBuyerTotal) / 100.0))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let name = order.buyerShippingName,
+               let address = order.buyerShippingAddress,
+               let postal = order.buyerShippingPostal,
+               let city = order.buyerShippingCity {
+                Text("\(name) — \(address), \(postal) \(city)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let carrier = order.shippingCarrier {
+                Text("Carrier: \(carrier.uppercased())")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            // Tracking-info för köparen — sparas på ordern via PDF-uppload
+            // *eller* via "Markera som skickad" nedan.
+            VStack(spacing: 6) {
+                TextField(
+                    L.t(sv: "Tracking-nummer", nb: "Tracking-nummer"),
+                    text: bindingForTracking(orderId: order.id, fallback: order.shippingTrackingNumber)
+                )
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .font(.system(size: 13))
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                TextField(
+                    L.t(sv: "Tracking-URL", nb: "Tracking-URL"),
+                    text: bindingForTrackingUrl(orderId: order.id, fallback: order.shippingTrackingUrl)
+                )
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: 13))
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Button {
+                manualOrderImporting = order.id
+            } label: {
+                HStack(spacing: 6) {
+                    if manualOrderImporting == order.id {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.up.doc.fill")
+                    }
+                    Text(L.t(sv: "Ladda upp PDF-fraktsedel", nb: "Last opp PDF-fraktseddel"))
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(manualOrderImporting != nil || markingShippedId != nil)
+
+            Button {
+                Task { await markShipped(order: order) }
+            } label: {
+                HStack(spacing: 6) {
+                    if markingShippedId == order.id {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "shippingbox.fill")
+                    }
+                    Text(L.t(sv: "Markera som skickad", nb: "Marker som sendt"))
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.green)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(manualOrderImporting != nil || markingShippedId != nil)
+        }
+        .padding(.vertical, 6)
+        .fileImporter(
+            isPresented: Binding(
+                get: { manualOrderImporting == order.id },
+                set: { if !$0 { manualOrderImporting = nil } }
+            ),
+            allowedContentTypes: [.pdf]
+        ) { result in
+            Task { await handleManualUpload(order: order, result: result) }
+        }
+    }
+
+    private func handleManualUpload(
+        order: MarketplaceOrderRow,
+        result: Result<URL, Error>
+    ) async {
+        defer {
+            Task { @MainActor in manualOrderImporting = nil }
+        }
+        do {
+            let url = try result.get()
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+            defer { if didStartAccessing { url.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: url)
+            // Föredra adminens manuella inmatning, fall tillbaka på det
+            // som redan finns på ordern (t.ex. delvis ifyllt från boknings-API).
+            let typedTracking = (manualOrderTracking[order.id] ?? "").trimmingCharacters(in: .whitespaces)
+            let typedUrl = (manualOrderTrackingUrl[order.id] ?? "").trimmingCharacters(in: .whitespaces)
+            try await ShippingLabelService.shared.uploadMarketplaceOrderLabelPDF(
+                orderId: order.id,
+                sellerId: order.sellerId,
+                data: data,
+                carrier: order.shippingCarrier,
+                trackingNumber: typedTracking.isEmpty ? order.shippingTrackingNumber : typedTracking,
+                trackingUrl: typedUrl.isEmpty ? order.shippingTrackingUrl : typedUrl
+            )
+            await load()
+        } catch {
+            await MainActor.run {
+                manualOrderUploadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func markShipped(order: MarketplaceOrderRow) async {
+        await MainActor.run { markingShippedId = order.id }
+        defer { Task { @MainActor in markingShippedId = nil } }
+        do {
+            let typedTracking = (manualOrderTracking[order.id] ?? order.shippingTrackingNumber ?? "")
+                .trimmingCharacters(in: .whitespaces)
+            let typedUrl = (manualOrderTrackingUrl[order.id] ?? order.shippingTrackingUrl ?? "")
+                .trimmingCharacters(in: .whitespaces)
+            _ = try await MarketplaceOrdersService.shared.markOrderShipped(
+                orderId: order.id,
+                trackingNumber: typedTracking.isEmpty ? nil : typedTracking,
+                trackingUrl: typedUrl.isEmpty ? nil : typedUrl
+            )
+            await load()
+        } catch {
+            await MainActor.run {
+                manualOrderUploadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func bindingForTracking(orderId: UUID, fallback: String?) -> Binding<String> {
+        Binding(
+            get: { manualOrderTracking[orderId] ?? fallback ?? "" },
+            set: { manualOrderTracking[orderId] = $0 }
+        )
+    }
+
+    private func bindingForTrackingUrl(orderId: UUID, fallback: String?) -> Binding<String> {
+        Binding(
+            get: { manualOrderTrackingUrl[orderId] ?? fallback ?? "" },
+            set: { manualOrderTrackingUrl[orderId] = $0 }
+        )
     }
 
     private func save(row: ConsignmentSubmissionRow, status: String) async {

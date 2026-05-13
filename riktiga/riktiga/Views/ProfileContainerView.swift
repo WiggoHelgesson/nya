@@ -2,11 +2,13 @@ import SwiftUI
 
 enum ProfileTab: String, CaseIterable {
     case statistik = "Statistik"
+    case minaAnnonser = "Mina annonser"
     case aktiviteter = "Aktiviteter"
 
     var displayName: String {
         switch self {
         case .statistik: return L.t(sv: "Statistik", nb: "Statistikk")
+        case .minaAnnonser: return L.t(sv: "Mina annonser", nb: "Mine annonser")
         case .aktiviteter: return L.t(sv: "Aktiviteter", nb: "Aktiviteter")
         }
     }
@@ -15,11 +17,12 @@ enum ProfileTab: String, CaseIterable {
 struct ProfileContainerView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     let popToRootTrigger: Int
+    @Namespace private var heroNS
     @State private var selectedTab: ProfileTab = .aktiviteter
     @State private var showSettings = false
     @State private var navigationPath = NavigationPath()
     @State private var showPublicProfile = false
-    
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
@@ -35,7 +38,18 @@ struct ProfileContainerView: View {
                     StatisticsView()
                         .environmentObject(authViewModel)
                         .tag(ProfileTab.statistik)
-                    
+
+                    // MARKET HIDDEN: Mina annonser-sidan döljs helt i TabView
+                    // (utöver att fliken är gömd i headern), så att horisontell
+                    // page-swipe inte når den. Vyn finns kvar i kodbasen och
+                    // återaktiveras genom att ta bort `#if false`.
+                    #if false
+                    MyListingsView()
+                        .environmentObject(authViewModel)
+                        .environment(\.marketplaceHeroNamespace, heroNS)
+                        .tag(ProfileTab.minaAnnonser)
+                    #endif
+
                     ProfileActivitiesView(onPublicProfileTapped: {
                         showPublicProfile = true
                     })
@@ -46,9 +60,10 @@ struct ProfileContainerView: View {
                 .animation(.easeInOut(duration: 0.25), value: selectedTab)
             }
             .navigationBarHidden(true)
+            .marketplaceDestinations()
             .navigationDestination(isPresented: $showPublicProfile) {
                 if let userId = authViewModel.currentUser?.id {
-                    UserProfileView(userId: userId)
+                    UserProfileView(userId: userId, forcePublicView: true)
                         .environmentObject(authViewModel)
                 }
             }
@@ -64,6 +79,17 @@ struct ProfileContainerView: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedTab = .statistik
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenMyPurchases"))) { _ in
+            NavigationDepthTracker.shared.hideTabBar = false
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTab = .aktiviteter
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToMyListings"))) { _ in
+            // MARKET HIDDEN: fliken Mina annonser döljs i headern tills marketplace lanseras.
+            // Push-notiser som tidigare landade här blir no-op men kraschar inte.
+            /* hidden for now */
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -100,7 +126,7 @@ private struct ProfileSkeletonView: View {
                 
                 // Tab skeleton
                 HStack(spacing: 0) {
-                    ForEach(0..<2, id: \.self) { _ in
+                    ForEach(0..<3, id: \.self) { _ in
                         VStack(spacing: 10) {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color(.systemGray5))
@@ -160,28 +186,8 @@ struct ProfileHeaderWithTabs: View {
         VStack(spacing: 0) {
             // MARK: - Top Row (Profile, Title, Actions)
             ZStack {
-                // Center: Page title or Pro CTA
-                if isPremium {
-                    Text(L.t(sv: "Profil", nb: "Profil"))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.primary)
-                } else {
-                    Button {
-                        SuperwallService.shared.showPaywall()
-                    } label: {
-                        Text(L.t(sv: "Bli pro medlem", nb: "Bli pro-medlem"))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(
-                                LinearGradient(colors: [.black, Color(white: 0.55)],
-                                               startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(20)
-                    }
-                    .buttonStyle(.plain)
-                }
+                // Center: Points badge
+                PointsBadge(points: authViewModel.currentUser?.currentXP ?? 0)
                 
                 // Left and Right sides
                 HStack {
@@ -217,8 +223,11 @@ struct ProfileHeaderWithTabs: View {
             .padding(.bottom, 16)
             
             // MARK: - Tab Selector (Strava-style)
+            // MARKET HIDDEN: Fliken `.minaAnnonser` är gömd tills marketplace lanseras.
+            // Enumcasen finns kvar i `ProfileTab` så att TabView nedan kan fortsätta
+            // tagga vyn — den blir bara aldrig vald.
             HStack(spacing: 0) {
-                ForEach(ProfileTab.allCases, id: \.self) { tab in
+                ForEach([ProfileTab.statistik, .aktiviteter], id: \.self) { tab in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = tab

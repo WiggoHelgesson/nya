@@ -288,6 +288,12 @@ deno_version = 1
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.shipmondo-webhook]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

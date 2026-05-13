@@ -4,7 +4,14 @@ import Supabase
 
 struct UserProfileView: View {
     let userId: String
-    
+    /// När `true` visas profilen som en publik förhandsgranskning även för
+    /// inloggad användare. Alla ägar-UI-element (Redigera profil, avatar/
+    /// banner-pickers, progress-photo upload, Skapa event m.fl.) döljs så att
+    /// vyn ser ut som den gör för andra användare.
+    var forcePublicView: Bool = false
+
+    @Environment(\.marketplaceHeroNamespace) private var heroNS
+
     @State private var username: String = ""
     @State private var avatarUrl: String? = nil
     @State private var bannerUrl: String? = nil
@@ -81,9 +88,13 @@ struct UserProfileView: View {
     @State private var sharePhotosOnProfile = false
     @State private var isTogglingPhotoShare = false
     @State private var hasLoadedPhotoShareState = false
+
+    // Listings (Annonser-sektion under veckotimmarna)
+    @State private var userListings: [ConsignmentSubmissionRow] = []
+    @State private var showAllListings: Bool = false
     
     private var isOwnProfile: Bool {
-        authViewModel.currentUser?.id == userId
+        !forcePublicView && authViewModel.currentUser?.id == userId
     }
     
     // Filter posts with Up&Down Live photos
@@ -101,6 +112,15 @@ struct UserProfileView: View {
         return pinnedPostIds.compactMap { id in
             profilePostsViewModel.posts.first(where: { $0.id == id })
         }
+    }
+
+    /// Insätts efter andra inlägget i flödet: full bredd (kant–kant), naturlig bildproportion.
+    private var profileFeedPromoImage108: some View {
+        Image("108")
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity)
+            .accessibilityHidden(true)
     }
     
     private var mutualFriendsLabel: some View {
@@ -284,6 +304,51 @@ struct UserProfileView: View {
         }
     }
     
+    // MARK: - Annonser (under WeeklyHoursChart)
+
+    private var listingsColumns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10)
+        ]
+    }
+
+    private var listingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L.t(sv: "Annonser", nb: "Annonser"))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                if userListings.count > 4 {
+                    Button {
+                        showAllListings = true
+                    } label: {
+                        Text(L.t(sv: "Se alla annonser", nb: "Se alle annonser"))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            LazyVGrid(columns: listingsColumns, spacing: 14) {
+                ForEach(Array(userListings.prefix(4))) { row in
+                    NavigationLink {
+                        CommunityListingDetailView(row: row)
+                            .modifier(MarketplaceHeroDestinationModifier(id: row.id))
+                    } label: {
+                        CommunityListingCard(row: row)
+                    }
+                    .buttonStyle(PressableCardButtonStyle())
+                    .modifier(MarketplaceHeroSourceModifier(id: row.id, namespace: heroNS))
+                }
+            }
+        }
+    }
+
     private var progressPhotosSlider: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
@@ -607,6 +672,7 @@ struct UserProfileView: View {
                     .padding(.vertical, 12)
                     .opacity(showChart ? 1 : 0)
 
+
                     if !livePhotoPosts.isEmpty {
                         PublicLiveWidget(posts: livePhotoPosts)
                             .padding(.horizontal, 16)
@@ -726,16 +792,7 @@ struct UserProfileView: View {
                         .opacity(showPosts ? 1 : 0)
                 
                     // Posts list
-                    if isLoading {
-                        VStack(spacing: 16) {
-                            ProgressView().tint(AppColors.brandBlue)
-                            Text(L.t(sv: "Laddar profil...", nb: "Laster profil..."))
-                                .font(.system(size: 14))
-                                .foregroundColor(.gray)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
-                    } else {
+                    Group {
                         if profilePostsViewModel.isLoading && profilePostsViewModel.posts.isEmpty {
                             VStack(spacing: 12) {
                                 ProgressView().tint(AppColors.brandBlue)
@@ -780,6 +837,13 @@ struct UserProfileView: View {
                                     
                                     Divider()
                                         .background(Color(.systemGray5))
+
+                                    if index == 1 {
+                                        profileFeedPromoImage108
+                                            .opacity(showPosts ? 1 : 0)
+                                        Divider()
+                                            .background(Color(.systemGray5))
+                                    }
                                 }
                             }
                         }
@@ -809,8 +873,9 @@ struct UserProfileView: View {
             }
         }
         .task {
-            await loadData()
+            hydrateFromCache()
             triggerAnimations()
+            await loadData()
         }
         .onChange(of: avatarPickerItem) { _, newItem in
             guard let newItem else { return }
@@ -912,8 +977,30 @@ struct UserProfileView: View {
                     .environmentObject(authViewModel)
             }
         }
-        .onAppear { NavigationDepthTracker.shared.setAtRoot(false) }
-        .onDisappear { NavigationDepthTracker.shared.setAtRoot(true) }
+        .overlay {
+            if showSkeleton {
+                PublicProfileSkeletonView()
+                    .transition(.opacity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: showSkeleton)
+        .onAppear {
+            NavigationDepthTracker.shared.setAtRoot(false)
+            NavigationDepthTracker.shared.acquireHideTabBar()
+        }
+        .onDisappear {
+            NavigationDepthTracker.shared.setAtRoot(true)
+            NavigationDepthTracker.shared.releaseHideTabBar()
+        }
+    }
+
+    /// Placeholder syns första gången man öppnar någon annans profil när
+    /// vi inte hunnit få något från cachen ännu. Så fort `username` är
+    /// satt (cache eller nätverk) fasar skeleten ut.
+    private var showSkeleton: Bool {
+        isLoading && username.isEmpty
     }
     
     private enum ProfileLoadResult: Sendable {
@@ -922,9 +1009,40 @@ struct UserProfileView: View {
         case following([String])
     }
     
+    /// Paintas stommen instant från senaste snapshoten (om någon finns).
+    /// Faktiska nätverksanrop kör i `loadData` och skriver över eventuella
+    /// förändringar.
+    @MainActor
+    private func hydrateFromCache() {
+        guard let snap = UserProfileCache.shared.snapshot(for: userId) else {
+            return
+        }
+        if username.isEmpty { username = snap.username }
+        if avatarUrl == nil { avatarUrl = snap.avatarUrl }
+        if bannerUrl == nil { bannerUrl = snap.bannerUrl }
+        isPro = snap.isPro
+        followersCount = snap.followersCount
+        followingCount = snap.followingCount
+        workoutsCount = snap.workoutsCount
+        weeklyHours = snap.weeklyHours
+        userListings = snap.listings
+        isLoading = false
+    }
+
+    /// Ny indelning: `loadData` kör core-delen (profil + followers + following)
+    /// och kickar i gång alla sekundära fetches som egna Tasks så att UI
+    /// progressivt fylls på utan att blockera varann.
     private func loadData() async {
-        isLoading = true
-        
+        async let core: Void = loadCoreProfile()
+        async let posts: Void = loadPostsSection()
+        async let mutual: Void = loadMutualFriends()
+        async let events: Void = loadEvents()
+        async let photos: Void = loadProgressPhotos()
+        async let listings: Void = loadUserListings()
+        _ = await (core, posts, mutual, events, photos, listings)
+    }
+
+    private func loadCoreProfile() async {
         let results = await withTaskGroup(of: ProfileLoadResult.self, returning: [ProfileLoadResult].self) { group in
             group.addTask {
                 let p = try? await ProfileService.shared.fetchUserProfile(userId: self.userId)
@@ -942,7 +1060,7 @@ struct UserProfileView: View {
             for await result in group { collected.append(result) }
             return collected
         }
-        
+
         var profile: User? = nil
         var followersIds: [String] = []
         var followingIds: [String] = []
@@ -953,7 +1071,7 @@ struct UserProfileView: View {
             case .following(let ids): followingIds = ids
             }
         }
-        
+
         await MainActor.run {
             if let profile = profile {
                 self.username = profile.name
@@ -974,51 +1092,60 @@ struct UserProfileView: View {
                 self.profileCompletedRaces = profile.completedRaces
                 self.verifiedSchoolEmail = profile.verifiedSchoolEmail
             }
-            
+
             self.followersCount = followersIds.count
             self.followingCount = followingIds.count
             self.isLoading = false
-            
+
             if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
                 self.isFollowingUser = followersIds.contains(currentUserId)
             } else {
                 self.isFollowingUser = false
             }
+
+            saveSnapshot()
         }
-        
+    }
+
+    private func loadPostsSection() async {
         if let viewerId = authViewModel.currentUser?.id {
             await profilePostsViewModel.loadPostsForUser(userId: userId, viewerId: viewerId)
         } else {
             await profilePostsViewModel.loadPostsForUser(userId: userId, viewerId: userId)
         }
-        
+
         await MainActor.run {
             workoutsCount = profilePostsViewModel.posts.count
             calculateWeeklyActivity()
+            saveSnapshot()
         }
-        
-        // Load mutual friends (only for other users' profiles)
-        if let currentUserId = authViewModel.currentUser?.id, currentUserId != userId {
-            do {
-                let result = try await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
-                await MainActor.run {
-                    self.mutualFriends = result.friends
-                    self.mutualFriendsTotal = result.totalCount
-                }
-            } catch {
-                print("⚠️ Failed to load mutual friends: \(error)")
+    }
+
+    private func loadMutualFriends() async {
+        guard let currentUserId = authViewModel.currentUser?.id, currentUserId != userId else {
+            return
+        }
+        do {
+            let result = try await SocialService.shared.getMutualFriends(currentUserId: currentUserId, otherUserId: userId)
+            await MainActor.run {
+                self.mutualFriends = result.friends
+                self.mutualFriendsTotal = result.totalCount
             }
+        } catch {
+            print("⚠️ Failed to load mutual friends: \(error)")
         }
-        
-        // Load events
+    }
+
+    private func loadEvents() async {
         do {
             let events = try await EventService.shared.fetchEvents(userId: userId)
             await MainActor.run { self.userEvents = events }
         } catch {
             print("⚠️ Failed to load events: \(error)")
         }
-        
-        // Load progress photos (own = all, others = shared only)
+    }
+
+    private func loadProgressPhotos() async {
         do {
             let photos: [WeightProgressEntry]
             if isOwnProfile {
@@ -1036,6 +1163,34 @@ struct UserProfileView: View {
         } catch {
             print("⚠️ Failed to load progress photos: \(error)")
             await MainActor.run { self.hasLoadedPhotoShareState = true }
+        }
+    }
+
+    private func loadUserListings() async {
+        guard let uuid = UUID(uuidString: userId) else { return }
+        do {
+            let rows = try await CommunityListingsService.shared.fetchAcceptedListings(forUserId: uuid)
+            await MainActor.run {
+                self.userListings = rows
+                saveSnapshot()
+            }
+        } catch {
+            print("⚠️ Failed to load user listings: \(error)")
+        }
+    }
+
+    @MainActor
+    private func saveSnapshot() {
+        UserProfileCache.shared.update(userId: userId) { snap in
+            if !username.isEmpty { snap.username = username }
+            snap.avatarUrl = avatarUrl
+            snap.bannerUrl = bannerUrl
+            snap.isPro = isPro
+            snap.followersCount = followersCount
+            snap.followingCount = followingCount
+            snap.workoutsCount = workoutsCount
+            snap.weeklyHours = weeklyHours
+            snap.listings = userListings
         }
     }
     
@@ -1228,6 +1383,120 @@ struct UserProfileView: View {
                 showPosts = true
             }
         }
+    }
+}
+
+// MARK: - Public Profile Skeleton
+
+/// Enkel skeleton-placeholder med shimmer som visas medan vi laddar en
+/// annan användares profil. Layouten speglar grovt den riktiga vyn —
+/// banner, avatar, namn-pill, statistik, action-knappar, veckodiagram
+/// och annonser — så övergången till riktig data känns smooth.
+private struct PublicProfileSkeletonView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // Banner
+            Rectangle()
+                .fill(Color(.systemGray5))
+                .frame(height: 260)
+                .overlay(alignment: .bottom) {
+                    Circle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: 120, height: 120)
+                        .overlay(
+                            Circle()
+                                .stroke(Color(.systemBackground), lineWidth: 4)
+                        )
+                        .offset(y: 60)
+                }
+
+            Spacer().frame(height: 78)
+
+            // Name pill
+            block(width: 160, height: 22, radius: 6)
+                .padding(.bottom, 16)
+
+            // Stats row
+            HStack(spacing: 32) {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(spacing: 6) {
+                        block(width: 36, height: 18, radius: 4)
+                        block(width: 60, height: 12, radius: 4)
+                    }
+                }
+            }
+            .padding(.bottom, 18)
+
+            // Action buttons (Följer / Meddelande)
+            HStack(spacing: 10) {
+                ForEach(0..<2, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 44)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 18)
+
+            // Mutual friends row
+            HStack(spacing: 10) {
+                HStack(spacing: -8) {
+                    ForEach(0..<2, id: \.self) { _ in
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(.systemBackground), lineWidth: 2)
+                            )
+                    }
+                }
+                block(width: 180, height: 14, radius: 4)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 18)
+
+            // Weekly chart
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(.systemGray6))
+                .frame(height: 170)
+                .overlay(alignment: .topLeading) {
+                    block(width: 180, height: 20, radius: 5)
+                        .padding(16)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 22)
+
+            // Annonser-section header
+            HStack {
+                block(width: 100, height: 20, radius: 5)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+
+            // Two listing card placeholders
+            HStack(spacing: 10) {
+                ForEach(0..<2, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray5))
+                        .aspectRatio(1, contentMode: .fit)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(.systemBackground))
+        .shimmer()
+    }
+
+    private func block(width: CGFloat, height: CGFloat, radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius)
+            .fill(Color(.systemGray5))
+            .frame(width: width, height: height)
     }
 }
 
@@ -2212,19 +2481,10 @@ struct CommonExerciseRow: View {
     var body: some View {
         HStack(spacing: 16) {
             // Exercise image
-            if let exerciseId = exercise.exerciseId {
-                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
-                    .frame(width: 60, height: 60)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-            } else {
-                Image(systemName: "dumbbell.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.gray)
-                    .frame(width: 60, height: 60)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-            }
+            ExerciseGIFView(exerciseId: exercise.exerciseId ?? "", gifUrl: nil, exerciseName: exercise.name)
+                .frame(width: 60, height: 60)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(exercise.name)
@@ -2341,12 +2601,10 @@ struct ExerciseComparisonView: View {
                             .foregroundColor(.gray)
                         
                         HStack(spacing: 12) {
-                            if let exerciseId = exercise.exerciseId {
-                                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
-                                    .frame(width: 60, height: 60)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(8)
-                            }
+                            ExerciseGIFView(exerciseId: exercise.exerciseId ?? "", gifUrl: nil, exerciseName: exercise.name)
+                                .frame(width: 60, height: 60)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(exercise.name)
@@ -2585,5 +2843,71 @@ struct FullscreenAvatarView: View {
             }
         }
         .statusBarHidden(true)
+    }
+}
+
+// MARK: - UserListingsView
+
+/// Komplett lista över en användares annonser. Öppnas från "Se alla annonser"
+/// på profilen när en användare har fler än 4 annonser. Vi tar emot rows via
+/// init så att listan paintas instant utan extra fetch.
+struct UserListingsView: View {
+    let username: String
+    let listings: [ConsignmentSubmissionRow]
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.marketplaceHeroNamespace) private var heroNS
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 14) {
+                ForEach(listings) { row in
+                    NavigationLink {
+                        CommunityListingDetailView(row: row)
+                            .modifier(MarketplaceHeroDestinationModifier(id: row.id))
+                    } label: {
+                        CommunityListingCard(row: row)
+                    }
+                    .buttonStyle(PressableCardButtonStyle())
+                    .modifier(MarketplaceHeroSourceModifier(id: row.id, namespace: heroNS))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+        }
+        .background(Color(.systemBackground))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(titleText)
+                    .font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 30, height: 30)
+                        .background(Color(.systemGray6))
+                        .clipShape(Circle())
+                }
+            }
+        }
+    }
+
+    private var titleText: String {
+        if username.isEmpty {
+            return L.t(sv: "Annonser", nb: "Annonser")
+        }
+        return "\(username) · \(L.t(sv: "Annonser", nb: "Annonser"))"
     }
 }

@@ -37,8 +37,8 @@ final class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-10k-steps"]) 
 
         let content = UNMutableNotificationContent()
-        content.title = "Dagens mål: 10 000 steg"
-        content.body = "Ta en kort promenad nu så når du målet idag!"
+        content.title = "Up&Down"
+        content.body = "Dagens mål: 10 000 steg – ta en kort promenad nu så når du målet idag!"
         content.sound = .default
 
         var date = DateComponents()
@@ -62,8 +62,8 @@ final class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-lunch-reminder"])
         
         let content = UNMutableNotificationContent()
-        content.title = "🍽️ Lunch dags!"
-        content.body = "Glöm inte registrera din måltid"
+        content.title = "Up&Down"
+        content.body = "🍽️ Lunch dags! Glöm inte registrera din måltid."
         content.sound = .default
         content.userInfo = ["type": "meal_reminder", "meal": "lunch"]
         
@@ -89,8 +89,8 @@ final class NotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-dinner-reminder"])
         
         let content = UNMutableNotificationContent()
-        content.title = "🍝 Dags för middag?"
-        content.body = "Regga på några sekunder med AI"
+        content.title = "Up&Down"
+        content.body = "🍝 Dags för middag? Regga på några sekunder med AI."
         content.sound = .default
         content.userInfo = ["type": "meal_reminder", "meal": "dinner"]
         
@@ -130,8 +130,9 @@ final class NotificationManager {
     /// Send a push notification when someone likes a post
     func sendLikeNotification(fromUserName: String, postTitle: String) {
         let content = UNMutableNotificationContent()
-        content.title = "❤️ \(fromUserName) gillade din post"
-        content.body = postTitle
+        content.title = "Up&Down"
+        let lead = "❤️ \(fromUserName) gillade din post"
+        content.body = postTitle.isEmpty ? lead : "\(lead): \(postTitle)"
         content.sound = .default
         content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
         
@@ -146,11 +147,11 @@ final class NotificationManager {
     /// Send a push notification when someone comments on a post
     func sendCommentNotification(fromUserName: String, commentText: String) {
         let content = UNMutableNotificationContent()
-        content.title = "💬 \(fromUserName) kommenterade på din post"
+        content.title = "Up&Down"
         
         // Truncate comment to 60 characters
         let truncatedComment = commentText.count > 60 ? String(commentText.prefix(60)) + "..." : commentText
-        content.body = truncatedComment
+        content.body = "💬 \(fromUserName) kommenterade på din post: \(truncatedComment)"
         content.sound = .default
         content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
         
@@ -165,8 +166,8 @@ final class NotificationManager {
     /// Send a push notification when someone follows the user
     func sendFollowNotification(fromUserName: String) {
         let content = UNMutableNotificationContent()
-        content.title = "👤 \(fromUserName) började följa dig"
-        content.body = "Du har en ny följare!"
+        content.title = "Up&Down"
+        content.body = "👤 \(fromUserName) började följa dig"
         content.sound = .default
         content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
         
@@ -189,8 +190,8 @@ final class NotificationManager {
         
         // Use first name if available, otherwise use a generic message
         let firstName = userName?.components(separatedBy: " ").first ?? "du"
-        content.title = "Grymt jobbat \(firstName)! 💪"
-        content.body = "Håll din streak uppe och fortsätt slakta det!"
+        content.title = "Up&Down"
+        content.body = "Grymt jobbat \(firstName)! 💪 Håll din streak uppe och fortsätt slakta det!"
         content.sound = .default
         content.userInfo = ["type": "workout_complete"]
         
@@ -212,8 +213,8 @@ final class NotificationManager {
     /// Send an immediate notification when the user's streak is broken
     func sendStreakBrokenNotification() {
         let content = UNMutableNotificationContent()
-        content.title = "Alla missar en dag ibland 💪"
-        content.body = "Starta en ny streak och nå dina mål, vi tror på dig!"
+        content.title = "Up&Down"
+        content.body = "Alla missar en dag ibland 💪 Starta en ny streak och nå dina mål, vi tror på dig!"
         content.sound = .default
         content.userInfo = ["type": "streak_broken"]
         
@@ -241,8 +242,8 @@ final class NotificationManager {
         
         // 1 hour reminder
         let content1h = UNMutableNotificationContent()
-        content1h.title = "Gymmar du fortfarande?"
-        content1h.body = "Glöm inte stänga av passet."
+        content1h.title = "Up&Down"
+        content1h.body = "Gymmar du fortfarande? Glöm inte stänga av passet."
         content1h.sound = .default
         content1h.userInfo = ["type": "active_session_reminder", "hours": 1]
         
@@ -259,8 +260,8 @@ final class NotificationManager {
         
         // 5 hour reminder
         let content5h = UNMutableNotificationContent()
-        content5h.title = "Glöm inte stänga av passet"
-        content5h.body = "Du har ett aktivt pass igång!"
+        content5h.title = "Up&Down"
+        content5h.body = "Glöm inte stänga av passet — du har ett aktivt pass igång!"
         content5h.sound = .default
         content5h.userInfo = ["type": "active_session_reminder", "hours": 5]
         
@@ -292,8 +293,8 @@ final class NotificationManager {
         cancelGymExitNotification()
         
         let content = UNMutableNotificationContent()
-        content.title = "Gymmar du fortfarande?"
-        content.body = "Det verkar som att du lämnat gymmet. Glöm inte att avsluta passet."
+        content.title = "Up&Down"
+        content.body = "Gymmar du fortfarande? Det verkar som att du lämnat gymmet. Glöm inte att avsluta passet."
         content.sound = .default
         content.userInfo = ["type": "gym_exit_reminder"]
         
@@ -355,8 +356,8 @@ final class NotificationManager {
                 let previousMonthName = swedishMonths[previousMonthIndex]
                 
                 let content = UNMutableNotificationContent()
-                content.title = "Din månadsrapport är tillgänglig!"
-                content.body = "Månadsrapporten för \(previousMonthName) är nu klar."
+                content.title = "Up&Down"
+                content.body = "Din månadsrapport för \(previousMonthName) är nu klar."
                 content.sound = .default
                 content.userInfo = ["type": "monthly_report"]
                 
@@ -425,8 +426,8 @@ final class NotificationManager {
             activityText = "träningspass"
         }
         
-        content.title = "\(firstName) startade ett \(activityText)! 💪"
-        content.body = "Ge lite motivation!"
+        content.title = "Up&Down"
+        content.body = "\(firstName) startade ett \(activityText)! 💪 Ge lite motivation!"
         content.sound = .default
         content.userInfo = [
             "type": "active_session",

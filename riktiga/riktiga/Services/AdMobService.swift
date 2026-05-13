@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import AppTrackingTransparency
 
 #if canImport(GoogleMobileAds)
 import GoogleMobileAds
@@ -16,6 +15,10 @@ import UserMessagingPlatform
 @MainActor
 final class AdMobService: NSObject, ObservableObject {
     static let shared = AdMobService()
+
+    /// Master kill-switch for AdMob. Set to `true` to show feed/listing ads again.
+    /// UI slots, `NativeAdCard`, targeting, and preload logic stay in the codebase.
+    static let isAdsEnabled: Bool = false
 
     #if canImport(GoogleMobileAds)
     @Published private(set) var nativeAds: [NativeAd] = []
@@ -80,6 +83,10 @@ final class AdMobService: NSObject, ObservableObject {
     // MARK: - Bootstrap
 
     func bootstrap() async {
+        guard Self.isAdsEnabled else {
+            print("[AdMob] bootstrap skipped — isAdsEnabled=false")
+            return
+        }
         #if canImport(GoogleMobileAds)
         #if DEBUG
         let buildType = "DEBUG"
@@ -89,7 +96,6 @@ final class AdMobService: NSObject, ObservableObject {
         print("[AdMob] bootstrap start — build=\(buildType) adUnitId=\(nativeAdUnitId) sdkVersion=\(MobileAds.shared.versionNumber)")
 
         await requestConsent()
-        await requestATT()
 
         #if DEBUG
         // iOS simulators are automatically treated as test devices by Google Mobile
@@ -181,29 +187,6 @@ final class AdMobService: NSObject, ObservableObject {
         }
     }
     #endif
-
-    // MARK: - ATT
-
-    private func requestATT() async {
-        let before = ATTrackingManager.trackingAuthorizationStatus
-        print("[AdMob] ATT before — status=\(Self.describe(before))")
-        guard before == .notDetermined else {
-            print("[AdMob] ATT already determined — skipping prompt")
-            return
-        }
-        let result = await ATTrackingManager.requestTrackingAuthorization()
-        print("[AdMob] ATT after prompt — status=\(Self.describe(result))")
-    }
-
-    private static func describe(_ status: ATTrackingManager.AuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: return "notDetermined"
-        case .restricted: return "restricted"
-        case .denied: return "denied"
-        case .authorized: return "authorized"
-        @unknown default: return "unknown(\(status.rawValue))"
-        }
-    }
 
     // MARK: - Preload Native Ads
 

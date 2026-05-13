@@ -1,0 +1,4 @@
+# Copy to supabase/scripts/exercise_gifs.local and fill in real values.
+# This file is gitignored.
+export SUPABASE_URL="https://xebatkodviqgkpsbyuiv.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY=""

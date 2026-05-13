@@ -121,25 +121,76 @@ class ImageCacheManager {
             print("❌ [IMG] Bad URL: \(urlString)")
             throw URLError(.badURL)
         }
+
+        // Truncated DB URLs: /object/sign/... without ?token= — go straight to public URL (no wasted 400).
+        if WorkoutImageURL.signURLMissingToken(urlString),
+           let publicStr = WorkoutImageURL.publicFallbackURL(from: urlString),
+           let publicURL = URL(string: publicStr) {
+            #if DEBUG
+            print("📷 [IMG] Sign URL missing token — loading public URL directly")
+            #endif
+            let (dataP, responseP) = try await SupabaseConfig.urlSession.data(from: publicURL)
+            let codeP = (responseP as? HTTPURLResponse)?.statusCode ?? 0
+            #if DEBUG
+            if codeP != 200 {
+                print("❌ [IMG] HTTP \(codeP) for public workout-image: \(publicStr.prefix(120))")
+            }
+            #endif
+            if (200...299).contains(codeP), let img = UIImage(data: dataP) {
+                setImage(img, for: urlString)
+                return img
+            }
+        }
         
         #if DEBUG
         print("📷 [IMG] Downloading: \(url.absoluteString.prefix(120))")
         #endif
         
         let (data, response) = try await SupabaseConfig.urlSession.data(from: url)
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
         
         #if DEBUG
-        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            print("❌ [IMG] HTTP \(http.statusCode) for: \(url.absoluteString.prefix(120))")
+        if status == 400, data.count < 512 {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("❌ [IMG] HTTP 400 body (prefix): \(body.prefix(200))")
+        }
+        if status != 200 {
+            print("❌ [IMG] HTTP \(status) for: \(url.absoluteString.prefix(120))")
         }
         #endif
         
-        guard let image = UIImage(data: data) else {
+        var image = UIImage(data: data)
+        let statusOK = (200...299).contains(status)
+        
+        if !statusOK || image == nil,
+           let fallback = WorkoutImageURL.publicFallbackURL(from: urlString),
+           let fallbackURL = URL(string: fallback),
+           fallback != rewritten {
+            #if DEBUG
+            print("📷 [IMG] Retrying public URL for workout-images")
+            #endif
+            let (data2, response2) = try await SupabaseConfig.urlSession.data(from: fallbackURL)
+            let http2 = response2 as? HTTPURLResponse
+            let status2 = http2?.statusCode ?? 0
+            #if DEBUG
+            if status2 == 400, data2.count < 512 {
+                let body2 = String(data: data2, encoding: .utf8) ?? ""
+                print("❌ [IMG] Fallback HTTP 400 body (prefix): \(body2.prefix(200))")
+            }
+            #endif
+            if (200...299).contains(status2), let img2 = UIImage(data: data2) {
+                setImage(img2, for: urlString)
+                return img2
+            }
+        }
+        
+        guard statusOK, let final = image else {
             print("❌ [IMG] Cannot decode image data (\(data.count) bytes) from: \(url.absoluteString.prefix(120))")
             throw URLError(.cannotDecodeContentData)
         }
-        setImage(image, for: urlString)
-        return image
+        setImage(final, for: urlString)
+        return final
     }
     
     func prefetch(urls: [String]) {
@@ -450,6 +501,83 @@ struct ProfileImage: View {
                 cornerRadius: size / 2
             )
             .id(url ?? "no-url")
+        }
+    }
+}
+
+// MARK: - Cached Remote Image (flexible size, scaledToFill)
+//
+// Drop-in replacement for `AsyncImage` when you need a remote image rendered
+// with `.scaledToFill()` inside a parent-provided frame (cards, carousels,
+// cover photos). Uses the shared `ImageCacheManager` memory + disk cache so
+// the same URL never has to hit the network twice.
+struct CachedRemoteImage<Placeholder: View>: View {
+    let url: String?
+    @ViewBuilder var placeholder: () -> Placeholder
+
+    @State private var image: UIImage?
+    @State private var loadedUrl: String?
+    @State private var isLoading: Bool = false
+
+    init(url: String?, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+        self.url = url
+        self.placeholder = placeholder
+
+        if let urlString = url, !urlString.isEmpty,
+           let cached = ImageCacheManager.shared.getImage(for: urlString) {
+            _image = State(initialValue: cached)
+            _loadedUrl = State(initialValue: urlString)
+        }
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder()
+            }
+        }
+        .onAppear { loadIfNeeded() }
+        .onChange(of: url) { _, _ in
+            image = nil
+            loadedUrl = nil
+            isLoading = false
+            loadIfNeeded()
+        }
+    }
+
+    private func loadIfNeeded() {
+        if let loadedUrl, loadedUrl == url, image != nil { return }
+        guard let urlString = url, !urlString.isEmpty else { return }
+
+        if let cached = ImageCacheManager.shared.getImage(for: urlString) {
+            self.image = cached
+            self.loadedUrl = urlString
+            return
+        }
+
+        guard !isLoading else { return }
+        isLoading = true
+        let urlToLoad = urlString
+
+        Task {
+            do {
+                let loaded = try await ImageCacheManager.shared.downloadAndCacheImage(from: urlToLoad)
+                await MainActor.run {
+                    guard self.url == urlToLoad else { return }
+                    self.image = loaded
+                    self.loadedUrl = urlToLoad
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    guard self.url == urlToLoad else { return }
+                    self.isLoading = false
+                }
+            }
         }
     }
 }

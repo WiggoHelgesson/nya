@@ -14,26 +14,25 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var showAdmin = false
     @State private var showConsignmentAdmin = false
+    @State private var showShipmondoTest = false
+    @State private var showSimulatePurchase = false
     @State private var showAnnouncement = false
     @State private var hasLoadedOnce = false
     @State private var showReferralView = false
     @StateObject private var stravaService = StravaService.shared
-    @ObservedObject private var languageManager = LanguageManager.shared
     @State private var showStravaDisconnectConfirmation = false
-    @State private var showNutritionOnboarding = false
-    @State private var showPersonalDetails = false
-    @State private var showSchoolPicker = false
-    
+    @State private var showSellerPickupAddressEditor = false
+    @State private var sellerPickupPrefill: ShippingAddress?
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     prenumerationSection
-                    dinSkolaSection
                     dittKontoSection
                     kopplingarSection
-                    sprakSection
-                    naringOchMalSection
+                    stripePayoutsSection
+                    sellerMarketplacePickupSection
                     kundtjanstSection
                     foljOssSection
                     adminSection
@@ -81,19 +80,36 @@ struct SettingsView: View {
             .sheet(isPresented: $showConsignmentAdmin) {
                 ConsignmentSubmissionsAdminView()
             }
+            .sheet(isPresented: $showShipmondoTest) {
+                TestSendifyLabelView()
+            }
+            .sheet(isPresented: $showSimulatePurchase) {
+                SimulatePurchaseAdminView()
+                    .environmentObject(authViewModel)
+            }
+            .sheet(isPresented: $showSellerPickupAddressEditor) {
+                NavigationStack {
+                    SellerPickupAddressForm(
+                        initialAddress: sellerPickupPrefill,
+                        onSave: { address in
+                            try await ShipmondoShippingService.shared.saveSellerPickupAddress(address)
+                            await MainActor.run {
+                                showSellerPickupAddressEditor = false
+                                sellerPickupPrefill = nil
+                            }
+                        },
+                        onCancel: {
+                            showSellerPickupAddressEditor = false
+                            sellerPickupPrefill = nil
+                        }
+                    )
+                }
+            }
             .sheet(isPresented: $showAnnouncement) {
                 AdminAnnouncementView()
             }
             .navigationDestination(isPresented: $showReferralView) {
                 ReferralView()
-                    .environmentObject(authViewModel)
-            }
-            .navigationDestination(isPresented: $showPersonalDetails) {
-                PersonalDetailsView()
-                    .environmentObject(authViewModel)
-            }
-            .sheet(isPresented: $showNutritionOnboarding) {
-                NutritionSettingsView()
                     .environmentObject(authViewModel)
             }
             .task {
@@ -193,59 +209,6 @@ struct SettingsView: View {
         }
     }
     
-    private var dinSkolaSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L.t(sv: "Din skola", nb: "Din skole"))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 4)
-            
-            Button(action: { showSchoolPicker = true }) {
-                HStack(spacing: 14) {
-                    Image(systemName: "graduationcap.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.primary)
-                        .frame(width: 24)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let user = authViewModel.currentUser,
-                           let schoolName = SchoolService.shared.schoolName(for: user) {
-                            Text(schoolName)
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                            Text(L.t(sv: "Tryck för att byta skola", nb: "Trykk for å bytte skole"))
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text(L.t(sv: "Ingen skola vald", nb: "Ingen skole valgt"))
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                            Text(L.t(sv: "Tryck för att välja skola", nb: "Trykk for å velge skole"))
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(.systemGray3))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-            }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-        }
-        .sheet(isPresented: $showSchoolPicker) {
-            SchoolVerificationView(isVerified: .constant(true)) {
-                showSchoolPicker = false
-            }
-            .environmentObject(authViewModel)
-        }
-    }
-    
     private var dittKontoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L.t(sv: "Ditt konto", nb: "Din konto"))
@@ -254,12 +217,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 4)
             
             VStack(spacing: 0) {
-                Button(action: { showPersonalDetails = true }) {
-                    NewSettingsRow(icon: "person.text.rectangle", title: L.t(sv: "Personliga detaljer", nb: "Personlige detaljer"))
-                }
-                
-                SettingsItemDivider()
-                
                 Button(action: openHealthSettings) {
                     NewSettingsRow(icon: "heart.fill", title: "Apple Health")
                 }
@@ -335,75 +292,44 @@ struct SettingsView: View {
         }
     }
     
-    private var sprakSection: some View {
+    private var stripePayoutsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L.t(sv: "Språk", nb: "Språk"))
+            Text(L.t(sv: "Utbetalningar (Stripe)", nb: "Utbetalinger (Stripe)"))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 4)
-            
+
+            SellerStripeOnboardingCard()
+                .environmentObject(authViewModel)
+        }
+    }
+
+    private var sellerMarketplacePickupSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.t(sv: "Marknadsannons", nb: "Markedsannonse"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 4)
+
             VStack(spacing: 0) {
-                ForEach(AppLanguage.allCases, id: \.self) { language in
-                    Button(action: {
-                        withAnimation(.smooth(duration: 0.3)) {
-                            languageManager.currentLanguage = language
-                        }
-                    }) {
-                        HStack(spacing: 14) {
-                            Text(language.flag)
-                                .font(.system(size: 22))
-                                .frame(width: 24)
-                            
-                            Text(language.displayName)
-                                .font(.system(size: 16))
-                                .foregroundColor(.primary)
-                            
-                            Spacer()
-                            
-                            if languageManager.currentLanguage == language {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.green)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
+                Button {
+                    Task {
+                        sellerPickupPrefill = try? await ShipmondoShippingService.shared
+                            .fetchSellerPickupAddress()
+                        showSellerPickupAddressEditor = true
                     }
-                    .buttonStyle(.plain)
-                    
-                    if language != AppLanguage.allCases.last {
-                        SettingsItemDivider()
-                    }
+                } label: {
+                    NewSettingsRow(
+                        icon: "mappin.and.ellipse",
+                        title: L.t(sv: "Upphämtningsadress för frakt", nb: "Henteadresse for frakt")
+                    )
                 }
             }
             .background(Color(.systemBackground))
             .cornerRadius(12)
         }
     }
-    
-    private var naringOchMalSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L.t(sv: "Näring & mål", nb: "Ernæring og mål"))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 4)
-            
-            VStack(spacing: 0) {
-                Button(action: { showNutritionOnboarding = true }) {
-                    NewSettingsRow(icon: "target", title: L.t(sv: "Uppdatera näringsinställningar", nb: "Oppdater ernæringsinnstillinger"))
-                }
-                
-                SettingsItemDivider()
-                
-                Button(action: { showPersonalDetails = true }) {
-                    NewSettingsRow(icon: "flag", title: L.t(sv: "Mål & nuvarande vikt", nb: "Mål og nåværende vekt"))
-                }
-            }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-        }
-    }
-    
+
     private var kundtjanstSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L.t(sv: "Kundtjänst & legalt", nb: "Kundeservice og juridisk"))
@@ -508,6 +434,24 @@ struct SettingsView: View {
                     
                     Button(action: { showConsignmentAdmin = true }) {
                         NewSettingsRow(icon: "shippingbox.circle", title: L.t(sv: "Admin (AI-sälj)", nb: "Admin (AI-salg)"))
+                    }
+                    
+                    SettingsItemDivider()
+                    
+                    Button(action: { showShipmondoTest = true }) {
+                        NewSettingsRow(icon: "doc.text.magnifyingglass", title: L.t(sv: "Testa Shipmondo-fraktsedel", nb: "Test Shipmondo-fraktseddel"))
+                    }
+                    
+                    SettingsItemDivider()
+
+                    Button(action: { showSimulatePurchase = true }) {
+                        NewSettingsRow(
+                            icon: "creditcard.trianglebadge.exclamationmark",
+                            title: L.t(
+                                sv: "Simulera köp efter betalning",
+                                nb: "Simuler kjøp etter betaling"
+                            )
+                        )
                     }
                     
                     SettingsItemDivider()

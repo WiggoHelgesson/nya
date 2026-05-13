@@ -1,0 +1,10 @@
+# Kopiera denna fil till sendify_test.local och fyll i nyckeln:
+#
+#   cp supabase/scripts/sendify_test.local.example supabase/scripts/sendify_test.local
+#
+# sendify_test.local är gitignored — lägg aldrig nyckeln i git.
+
+export SENDIFY_API_KEY="klistra-in-din-sendify-nyckel-här"
+
+# Valfritt — sandbox:
+# export SENDIFY_BASE_URL="https://app.dev.sendify.se/external/v1"

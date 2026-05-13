@@ -52,8 +52,6 @@
 	<string>Light</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-7998412098246140~7497058709</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Up&amp;Down använder detta för att visa relevanta annonser och hålla appen gratis.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>

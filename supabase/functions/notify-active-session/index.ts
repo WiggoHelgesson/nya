@@ -192,7 +192,8 @@ serve(async (req) => {
       activityText = "skidpass";
     }
 
-    const title = "Nytt träningspass";
+    // Alla notiser har "Up&Down" som rubrik.
+    const title = "Up&Down";
     const body = `${firstName} startade ${articleWord} ${activityText}`;
 
     // Send push notifications to all followers

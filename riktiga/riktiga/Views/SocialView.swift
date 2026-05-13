@@ -334,8 +334,7 @@ struct SocialView: View {
                                         uploadProgressCard
                                     }
 
-                                    Divider()
-                                        .background(Color(.systemGray5))
+                                    feedSeparator
 
                                     feedContent
                                 }
@@ -752,8 +751,7 @@ struct SocialView: View {
             }
             .padding(.horizontal, 16)
             
-            Divider()
-                .background(Color(.systemGray5))
+            feedSeparator
                 .padding(.top, 6)
             
             // Skeleton posts
@@ -821,8 +819,7 @@ struct SocialView: View {
                                 featuredPosts.removeAll { $0.id == postId }
                             }
                         )
-                        Divider()
-                            .background(Color(.systemGray5))
+                        feedSeparator
                     }
                 }
             }
@@ -1818,8 +1815,7 @@ struct SocialView: View {
                     )
                     .id(post.id)
                     
-                    Divider()
-                        .background(Color(.systemGray5))
+                    feedSeparator
                 }
                 .opacity(showPosts ? 1 : 0)
                 .animation(
@@ -1834,12 +1830,24 @@ struct SocialView: View {
                         loadMorePosts()
                     }
                 }
+
+                if index == 1 {
+                    Image("108")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .opacity(showPosts ? 1 : 0)
+                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
+                        .accessibilityHidden(true)
+                    feedSeparator
+                }
                 
                 // Google AdMob native ads: first ad after the 2nd post
                 // (index 1), then every 4th post after that
                 // (index 5, 9, 13, ...). Pro members never see ads.
                 #if canImport(GoogleMobileAds)
-                if !(authViewModel.currentUser?.isProMember ?? false),
+                if AdMobService.isAdsEnabled,
+                   !(authViewModel.currentUser?.isProMember ?? false),
                    let slot = adSlotIndex(forPostIndex: index) {
                     let hasSlot = adMobService.nativeAds.indices.contains(slot)
                     if hasSlot {
@@ -1853,8 +1861,7 @@ struct SocialView: View {
                             .onAppear {
                                 AdFeedDiagnostics.logFill(slot: slot, loadedCount: adMobService.nativeAds.count)
                             }
-                        Divider()
-                            .background(Color(.systemGray5))
+                        feedSeparator
                     } else {
                         Color.clear
                             .frame(width: 0, height: 0)
@@ -2255,6 +2262,19 @@ struct SocialView: View {
     }
 
     /// Promo row shown directly above every native ad, giving the user an
+    /// Edge-to-edge image separator used between feed posts and ads.
+    /// Small fixed height — the teal gradient image is stretched to fill
+    /// the full width and clipped to keep the strip thin.
+    @ViewBuilder
+    private var feedSeparator: some View {
+        Image("feedSeparator")
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity)
+            .frame(height: 3)
+            .clipped()
+    }
+
     /// obvious way to upgrade to Pro and stop seeing ads. Opens the
     /// Superwall paywall via the existing `showPaywall` state + onChange hook.
     @ViewBuilder
@@ -3564,14 +3584,11 @@ struct CommentsView: View {
             }
         }
         .onAppear {
-            // Track navigation depth to hide tab bar
-            NavigationDepthTracker.shared.setAtRoot(false)
-            
-            // Setup real-time listeners for comment likes and new/deleted comments
+            NavigationDepthTracker.shared.acquireHideTabBar()
             commentsViewModel.setupRealtimeListeners(currentUserId: authViewModel.currentUser?.id)
         }
         .onDisappear {
-            NavigationDepthTracker.shared.setAtRoot(true)
+            NavigationDepthTracker.shared.releaseHideTabBar()
         }
     }
     
@@ -5532,19 +5549,9 @@ struct GymExercisesListView: View {
     private func exerciseCard(exercise: GymExercisePost, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             // Exercise GIF/Image
-            if let exerciseId = exercise.id {
-                ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
-                    .frame(width: 80, height: 80)
-                    .cornerRadius(8)
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(.systemGray5))
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        Image(systemName: "dumbbell.fill")
-                            .foregroundColor(.gray)
-                    )
-            }
+            ExerciseGIFView(exerciseId: exercise.id ?? "", gifUrl: nil, exerciseName: exercise.name)
+                .frame(width: 80, height: 80)
+                .cornerRadius(8)
             
             // Exercise details
             VStack(alignment: .leading, spacing: 6) {
@@ -5800,11 +5807,16 @@ struct FullFrameAsyncImage: View {
             return
         }
 
-        // Try to load from URL
-        if let url = URL(string: path) {
+        let rewrittenPath = SupabaseConfig.rewriteURL(path)
+
+        // Truncated sign URLs (no ?token=): load public URL first, skip useless GET to sign endpoint.
+        if WorkoutImageURL.signURLMissingToken(path),
+           let pub = WorkoutImageURL.publicFallbackURL(from: path),
+           let pubURL = URL(string: pub) {
             do {
-                let (data, _) = try await SupabaseConfig.urlSession.data(from: url)
-                if let downloadedImage = UIImage(data: data) {
+                let (data, response) = try await SupabaseConfig.urlSession.data(from: pubURL)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if (200...299).contains(code), let downloadedImage = UIImage(data: data) {
                     ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
                     await MainActor.run {
                         withAnimation(.easeOut(duration: 0.2)) {
@@ -5815,16 +5827,56 @@ struct FullFrameAsyncImage: View {
                     return
                 }
             } catch {
+                print("❌ Failed to load public workout image: \(error)")
+            }
+        } else if let url = URL(string: rewrittenPath) {
+            // Try to load from URL (rewrite host for custom domain)
+            do {
+                let (data, response) = try await SupabaseConfig.urlSession.data(from: url)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if (200...299).contains(code), let downloadedImage = UIImage(data: data) {
+                    ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
+                    await MainActor.run {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            self.image = downloadedImage
+                            self.isLoading = false
+                        }
+                    }
+                    return
+                }
+                if let fallback = WorkoutImageURL.publicFallbackURL(from: path),
+                   let fURL = URL(string: fallback),
+                   fallback != rewrittenPath {
+                    let (data2, response2) = try await SupabaseConfig.urlSession.data(from: fURL)
+                    let code2 = (response2 as? HTTPURLResponse)?.statusCode ?? 0
+                    if (200...299).contains(code2), let downloadedImage = UIImage(data: data2) {
+                        ImageCacheManager.shared.setImage(downloadedImage, for: cacheKey)
+                        await MainActor.run {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                self.image = downloadedImage
+                                self.isLoading = false
+                            }
+                        }
+                        return
+                    }
+                }
+            } catch {
                 print("❌ Failed to load image: \(error)")
             }
         }
 
-        // Try Supabase storage
+        // Try Supabase storage (fresh signed URL)
         do {
-            let filename = path.contains("/") ? String(path.split(separator: "/").last ?? "") : path
+            let storagePath: String = {
+                if let k = WorkoutImageURL.objectKey(from: path) { return k }
+                let t = path.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.contains("/") && !t.lowercased().hasPrefix("http") { return t }
+                return ""
+            }()
+            guard !storagePath.isEmpty else { throw URLError(.badURL) }
             let signedURL = try await SupabaseConfig.supabase.storage
                 .from("workout-images")
-                .createSignedURL(path: filename, expiresIn: 3600)
+                .createSignedURL(path: storagePath, expiresIn: 3600)
 
             let (data, _) = try await SupabaseConfig.urlSession.data(from: signedURL)
             if let downloadedImage = UIImage(data: data) {

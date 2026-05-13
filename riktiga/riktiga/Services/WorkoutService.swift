@@ -113,24 +113,13 @@ class WorkoutService {
                 
                 print("✅ Image uploaded successfully to Supabase Storage: \(fileName)")
                 
-                // Try to get a signed URL (works for private buckets)
-                do {
-                    let signedURL = try await supabase.storage
-                        .from("workout-images")
-                        .createSignedURL(path: fileName, expiresIn: 31536000) // 1 year expiry
-                    
-                    print("✅ Image signed URL: \(signedURL)")
-                    return signedURL.absoluteString
-                } catch {
-                    print("⚠️ Could not create signed URL, using public URL: \(error)")
-                    // Fall back to public URL
-                    let publicURL = try supabase.storage
-                        .from("workout-images")
-                        .getPublicURL(path: fileName)
-                    
-                    print("✅ Image public URL: \(publicURL)")
-                    return publicURL.absoluteString
-                }
+                // Public bucket URL (stable in DB; no expiring token). Requires storage policy — see workout_images_bucket_public_read.sql.
+                let publicURL = try supabase.storage
+                    .from("workout-images")
+                    .getPublicURL(path: fileName)
+                let urlString = SupabaseConfig.rewriteURL(publicURL.absoluteString)
+                print("✅ Image public URL: \(urlString)")
+                return urlString
                 
             } catch {
                 print("❌ Upload failed or couldn't get URL: \(error)")
@@ -269,17 +258,10 @@ class WorkoutService {
                             .from("workout-images")
                             .upload(userImageFileName, data: imageData, options: FileOptions(upsert: true))
                         
-                        do {
-                            let signedURL = try await self.supabase.storage
-                                .from("workout-images")
-                                .createSignedURL(path: userImageFileName, expiresIn: 31536000)
-                            uploadedUserImageUrls[idx] = signedURL.absoluteString
-                        } catch {
-                            let publicURL = try self.supabase.storage
-                                .from("workout-images")
-                                .getPublicURL(path: userImageFileName)
-                            uploadedUserImageUrls[idx] = publicURL.absoluteString
-                        }
+                        let publicURL = try self.supabase.storage
+                            .from("workout-images")
+                            .getPublicURL(path: userImageFileName)
+                        uploadedUserImageUrls[idx] = SupabaseConfig.rewriteURL(publicURL.absoluteString)
                     } catch {
                         print("⚠️ User image \(idx) upload failed: \(error)")
                     }
@@ -505,31 +487,27 @@ class WorkoutService {
         }
         
         // Delete images from storage if they exist
-        if let imageUrl = post.imageUrl, !imageUrl.isEmpty {
-            // Extract filename from URL
-            if let filename = imageUrl.components(separatedBy: "/").last {
-                do {
-                    try await supabase.storage
-                        .from("workout-images")
-                        .remove(paths: [filename])
-                    print("✅ Deleted route image: \(filename)")
-                } catch {
-                    print("⚠️ Could not delete route image: \(error)")
-                }
+        if let imageUrl = post.imageUrl, !imageUrl.isEmpty,
+           let filename = WorkoutImageURL.objectKey(from: imageUrl) {
+            do {
+                try await supabase.storage
+                    .from("workout-images")
+                    .remove(paths: [filename])
+                print("✅ Deleted route image: \(filename)")
+            } catch {
+                print("⚠️ Could not delete route image: \(error)")
             }
         }
         
-        if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty {
-            // Extract filename from URL
-            if let filename = userImageUrl.components(separatedBy: "/").last {
-                do {
-                    try await supabase.storage
-                        .from("workout-images")
-                        .remove(paths: [filename])
-                    print("✅ Deleted user image: \(filename)")
-                } catch {
-                    print("⚠️ Could not delete user image: \(error)")
-                }
+        if let userImageUrl = post.userImageUrl, !userImageUrl.isEmpty,
+           let filename = WorkoutImageURL.objectKey(from: userImageUrl) {
+            do {
+                try await supabase.storage
+                    .from("workout-images")
+                    .remove(paths: [filename])
+                print("✅ Deleted user image: \(filename)")
+            } catch {
+                print("⚠️ Could not delete user image: \(error)")
             }
         }
         

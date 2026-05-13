@@ -9,19 +9,52 @@ import Supabase
 class NavigationDepthTracker: ObservableObject {
     static let shared = NavigationDepthTracker()
     @Published var isAtRootView = true
-    @Published var hideTabBar = false
+
+    /// Räknar hur många pushade vyer som vill dölja tab baren just nu.
+    /// `hideTabBar` är derived från detta så att flera nästbara vyer kan
+    /// hålla baren dold även om source-vyns `onDisappear` råkar köras
+    /// efter destination-vyns `onAppear` (SwiftUI kör onDisappear async).
+    @Published private var hideTabBarRequests: Int = 0
+
+    /// Computed wrapper för bakåtkompat med befintliga views som skriver
+    /// `hideTabBar = true/false` direkt (NotificationsView, StatisticsView,
+    /// MessagesListView, FindFriendsView, MessagesContainerView). Nya views
+    /// ska använda `acquireHideTabBar()` / `releaseHideTabBar()`.
+    var hideTabBar: Bool {
+        get { hideTabBarRequests > 0 }
+        set {
+            if newValue && hideTabBarRequests == 0 {
+                hideTabBarRequests = 1
+            } else if !newValue {
+                hideTabBarRequests = 0
+            }
+        }
+    }
+
+    /// Räkna in en vy som vill dölja tab baren. Måste paras med
+    /// `releaseHideTabBar()` i samma vys `onDisappear`.
+    func acquireHideTabBar() {
+        hideTabBarRequests += 1
+    }
+
+    /// Släpper en tidigare `acquireHideTabBar()`. Tab baren visas igen
+    /// först när alla acquires släppts.
+    func releaseHideTabBar() {
+        hideTabBarRequests = max(0, hideTabBarRequests - 1)
+    }
+
     private var navigationDepth = 0
-    
+
     func pushView() {
         navigationDepth += 1
         isAtRootView = false
     }
-    
+
     func popView() {
         navigationDepth = max(0, navigationDepth - 1)
         isAtRootView = navigationDepth == 0
     }
-    
+
     func setAtRoot(_ atRoot: Bool) {
         if atRoot {
             popView()
@@ -29,10 +62,11 @@ class NavigationDepthTracker: ObservableObject {
             pushView()
         }
     }
-    
+
     func resetToRoot() {
         navigationDepth = 0
         isAtRootView = true
+        hideTabBarRequests = 0
     }
 }
 
@@ -89,38 +123,48 @@ struct MainTabView: View {
     @State private var popToRootTrigger: [Int: Int] = [0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0]
     @State private var showTrackingTypePicker = false
     @State private var showQuickTracking = false
+    @State private var showSellFlow = false
     
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .heavy)
     
-    // Tab items data - dynamiskt baserat på om användaren har coach
+    // Tab items data - dynamiskt baserat på om användaren har coach.
+    // Marketplace-specifika flikar ("Skapa annons", "Meddelanden") är dolda tills marketplace lanseras.
     private var tabItems: [(icon: String, title: String, selectedIcon: String)] {
+        // `"strava_record"` triggar specialgrenen i `CustomTabBarItem` som ritar
+        // en yttre stroked cirkel + en mindre filled cirkel inuti — "cirkel
+        // med yttre ring"-utseendet som center-tabben "Starta pass" ska ha.
+        let startPassIcon = "strava_record"
         if hasActiveCoach {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
                 ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
-                ("bag", L.t(sv: "Produkter", nb: "Produkter"), "bag.fill"),
-                ("record.circle", L.t(sv: "Tracka", nb: "Track"), "record.circle.fill"),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill"),
+                ("bag", L.t(sv: "Sälj", nb: "Selg"), "bag.fill"),
+                (startPassIcon, L.t(sv: "Starta pass", nb: "Start økt"), startPassIcon),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         } else {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("bag", L.t(sv: "Produkter", nb: "Produkter"), "bag.fill"),
-                ("record.circle", L.t(sv: "Tracka", nb: "Track"), "record.circle.fill"),
-                ("gift", L.t(sv: "Belöningar", nb: "Belønningar"), "gift.fill"),
+                ("bag", L.t(sv: "Sälj", nb: "Selg"), "bag.fill"),
+                (startPassIcon, L.t(sv: "Starta pass", nb: "Start økt"), startPassIcon),
+                ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
             ]
         }
     }
-    
+
     // Tab index mapping
+    private var coachTabIndex: Int { 1 }
     private var marketTabIndex: Int { hasActiveCoach ? 2 : 1 }
-    private var trackaTabIndex: Int { hasActiveCoach ? 3 : 2 }
+    private var startPassTabIndex: Int { hasActiveCoach ? 3 : 2 }
+    /// Behållen som synonym för bakåtkompatibilitet med tidigare kod som triggade `showSellFlow`.
+    private var createListingTabIndex: Int { startPassTabIndex }
     private var rewardsTabIndex: Int { hasActiveCoach ? 4 : 3 }
     private var profileTabIndex: Int { hasActiveCoach ? 5 : 4 }
-    private var coachTabIndex: Int { 1 }
-    
+    /// Meddelandefliken är dold; -1 gör befintliga `selectedTab = messagesTabIndex`-anrop till no-op.
+    private var messagesTabIndex: Int { -1 }
+
     var body: some View {
         mainContent
             .modifier(FullScreenCoversModifier(
@@ -145,7 +189,7 @@ struct MainTabView: View {
                 hideFloatingButton: $hideFloatingButton,
                 hasActiveCoach: hasActiveCoach,
                 marketTabIndex: marketTabIndex,
-                rewardsTabIndex: rewardsTabIndex,
+                messagesTabIndex: messagesTabIndex,
                 profileTabIndex: profileTabIndex,
                 coachTabIndex: coachTabIndex
             ))
@@ -157,11 +201,12 @@ struct MainTabView: View {
                 showResumeSession: $showResumeSession,
                 showProWelcome: $showProWelcome,
                 previousTab: $previousTab,
+                showSellFlow: $showSellFlow,
                 showTrackingTypePicker: $showTrackingTypePicker,
                 hasActiveCoach: hasActiveCoach,
                 notificationNav: notificationNav,
                 coachTabIndex: coachTabIndex,
-                trackaTabIndex: trackaTabIndex
+                createListingTabIndex: createListingTabIndex
             ))
             .sheet(isPresented: $authViewModel.showUsernameRequiredPopup) {
                 UsernameRequiredView().environmentObject(authViewModel)
@@ -217,6 +262,10 @@ struct MainTabView: View {
             }
             .fullScreenCover(isPresented: $showQuickTracking) {
                 QuickTrackingFlowView()
+                    .environmentObject(authViewModel)
+            }
+            .fullScreenCover(isPresented: $showSellFlow) {
+                SellFlowView(onAbandonFlow: { showSellFlow = false })
                     .environmentObject(authViewModel)
             }
             .onAppear {
@@ -653,17 +702,27 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(selectedTab == marketTabIndex ? 1 : 0)
                     .allowsHitTesting(selectedTab == marketTabIndex && !showAddMealSheet)
-                
+
+                // MARKET HIDDEN: Meddelandefliken är dold tills marketplace lanseras.
+                // Vyn behålls i kodbasen och kan återaktiveras genom att rendera den och
+                // återställa `messagesTabIndex` till sitt riktiga värde.
+                #if false
+                MessagesContainerView(popToRootTrigger: popToRootTrigger[messagesTabIndex] ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(selectedTab == messagesTabIndex ? 1 : 0)
+                    .allowsHitTesting(selectedTab == messagesTabIndex && !showAddMealSheet)
+                #endif
+
                 RewardsContainerView(popToRootTrigger: popToRootTrigger[rewardsTabIndex] ?? 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(selectedTab == rewardsTabIndex ? 1 : 0)
                     .allowsHitTesting(selectedTab == rewardsTabIndex && !showAddMealSheet)
-                
+
                 ProfileContainerView(popToRootTrigger: popToRootTrigger[profileTabIndex] ?? 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(selectedTab == profileTabIndex ? 1 : 0)
                     .allowsHitTesting(selectedTab == profileTabIndex && !showAddMealSheet)
-                
+
                 // Floating active session banner
                 if sessionManager.hasActiveSession && !showStartSession && !showResumeSession {
                     VStack {
@@ -673,6 +732,9 @@ struct MainTabView: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+
+                // Den flytande gym-knappen är borttagen — center-tabben "Starta pass" tar över rollen.
+
             }
             
             if !navigationTracker.hideTabBar {
@@ -683,6 +745,13 @@ struct MainTabView: View {
         .animation(.easeInOut(duration: 0.15), value: selectedTab)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sessionManager.hasActiveSession)
         .animation(.easeInOut(duration: 0.25), value: navigationTracker.hideTabBar)
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == marketTabIndex {
+                Task {
+                    await CommunityListingsCache.shared.refresh(force: false)
+                }
+            }
+        }
     }
     
     // MARK: - Tab Bar Background
@@ -718,14 +787,14 @@ struct MainTabView: View {
             .frame(width: 56, height: 56)
             .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 4)
     }
-    
+
     // MARK: - Custom Tab Bar
     private var customTabBar: some View {
         VStack(spacing: 0) {
             // Top border line
             Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 0.5)
+                .fill(Color.black)
+                .frame(height: 1)
             
             // Tab bar content
             HStack(spacing: 0) {
@@ -961,7 +1030,7 @@ private struct NavigationReceiversModifier: ViewModifier {
     @Binding var hideFloatingButton: Bool
     let hasActiveCoach: Bool
     let marketTabIndex: Int
-    let rewardsTabIndex: Int
+    let messagesTabIndex: Int
     let profileTabIndex: Int
     let coachTabIndex: Int
     
@@ -1004,15 +1073,22 @@ private struct NavigationReceiversModifier: ViewModifier {
                 showStartSession = false
                 showResumeSession = false
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToMarket"))) { _ in
-                selectedTab = marketTabIndex
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
+                selectedTab = profileTabIndex
+                showStartSession = false
+                showResumeSession = false
+                NotificationCenter.default.post(name: NSNotification.Name("OpenBrandRewards"), object: nil)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToMyListings"))) { _ in
+                selectedTab = profileTabIndex
                 showStartSession = false
                 showResumeSession = false
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToRewards"))) { _ in
-                selectedTab = rewardsTabIndex
-                showStartSession = false
-                showResumeSession = false
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToMessages"))) { _ in
+                // MARKET HIDDEN: meddelandefliken är gömd tills marketplace lanseras.
+                // Push-notiser som tidigare öppnade fliken blir no-op men kraschar inte.
+                /* hidden for now */
+                _ = messagesTabIndex
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToKalorier"))) { _ in
                 selectedTab = 0
@@ -1062,11 +1138,12 @@ private struct StateObserversModifier: ViewModifier {
     @Binding var showResumeSession: Bool
     @Binding var showProWelcome: Bool
     @Binding var previousTab: Int
+    @Binding var showSellFlow: Bool
     @Binding var showTrackingTypePicker: Bool
     let hasActiveCoach: Bool
     let notificationNav: NotificationNavigationManager
     let coachTabIndex: Int
-    let trackaTabIndex: Int
+    let createListingTabIndex: Int
     
     func body(content: Content) -> some View {
         content
@@ -1119,7 +1196,9 @@ private struct StateObserversModifier: ViewModifier {
                 }
             }
             .onChange(of: selectedTab) { oldTab, newTab in
-                if newTab == trackaTabIndex {
+                // Center-tabben "Starta pass" är ett action, inte en riktig flik:
+                // återställ valet och öppna träningsväljaren istället.
+                if newTab == createListingTabIndex {
                     Task { @MainActor in
                         selectedTab = oldTab
                     }
@@ -1132,6 +1211,7 @@ private struct StateObserversModifier: ViewModifier {
                     tabHaptic.impactOccurred(intensity: 0.7)
                 }
                 NavigationDepthTracker.shared.resetToRoot()
+                NotificationCenter.default.post(name: NSNotification.Name("ShowFloatingButton"), object: nil)
                 previousTab = oldTab
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
@@ -1163,8 +1243,12 @@ private struct CustomTabBarItem: View {
     
     private let selectionHaptic = UIImpactFeedbackGenerator(style: .medium)
     
-    private var unselectedColor: Color {
-        Color(red: 0.15, green: 0.15, blue: 0.15)
+    private var unselectedColor: Color { .black }
+
+    private let selectedColor = Color.black
+
+    private var itemStyle: AnyShapeStyle {
+        isSelected ? AnyShapeStyle(selectedColor) : AnyShapeStyle(unselectedColor)
     }
 
     var body: some View {
@@ -1174,21 +1258,31 @@ private struct CustomTabBarItem: View {
             action()
         } label: {
             VStack(spacing: 4) {
-                if useTextIcon {
+                if icon == "strava_record" {
+                    ZStack {
+                        Circle()
+                            .stroke(itemStyle, lineWidth: isSelected ? 2 : 1.5)
+                            .frame(width: 24, height: 24)
+                        Circle()
+                            .fill(itemStyle)
+                            .frame(width: isSelected ? 14 : 12, height: isSelected ? 14 : 12)
+                    }
+                    .frame(height: 26)
+                } else if useTextIcon {
                     Text(icon)
                         .font(.system(size: 16, weight: isSelected ? .black : .bold))
-                        .foregroundColor(isSelected ? .black : unselectedColor)
+                        .foregroundStyle(itemStyle)
                         .frame(height: 26)
                 } else {
                     Image(systemName: isSelected ? selectedIcon : icon)
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(isSelected ? .black : unselectedColor)
+                        .foregroundStyle(itemStyle)
                         .frame(height: 26)
                 }
                 
                 Text(title)
                     .font(.system(size: 10, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? .black : unselectedColor)
+                    .foregroundStyle(itemStyle)
             }
             .frame(maxWidth: .infinity)
         }
@@ -1262,10 +1356,14 @@ private struct TrackingChoiceSheet: View {
             Spacer().frame(height: 8)
 
             HStack(spacing: 16) {
+                // GymTypeSheet (snabbtrack vs vanligt) hoppas över — Gympass
+                // går direkt in i vanligt gympass via onGym. State och sheet
+                // för snabbtrack ligger kvar längre ner i strukten så det är
+                // trivialt att slå på igen om det behövs.
                 choiceButton(
                     icon: "dumbbell.fill",
                     title: L.t(sv: "Gympass", nb: "Treningsøkt"),
-                    action: { showGymOptions = true }
+                    action: onGym
                 )
 
                 choiceButton(

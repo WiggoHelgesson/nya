@@ -850,8 +850,8 @@ private struct CreateRoutineExerciseRow: View {
     
     @ViewBuilder
     private var exerciseImage: some View {
-        if let exerciseId = exercise.id {
-            ExerciseGIFView(exerciseId: exerciseId, gifUrl: nil)
+        if exercise.id != nil || !exercise.name.isEmpty {
+            ExerciseGIFView(exerciseId: exercise.id ?? "", gifUrl: nil, exerciseName: exercise.name)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         } else {

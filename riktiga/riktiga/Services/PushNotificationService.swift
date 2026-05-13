@@ -896,10 +896,24 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             case "coach_schedule_updated":
                 // Navigate to coach tab to see updated schedule
                 NotificationNavigationManager.shared.navigateToCoachTab()
+            case "marketplace_direct_message":
+                NotificationCenter.default.post(name: NSNotification.Name("NavigateToMessages"), object: nil)
             case "direct_message", "gym_invite":
                 // Navigate to the specific DM conversation
                 if let conversationId = userInfo["conversation_id"] as? String {
                     NotificationNavigationManager.shared.navigateToDirectMessage(conversationId: conversationId)
+                }
+            case "marketplace_sale", "marketplace_purchase":
+                if let listingId = userInfo["listing_id"] as? String, !listingId.isEmpty,
+                   let otherUserId = userInfo["actor_id"] as? String, !otherUserId.isEmpty {
+                    NotificationCenter.default.post(name: NSNotification.Name("NavigateToMessages"), object: nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("PushOpenMarketplaceListingDM"),
+                            object: nil,
+                            userInfo: ["listing_id": listingId, "other_user_id": otherUserId]
+                        )
+                    }
                 }
             case "monthly_report":
                 NotificationNavigationManager.shared.navigateToMonthlyReport()

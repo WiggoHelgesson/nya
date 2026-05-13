@@ -27,7 +27,7 @@ class PointsDiscountService {
     static let tiers: [DiscountTier] = [
         DiscountTier(xpCost: 200, freePercent: 5, proPercent: 10),
         DiscountTier(xpCost: 500, freePercent: 10, proPercent: 20),
-        DiscountTier(xpCost: 1000, freePercent: 25, proPercent: 40),
+        DiscountTier(xpCost: 1000, freePercent: 20, proPercent: 40),
     ]
 
     private let supabase = SupabaseConfig.supabase

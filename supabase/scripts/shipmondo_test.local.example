@@ -1,0 +1,11 @@
+# Kopiera till shipmondo_test.local (gitignored) och fyll i:
+#   cp supabase/scripts/shipmondo_test.local.example supabase/scripts/shipmondo_test.local
+
+export SHIPMONDO_API_USER="ditt-api-user-id"
+export SHIPMONDO_API_KEY="ditt-api-nyckel"
+
+# false om ni bokar via Shipmondo utan eget bäraravtal (många standardprodukter).
+# export SHIPMONDO_OWN_AGREEMENT=false
+
+# Valfritt — annan miljö (prod använder https://app.shipmondo.com/api/public/v3 som standard i koden):
+# export SHIPMONDO_BASE_URL="https://sandbox.shipmondo.com/api/public/v3"

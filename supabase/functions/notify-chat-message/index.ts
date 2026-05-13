@@ -223,8 +223,9 @@ serve(async (req) => {
     const truncatedMessage = message.length > 100 ? message.substring(0, 100) + '...' : message
 
     // 6. Send push notifications to all devices
-    const title = `${senderName}`
-    const body = truncatedMessage
+    // Alla notiser har "Up&Down" som rubrik — sändarens namn flyttas till body.
+    const title = 'Up&Down'
+    const body = `${senderName}: ${truncatedMessage}`
 
     const data: Record<string, string> = {
       type: 'trainer_chat_message',

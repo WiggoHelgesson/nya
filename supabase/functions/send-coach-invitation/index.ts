@@ -191,7 +191,8 @@ serve(async (req) => {
     }
 
     // 3. Send push notifications to all devices
-    const title = 'Coach-inbjudan'
+    // Alla notiser har "Up&Down" som rubrik.
+    const title = 'Up&Down'
     const body = `${coach_name} vill coacha dig! Tryck för att svara.`
     
     const data: Record<string, string> = {

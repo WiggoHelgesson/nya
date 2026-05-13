@@ -1131,7 +1131,7 @@ struct ExerciseCard: View {
             // Exercise header
             HStack(spacing: 12) {
                 // Exercise GIF
-                ExerciseGIFView(exerciseId: exercise.id, gifUrl: nil)
+                ExerciseGIFView(exerciseId: exercise.id, gifUrl: nil, exerciseName: exercise.name)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(exercise.name)
@@ -2407,7 +2407,7 @@ struct ExerciseGridCard: View {
                 // Image area with bookmark and info buttons
                 ZStack(alignment: .topLeading) {
                     // Exercise image
-                    ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl, width: nil, height: 180)
+                    ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl, exerciseName: exercise.name, width: nil, height: 180)
                         .frame(maxWidth: .infinity)
                         .background(Color.white)
                         .clipped()
@@ -2488,7 +2488,7 @@ struct ExerciseListRow: View {
         Button(action: onSelect) {
             HStack(spacing: 14) {
                 // Exercise GIF
-                ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl, width: 70, height: 70)
+                ExerciseGIFView(exerciseId: exercise.id, gifUrl: exercise.gifUrl, exerciseName: exercise.name, width: 70, height: 70)
                     .frame(width: 70, height: 70)
                     .background(Color.white)
                     .cornerRadius(8)

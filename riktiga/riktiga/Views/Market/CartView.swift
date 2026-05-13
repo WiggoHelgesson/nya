@@ -139,8 +139,10 @@ struct CartView: View {
                 withAnimation { showDiscountSection.toggle() }
             } label: {
                 HStack {
-                    Image(systemName: "tag")
-                        .font(.system(size: 14))
+                    Image("101")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
                     Text(L.t(sv: "Använd poäng för rabatt", nb: "Bruk poeng for rabatt"))
                         .font(.system(size: 14, weight: .medium))
                     Spacer()

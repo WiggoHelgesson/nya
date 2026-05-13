@@ -130,11 +130,25 @@ struct MarketContainerView: View {
                 .padding(.horizontal, 16)
 
                 VStack(spacing: 0) {
-                    comingSoonRow(
-                        icon: "star",
-                        title: L.t(sv: "Använd dina poäng för rabatter", nb: "Bruk poengene dine for rabatter"),
-                        subtitle: L.t(sv: "På riktiga produkter", nb: "På ekte produkter")
-                    )
+                    HStack(spacing: 14) {
+                        Image("101")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 24, height: 24)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L.t(sv: "Använd dina poäng för rabatter", nb: "Bruk poengene dine for rabatter"))
+                                .font(.system(size: 15, weight: .semibold))
+                            Text(L.t(sv: "På riktiga produkter", nb: "På ekte produkter"))
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                     Divider().padding(.leading, 56)
                     comingSoonRow(
                         icon: "hands.clap",

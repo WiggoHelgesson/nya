@@ -127,6 +127,10 @@ struct ProductDetailView: View {
             if selectedVariant == nil {
                 selectedVariant = product.firstAvailableVariant ?? variants.first
             }
+            NavigationDepthTracker.shared.acquireHideTabBar()
+        }
+        .onDisappear {
+            NavigationDepthTracker.shared.releaseHideTabBar()
         }
     }
 
@@ -280,9 +284,15 @@ struct ProductDetailView: View {
 
                 Spacer()
 
-                Text("\(currentXP) XP")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                HStack(spacing: 6) {
+                    Image("101")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                    Text("\(currentXP) XP")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -674,12 +684,6 @@ struct ProductDetailView: View {
 
     @State private var sellBagExpanded: Bool = false
 
-    // Sell bag earnings estimator
-    private let estimatorMinCount = 1
-    private let estimatorMaxCount = 15
-    private let estimatorPricePerGarment = 300
-    @State private var estimatorGarmentCount: Double = 3
-
     private var sellBagAcceptanceSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             DisclosureGroup(isExpanded: $sellBagExpanded) {
@@ -781,71 +785,10 @@ struct ProductDetailView: View {
         }
     }
 
-    // MARK: - Sell Bag Earnings Estimator
-
-    private var estimatedEarnings: Int {
-        Int(estimatorGarmentCount) * estimatorPricePerGarment
-    }
+    // MARK: - Sell Bag Payout Calculator
 
     private var sellBagEstimatorSection: some View {
-        let count = Int(estimatorGarmentCount)
-        return VStack(alignment: .leading, spacing: 14) {
-            Text(L.t(sv: "Hur mycket kan du tjäna?", nb: "Hvor mye kan du tjene?"))
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.primary)
-
-            Text(L.t(
-                sv: "Dra för att välja hur många plagg du lägger i påsen",
-                nb: "Dra for å velge hvor mange plagg du legger i posen"
-            ))
-            .font(.system(size: 13))
-            .foregroundColor(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(estimatedEarnings) kr")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: estimatedEarnings)
-
-                Text(L.t(
-                    sv: "≈ baserat på \(count) \(count == 1 ? "plagg" : "plagg") × \(estimatorPricePerGarment) kr",
-                    nb: "≈ basert på \(count) plagg × \(estimatorPricePerGarment) kr"
-                ))
-                .font(.system(size: 13))
-                .foregroundColor(.secondary)
-            }
-
-            Slider(
-                value: $estimatorGarmentCount,
-                in: Double(estimatorMinCount)...Double(estimatorMaxCount),
-                step: 1
-            )
-            .tint(.primary)
-
-            HStack {
-                Text("\(estimatorMinCount)")
-                Spacer()
-                Text("\(estimatorMaxCount)")
-            }
-            .font(.system(size: 13))
-            .foregroundColor(.secondary)
-
-            Text(L.t(
-                sv: "Uppskattning. Slutpris beror på skick, märke och efterfrågan.",
-                nb: "Estimat. Sluttpris avhenger av tilstand, merke og etterspørsel."
-            ))
-            .font(.system(size: 11))
-            .foregroundColor(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        SellBagPayoutCalculator()
     }
 
     // MARK: - Description

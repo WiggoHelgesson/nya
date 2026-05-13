@@ -40,10 +40,8 @@ struct SocialContainerView: View {
                 // MARK: - Header (samma som Rewards)
                 VStack(spacing: 0) {
                     ZStack {
-                        // Center: Page title
-                        Text(L.t(sv: "Socialt", nb: "Sosialt"))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.primary)
+                        // Center: Points badge
+                        PointsBadge(points: authViewModel.currentUser?.currentXP ?? 0)
                         
                         // Left and Right sides
                         HStack {
@@ -70,32 +68,8 @@ struct SocialContainerView: View {
                             
                             Spacer()
                             
-                            // Right: Messages + Notifications
+                            // Right: Notifications
                             HStack(spacing: 12) {
-                                // Direct messages
-                                NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(systemName: "bubble.left.and.bubble.right")
-                                            .font(.system(size: 20, weight: .regular))
-                                            .foregroundColor(.primary)
-                                        
-                                        if unreadMessages > 0 {
-                                            Circle()
-                                                .fill(Color.black)
-                                                .frame(width: 18, height: 18)
-                                                .overlay(
-                                                    Text("\(min(unreadMessages, 99))")
-                                                        .font(.system(size: 10, weight: .bold))
-                                                        .foregroundColor(.white)
-                                                )
-                                                .offset(x: 8, y: -6)
-                                        }
-                                    }
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                
                                 // Notification bell
                                 NavigationLink(destination: NotificationsView(onDismiss: {
                                     Task { await refreshUnreadCount() }

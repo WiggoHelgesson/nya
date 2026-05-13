@@ -10,6 +10,8 @@ import StripePaymentSheet
 import InsertAffiliateSwift
 import RevenueCat
 import GoogleSignIn
+import UIKit
+import UserNotifications
 
 @main
 struct UpAndDownApp: App {
@@ -223,7 +225,19 @@ struct UpAndDownApp: App {
                 .environmentObject(authViewModel)
                 .tint(.black)
                 .onAppear {
-                    PushNotificationService.shared.requestPermissionAndRegister()
+                    // Vi auto-promptar INTE notiser här längre; iOS-dialogen
+                    // visas i kontextuella soft-prompts (köp/försäljning/
+                    // första öppning av Mina köp). Däremot registrerar vi
+                    // för remote APNs om användaren redan har godkänt
+                    // notiser tidigare, så vi får upp device tokens igen.
+                    UNUserNotificationCenter.current().getNotificationSettings { settings in
+                        if settings.authorizationStatus == .authorized
+                            || settings.authorizationStatus == .provisional {
+                            DispatchQueue.main.async {
+                                UIApplication.shared.registerForRemoteNotifications()
+                            }
+                        }
+                    }
                     NotificationManager.shared.cancelMealReminders()
                     NotificationManager.shared.scheduleMonthlyReportNotifications(avatarUrl: authViewModel.currentUser?.avatarUrl)
                     WidgetSyncService.shared.syncStreakData()

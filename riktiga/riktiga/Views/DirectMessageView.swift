@@ -124,9 +124,13 @@ struct DirectMessageView: View {
     let otherAvatarUrl: String?
     var isGroup: Bool = false
     var memberCount: Int = 2
+    /// Optional listing this conversation belongs to. When set, the chat header
+    /// shows a tappable card with the listing image/title/price (Bild 2).
+    var listingId: UUID? = nil
     
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.marketplaceHeroNamespace) private var heroNS
     @StateObject private var dmService = DirectMessageService.shared
     
     @State private var messageText = ""
@@ -142,16 +146,21 @@ struct DirectMessageView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var photoPickerPresented = false
     @State private var isSendingImage = false
-    @State private var showUserProfile = false
     @State private var profileUserIdToShow: String? = nil
     @State private var chatAppeared = true
     @State private var activeReactionMessageId: UUID? = nil
+    @State private var listing: ConsignmentSubmissionRow? = nil
+    /// Order som kräver frakt — endast säljare, innan `shipped_at`.
+    @State private var sellerShippingBannerOrder: MarketplaceOrderRow?
+    @State private var showSellerQRSheet = false
     @FocusState private var isInputFocused: Bool
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             chatHeader
+
+            sellerShippingStickyBanner
             
             // Messages
             if isLoading {
@@ -208,40 +217,9 @@ struct DirectMessageView: View {
             )
             .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $showUserProfile) {
-            if !otherUserId.isEmpty {
-                NavigationStack {
-                    UserProfileView(userId: otherUserId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    showUserProfile = false
-                                }
-                                .foregroundColor(.primary)
-                            }
-                        }
-                }
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { profileUserIdToShow != nil },
-            set: { if !$0 { profileUserIdToShow = nil } }
-        )) {
-            if let userId = profileUserIdToShow {
-                NavigationStack {
-                    UserProfileView(userId: userId)
-                        .environmentObject(authViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button(L.t(sv: "Stäng", nb: "Lukk")) {
-                                    profileUserIdToShow = nil
-                                }
-                                .foregroundColor(.primary)
-                            }
-                        }
-                }
-            }
+        .navigationDestination(item: $profileUserIdToShow) { userId in
+            UserProfileView(userId: userId)
+                .environmentObject(authViewModel)
         }
         .sheet(isPresented: $showGymInviteSheet) {
             GymInviteProposalSheet(conversationId: conversationId, otherUsername: otherUsername)
@@ -253,11 +231,20 @@ struct DirectMessageView: View {
             GifPickerView(conversationId: conversationId)
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showSellerQRSheet) {
+            if let o = sellerShippingBannerOrder,
+               let raw = qrPayloadForSellerBanner(o) {
+                SellerQRSheet(
+                    qrPayload: raw,
+                    carrier: o.shippingCarrier,
+                    trackingNumber: o.shippingTrackingNumber
+                )
+            }
+        }
+        .marketplaceDestinations()
         .photosPicker(isPresented: $photoPickerPresented, selection: $selectedPhotoItem, matching: .images)
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            guard let item = newItem else { return }
-            handleSelectedPhoto(item)
-            selectedPhotoItem = nil
+        .onChange(of: dmService.messages.count) { _, _ in
+            Task { await refreshSellerShippingBannerState() }
         }
     }
     
@@ -265,59 +252,145 @@ struct DirectMessageView: View {
     
     private var chatHeader: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                // Back button
+            // Top bar: back button (left) + settings (right)
+            HStack {
                 Button {
                     dismiss()
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .bold))
-                        if dmService.totalUnreadCount > 0 {
-                            Text("\(dmService.totalUnreadCount)")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                    }
-                    .foregroundColor(.primary)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle().fill(Color(.systemGray6))
+                        )
                 }
-                
+
                 Spacer()
-                
-                // Center: Avatar + Name (tappable)
+
                 Button {
-                    if !isGroup && !otherUserId.isEmpty {
-                        showUserProfile = true
-                    }
+                    showSettings = true
                 } label: {
-                    VStack(spacing: 3) {
-                        ProfileImage(url: otherAvatarUrl, size: 36)
-                        
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle().fill(Color(.systemGray6))
+                        )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 8)
+
+            // Seller section (Bild 2): avatar + name, tappable to open profile
+            if !isGroup && !otherUserId.isEmpty {
+                Button {
+                    profileUserIdToShow = otherUserId
+                } label: {
+                    VStack(spacing: 8) {
+                        ProfileImage(url: otherAvatarUrl, size: 84)
+
                         Text(otherUsername)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.primary)
                             .lineLimit(1)
                     }
                 }
                 .buttonStyle(.plain)
-                
-                Spacer()
-                
-                // Right: Settings
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 22, weight: .medium))
+                .padding(.bottom, 12)
+            } else {
+                VStack(spacing: 8) {
+                    ProfileImage(url: otherAvatarUrl, size: 84)
+
+                    Text(otherUsername)
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.primary)
+                        .lineLimit(1)
                 }
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            
+
+            // Listing card
+            if let listing = listing {
+                NavigationLink(value: MarketplaceRoute.listing(listing)) {
+                    listingCard(for: listing)
+                }
+                .buttonStyle(PressableCardButtonStyle())
+                .modifier(MarketplaceHeroSourceModifier(id: listing.id, namespace: heroNS))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
             Divider()
                 .opacity(0.4)
         }
         .background(Color(.systemBackground))
+    }
+
+    @ViewBuilder
+    private var sellerShippingStickyBanner: some View {
+        if let shipOrder = sellerShippingBannerOrder {
+            SellerShippingBanner(
+                order: shipOrder,
+                onShowQR: { showSellerQRSheet = true }
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func qrPayloadForSellerBanner(_ order: MarketplaceOrderRow) -> String? {
+        order.effectiveQrPayloadForAgent
+    }
+
+    // MARK: - Listing card (shown at top of marketplace chats)
+
+    @ViewBuilder
+    private func listingCard(for listing: ConsignmentSubmissionRow) -> some View {
+        HStack(spacing: 14) {
+            if let first = listing.imageUrls.first {
+                CachedRemoteImage(url: first) {
+                    Rectangle().fill(Color(.systemGray6))
+                }
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.systemGray6))
+                    .frame(width: 64, height: 64)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(listing.title ?? L.t(sv: "Annons", nb: "Annonse"))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                if let price = listing.priceSEK {
+                    Text("\(price) kr")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(.systemGray4), lineWidth: 0.5)
+        )
     }
     
     private var isOtherUserOnline: Bool {
@@ -425,6 +498,23 @@ struct DirectMessageView: View {
                                         otherUsername: otherUsername,
                                         isGroup: isGroup,
                                         memberCount: memberCount
+                                    )
+                                } else if message.isOfferSystemMessage {
+                                    OfferSystemMessageCard(
+                                        message: message,
+                                        currentUserId: currentUserId
+                                    )
+                                } else if message.isPurchaseCompleted {
+                                    PurchaseSystemMessageCard(
+                                        message: message,
+                                        currentUserId: currentUserId
+                                    )
+                                } else if message.isSellerPacked {
+                                    SellerPackedMessageCard(message: message)
+                                } else if message.isShippingSystemMessage {
+                                    ShippingLabelCard(
+                                        message: message,
+                                        currentUserId: currentUserId
                                     )
                                 } else if message.isMediaMessage {
                                     ImageMessageBubble(
@@ -646,7 +736,40 @@ struct DirectMessageView: View {
         dmService.startPolling(conversationId: conversationId)
         updateLastSeen()
         await loadSenderNames()
+        await loadListing()
         isLoading = false
+    }
+
+    private func loadListing() async {
+        guard let listingId = listingId else { return }
+        do {
+            if let fetched = try await CommunityListingsService.shared.fetchListing(id: listingId) {
+                await MainActor.run { self.listing = fetched }
+            }
+        } catch {
+            print("⚠️ Failed to load listing for chat header: \(error)")
+        }
+        await refreshSellerShippingBannerState()
+    }
+
+    private func refreshSellerShippingBannerState() async {
+        guard let listingId = listingId,
+              let listing = listing,
+              let me = await dmService.getCurrentUserId(),
+              listing.userId == me
+        else {
+            await MainActor.run { sellerShippingBannerOrder = nil }
+            return
+        }
+        do {
+            let order = try await MarketplaceOrdersService.shared.fetchActiveSellerShipmentOrder(
+                listingId: listingId,
+                sellerId: me
+            )
+            await MainActor.run { sellerShippingBannerOrder = order }
+        } catch {
+            await MainActor.run { sellerShippingBannerOrder = nil }
+        }
     }
     
     private func updateLastSeen() {
@@ -2355,16 +2478,14 @@ struct GymInviteReminderManager {
         
         let content = UNMutableNotificationContent()
         
+        content.title = "Up&Down"
         switch activityType {
         case .gym:
-            content.title = L.t(sv: "Gympass snart!", nb: "Gymøkt snart!")
-            content.body = L.t(sv: "Gympass med \(otherUsername) om 1 timme på \(gym)", nb: "Gymøkt med \(otherUsername) om 1 time på \(gym)")
+            content.body = L.t(sv: "Gympass snart! Gympass med \(otherUsername) om 1 timme på \(gym)", nb: "Gymøkt snart! Gymøkt med \(otherUsername) om 1 time på \(gym)")
         case .running:
-            content.title = L.t(sv: "Löppass snart!", nb: "Løpetur snart!")
-            content.body = L.t(sv: "Löppass med \(otherUsername) om 1 timme vid \(gym)", nb: "Løpetur med \(otherUsername) om 1 time ved \(gym)")
+            content.body = L.t(sv: "Löppass snart! Löppass med \(otherUsername) om 1 timme vid \(gym)", nb: "Løpetur snart! Løpetur med \(otherUsername) om 1 time ved \(gym)")
         case .golf:
-            content.title = L.t(sv: "Golfrunda snart!", nb: "Golfrunde snart!")
-            content.body = L.t(sv: "Golfrunda med \(otherUsername) om 1 timme på \(gym)", nb: "Golfrunde med \(otherUsername) om 1 time på \(gym)")
+            content.body = L.t(sv: "Golfrunda snart! Golfrunda med \(otherUsername) om 1 timme på \(gym)", nb: "Golfrunde snart! Golfrunde med \(otherUsername) om 1 time på \(gym)")
         }
         
         content.sound = .default

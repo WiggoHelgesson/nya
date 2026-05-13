@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     // =========================================
     // 2. PARSE REQUEST BODY
     // =========================================
-    const { stripeAccountId, trainerId } = await req.json();
+    const { stripeAccountId, trainerId, sellerId } = await req.json();
 
     if (!stripeAccountId) {
       throw new Error('stripeAccountId is required');
@@ -102,23 +102,38 @@ Deno.serve(async (req) => {
     // =========================================
     // 5. UPDATE DATABASE (if trainerId provided)
     // =========================================
-    if (trainerId) {
+    if (trainerId || sellerId) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
+
       if (supabaseUrl && supabaseServiceKey) {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        
-        await supabase
-          .from('trainer_profiles')
-          .update({
-            stripe_onboarding_complete: account.details_submitted,
-            stripe_payouts_enabled: account.payouts_enabled,
-            stripe_charges_enabled: account.charges_enabled,
-          })
-          .eq('id', trainerId);
-        
-        console.log(`Updated trainer profile ${trainerId} with Stripe status`);
+
+        if (trainerId) {
+          await supabase
+            .from('trainer_profiles')
+            .update({
+              stripe_onboarding_complete: account.details_submitted,
+              stripe_payouts_enabled: account.payouts_enabled,
+              stripe_charges_enabled: account.charges_enabled,
+            })
+            .eq('id', trainerId);
+
+          console.log(`Updated trainer profile ${trainerId} with Stripe status`);
+        }
+
+        if (sellerId) {
+          await supabase
+            .from('profiles')
+            .update({
+              stripe_onboarding_complete: account.details_submitted,
+              stripe_payouts_enabled: account.payouts_enabled,
+              stripe_charges_enabled: account.charges_enabled,
+            })
+            .eq('id', sellerId);
+
+          console.log(`Updated profile ${sellerId} with Stripe status`);
+        }
       }
     }
 

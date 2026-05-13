@@ -261,8 +261,8 @@ struct WorkoutDetailView: View {
             // Exercise header with GIF
             HStack(spacing: 12) {
                 // Exercise GIF/Image placeholder
-                if let exerciseId = exercise.id, !exerciseId.isEmpty {
-                    AsyncImage(url: URL(string: "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/\(exerciseId)/0.jpg")) { image in
+                if !exercise.name.isEmpty {
+                    AsyncImage(url: URL(string: ExerciseDBExercise.githubFallbackImageURL(forExerciseName: exercise.name))) { image in
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)

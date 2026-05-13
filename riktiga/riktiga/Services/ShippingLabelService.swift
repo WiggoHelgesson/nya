@@ -137,6 +137,30 @@ final class ShippingLabelService {
             .createSignedURL(path: path, expiresIn: 3600)
     }
 
+    /// Signed URL for a marketplace-order shipping label. The
+    /// `book-marketplace-shipping` edge function stores PDFs at
+    /// `{sellerId}/{orderId}.pdf` in the `shipping-labels` bucket.
+    /// If `storedPath` is provided (e.g. read from
+    /// `marketplace_orders.shipping_label_url` when it points at the
+    /// bucket), we sign that path instead.
+    func signedUrlForMarketplaceOrderLabel(
+        orderId: UUID,
+        sellerId: UUID,
+        storedPath: String? = nil
+    ) async throws -> URL {
+        try await AuthSessionManager.shared.ensureValidSession()
+        let path: String
+        if let storedPath, !storedPath.isEmpty,
+           !storedPath.hasPrefix("http") {
+            path = storedPath
+        } else {
+            path = "\(sellerId.uuidString)/\(orderId.uuidString).pdf"
+        }
+        return try await supabase.storage
+            .from(bucket)
+            .createSignedURL(path: path, expiresIn: 3600)
+    }
+
     // MARK: Admin
 
     /// Upload a PDF shipping label. Caller must be admin. Sets label URL + status.
@@ -179,6 +203,58 @@ final class ShippingLabelService {
             .from("consignment_submissions")
             .update(payload)
             .eq("id", value: submissionId.uuidString)
+            .execute()
+
+        return path
+    }
+
+    /// Admin: uploads a PDF shipping label for a marketplace order whose
+    /// Automated booking failed (`shipping_status='manual'`). Stores at
+    /// `{sellerId}/{orderId}.pdf` in the same bucket as API-booked
+    /// labels and flips `shipping_status='label_ready'` so the seller
+    /// sees the standard PDF link in the chat.
+    @discardableResult
+    func uploadMarketplaceOrderLabelPDF(
+        orderId: UUID,
+        sellerId: UUID,
+        data: Data,
+        carrier: String? = nil,
+        trackingNumber: String? = nil,
+        trackingUrl: String? = nil
+    ) async throws -> String {
+        try await AuthSessionManager.shared.ensureValidSession()
+
+        let path = "\(sellerId.uuidString)/\(orderId.uuidString).pdf"
+        try await supabase.storage
+            .from(bucket)
+            .upload(
+                path: path,
+                file: data,
+                options: FileOptions(contentType: "application/pdf", upsert: true)
+            )
+
+        struct Payload: Encodable {
+            let shipping_label_url: String
+            let shipping_status: String
+            let shipping_carrier: String?
+            let shipping_tracking_number: String?
+            let shipping_tracking_url: String?
+            let shipping_booked_at: String
+        }
+
+        let payload = Payload(
+            shipping_label_url: path,
+            shipping_status: "label_ready",
+            shipping_carrier: carrier,
+            shipping_tracking_number: trackingNumber,
+            shipping_tracking_url: trackingUrl,
+            shipping_booked_at: ISO8601DateFormatter().string(from: Date())
+        )
+
+        try await supabase
+            .from("marketplace_orders")
+            .update(payload)
+            .eq("id", value: orderId.uuidString)
             .execute()
 
         return path

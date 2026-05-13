@@ -217,6 +217,20 @@ serve(async (req) => {
 
     console.log(`💬 DM notification: sender=${sender_id}, conversation=${conversation_id}, type=${message_type}`)
 
+    let conversationListingId: string | null = null
+    try {
+      const { data: convMeta } = await supabase
+        .from('direct_conversations')
+        .select('listing_id')
+        .eq('id', conversation_id)
+        .maybeSingle()
+      if (convMeta?.listing_id) {
+        conversationListingId = String(convMeta.listing_id)
+      }
+    } catch {
+      // non-fatal — fall back to generic direct_message routing
+    }
+
     // 1. Get sender profile
     const { data: senderProfile } = await supabase
       .from('profiles')
@@ -249,22 +263,24 @@ serve(async (req) => {
     let title: string
     let body: string
 
+    // Alla notiser har "Up&Down" som rubrik — kontexten flyttas till body.
+    title = 'Up&Down'
+
     if (message_type === 'gym_invite') {
       const activityType = getActivityTypeFromMessage(message)
       const activityName = getActivityDisplayName(activityType)
-      title = isGroup ? `${senderName} föreslog ${activityName.toLowerCase()}` : `Nytt träningsförslag: ${activityName}`
-      body = formatGymInviteBody(message)
+      const lead = isGroup
+        ? `${senderName} föreslog ${activityName.toLowerCase()}`
+        : `Nytt träningsförslag från ${senderName}: ${activityName}`
+      body = `${lead} – ${formatGymInviteBody(message)}`
     } else if (message_type === 'gym_invite_response') {
-      // message contains "accepted" or "declined"
       const isAccepted = message === 'accepted'
-      title = isAccepted ? `${senderName} kommer! 💪` : `${senderName} kan inte`
-      body = isAccepted 
-        ? `${senderName} har godkänt träningsförslaget`
+      body = isAccepted
+        ? `${senderName} har godkänt träningsförslaget 💪`
         : `${senderName} har avböjt träningsförslaget`
     } else {
-      title = `${senderName} skickade ett meddelande`
-      // Show the actual message as subtitle
-      body = message.length > 150 ? message.substring(0, 150) + '...' : message
+      const truncated = message.length > 150 ? message.substring(0, 150) + '...' : message
+      body = `${senderName}: ${truncated}`
     }
 
     // 5. Determine recipients
@@ -306,10 +322,19 @@ serve(async (req) => {
         continue
       }
 
+      const baseType =
+        message_type === 'gym_invite'
+          ? 'gym_invite'
+          : message_type === 'gym_invite_response'
+            ? 'gym_invite'
+            : 'direct_message'
       const pushData: Record<string, string> = {
-        type: message_type === 'gym_invite' ? 'gym_invite' : message_type === 'gym_invite_response' ? 'gym_invite' : 'direct_message',
+        type: conversationListingId ? 'marketplace_direct_message' : baseType,
         conversation_id: conversation_id,
         sender_id: sender_id,
+      }
+      if (conversationListingId) {
+        pushData.listing_id = conversationListingId
       }
 
       if (senderAvatar) {

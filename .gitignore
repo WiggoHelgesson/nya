@@ -44,3 +44,9 @@ fastlane/test_output
 *.so
 .gitignore~
 *.env
+
+# Lokala Sendify-testnycklar (supabase/scripts/run_test_sendify_label.sh)
+supabase/scripts/sendify_test.local
+supabase/scripts/shipmondo_test.local
+supabase/scripts/exercise_gifs.local
+supabase/scripts/prepopulate_exercise_gifs.failures.log

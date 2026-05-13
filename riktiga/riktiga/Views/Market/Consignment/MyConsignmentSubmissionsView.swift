@@ -135,6 +135,7 @@ struct MyConsignmentSubmissionsView: View {
             await MainActor.run {
                 rows = list
                 isLoading = false
+                ImageCacheManager.shared.prefetch(urls: list.flatMap { $0.imageUrls })
                 if let autoId = autoOpenSubmissionId,
                    let match = list.first(where: { $0.id == autoId }) {
                     autoOpenSubmissionId = nil
@@ -375,17 +376,11 @@ private struct SubmissionRowCard: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let first = row.imageUrls.first,
-           let url = URL(string: first) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable().scaledToFill()
-                case .failure:
-                    Image(systemName: "photo")
-                        .foregroundColor(.gray)
-                default:
-                    ProgressView()
+        if let first = row.imageUrls.first {
+            CachedRemoteImage(url: first) {
+                ZStack {
+                    Color(.secondarySystemBackground)
+                    Image(systemName: "photo").foregroundColor(.gray)
                 }
             }
             .frame(width: 72, height: 72)
@@ -397,10 +392,9 @@ private struct SubmissionRowCard: View {
     }
 
     private var title: String {
-        let aiTitle = row.aiPayload.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !aiTitle.isEmpty { return aiTitle }
-        let name = row.aiPayload.productName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !name.isEmpty { return name }
+        if let t = row.title?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+            return t
+        }
         return row.category
     }
 
