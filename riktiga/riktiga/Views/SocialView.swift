@@ -24,7 +24,6 @@ struct SocialView: View {
     @StateObject private var celebrationManager = CelebrationManager.shared
     @ObservedObject private var uploadManager = PostUploadManager.shared
     @ObservedObject private var adService = AdService.shared
-    @ObservedObject private var adMobService = AdMobService.shared
     @ObservedObject private var launchCoordinator = AppLaunchCoordinator.shared
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
@@ -1841,42 +1840,7 @@ struct SocialView: View {
                         .accessibilityHidden(true)
                     feedSeparator
                 }
-                
-                // Google AdMob native ads: first ad after the 2nd post
-                // (index 1), then every 4th post after that
-                // (index 5, 9, 13, ...). Pro members never see ads.
-                #if canImport(GoogleMobileAds)
-                if AdMobService.isAdsEnabled,
-                   !(authViewModel.currentUser?.isProMember ?? false),
-                   let slot = adSlotIndex(forPostIndex: index) {
-                    let hasSlot = adMobService.nativeAds.indices.contains(slot)
-                    if hasSlot {
-                        removeAdsPromoButton
-                            .opacity(showPosts ? 1 : 0)
-                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                        NativeAdCard(nativeAd: adMobService.nativeAds[slot])
-                            .frame(maxWidth: .infinity)
-                            .opacity(showPosts ? 1 : 0)
-                            .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                            .onAppear {
-                                AdFeedDiagnostics.logFill(slot: slot, loadedCount: adMobService.nativeAds.count)
-                            }
-                        feedSeparator
-                    } else {
-                        Color.clear
-                            .frame(width: 0, height: 0)
-                            .onAppear {
-                                AdFeedDiagnostics.logMiss(
-                                    slot: slot,
-                                    isPro: false,
-                                    isInitialized: adMobService.isInitialized,
-                                    loadedCount: adMobService.nativeAds.count
-                                )
-                            }
-                    }
-                }
-                #endif
-                
+
             }
             
             if isLoadingMore {
@@ -2250,19 +2214,7 @@ struct SocialView: View {
         }
     }
     
-    // MARK: - AdMob slot helpers
-
-    /// Maps a feed post index to a native ad slot index.
-    /// First ad after the 2nd post (post index 1 → slot 0), then one ad every
-    /// 4 posts after that: index 5 → slot 1, 9 → slot 2, 13 → slot 3, …
-    /// Returns nil for post indices that shouldn't display an ad.
-    private func adSlotIndex(forPostIndex index: Int) -> Int? {
-        guard index >= 1, (index - 1) % 4 == 0 else { return nil }
-        return (index - 1) / 4
-    }
-
-    /// Promo row shown directly above every native ad, giving the user an
-    /// Edge-to-edge image separator used between feed posts and ads.
+    /// Edge-to-edge image separator used between feed posts.
     /// Small fixed height — the teal gradient image is stretched to fill
     /// the full width and clipped to keep the strip thin.
     @ViewBuilder
@@ -2273,39 +2225,6 @@ struct SocialView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 3)
             .clipped()
-    }
-
-    /// obvious way to upgrade to Pro and stop seeing ads. Opens the
-    /// Superwall paywall via the existing `showPaywall` state + onChange hook.
-    @ViewBuilder
-    private var removeAdsPromoButton: some View {
-        Button {
-            showPaywall = true
-        } label: {
-            HStack(spacing: 10) {
-                Image("upanddownlog")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text(L.t(
-                    sv: "Bli Pro medlem och slipp annonser",
-                    nb: "Bli Pro-medlem og slipp annonser"
-                ))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.primary)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemGray6))
-        }
-        .buttonStyle(.plain)
-        .padding(.bottom, 6)
     }
 
     private func toggleRecommendedFollow(for userId: String) {

@@ -1,9 +1,5 @@
 import SwiftUI
 
-#if canImport(GoogleMobileAds)
-import GoogleMobileAds
-#endif
-
 // MARK: - Grid card used on the products page
 
 struct CommunityListingCard: View {
@@ -148,10 +144,6 @@ struct CommunityListingDetailView: View {
         let otherAvatarUrl: String?
     }
 
-    #if canImport(GoogleMobileAds)
-    @ObservedObject private var adMobService = AdMobService.shared
-    #endif
-
     private let accent = Color.black
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -186,7 +178,6 @@ struct CommunityListingDetailView: View {
                         sectionSeparator
                         sectionContainer {
                             legalBlock
-                            adBlock
                             feedBlock
                         }
                     }
@@ -669,28 +660,6 @@ struct CommunityListingDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    // MARK: - AdMob ad
-
-    @ViewBuilder
-    private var adBlock: some View {
-        #if canImport(GoogleMobileAds)
-        if AdMobService.isAdsEnabled,
-           !(authViewModel.currentUser?.isProMember ?? false),
-           let nativeAd = adMobService.nativeAds.first {
-            VStack(spacing: 8) {
-                Text(L.t(sv: "Annonsering", nb: "Annonsering"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-
-                NativeAdCard(nativeAd: nativeAd)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        #else
-        EmptyView()
-        #endif
     }
 
     // MARK: - Related feed

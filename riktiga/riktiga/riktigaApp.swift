@@ -252,10 +252,6 @@ struct UpAndDownApp: App {
                         launchCoordinator.markReadyImmediately()
                     }
 
-                    // TEMP: bootstrap AdMob for all users (Pro-gate disabled for testing).
-                    let isPro = authViewModel.currentUser?.isProMember ?? false
-                    print("[AdMob] Triggering bootstrap from mainAppView.onAppear — userId=\(authViewModel.currentUser?.id ?? "<nil>") isPro=\(isPro) (Pro gate temporarily disabled)")
-                    Task { await AdMobService.shared.bootstrap() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NetworkMonitor.networkRestoredNotification)) { _ in
                     Task {
