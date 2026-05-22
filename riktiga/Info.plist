@@ -8,8 +8,6 @@
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Appen behöver åtkomst till ditt bildbibliotek för att välja en profilbild.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Vi ber om tillstånd att spåra så att vi kan förbättra upplevelsen och hålla koll på dina aktiviteter.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
