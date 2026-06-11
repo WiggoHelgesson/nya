@@ -102,6 +102,11 @@ struct ShopifyConnection<T: Decodable>: Decodable {
         case edges, pageInfo
     }
 
+    init(edges: [ShopifyEdge<T>], pageInfo: ShopifyPageInfo? = nil) {
+        self.edges = edges
+        self.pageInfo = pageInfo
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         edges = try container.decode([ShopifyEdge<T>].self, forKey: .edges)
@@ -115,6 +120,11 @@ struct ShopifyEdge<T: Decodable>: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case node, cursor
+    }
+
+    init(node: T, cursor: String? = nil) {
+        self.node = node
+        self.cursor = cursor
     }
 
     init(from decoder: Decoder) throws {

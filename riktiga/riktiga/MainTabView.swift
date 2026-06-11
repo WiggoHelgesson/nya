@@ -113,6 +113,8 @@ struct MainTabView: View {
     @State private var showProWelcome = false
     @AppStorage("hasSeenFirstLaunchPopup") private var hasSeenFirstLaunchPopup = false
     @State private var showFirstLaunchPopup = false
+    @AppStorage("hasSeenCollectionLaunchV1") private var hasSeenCollectionLaunch = false
+    @State private var showCollectionLaunch = false
     @State private var hasActiveCoach = false
     @State private var coachWorkoutToStart: SavedGymWorkout? = nil
     @State private var pendingCoachInvitation: CoachInvitation? = nil
@@ -138,7 +140,7 @@ struct MainTabView: View {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
                 ("person.badge.shield.checkmark", L.t(sv: "Coach", nb: "Coach"), "person.badge.shield.checkmark.fill"),
-                ("bag", L.t(sv: "Sälj", nb: "Selg"), "bag.fill"),
+                ("bag", L.t(sv: "Vår shop", nb: "Vår shop"), "bag.fill"),
                 (startPassIcon, L.t(sv: "Starta pass", nb: "Start økt"), startPassIcon),
                 ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
@@ -146,7 +148,7 @@ struct MainTabView: View {
         } else {
             return [
                 ("house", L.t(sv: "Hem", nb: "Hjem"), "house.fill"),
-                ("bag", L.t(sv: "Sälj", nb: "Selg"), "bag.fill"),
+                ("bag", L.t(sv: "Vår shop", nb: "Vår shop"), "bag.fill"),
                 (startPassIcon, L.t(sv: "Starta pass", nb: "Start økt"), startPassIcon),
                 ("gift", L.t(sv: "Belöningar", nb: "Belønninger"), "gift.fill"),
                 ("person", L.t(sv: "Profil", nb: "Profil"), "person.fill")
@@ -280,6 +282,12 @@ struct MainTabView: View {
                         showFirstLaunchPopup = true
                     }
                 }
+
+                if !hasSeenCollectionLaunch {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showCollectionLaunch = true
+                    }
+                }
             }
             .task {
                 await checkForActiveCoach()
@@ -301,6 +309,68 @@ struct MainTabView: View {
                     firstLaunchPopupOverlay
                 }
             }
+            .overlay {
+                if showCollectionLaunch {
+                    collectionLaunchOverlay
+                }
+            }
+    }
+
+    // MARK: - Collection Launch Announcement
+    private var collectionLaunchOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture { }
+
+            VStack(spacing: 0) {
+                Image("116")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 220)
+                    .clipped()
+
+                VStack(spacing: 16) {
+                    Text(L.t(sv: "Stora Nyheter!", nb: "Store Nyheter!"))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(L.t(
+                        sv: "Nu har vi lanserat våra första produkter från vår egna kollektion där ni kan använda era poäng för upp mot 40% rabatt. Vi kommer utöka våra egna varumärken löpande under kommande åren med fler produkter inom allt från sport till vardagliga produkter för att kunna erbjuda er produkter för så billiga priser som det bara går. Fortsätt träna och samla era poäng!",
+                        nb: "Nå har vi lansert våre første produkter fra vår egen kolleksjon der dere kan bruke poengene for opptil 40% rabatt. Vi vil utvide våre egne merkevarer løpende de kommende årene med flere produkter innen alt fra sport til hverdagsprodukter for å tilby dere produkter til så lave priser som mulig. Fortsett å trene og spar poengene dine!"
+                    ))
+                        .font(.system(size: 15))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            hasSeenCollectionLaunch = true
+                            showCollectionLaunch = false
+                        }
+                    } label: {
+                        Text(L.t(sv: "Fortsätt", nb: "Fortsett"))
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(20)
+            }
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+            .padding(.horizontal, 24)
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
+        .animation(.easeOut(duration: 0.25), value: showCollectionLaunch)
     }
     
     // MARK: - First Launch Popup
@@ -748,7 +818,7 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { _, newTab in
             if newTab == marketTabIndex {
                 Task {
-                    await CommunityListingsCache.shared.refresh(force: false)
+                    await ShopifyFeedStore.shared.refresh()
                 }
             }
         }

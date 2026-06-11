@@ -150,6 +150,10 @@ class ShopifyService {
         return response.product
     }
 
+    func isStorefrontPurchasable(handle: String) async -> Bool {
+        (try? await fetchProductByHandle(handle)) != nil
+    }
+
     // MARK: - Collection Products
 
     func fetchCollectionProducts(handle: String, first: Int = 20) async throws -> [ShopifyProduct] {
@@ -207,11 +211,91 @@ class ShopifyService {
         if let collection = result.collection {
             let products = collection.products.edges.map(\.node)
             print("[ShopifyService] Collection '\(handle)' found — \(products.count) products")
-            return products
+            if !products.isEmpty { return products }
         } else {
-            print("[ShopifyService] WARNING: collection '\(handle)' returned nil — check handle spelling in Shopify admin")
+            print("[ShopifyService] WARNING: collection '\(handle)' returned nil — trying JSON fallback")
+        }
+
+        let jsonProducts = try await fetchCollectionProductsFromJSON(handle: handle, limit: first)
+        let hydrated = await hydrateJSONProducts(jsonProducts)
+        print("[ShopifyService] Collection '\(handle)' JSON fallback — \(hydrated.count) products")
+        return hydrated
+    }
+
+    private func hydrateJSONProducts(_ jsonProducts: [ShopifyProduct]) async -> [ShopifyProduct] {
+        var result: [ShopifyProduct] = []
+        for jsonProduct in jsonProducts {
+            if let storefront = try? await fetchProductByHandle(jsonProduct.handle) {
+                result.append(storefront)
+                print("[ShopifyService] Hydrated '\(jsonProduct.handle)' from Storefront API")
+            } else {
+                result.append(jsonProduct)
+                print("[ShopifyService] '\(jsonProduct.handle)' not in Storefront API — display only")
+            }
+        }
+        return result
+    }
+
+    /// Hämtar exakt de produkter som tillhör en kollektion via Shopifys publika
+    /// `/collections/{handle}/products.json`-endpoint. Används när Storefront GraphQL
+    /// returnerar tom lista (t.ex. produkter publicerade till Online Store men inte Headless).
+    private func fetchCollectionProductsFromJSON(handle: String, limit: Int) async throws -> [ShopifyProduct] {
+        guard let url = URL(string: "https://\(shopDomain)/collections/\(handle)/products.json?limit=\(limit)") else {
             return []
         }
+
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[ShopifyService] Collection JSON HTTP ERROR \(code) for '\(handle)'")
+            return []
+        }
+
+        let payload = try decoder.decode(CollectionProductsJSONResponse.self, from: data)
+        return payload.products.map(mapJSONProductToShopifyProduct)
+    }
+
+    private func mapJSONProductToShopifyProduct(_ product: CollectionJSONProduct) -> ShopifyProduct {
+        let imageEdges = product.images.map { image in
+            ShopifyEdge(
+                node: ShopifyImage(url: image.src, altText: image.alt),
+                cursor: nil
+            )
+        }
+        let variantEdges = product.variants.map { variant in
+            ShopifyEdge(
+                node: ShopifyVariant(
+                    id: "gid://shopify/ProductVariant/\(variant.id)",
+                    title: variant.title,
+                    availableForSale: variant.available,
+                    price: ShopifyMoney(amount: variant.price, currencyCode: "SEK"),
+                    selectedOptions: variant.option1.map { [ShopifyOption(name: "Storlek", value: $0)] } ?? [],
+                    image: variant.featured_image.map { ShopifyImage(url: $0.src, altText: $0.alt) }
+                ),
+                cursor: nil
+            )
+        }
+
+        let prices = product.variants.map { Double($0.price) ?? 0 }
+        let minPrice = prices.min() ?? 0
+        let maxPrice = prices.max() ?? minPrice
+        let money = { (amount: Double) in ShopifyMoney(amount: String(format: "%.2f", amount), currencyCode: "SEK") }
+
+        return ShopifyProduct(
+            id: "gid://shopify/Product/\(product.id)",
+            title: product.title,
+            handle: product.handle,
+            description: product.body_html ?? "",
+            productType: product.product_type,
+            vendor: product.vendor,
+            tags: product.tags,
+            images: ShopifyConnection(edges: imageEdges),
+            variants: ShopifyConnection(edges: variantEdges),
+            priceRange: ShopifyPriceRange(
+                minVariantPrice: money(minPrice),
+                maxVariantPrice: money(maxPrice)
+            )
+        )
     }
 
     // MARK: - Cart
@@ -363,6 +447,38 @@ class ShopifyService {
         discountCodes { code applicable }
         """
     }
+}
+
+// MARK: - Collection JSON API (Online Store)
+
+private struct CollectionProductsJSONResponse: Decodable {
+    let products: [CollectionJSONProduct]
+}
+
+private struct CollectionJSONProduct: Decodable {
+    let id: Int
+    let title: String
+    let handle: String
+    let body_html: String?
+    let vendor: String
+    let product_type: String
+    let tags: [String]
+    let variants: [CollectionJSONVariant]
+    let images: [CollectionJSONImage]
+}
+
+private struct CollectionJSONVariant: Decodable {
+    let id: Int
+    let title: String
+    let available: Bool
+    let price: String
+    let option1: String?
+    let featured_image: CollectionJSONImage?
+}
+
+private struct CollectionJSONImage: Decodable {
+    let src: String
+    let alt: String?
 }
 
 // MARK: - Errors

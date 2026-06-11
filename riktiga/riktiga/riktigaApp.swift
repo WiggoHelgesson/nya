@@ -113,6 +113,12 @@ struct UpAndDownApp: App {
                     launchCoordinator.reset()
                     launchCoordinator.markReadyImmediately()
                 }
+                // Refresh Pro-status direkt när användaren blir inloggad
+                // (täcker alla inloggningsvägar + kall appstart) så att
+                // Pro-medlemmar har sina funktioner utan att besöka Inställningar.
+                if oldValue == false && newValue == true {
+                    Task { await authViewModel.refreshProStatusFromDatabase() }
+                }
             }
             // Refresh Pro-status från Supabase varje gång appen lyfts fram
             // från bakgrund, så att manuellt granted is_pro_member syns

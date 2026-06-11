@@ -5,17 +5,11 @@ struct RewardsContainerView: View {
     let popToRootTrigger: Int
     @State private var showPublicProfile = false
     @State private var unreadNotifications = 0
-    @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var navigationPath = NavigationPath()
     @State private var lastUnreadFetch: Date = .distantPast
-    @StateObject private var dmService = DirectMessageService.shared
 
     private let fetchThrottleInterval: TimeInterval = 30
-
-    private var isPremium: Bool {
-        authViewModel.currentUser?.isProMember ?? false
-    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -50,29 +44,6 @@ struct RewardsContainerView: View {
                             Spacer()
 
                             HStack(spacing: 12) {
-                                NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(systemName: "bubble.left.and.bubble.right")
-                                            .font(.system(size: 20, weight: .regular))
-                                            .foregroundColor(.primary)
-
-                                        if unreadMessages > 0 {
-                                            Circle()
-                                                .fill(Color.black)
-                                                .frame(width: 18, height: 18)
-                                                .overlay(
-                                                    Text("\(min(unreadMessages, 99))")
-                                                        .font(.system(size: 10, weight: .bold))
-                                                        .foregroundColor(.white)
-                                                )
-                                                .offset(x: 8, y: -6)
-                                        }
-                                    }
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-
                                 NavigationLink(destination: NotificationsView(onDismiss: {
                                     Task { await refreshUnreadCount() }
                                 }).environmentObject(authViewModel)) {
@@ -136,9 +107,6 @@ struct RewardsContainerView: View {
         .task {
             await throttledRefresh()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshUnreadMessages"))) { _ in
-            Task { await refreshUnreadMessages() }
-        }
         .id(popToRootTrigger)
         .onChange(of: popToRootTrigger) { _, _ in
             navigationPath = NavigationPath()
@@ -150,7 +118,6 @@ struct RewardsContainerView: View {
         guard Date().timeIntervalSince(lastUnreadFetch) >= fetchThrottleInterval else { return }
         lastUnreadFetch = Date()
         await refreshUnreadCount()
-        await refreshUnreadMessages()
     }
 
     private func refreshUnreadCount() async {
@@ -171,12 +138,6 @@ struct RewardsContainerView: View {
         isFetchingUnread = false
     }
 
-    private func refreshUnreadMessages() async {
-        await dmService.fetchTotalUnreadCount()
-        await MainActor.run {
-            unreadMessages = dmService.totalUnreadCount
-        }
-    }
 }
 
 #Preview {

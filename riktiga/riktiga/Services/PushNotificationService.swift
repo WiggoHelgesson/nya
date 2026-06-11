@@ -103,7 +103,7 @@ final class PushNotificationService: NSObject {
         }
     }
     
-    // MARK: - Notify Followers About New Workout
+    // MARK: - Notify Friends About New Workout
     
     func notifyFollowersAboutWorkout(
         userId: String,
@@ -116,56 +116,56 @@ final class PushNotificationService: NSObject {
         print("🔔 [PUSH] User ID: \(userId), Activity: \(activityType), Post ID: \(postId)")
         
         do {
-            // Get all followers
-            let followers = try await SocialService.shared.getFollowers(userId: userId)
+            // "Vänner" i appen = personer användaren följer (samma som aktiv-vänner/stories)
+            let friends = try await SocialService.shared.getFollowing(userId: userId)
             
-            guard !followers.isEmpty else {
-                print("📭 [PUSH] No followers to notify for user \(userId)")
+            guard !friends.isEmpty else {
+                print("📭 [PUSH] No friends to notify for user \(userId)")
                 return
             }
             
-            print("🔔 [PUSH] Found \(followers.count) followers to notify: \(followers)")
+            print("🔔 [PUSH] Found \(friends.count) friends to notify: \(friends)")
             
-            // Create in-app notification AND send push for each follower
-            for followerId in followers {
+            // Create in-app notification AND send push for each friend
+            for friendId in friends {
                 // Don't notify yourself
-                guard followerId != userId else {
-                    print("⏭️ [PUSH] Skipping self-notification for \(followerId)")
+                guard friendId != userId else {
+                    print("⏭️ [PUSH] Skipping self-notification for \(friendId)")
                     continue
                 }
                 
-                print("📤 [PUSH] Sending notification to follower: \(followerId)")
+                print("📤 [PUSH] Sending notification to friend: \(friendId)")
                 
                 do {
                     // 1. Create in-app notification
                     try await createWorkoutNotification(
-                        forUserId: followerId,
+                        forUserId: friendId,
                         fromUserId: userId,
                         fromUserName: userName,
                         fromUserAvatar: userAvatar,
                         activityType: activityType,
                         postId: postId
                     )
-                    print("✅ [PUSH] In-app notification created for \(followerId)")
+                    print("✅ [PUSH] In-app notification created for \(friendId)")
                     
                     // 2. Send real iOS push notification via Edge Function
                     let firstName = userName.components(separatedBy: " ").first ?? userName
                     let (activityLabel, article) = Self.activityDisplayText(activityType)
                     await sendRealPushNotification(
-                        toUserId: followerId,
+                        toUserId: friendId,
                         title: "\(firstName) har slutfört \(article) \(activityLabel)",
                         body: "Kolla in passet! 💪",
                         data: ["type": "new_workout", "post_id": postId, "actor_id": userId]
                     )
-                    print("✅ [PUSH] Push notification sent to \(followerId)")
+                    print("✅ [PUSH] Push notification sent to \(friendId)")
                 } catch {
-                    print("⚠️ [PUSH] Failed to notify follower \(followerId): \(error)")
+                    print("⚠️ [PUSH] Failed to notify friend \(friendId): \(error)")
                 }
             }
             
-            print("✅ [PUSH] All \(followers.count) followers notified with push notifications")
+            print("✅ [PUSH] All \(friends.count) friends notified with push notifications")
         } catch {
-            print("❌ [PUSH] Failed to get followers for notification: \(error)")
+            print("❌ [PUSH] Failed to get friends for notification: \(error)")
         }
     }
     

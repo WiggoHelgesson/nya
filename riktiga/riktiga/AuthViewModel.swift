@@ -243,6 +243,10 @@ class AuthViewModel: NSObject, ObservableObject {
                     }
                     
                     await RevenueCatManager.shared.logInFor(appUserId: session.user.id.uuidString)
+                    // Räkna om kombinerad Pro-status (RevenueCat + databas) direkt vid start.
+                    // Utan detta tappas tidiga isPremium-uppdateringar som kom innan
+                    // currentUser fanns, och Pro aktiverades först vid besök i Inställningar.
+                    await refreshProStatusFromDatabase()
                 } else {
                     // fetchUserProfile returned nil (query succeeded, zero rows) — profile truly missing
                     try? await supabase.auth.signOut()

@@ -1830,16 +1830,6 @@ struct SocialView: View {
                     }
                 }
 
-                if index == 1 {
-                    Image("108")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .opacity(showPosts ? 1 : 0)
-                        .animation(.smooth(duration: 0.4).delay(0.25), value: showPosts)
-                        .accessibilityHidden(true)
-                    feedSeparator
-                }
 
             }
             

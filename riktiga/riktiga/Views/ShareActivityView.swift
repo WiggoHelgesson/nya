@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import PhotosUI
 import UIKit
 import Combine
 
@@ -11,12 +12,15 @@ struct ShareActivityView: View {
     @StateObject private var insightsLoader: ShareInsightsLoader
     
     @State private var selectedTemplateIndex = 0
-    @State private var selectedBackground: ShareBackgroundOption = .transparent
-    @State private var showBackgroundDialog = false
+    private let selectedBackground: ShareBackgroundOption = .transparent
     @State private var showAlert = false
+    @State private var isPremium = RevenueCatManager.shared.isProMember
     @State private var alertMessage = ""
     @State private var coverImage: UIImage?
     @State private var showConfetti = false
+    @State private var customImage: UIImage?
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
     
     init(post: SocialWorkoutPost, onFinish: (() -> Void)? = nil) {
         self.post = post
@@ -68,14 +72,7 @@ struct ShareActivityView: View {
                 }
             }
         }
-        .confirmationDialog(L.t(sv: "Välj bakgrund", nb: "Velg bakgrunn"), isPresented: $showBackgroundDialog, titleVisibility: .visible) {
-            ForEach(ShareBackgroundOption.allCases) { option in
-                Button(option.displayName) {
-                    selectedBackground = option
-                }
-            }
-            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
-        }
+        .onReceive(RevenueCatManager.shared.$isProMember) { isPremium = $0 }
         .alert(L.t(sv: "Meddelande", nb: "Melding"), isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -114,29 +111,34 @@ struct ShareActivityView: View {
     }
     
     private var templates: [ShareCardTemplate] {
+        var list: [ShareCardTemplate]
         let isQuickTrack = post.exercises == nil && post.duration == nil
         
         if isQuickTrack {
-            var list: [ShareCardTemplate] = []
+            list = []
             let streakDays = insightsLoader.insights.streakInfo.currentStreak
             if streakDays >= 2 {
                 list.append(.streak)
             }
             list.append(.calendar)
-            return list
+        } else {
+            list = [.stats, .compact]
+            
+            let streakDays = insightsLoader.insights.streakInfo.currentStreak
+            if streakDays >= 2 {
+                list.append(.streak)
+            }
+            
+            list.append(.calendar)
+            
+            if (post.exercises?.isEmpty == false) {
+                list.append(.muscles)
+            }
         }
         
-        var list: [ShareCardTemplate] = [.stats, .compact]
-        
-        let streakDays = insightsLoader.insights.streakInfo.currentStreak
-        if streakDays >= 2 {
-            list.append(.streak)
-        }
-        
-        list.append(.calendar)
-        
-        if (post.exercises?.isEmpty == false) {
-            list.append(.muscles)
+        // Photo templates (Pro) shown first when a custom image is picked
+        if customImage != nil {
+            list = ShareCardTemplate.photoTemplates + list
         }
         return list
     }
@@ -154,6 +156,7 @@ struct ShareActivityView: View {
                         size: CGSize(width: UIScreen.main.bounds.width - 48,
                                      height: (UIScreen.main.bounds.width - 48) * 1.25),
                         coverImage: coverImage,
+                        customImage: customImage,
                         isPreview: true // Show checkerboard for preview
                     )
                     .tag(index)
@@ -171,15 +174,31 @@ struct ShareActivityView: View {
             ShareActionButton(icon: "square.and.arrow.down", label: L.t(sv: "Spara", nb: "Lagre")) {
                 saveCurrentCardToPhotos()
             }
-            ShareActionButton(icon: "paintpalette.fill", label: L.t(sv: "Bakgrund", nb: "Bakgrunn")) {
-                showBackgroundDialog = true
-            }
-            ShareActionButton(icon: "camera.viewfinder", label: "Stories") {
-                shareToInstagramStories()
+            ShareActionButton(
+                icon: "photo.on.rectangle.angled",
+                label: L.t(sv: "Egen bild", nb: "Eget bilde"),
+                showsProBadge: true
+            ) {
+                showPhotoPicker = true
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+        .onChange(of: photoPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        customImage = image
+                        withAnimation {
+                            selectedTemplateIndex = 0
+                        }
+                    }
+                }
+            }
+        }
     }
     
     private var doneButton: some View {
@@ -213,13 +232,14 @@ struct ShareActivityView: View {
             background: selectedBackground,
             size: exportSize,
             coverImage: coverImage,
+            customImage: customImage,
             isPreview: false // Export with true transparency (no checkerboard)
         )
         
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
         
-        if selectedBackground == .transparent {
+        if selectedBackground == .transparent && !template.isPhotoTemplate {
             // For transparent images, we need special handling
             renderer.isOpaque = false
             
@@ -252,6 +272,13 @@ struct ShareActivityView: View {
     }
     
     private func saveCurrentCardToPhotos() {
+        // Photo templates (custom image) are a Pro feature — gate the download
+        let template = templates.indices.contains(selectedTemplateIndex) ? templates[selectedTemplateIndex] : nil
+        if template?.isPhotoTemplate == true && !isPremium {
+            SuperwallService.shared.showPaywall()
+            return
+        }
+        
         guard let image = renderCurrentCardImage() else {
             showAlert(message: L.t(sv: "Kunde inte skapa bilden.", nb: "Kunne ikke lage bildet."))
             return
@@ -259,7 +286,8 @@ struct ShareActivityView: View {
         
         // For transparent images, we need to save as PNG file first
         // because Photos library might convert UIImage to JPEG (no transparency)
-        if selectedBackground == .transparent {
+        let currentTemplate = templates.indices.contains(selectedTemplateIndex) ? templates[selectedTemplateIndex] : nil
+        if selectedBackground == .transparent && currentTemplate?.isPhotoTemplate != true {
             savePNGToPhotos(image: image)
         } else {
             saveImageToPhotos(image: image)
@@ -551,7 +579,22 @@ enum ShareBackgroundOption: String, CaseIterable, Identifiable {
 // MARK: - ShareCardTemplate
 enum ShareCardTemplate: String, CaseIterable, Identifiable {
     case stats, compact, streak, calendar, muscles
+    case photoFull, photoPolaroid, photoMinimal
+    case photoSplit, photoBold, photoNeon, photoCinema
     var id: String { rawValue }
+
+    /// Photo templates render a user-picked image as their background and always export opaque.
+    var isPhotoTemplate: Bool {
+        switch self {
+        case .photoFull, .photoPolaroid, .photoMinimal,
+             .photoSplit, .photoBold, .photoNeon, .photoCinema: return true
+        default: return false
+        }
+    }
+
+    static let photoTemplates: [ShareCardTemplate] = [
+        .photoFull, .photoMinimal, .photoSplit, .photoBold, .photoNeon, .photoCinema, .photoPolaroid
+    ]
 }
 
 // MARK: - ShareCardView
@@ -562,6 +605,7 @@ struct ShareCardView: View {
     let background: ShareBackgroundOption
     let size: CGSize
     let coverImage: UIImage?
+    var customImage: UIImage? = nil
     var isPreview: Bool = false // true = show checkerboard, false = true transparency for export
     
     private var scale: CGFloat {
@@ -590,7 +634,19 @@ struct ShareCardView: View {
 
     private var backgroundView: some View {
         ZStack {
-            if background == .transparent {
+            if template.isPhotoTemplate {
+                if template == .photoPolaroid {
+                    Color.white
+                } else if let customImage {
+                    Image(uiImage: customImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                } else {
+                    Color.black
+                }
+            } else if background == .transparent {
                 // Preview: show checkerboard to indicate transparency
                 // Export: use Color.clear for true transparency
                 if isPreview {
@@ -622,32 +678,477 @@ struct ShareCardView: View {
     
     @ViewBuilder
     private var content: some View {
+        if template.isPhotoTemplate {
+            switch template {
+            case .photoFull: photoFullCard
+            case .photoPolaroid: photoPolaroidCard
+            case .photoSplit: photoSplitCard
+            case .photoBold: photoBoldCard
+            case .photoNeon: photoNeonCard
+            case .photoCinema: photoCinemaCard
+            default: photoMinimalCard
+            }
+        } else {
+            VStack(spacing: 0) {
+                // Top section with centered content
+                VStack {
+                    Spacer()
+                    
+                    switch template {
+                    case .stats: statsCard
+                    case .compact: compactCard
+                    case .streak: streakCard
+                    case .calendar: calendarCard
+                    default: muscleCard
+                    }
+                    
+                    Spacer()
+                }
+                .frame(maxHeight: .infinity)
+                
+                // Don't show brand signature for compact card since it has branding at top
+                if template != .compact {
+                    brandSignature
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundColor(textColor)
+        }
+    }
+
+    // MARK: - Photo Templates (Pro)
+
+    private var photoStats: [ShareStat] {
+        sharePreviewStats(for: post)
+    }
+
+    private var photoDateString: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMMM yyyy"
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+        let date = isoFormatter.date(from: post.createdAt) ?? fallbackFormatter.date(from: post.createdAt) ?? Date()
+        return formatter.string(from: date)
+    }
+
+    /// Full-bleed image with a dark bottom gradient holding title, stats and branding.
+    private var photoFullCard: some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(
+                colors: [.clear, .clear, Color.black.opacity(0.45), Color.black.opacity(0.85)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 14 * scale) {
+                Text(post.title)
+                    .font(.system(size: 26 * scale, weight: .heavy))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+
+                HStack(spacing: 24 * scale) {
+                    ForEach(photoStats, id: \.title) { stat in
+                        VStack(alignment: .leading, spacing: 2 * scale) {
+                            Text(stat.title)
+                                .font(.system(size: 12 * scale, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                            Text(stat.value)
+                                .font(.system(size: 20 * scale, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 10 * scale) {
+                    Image("23")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 30 * scale, height: 30 * scale)
+                        .clipShape(RoundedRectangle(cornerRadius: 7 * scale))
+                    Text("UP&DOWN")
+                        .font(.system(size: 14 * scale, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text(shareHandle(for: post))
+                        .font(.system(size: 13 * scale, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
+            .padding(.horizontal, 22 * scale)
+            .padding(.bottom, 24 * scale)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Polaroid-style: image in a white frame, stats and date printed below.
+    private var photoPolaroidCard: some View {
         VStack(spacing: 0) {
-            // Top section with centered content
+            Spacer(minLength: 24 * scale)
+
+            VStack(spacing: 0) {
+                Group {
+                    if let customImage {
+                        Image(uiImage: customImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Color.black
+                    }
+                }
+                .frame(width: size.width - 72 * scale, height: (size.width - 72 * scale) * 1.05)
+                .clipped()
+
+                VStack(spacing: 8 * scale) {
+                    Text(post.title)
+                        .font(.system(size: 20 * scale, weight: .bold))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
+
+                    HStack(spacing: 14 * scale) {
+                        ForEach(photoStats, id: \.title) { stat in
+                            Text("\(stat.title) \(stat.value)")
+                                .font(.system(size: 12 * scale, weight: .semibold))
+                                .foregroundColor(.black.opacity(0.65))
+                        }
+                    }
+
+                    Text(photoDateString)
+                        .font(.system(size: 11 * scale, weight: .medium))
+                        .foregroundColor(.black.opacity(0.4))
+                }
+                .padding(.vertical, 18 * scale)
+            }
+            .padding(12 * scale)
+            .background(Color.white)
+            .shadow(color: .black.opacity(0.25), radius: 14 * scale, x: 0, y: 8 * scale)
+            .rotationEffect(.degrees(-1.5))
+
+            Spacer(minLength: 12 * scale)
+
+            HStack(spacing: 8 * scale) {
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 26 * scale, height: 26 * scale)
+                    .clipShape(RoundedRectangle(cornerRadius: 6 * scale))
+                Text("Up&Down")
+                    .font(.system(size: 14 * scale, weight: .bold))
+                    .foregroundColor(.black)
+                Text(shareHandle(for: post))
+                    .font(.system(size: 13 * scale, weight: .semibold))
+                    .foregroundColor(.black.opacity(0.5))
+            }
+            .padding(.bottom, 22 * scale)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            LinearGradient(
+                colors: [Color(white: 0.96), Color(white: 0.88)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    /// Full-bleed image with a single frosted glass pill of stats at the bottom.
+    private var photoMinimalCard: some View {
+        VStack {
+            Spacer()
+
+            HStack(spacing: 16 * scale) {
+                Image("23")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28 * scale, height: 28 * scale)
+                    .clipShape(RoundedRectangle(cornerRadius: 7 * scale))
+
+                ForEach(photoStats.prefix(2), id: \.title) { stat in
+                    VStack(alignment: .leading, spacing: 1 * scale) {
+                        Text(stat.title)
+                            .font(.system(size: 10 * scale, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.75))
+                        Text(stat.value)
+                            .font(.system(size: 16 * scale, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+
+                Text(shareHandle(for: post))
+                    .font(.system(size: 12 * scale, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+            }
+            .padding(.horizontal, 20 * scale)
+            .padding(.vertical, 12 * scale)
+            .background(.ultraThinMaterial.opacity(0.92), in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .padding(.bottom, 28 * scale)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    /// Split: dark panel at bottom, image fills the top portion.
+    private var photoSplitCard: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 14 * scale) {
+                Text(post.title)
+                    .font(.system(size: 22 * scale, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.18))
+                    .frame(height: 1)
+
+                HStack(spacing: 0) {
+                    ForEach(Array(photoStats.prefix(3).enumerated()), id: \.offset) { index, stat in
+                        VStack(alignment: .leading, spacing: 3 * scale) {
+                            Text(stat.value)
+                                .font(.system(size: 20 * scale, weight: .heavy))
+                                .foregroundColor(.white)
+                            Text(stat.title)
+                                .font(.system(size: 10 * scale, weight: .medium))
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        if index < photoStats.prefix(3).count - 1 { Spacer() }
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 8 * scale) {
+                    Image("23")
+                        .resizable().scaledToFit()
+                        .frame(width: 24 * scale, height: 24 * scale)
+                        .clipShape(RoundedRectangle(cornerRadius: 6 * scale))
+                    Text("UP&DOWN")
+                        .font(.system(size: 13 * scale, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text(shareHandle(for: post))
+                        .font(.system(size: 12 * scale, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+            .padding(.horizontal, 24 * scale)
+            .padding(.vertical, 20 * scale)
+            .frame(maxWidth: .infinity)
+            .background(Color(red: 0.07, green: 0.07, blue: 0.09))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Bold: giant primary stat in the center, overlaid directly on the image.
+    private var photoBoldCard: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.black.opacity(0.55), Color.black.opacity(0.15), Color.black.opacity(0.6)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 5 * scale) {
+                    Text(post.title)
+                        .font(.system(size: 20 * scale, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                    Text(photoDateString)
+                        .font(.system(size: 12 * scale, weight: .medium))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                .padding(.top, 26 * scale)
+                .padding(.horizontal, 22 * scale)
+
+                Spacer()
+
+                if let primaryStat = photoStats.first {
+                    VStack(alignment: .leading, spacing: 4 * scale) {
+                        Text(primaryStat.title.uppercased())
+                            .font(.system(size: 12 * scale, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .tracking(2)
+                        Text(primaryStat.value)
+                            .font(.system(size: 64 * scale, weight: .heavy))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    }
+                    .padding(.horizontal, 22 * scale)
+                }
+
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 12 * scale) {
+                    if photoStats.count > 1 {
+                        HStack(spacing: 20 * scale) {
+                            ForEach(photoStats.dropFirst(), id: \.title) { stat in
+                                VStack(alignment: .leading, spacing: 2 * scale) {
+                                    Text(stat.value)
+                                        .font(.system(size: 18 * scale, weight: .bold))
+                                        .foregroundColor(.white)
+                                    Text(stat.title)
+                                        .font(.system(size: 10 * scale, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.55))
+                                }
+                            }
+                            Spacer()
+                        }
+                    }
+                    HStack(spacing: 8 * scale) {
+                        Image("23")
+                            .resizable().scaledToFit()
+                            .frame(width: 24 * scale, height: 24 * scale)
+                            .clipShape(RoundedRectangle(cornerRadius: 6 * scale))
+                        Text("UP&DOWN")
+                            .font(.system(size: 13 * scale, weight: .heavy))
+                            .tracking(1)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(shareHandle(for: post))
+                            .font(.system(size: 12 * scale, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.75))
+                    }
+                }
+                .padding(.horizontal, 22 * scale)
+                .padding(.bottom, 24 * scale)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Neon: frosted dark card with an orange accent bar, stats with colored labels.
+    private var photoNeonCard: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+
             VStack {
                 Spacer()
-                
-                switch template {
-                case .stats: statsCard
-                case .compact: compactCard
-                case .streak: streakCard
-                case .calendar: calendarCard
-                case .muscles: muscleCard
+
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color(red: 1.0, green: 0.55, blue: 0.1))
+                        .frame(width: 4 * scale)
+                        .padding(.vertical, 0)
+
+                    VStack(alignment: .leading, spacing: 12 * scale) {
+                        Text(post.title)
+                            .font(.system(size: 20 * scale, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+
+                        HStack(spacing: 20 * scale) {
+                            ForEach(photoStats.prefix(3), id: \.title) { stat in
+                                VStack(alignment: .leading, spacing: 2 * scale) {
+                                    Text(stat.value)
+                                        .font(.system(size: 22 * scale, weight: .heavy))
+                                        .foregroundColor(.white)
+                                    Text(stat.title)
+                                        .font(.system(size: 10 * scale, weight: .semibold))
+                                        .foregroundColor(Color(red: 1.0, green: 0.65, blue: 0.2))
+                                }
+                            }
+                            Spacer()
+                        }
+
+                        HStack(spacing: 6 * scale) {
+                            Image("23")
+                                .resizable().scaledToFit()
+                                .frame(width: 20 * scale, height: 20 * scale)
+                                .clipShape(RoundedRectangle(cornerRadius: 5 * scale))
+                            Text("UP&DOWN · \(shareHandle(for: post))")
+                                .font(.system(size: 11 * scale, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.65))
+                        }
+                    }
+                    .padding(.leading, 16 * scale)
+                    .padding(.trailing, 20 * scale)
+                    .padding(.vertical, 20 * scale)
                 }
-                
-                Spacer()
-            }
-            .frame(maxHeight: .infinity)
-            
-            // Don't show brand signature for compact card since it has branding at top
-            if template != .compact {
-                brandSignature
+                .background(.ultraThinMaterial.opacity(0.85))
+                .environment(\.colorScheme, .dark)
+                .clipShape(RoundedRectangle(cornerRadius: 16 * scale))
+                .padding(.horizontal, 18 * scale)
+                .padding(.bottom, 28 * scale)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .foregroundColor(textColor)
     }
-    
+
+    /// Cinema: letterbox black bars top + bottom, image in the middle.
+    private var photoCinemaCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4 * scale) {
+                    Text(post.title)
+                        .font(.system(size: 16 * scale, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                    Text(photoDateString)
+                        .font(.system(size: 11 * scale, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
+                HStack(spacing: 6 * scale) {
+                    Image("23")
+                        .resizable().scaledToFit()
+                        .frame(width: 22 * scale, height: 22 * scale)
+                        .clipShape(RoundedRectangle(cornerRadius: 5 * scale))
+                    Text("UP&DOWN")
+                        .font(.system(size: 12 * scale, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal, 22 * scale)
+            .padding(.vertical, 18 * scale)
+            .frame(maxWidth: .infinity)
+            .background(Color.black)
+
+            Spacer()
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    ForEach(Array(photoStats.prefix(3).enumerated()), id: \.offset) { index, stat in
+                        VStack(spacing: 3 * scale) {
+                            Text(stat.value)
+                                .font(.system(size: 20 * scale, weight: .heavy))
+                                .foregroundColor(.white)
+                            Text(stat.title)
+                                .font(.system(size: 10 * scale, weight: .medium))
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        .frame(maxWidth: .infinity)
+                        if index < min(photoStats.count, 3) - 1 {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.15))
+                                .frame(width: 1, height: 36 * scale)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16 * scale)
+                .padding(.top, 16 * scale)
+                .padding(.bottom, 10 * scale)
+                .frame(maxWidth: .infinity)
+
+                Text(shareHandle(for: post))
+                    .font(.system(size: 12 * scale, weight: .medium))
+                    .foregroundColor(.white.opacity(0.45))
+                    .padding(.bottom, 16 * scale)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color.black)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var textColor: Color {
         shouldShowCoverImage ? background.textColorWithCoverImage : background.preferredTextColor
     }
@@ -961,6 +1462,7 @@ struct ShareCardView: View {
 struct ShareActionButton: View {
     let icon: String
     let label: String
+    var showsProBadge: Bool = false
     let action: () -> Void
     
     var body: some View {
@@ -972,11 +1474,25 @@ struct ShareActionButton: View {
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 80)
             .background(Color(.systemGray6))
             .cornerRadius(14)
+            .overlay(alignment: .topTrailing) {
+                if showsProBadge {
+                    Text("PRO")
+                        .font(.system(size: 9, weight: .heavy))
+                        .foregroundColor(Color(red: 0.55, green: 0.42, blue: 0.06))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color(red: 1, green: 0.9, blue: 0.4))
+                        .clipShape(Capsule())
+                        .padding(6)
+                }
+            }
         }
     }
 }

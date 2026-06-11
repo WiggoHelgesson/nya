@@ -114,14 +114,6 @@ struct UserProfileView: View {
         }
     }
 
-    /// Insätts efter andra inlägget i flödet: full bredd (kant–kant), naturlig bildproportion.
-    private var profileFeedPromoImage108: some View {
-        Image("108")
-            .resizable()
-            .scaledToFit()
-            .frame(maxWidth: .infinity)
-            .accessibilityHidden(true)
-    }
     
     private var mutualFriendsLabel: some View {
         let friends = Array(mutualFriends.prefix(3))
@@ -838,12 +830,6 @@ struct UserProfileView: View {
                                     Divider()
                                         .background(Color(.systemGray5))
 
-                                    if index == 1 {
-                                        profileFeedPromoImage108
-                                            .opacity(showPosts ? 1 : 0)
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
                                 }
                             }
                         }

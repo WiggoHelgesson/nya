@@ -6,12 +6,16 @@ struct StravaStyleHeaderView: View {
     var isProfilePage: Bool = false
     var pageTitle: String = L.t(sv: "Hem", nb: "Hjem")
     var onSettingsTapped: (() -> Void)? = nil
+    var hideMessages: Bool = false
+    /// När satt visas en varukorgsikon (med antal varor) i stället för/bredvid övriga ikoner.
+    var cartAction: (() -> Void)? = nil
     
     @State private var unreadNotifications = 0
     @State private var unreadMessages = 0
     @State private var isFetchingUnread = false
     @State private var showPublicProfile = false
     @StateObject private var dmService = DirectMessageService.shared
+    @ObservedObject private var cartManager = CartManager.shared
     
     private var isPremium: Bool {
         authViewModel.currentUser?.isProMember ?? false
@@ -101,30 +105,60 @@ struct StravaStyleHeaderView: View {
                 } else {
                     // Messages + Notifications for other pages
                     HStack(spacing: 12) {
-                        // Direct messages
-                        NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "bubble.left.and.bubble.right")
-                                    .font(.system(size: 20, weight: .regular))
-                                    .foregroundColor(.primary)
-                                
-                                if unreadMessages > 0 {
-                                    Circle()
-                                        .fill(Color.black)
-                                        .frame(width: 18, height: 18)
-                                        .overlay(
-                                            Text("\(min(unreadMessages, 99))")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
-                                        .offset(x: 8, y: -6)
+                        // Direct messages (hidden on pages that pass hideMessages: true)
+                        if !hideMessages {
+                            NavigationLink(destination: MessagesListView().environmentObject(authViewModel)) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 20, weight: .regular))
+                                        .foregroundColor(.primary)
+
+                                    if unreadMessages > 0 {
+                                        Circle()
+                                            .fill(Color.black)
+                                            .frame(width: 18, height: 18)
+                                            .overlay(
+                                                Text("\(min(unreadMessages, 99))")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            )
+                                            .offset(x: 8, y: -6)
+                                    }
                                 }
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
                             }
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        
+
+                        // Cart (visas bara på sidor som skickar in cartAction, t.ex. Vår shop)
+                        if let cartAction {
+                            Button {
+                                cartAction()
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "cart")
+                                        .font(.system(size: 20, weight: .regular))
+                                        .foregroundColor(.primary)
+
+                                    if cartManager.itemCount > 0 {
+                                        Circle()
+                                            .fill(Color.black)
+                                            .frame(width: 18, height: 18)
+                                            .overlay(
+                                                Text("\(min(cartManager.itemCount, 99))")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            )
+                                            .offset(x: 8, y: -6)
+                                    }
+                                }
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         // Notification bell
                         NavigationLink(destination: NotificationsView(onDismiss: {
                             Task { await refreshUnreadCount() }

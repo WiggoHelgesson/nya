@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ProductDetailView: View {
-    let product: ShopifyProduct
+    @State private var product: ShopifyProduct
     @Binding var showCart: Bool
     @EnvironmentObject var authViewModel: AuthViewModel
     @ObservedObject private var cartManager = CartManager.shared
@@ -20,7 +20,19 @@ struct ProductDetailView: View {
     @State private var showSizeAlert = false
     @State private var relatedProducts: [ShopifyProduct] = []
     @State private var isLoadingRelated = false
+    @State private var isPurchasable = false
+    @State private var isHydratingProduct = true
+    @State private var checkoutErrorMessage: String?
+    @State private var showCheckoutError = false
+    @ObservedObject private var rewardService = FreeRewardService.shared
+    @State private var isRedeemingFreeReward = false
+    @State private var showFreeRewardConfirmation = false
     @Environment(\.dismiss) private var dismiss
+
+    init(product: ShopifyProduct, showCart: Binding<Bool>) {
+        _product = State(initialValue: product)
+        _showCart = showCart
+    }
 
     private var variants: [ShopifyVariant] {
         product.variants.edges.map(\.node)
@@ -54,9 +66,19 @@ struct ProductDetailView: View {
                     .padding(.top, 20)
                 priceSection
                     .padding(.top, 8)
+                if rewardService.isEligible(product) {
+                    freeRewardCard
+                        .padding(.top, 12)
+                        .padding(.horizontal, 16)
+                }
                 if hasMeaningfulVariants {
                     variantSelector
                         .padding(.top, 16)
+                }
+                if !isHydratingProduct && !isPurchasable {
+                    notPurchasableBanner
+                        .padding(.top, 16)
+                        .padding(.horizontal, 16)
                 }
                 actionButtons
                     .padding(.top, 16)
@@ -80,6 +102,9 @@ struct ProductDetailView: View {
                 }
                 Spacer(minLength: 40)
             }
+        }
+        .task(id: product.handle) {
+            await hydrateProductFromStorefront()
         }
         .task(id: product.id) {
             await loadRelatedProducts()
@@ -117,11 +142,38 @@ struct ProductDetailView: View {
                 nb: "Poengene dine vil bli trukket hvis du velger å fortsette"
             ))
         }
+        .alert(
+            L.t(sv: "Hämta gratis produkt?", nb: "Hente gratis produkt?"),
+            isPresented: $showFreeRewardConfirmation
+        ) {
+            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) { }
+            Button(L.t(sv: "Fortsätt", nb: "Fortsett")) {
+                Task { await redeemFreeProduct() }
+            }
+        } message: {
+            Text(L.t(
+                sv: "Du löser in din 3-månadersbelöning. Frakt tillkommer.",
+                nb: "Du løser inn 3-månedersbelønningen din. Frakt kommer i tillegg."
+            ))
+        }
+        .task { await rewardService.syncAndFetchStatus() }
+        .onAppear { RecentlyViewedStore.shared.record(product) }
         .fullScreenCover(isPresented: $showCheckoutSafari) {
             if let url = checkoutURL {
                 SafariView(url: url)
                     .ignoresSafeArea()
             }
+        }
+        .alert(
+            L.t(sv: "Kunde inte slutföra köpet", nb: "Kunne ikke fullføre kjøpet"),
+            isPresented: $showCheckoutError
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(checkoutErrorMessage ?? L.t(
+                sv: "Något gick fel. Försök igen.",
+                nb: "Noe gikk galt. Prøv igjen."
+            ))
         }
         .onAppear {
             if selectedVariant == nil {
@@ -236,7 +288,141 @@ struct ProductDetailView: View {
         .padding(.horizontal, 16)
     }
 
+    // MARK: - Free Reward Card
+
+    private var rewardGold: Color { Color(red: 0.85, green: 0.65, blue: 0.1) }
+
+    /// Kort under priset på eligible produkter:
+    /// - Intjänad reward: hämta gratis-knapp (bekräftelse → checkout med 100%-kod)
+    /// - Pro under intjäning: "låses upp om X dagar"
+    /// - Icke-Pro: upsell till Pro via paywall
+    @ViewBuilder
+    private var freeRewardCard: some View {
+        let status = rewardService.status
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(rewardGold)
+                Text(L.t(sv: "GRATIS för Pro", nb: "GRATIS for Pro"))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(rewardGold)
+                Spacer()
+            }
+
+            if status?.hasEarnedReward == true {
+                Text(L.t(
+                    sv: "Du har en intjänad Pro-belöning — hämta denna produkt gratis. Frakt tillkommer.",
+                    nb: "Du har en opptjent Pro-belønning — hent dette produktet gratis. Frakt kommer i tillegg."
+                ))
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    guard !isRedeemingFreeReward else { return }
+                    if hasMeaningfulVariants && selectedVariant == nil {
+                        showSizeAlert = true
+                        return
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    showFreeRewardConfirmation = true
+                } label: {
+                    HStack(spacing: 8) {
+                        if isRedeemingFreeReward {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "gift.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(L.t(sv: "Hämta gratis med din Pro-belöning", nb: "Hent gratis med Pro-belønningen din"))
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(canPurchase ? rewardGold : Color.gray.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(isRedeemingFreeReward || !canPurchase)
+            } else if status?.isPro == true, let days = status?.daysRemaining {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    Text(L.t(
+                        sv: "Din gratisprodukt låses upp om \(days) dagar",
+                        nb: "Gratisproduktet ditt låses opp om \(days) dager"
+                    ))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                }
+            } else {
+                Text(L.t(
+                    sv: "Pro-medlemmar får en sådan här produkt gratis var 3:e månad.",
+                    nb: "Pro-medlemmer får et slikt produkt gratis hver 3. måned."
+                ))
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    SuperwallService.shared.showPaywall()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("✦")
+                            .font(.system(size: 11))
+                        Text(L.t(sv: "Bli Pro", nb: "Bli Pro"))
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundColor(Color(red: 0.55, green: 0.42, blue: 0.06))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(red: 1, green: 0.9, blue: 0.4).opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(rewardGold.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(rewardGold.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Not Purchasable Banner
+
+    private var notPurchasableBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.secondary)
+            Text(L.t(
+                sv: "Produkten kan visas men är inte tillgänglig för köp i appen ännu.",
+                nb: "Produktet kan vises, men er ikke tilgjengelig for kjøp i appen ennå."
+            ))
+            .font(.system(size: 14))
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemGray6))
+        )
+    }
+
     // MARK: - Action Buttons
+
+    private var canPurchase: Bool {
+        isPurchasable && !isHydratingProduct
+    }
 
     private var actionButtons: some View {
         VStack(spacing: 10) {
@@ -249,7 +435,7 @@ struct ProductDetailView: View {
                 Task { await buyNow(variantId: variant.id) }
             } label: {
                 HStack(spacing: 8) {
-                    if isCheckingOut {
+                    if isCheckingOut || isHydratingProduct {
                         ProgressView().tint(.white)
                     } else {
                         Text(L.t(sv: "Köp nu", nb: "Kjøp nå"))
@@ -259,13 +445,15 @@ struct ProductDetailView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.black)
+                .background(canPurchase ? Color.black : Color.gray.opacity(0.4))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            .disabled(isCheckingOut)
+            .disabled(isCheckingOut || !canPurchase)
 
             if !isSellBagProduct {
                 pointsDiscountDropdown
+                    .opacity(canPurchase ? 1 : 0.5)
+                    .allowsHitTesting(canPurchase)
             }
         }
     }
@@ -274,10 +462,11 @@ struct ProductDetailView: View {
 
     private var pointsDiscountDropdown: some View {
         VStack(spacing: 0) {
+            // Header row
             HStack(spacing: 8) {
                 Text(L.t(
-                    sv: "Har du poäng? Se rabatterat pris",
-                    nb: "Har du poeng? Se rabattert pris"
+                    sv: "Lös in poäng mot rabatt",
+                    nb: "Løs inn poeng mot rabatt"
                 ))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.primary)
@@ -301,28 +490,63 @@ struct ProductDetailView: View {
                 Divider().padding(.horizontal, 14)
 
                 ForEach(PointsDiscountService.tiers) { tier in
-                    let percent = tier.percent(isPro: isPro)
-                    let discounted = productPrice * (1.0 - Double(percent) / 100.0)
+                    let activePercent = tier.percent(isPro: isPro)
+                    let discounted = productPrice * (1.0 - Double(activePercent) / 100.0)
                     let canAfford = currentXP >= tier.xpCost
                     let isRedeeming = redeemingTierId == tier.id
 
                     VStack(spacing: 0) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .center) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                // XP cost + discount badge(es)
                                 HStack(spacing: 6) {
                                     Text("\(tier.xpCost) XP")
                                         .font(.system(size: 14, weight: .bold))
                                         .foregroundColor(canAfford ? .primary : .gray)
 
-                                    Text("\(percent)%")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(canAfford ? Color.black : Color.gray.opacity(0.4))
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    if isPro {
+                                        // Pro user: single gold badge
+                                        HStack(spacing: 3) {
+                                            Text("✦")
+                                                .font(.system(size: 9))
+                                            Text("\(activePercent)%")
+                                                .font(.system(size: 12, weight: .bold))
+                                        }
+                                        .foregroundColor(canAfford ? Color(red: 0.55, green: 0.42, blue: 0.06) : .gray)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 3)
+                                        .background(canAfford ? Color(red: 1, green: 0.9, blue: 0.4).opacity(0.9) : Color.gray.opacity(0.15))
+                                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    } else {
+                                        // Non-Pro: show free rate in black + Pro rate in gold
+                                        Text("\(tier.freePercent)%")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(canAfford ? Color.black : Color.gray.opacity(0.4))
+                                            .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                                        Button {
+                                            SuperwallService.shared.showPaywall()
+                                        } label: {
+                                            HStack(spacing: 3) {
+                                                Text("✦")
+                                                    .font(.system(size: 9))
+                                                Text("\(tier.proPercent)% PRO")
+                                                    .font(.system(size: 11, weight: .bold))
+                                            }
+                                            .foregroundColor(Color(red: 0.55, green: 0.42, blue: 0.06))
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3)
+                                            .background(Color(red: 1, green: 0.9, blue: 0.4).opacity(0.85))
+                                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
 
+                                // Price row
                                 HStack(spacing: 4) {
                                     Text("\(Int(productPrice)) \(productCurrency)")
                                         .font(.system(size: 13))
@@ -370,6 +594,34 @@ struct ProductDetailView: View {
                         }
                     }
                 }
+
+                // Pro upgrade banner for non-Pro users
+                if !isPro {
+                    Divider().padding(.horizontal, 14)
+                    Button {
+                        SuperwallService.shared.showPaywall()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("✦")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(red: 0.55, green: 0.42, blue: 0.06))
+                            Text(L.t(
+                                sv: "Bli Pro och dubblera din rabatt — upp till 40 %",
+                                nb: "Bli Pro og dobbel rabatten — opptil 40 %"
+                            ))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(Color(red: 1, green: 0.97, blue: 0.75).opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .background(
@@ -380,11 +632,49 @@ struct ProductDetailView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(.separator).opacity(0.3), lineWidth: 1)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Storefront Hydration
+
+    private func hydrateProductFromStorefront() async {
+        isHydratingProduct = true
+        defer { isHydratingProduct = false }
+
+        let previousVariant = selectedVariant
+        do {
+            if let storefrontProduct = try await ShopifyService.shared.fetchProductByHandle(product.handle) {
+                product = storefrontProduct
+                selectedVariant = matchVariant(previousVariant, in: storefrontProduct.variants.edges.map(\.node))
+                isPurchasable = true
+            } else {
+                isPurchasable = false
+            }
+        } catch {
+            print("[ProductDetail] Storefront hydration failed: \(error.localizedDescription)")
+            isPurchasable = false
+        }
+    }
+
+    private func matchVariant(_ previous: ShopifyVariant?, in newVariants: [ShopifyVariant]) -> ShopifyVariant? {
+        guard let previous else {
+            return newVariants.first(where: \.availableForSale) ?? newVariants.first
+        }
+        if let exact = newVariants.first(where: { $0.id == previous.id }) {
+            return exact
+        }
+        return newVariants.first { variant in
+            previous.selectedOptions.allSatisfy { option in
+                variant.selectedOptions.contains { $0.name == option.name && $0.value == option.value }
+            }
+        } ?? newVariants.first(where: \.availableForSale) ?? newVariants.first
     }
 
     // MARK: - Checkout Helpers
 
     private func buyNow(variantId: String) async {
+        guard canPurchase else { return }
+
         isCheckingOut = true
         defer { isCheckingOut = false }
 
@@ -392,17 +682,23 @@ struct ProductDetailView: View {
             let cart = try await ShopifyService.shared.cartCreate(variantId: variantId, quantity: 1)
             print("[Checkout] cart.checkoutUrl = \(cart.checkoutUrl)")
             guard let url = URL(string: cart.checkoutUrl) else {
-                print("[Checkout] Failed to parse checkout URL")
+                showCheckoutFailure(L.t(
+                    sv: "Kunde inte öppna kassan. Försök igen.",
+                    nb: "Kunne ikke åpne kassen. Prøv igjen."
+                ))
                 return
             }
             checkoutURL = url
             showCheckoutSafari = true
         } catch {
             print("[Checkout] Buy now error: \(error.localizedDescription)")
+            showCheckoutFailure(error.localizedDescription)
         }
     }
 
     private func buyWithDiscount(variantId: String, tier: DiscountTier) async {
+        guard canPurchase else { return }
+
         isRedeemingDiscount = true
         redeemingTierId = tier.id
         defer {
@@ -412,23 +708,67 @@ struct ProductDetailView: View {
 
         do {
             guard let userId = authViewModel.currentUser?.id else { return }
+
+            let cart = try await ShopifyService.shared.cartCreate(variantId: variantId, quantity: 1)
             let discount = try await PointsDiscountService.shared.redeemDiscount(
                 userId: userId, tier: tier, isPro: isPro
             )
-            let cart = try await ShopifyService.shared.cartCreate(variantId: variantId, quantity: 1)
             let updatedCart = try await ShopifyService.shared.cartDiscountCodesUpdate(
                 cartId: cart.id, discountCodes: [discount.code]
             )
             print("[Checkout] discounted checkoutUrl = \(updatedCart.checkoutUrl)")
             guard let url = URL(string: updatedCart.checkoutUrl) else {
-                print("[Checkout] Failed to parse discounted checkout URL")
+                showCheckoutFailure(L.t(
+                    sv: "Kunde inte öppna kassan. Försök igen.",
+                    nb: "Kunne ikke åpne kassen. Prøv igjen."
+                ))
                 return
             }
             checkoutURL = url
             showCheckoutSafari = true
         } catch {
             print("[Checkout] Discount checkout error: \(error.localizedDescription)")
+            showCheckoutFailure(error.localizedDescription)
         }
+    }
+
+    /// Löser in Pro-belöningen: skapar 100%-kod via edge-funktionen, applicerar
+    /// den på en ny cart och öppnar checkout (frakt betalas som vanligt).
+    private func redeemFreeProduct() async {
+        guard canPurchase else { return }
+        guard let variant = selectedVariant ?? product.firstAvailableVariant else {
+            showSizeAlert = true
+            return
+        }
+
+        isRedeemingFreeReward = true
+        defer { isRedeemingFreeReward = false }
+
+        do {
+            let cart = try await ShopifyService.shared.cartCreate(variantId: variant.id, quantity: 1)
+            let result = try await FreeRewardService.shared.redeem(product: product)
+            let updatedCart = try await ShopifyService.shared.cartDiscountCodesUpdate(
+                cartId: cart.id, discountCodes: [result.code]
+            )
+            print("[Checkout] free reward checkoutUrl = \(updatedCart.checkoutUrl)")
+            guard let url = URL(string: updatedCart.checkoutUrl) else {
+                showCheckoutFailure(L.t(
+                    sv: "Kunde inte öppna kassan. Försök igen.",
+                    nb: "Kunne ikke åpne kassen. Prøv igjen."
+                ))
+                return
+            }
+            checkoutURL = url
+            showCheckoutSafari = true
+        } catch {
+            print("[Checkout] Free reward redemption error: \(error.localizedDescription)")
+            showCheckoutFailure(error.localizedDescription)
+        }
+    }
+
+    private func showCheckoutFailure(_ message: String) {
+        checkoutErrorMessage = message
+        showCheckoutError = true
     }
 
     // MARK: - Payment Icons

@@ -33,11 +33,11 @@ enum SportType: String, CaseIterable, Identifiable {
     
     var activityTypes: [String] {
         switch self {
-        case .gym: return ["gym", "weight_training", "strength"]
-        case .running: return ["run", "running", "trail_run"]
-        case .skiing: return ["ski", "skiing", "downhill_skiing", "cross_country_skiing"]
-        case .golf: return ["golf"]
-        case .mountaineering: return ["mountaineering", "climbing", "rock_climbing", "hiking"]
+        case .gym: return ["gym", "gympass", "weight_training", "strength"]
+        case .running: return ["run", "running", "trail_run", "löppass", "löpning", "löptur"]
+        case .skiing: return ["ski", "skiing", "downhill_skiing", "cross_country_skiing", "skidåkning"]
+        case .golf: return ["golf", "golfrunda"]
+        case .mountaineering: return ["mountaineering", "climbing", "rock_climbing", "hiking", "bestiga berg", "berg", "vandring"]
         }
     }
     
@@ -49,9 +49,32 @@ enum SportType: String, CaseIterable, Identifiable {
     }
 }
 
+/// Shared gym matcher used by all statistics computations (muscle distribution,
+/// top exercises, exercise histories, monthly recap) so they agree with the sport filter.
+func isGymActivityType(_ activityType: String) -> Bool {
+    let type = activityType.lowercased()
+    return SportType.gym.activityTypes.contains { type.contains($0) }
+}
+
+/// Number of sets actually logged: `sets` clamped to the kg/reps data when present,
+/// so set counts and volume are always derived from the same source.
+func gymEffectiveSetCount(_ exercise: GymExercisePost) -> Int {
+    let loggedPairs = min(exercise.kg.count, exercise.reps.count)
+    guard loggedPairs > 0 else { return exercise.sets }
+    return exercise.sets > 0 ? min(exercise.sets, loggedPairs) : loggedPairs
+}
+
+/// Volume (kg × reps) over the same effective sets as `gymEffectiveSetCount`.
+func gymExerciseVolume(_ exercise: GymExercisePost) -> Double {
+    let count = min(gymEffectiveSetCount(exercise), min(exercise.kg.count, exercise.reps.count))
+    guard count > 0 else { return 0 }
+    return (0..<count).reduce(0.0) { $0 + exercise.kg[$1] * Double(exercise.reps[$1]) }
+}
+
 struct StatisticsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    
+    @State private var isPremium = RevenueCatManager.shared.isProMember
+
     @State private var selectedSport: SportType = .gym
     @State private var allPosts: [WorkoutPost] = []
     @State private var isLoading = true
@@ -89,7 +112,12 @@ struct StatisticsView: View {
     // Muscle distribution filter
     @State private var muscleTimePeriod: MuscleTimePeriod = .last30Days
     
-    private let calendar = Calendar.current
+    // ISO8601 = Monday-first weeks, independent of device locale (consistent with HomeView/CoachTabView)
+    private let calendar: Calendar = {
+        var cal = Calendar(identifier: .iso8601)
+        cal.locale = Locale(identifier: "sv_SE")
+        return cal
+    }()
     
     private var filteredPosts: [WorkoutPost] {
         allPosts.filter { post in
@@ -131,46 +159,79 @@ struct StatisticsView: View {
                     .padding(.top, 16)
                     .opacity(showChart ? 1 : 0)
                 
-                // MARK: - Progressive Overload Section
-                Divider()
-                    .padding(.vertical, 32)
-                    .opacity(showProgressive ? 1 : 0)
-                
-                progressiveOverloadSection
-                    .opacity(showProgressive ? 1 : 0)
-                
-                // MARK: - Calendar Section
-                Divider()
-                    .padding(.vertical, 32)
-                    .opacity(showCalendar ? 1 : 0)
-                
-                calendarSection
-                    .opacity(showCalendar ? 1 : 0)
-                
-                // MARK: - Progress Photos Section
-                Divider()
-                    .padding(.vertical, 32)
-                    .opacity(showProgressPhotos ? 1 : 0)
-                
-                ProgressPhotosSectionView()
-                    .environmentObject(authViewModel)
-                    .opacity(showProgressPhotos ? 1 : 0)
-                
-                // MARK: - Muscle Distribution Section
-                muscleDistributionSection
-                    .opacity(showMuscleBalance ? 1 : 0)
-                    .padding(.top, 32)
-                
-                // MARK: - Top Exercises Section
-                topExercisesSection
-                    .opacity(showTopExercises ? 1 : 0)
-                    .padding(.top, 32)
-                
-                // MARK: - Feedback Link
-                feedbackSection
-                    .padding(.top, 40)
-                
-                Spacer(minLength: 100)
+                // MARK: - Pro-locked content (everything from Progressive Overload down)
+                ZStack(alignment: .top) {
+                    VStack(spacing: 0) {
+                        // MARK: - Progressive Overload Section
+                        Divider()
+                            .padding(.vertical, 32)
+                            .opacity(showProgressive ? 1 : 0)
+
+                        progressiveOverloadSection
+                            .opacity(showProgressive ? 1 : 0)
+
+                        // MARK: - Training Clock Section
+                        Divider()
+                            .padding(.vertical, 32)
+
+                        trainingClockSection
+
+                        // MARK: - Calendar Section
+                        Divider()
+                            .padding(.vertical, 32)
+                            .opacity(showCalendar ? 1 : 0)
+
+                        calendarSection
+                            .opacity(showCalendar ? 1 : 0)
+
+                        // MARK: - Fun Facts Section
+                        Divider()
+                            .padding(.vertical, 32)
+
+                        funFactsSection
+
+                        // MARK: - Progress Photos Section
+                        Divider()
+                            .padding(.vertical, 32)
+                            .opacity(showProgressPhotos ? 1 : 0)
+
+                        ProgressPhotosSectionView()
+                            .environmentObject(authViewModel)
+                            .opacity(showProgressPhotos ? 1 : 0)
+
+                        // MARK: - Muscle Distribution Section
+                        muscleDistributionSection
+                            .opacity(showMuscleBalance ? 1 : 0)
+                            .padding(.top, 32)
+
+                        // MARK: - Record Corner Section
+                        Divider()
+                            .padding(.vertical, 32)
+
+                        recordCornerSection
+
+                        // MARK: - Top Exercises Section
+                        topExercisesSection
+                            .opacity(showTopExercises ? 1 : 0)
+                            .padding(.top, 32)
+
+                        // MARK: - Training Buddies Section
+                        trainingBuddiesSection
+                            .padding(.top, 32)
+
+                        // MARK: - Feedback Link
+                        feedbackSection
+                            .padding(.top, 40)
+
+                        Spacer(minLength: 100)
+                    }
+                    .blur(radius: isPremium ? 0 : 10)
+                    .allowsHitTesting(isPremium)
+
+                    if !isPremium {
+                        statsProPaywall
+                    }
+                }
             }
         }
         .opacity(showSkeleton ? 0 : 1)
@@ -184,7 +245,47 @@ struct StatisticsView: View {
         .onAppear {
             animateContent()
         }
+        .onReceive(RevenueCatManager.shared.$isProMember) { newValue in
+            isPremium = newValue
+        }
         .enableSwipeBack()
+    }
+
+    private var statsProPaywall: some View {
+        VStack(spacing: 20) {
+            Spacer(minLength: 60)
+
+            Image(systemName: "lock.fill")
+                .font(.system(size: 36))
+                .foregroundColor(.primary)
+
+            Text(L.t(sv: "Bli Pro för att låsa upp all din statistik", nb: "Bli Pro for å låse opp all statistikken din"))
+                .font(.system(size: 20, weight: .bold))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.primary)
+                .padding(.horizontal, 32)
+
+            Text(L.t(sv: "Progressiv överbelastning, träningskalender, progressbilder och mer.", nb: "Progressiv overbelastning, treningskalender, fremgangsbilder og mer."))
+                .font(.system(size: 14))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 40)
+
+            Button {
+                SuperwallService.shared.showPaywall()
+            } label: {
+                Text(L.t(sv: "Bli Pro", nb: "Bli Pro"))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 40)
+
+            Spacer(minLength: 80)
+        }
     }
     
     private func animateContent() {
@@ -358,19 +459,19 @@ struct StatisticsView: View {
                         }
                     }
                     
-                    // X-axis labels
+                    // X-axis labels — taken from the actual weeks plotted in the chart
                     HStack {
-                        let currentMonth = calendar.component(.month, from: Date())
-                        let months = (0..<3).reversed().map { offset -> String in
-                            let month = (currentMonth - offset + 11) % 12 + 1
+                        let labelIndices = weeklyData.isEmpty ? [] : [0, weeklyData.count / 2, weeklyData.count - 1]
+                        let months = labelIndices.map { idx -> String in
+                            let month = calendar.component(.month, from: weeklyData[idx].weekStart)
                             return monthAbbreviation(month).uppercased()
                         }
                         
-                        ForEach(months, id: \.self) { month in
+                        ForEach(Array(months.enumerated()), id: \.offset) { index, month in
                             Text(month)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.gray)
-                            if month != months.last {
+                            if index != months.count - 1 {
                                 Spacer()
                             }
                         }
@@ -1150,12 +1251,13 @@ struct StatisticsView: View {
             return ConsistencyStats(avgSessionsPerWeek: 0, longestStreakDays: 0, longestStreakWeeks: 0, totalWeeks: 0)
         }
         
-        let cal = Calendar.current
+        var cal = Calendar(identifier: .iso8601)
+        cal.locale = Locale(identifier: "sv_SE")
         
         // Average sessions per week
         let firstDate = dates.first!
         let daysSinceFirst = max(cal.dateComponents([.day], from: firstDate, to: Date()).day ?? 1, 1)
-        let totalWeeks = max(daysSinceFirst / 7, 1)
+        let totalWeeks = max(Int(ceil(Double(daysSinceFirst) / 7.0)), 1)
         let avgPerWeek = Double(dates.count) / Double(totalWeeks)
         
         // Longest streak in consecutive days with activity
@@ -1173,29 +1275,21 @@ struct StatisticsView: View {
         }
         if uniqueDays.count == 1 { longestDayStreak = 1 }
         
-        // Longest streak in consecutive weeks with at least one activity
-        let weekIdentifiers = Set(dates.map { cal.component(.weekOfYear, from: $0) * 10000 + cal.component(.yearForWeekOfYear, from: $0) })
-        let sortedWeeks: [(year: Int, week: Int)] = weekIdentifiers.map { (year: $0 % 10000, week: $0 / 10000) }
-            .sorted { a, b in a.year != b.year ? a.year < b.year : a.week < b.week }
+        // Longest streak in consecutive weeks with at least one activity.
+        // Compare actual week-start dates so streaks survive year boundaries (week 52 -> week 1).
+        let weekStarts = Set(dates.compactMap { cal.dateInterval(of: .weekOfYear, for: $0)?.start }).sorted()
         
-        var longestWeekStreak = 1
+        var longestWeekStreak = weekStarts.isEmpty ? 0 : 1
         var currentWeekStreak = 1
-        for i in 1..<sortedWeeks.count {
-            let prev = sortedWeeks[i - 1]
-            let curr = sortedWeeks[i]
-            let prevDate = cal.date(from: DateComponents(weekOfYear: prev.week, yearForWeekOfYear: prev.year))
-            let currDate = cal.date(from: DateComponents(weekOfYear: curr.week, yearForWeekOfYear: curr.year))
-            if let p = prevDate, let c = currDate {
-                let weekDiff = cal.dateComponents([.weekOfYear], from: p, to: c).weekOfYear ?? 0
-                if weekDiff == 1 {
-                    currentWeekStreak += 1
-                    longestWeekStreak = max(longestWeekStreak, currentWeekStreak)
-                } else {
-                    currentWeekStreak = 1
-                }
+        for i in 1..<max(weekStarts.count, 1) {
+            if let expectedNext = cal.date(byAdding: .weekOfYear, value: 1, to: weekStarts[i - 1]),
+               cal.isDate(expectedNext, inSameDayAs: weekStarts[i]) {
+                currentWeekStreak += 1
+                longestWeekStreak = max(longestWeekStreak, currentWeekStreak)
+            } else {
+                currentWeekStreak = 1
             }
         }
-        if sortedWeeks.count == 1 { longestWeekStreak = 1 }
         
         return ConsistencyStats(
             avgSessionsPerWeek: avgPerWeek,
@@ -1280,8 +1374,11 @@ struct StatisticsView: View {
             MuscleRadarChart(muscleData: muscleData)
                 .frame(height: 280)
             
-            // Legend - top muscle group
+            // Legend - top muscle group (share of all logged sets)
             if let topMuscle = muscleData.max(by: { $0.value < $1.value }), topMuscle.value > 0 {
+                let totalSets = muscleData.values.reduce(0, +)
+                let share = totalSets > 0 ? Double(topMuscle.value) / Double(totalSets) : 0
+                
                 HStack(spacing: 8) {
                     Circle()
                         .fill(Color.white)
@@ -1297,16 +1394,21 @@ struct StatisticsView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.6))
                     
-                    Text("100%")
+                    Text("\(Int(round(share * 100)))%")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                 }
                 
                 // Progress bar
                 GeometryReader { geometry in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white)
-                        .frame(width: geometry.size.width, height: 6)
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: geometry.size.width, height: 6)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white)
+                            .frame(width: geometry.size.width * share, height: 6)
+                    }
                 }
                 .frame(height: 6)
             }
@@ -1420,6 +1522,716 @@ struct StatisticsView: View {
         exerciseHistories.first { $0.name == exerciseName }?.exerciseId
     }
     
+    // MARK: - Träningsklockan (when you train)
+    
+    private struct TrainingClockData {
+        let bucketCounts: [Int]      // morgon, lunch, eftermiddag, kväll
+        let weekdayCounts: [Int]     // Monday-first
+        let averageStartMinutes: Int?
+        let totalCount: Int
+        
+        var topBucketIndex: Int? {
+            guard totalCount > 0 else { return nil }
+            return bucketCounts.indices.max(by: { bucketCounts[$0] < bucketCounts[$1] })
+        }
+        
+        var topWeekdayIndex: Int? {
+            guard totalCount > 0 else { return nil }
+            return weekdayCounts.indices.max(by: { weekdayCounts[$0] < weekdayCounts[$1] })
+        }
+    }
+    
+    private func computeTrainingClock() -> TrainingClockData {
+        var buckets = [0, 0, 0, 0]
+        var weekdays = Array(repeating: 0, count: 7)
+        var startMinutes: [Int] = []
+        
+        for post in allPosts {
+            guard let date = parseDate(post.createdAt) else { continue }
+            let hour = calendar.component(.hour, from: date)
+            let minute = calendar.component(.minute, from: date)
+            
+            switch hour {
+            case 5..<11: buckets[0] += 1
+            case 11..<14: buckets[1] += 1
+            case 14..<18: buckets[2] += 1
+            default: buckets[3] += 1
+            }
+            
+            let weekdayIndex = (calendar.component(.weekday, from: date) + 5) % 7
+            weekdays[weekdayIndex] += 1
+            startMinutes.append(hour * 60 + minute)
+        }
+        
+        let avg = startMinutes.isEmpty ? nil : startMinutes.reduce(0, +) / startMinutes.count
+        return TrainingClockData(
+            bucketCounts: buckets,
+            weekdayCounts: weekdays,
+            averageStartMinutes: avg,
+            totalCount: allPosts.count
+        )
+    }
+    
+    private var trainingClockSection: some View {
+        let clock = computeTrainingClock()
+        let bucketLabels = [
+            L.t(sv: "Morgon", nb: "Morgen"),
+            L.t(sv: "Lunch", nb: "Lunsj"),
+            L.t(sv: "Em", nb: "Em"),
+            L.t(sv: "Kväll", nb: "Kveld")
+        ]
+        let bucketIcons = ["sunrise.fill", "sun.max.fill", "sun.haze.fill", "moon.stars.fill"]
+        let personalities = [
+            L.t(sv: "Du är en morgonmänniska", nb: "Du er et morgenmenneske"),
+            L.t(sv: "Du är en lunchtränare", nb: "Du er en lunsjtrener"),
+            L.t(sv: "Du tränar helst på eftermiddagen", nb: "Du trener helst på ettermiddagen"),
+            L.t(sv: "Du är en kvällskrigare", nb: "Du er en kveldskriger")
+        ]
+        let weekdayLabels = ["M", "T", "O", "T", "F", "L", "S"]
+        let maxBucket = max(clock.bucketCounts.max() ?? 1, 1)
+        let maxWeekday = max(clock.weekdayCounts.max() ?? 1, 1)
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L.t(sv: "VANOR", nb: "VANER"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.5)
+                
+                Text(L.t(sv: "Träningsklockan", nb: "Treningsklokken"))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(L.t(sv: "När du tränar som mest", nb: "Når du trener mest"))
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            if clock.totalCount == 0 {
+                VStack(spacing: 12) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text(L.t(sv: "Inga pass ännu", nb: "Ingen økter ennå"))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Personality label
+                    if let top = clock.topBucketIndex {
+                        HStack(spacing: 10) {
+                            Image(systemName: bucketIcons[top])
+                                .font(.system(size: 22))
+                                .foregroundColor(.primary)
+                            Text(personalities[top])
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    
+                    // Time-of-day bars
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ForEach(0..<4, id: \.self) { i in
+                            VStack(spacing: 6) {
+                                Text("\(clock.bucketCounts[i])")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(i == clock.topBucketIndex ? Color.primary : Color.primary.opacity(0.2))
+                                    .frame(height: max(8, CGFloat(clock.bucketCounts[i]) / CGFloat(maxBucket) * 80))
+                                Text(bucketLabels[i])
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Weekday bars
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L.t(sv: "Pass per veckodag", nb: "Økter per ukedag"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        
+                        HStack(alignment: .bottom, spacing: 8) {
+                            ForEach(0..<7, id: \.self) { i in
+                                VStack(spacing: 5) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(i == clock.topWeekdayIndex ? Color.primary : Color.primary.opacity(0.2))
+                                        .frame(height: max(6, CGFloat(clock.weekdayCounts[i]) / CGFloat(maxWeekday) * 56))
+                                    Text(weekdayLabels[i])
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(i == clock.topWeekdayIndex ? .primary : .secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                    
+                    // Average start time
+                    if let avg = clock.averageStartMinutes {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                            Text(L.t(sv: "Snittstarttid: \(String(format: "%02d:%02d", avg / 60, avg % 60))", nb: "Gjennomsnittlig starttid: \(String(format: "%02d:%02d", avg / 60, avg % 60))"))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(20)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Roliga fakta (fun comparisons)
+    
+    private struct FunFact: Identifiable {
+        let id: String
+        let icon: String
+        let title: String
+        let value: String
+        let comparison: String
+    }
+    
+    private func computeFunFacts() -> [FunFact] {
+        var facts: [FunFact] = []
+        
+        // Total volume lifted (gym)
+        let totalVolumeKg = allPosts
+            .filter { isGymActivityType($0.activityType) }
+            .reduce(0.0) { $0 + ($1.exercises?.reduce(0.0) { $0 + gymExerciseVolume($1) } ?? 0) }
+        if totalVolumeKg > 0 {
+            let tons = totalVolumeKg / 1000.0
+            let comparison: String
+            if tons >= 150 {
+                let whales = tons / 150.0
+                comparison = L.t(sv: "Det motsvarar \(String(format: "%.1f", whales)) blåvalar", nb: "Det tilsvarer \(String(format: "%.1f", whales)) blåhvaler")
+            } else if tons >= 41 {
+                let planes = tons / 41.0
+                comparison = L.t(sv: "Det motsvarar \(String(format: "%.1f", planes)) Boeing 737", nb: "Det tilsvarer \(String(format: "%.1f", planes)) Boeing 737")
+            } else if tons >= 6 {
+                let elephants = tons / 6.0
+                comparison = L.t(sv: "Det motsvarar \(String(format: "%.1f", elephants)) elefanter", nb: "Det tilsvarer \(String(format: "%.1f", elephants)) elefanter")
+            } else {
+                let cars = totalVolumeKg / 1500.0
+                comparison = L.t(sv: "Det motsvarar \(String(format: "%.1f", cars)) personbilar", nb: "Det tilsvarer \(String(format: "%.1f", cars)) personbiler")
+            }
+            let value = tons >= 1
+                ? L.t(sv: "\(String(format: "%.1f", tons)) ton", nb: "\(String(format: "%.1f", tons)) tonn")
+                : "\(Int(totalVolumeKg)) kg"
+            facts.append(FunFact(
+                id: "volume",
+                icon: "scalemass.fill",
+                title: L.t(sv: "Totalt lyft", nb: "Totalt løftet"),
+                value: value,
+                comparison: comparison
+            ))
+        }
+        
+        // Total distance (km)
+        let totalKm = allPosts.reduce(0.0) { $0 + ($1.distance ?? 0) }
+        if totalKm > 0 {
+            let comparison: String
+            if totalKm >= 1572 {
+                comparison = L.t(sv: "\(String(format: "%.1f", totalKm / 1572.0)) gånger Sverige på längden", nb: "\(String(format: "%.1f", totalKm / 1572.0)) ganger Sverige på langs")
+            } else if totalKm >= 315 {
+                comparison = L.t(sv: "\(String(format: "%.1f", totalKm / 315.0)) Vätternrundor", nb: "\(String(format: "%.1f", totalKm / 315.0)) Vätternrundaer")
+            } else {
+                let laps = Int(totalKm * 1000 / 400)
+                comparison = L.t(sv: "\(laps) varv på en löparbana", nb: "\(laps) runder på en løpebane")
+            }
+            facts.append(FunFact(
+                id: "distance",
+                icon: "point.topleft.down.curvedto.point.bottomright.up.fill",
+                title: L.t(sv: "Total distans", nb: "Total distanse"),
+                value: "\(String(format: "%.1f", totalKm)) km",
+                comparison: comparison
+            ))
+        }
+        
+        // Total elevation (m)
+        let totalElevation = allPosts.reduce(0.0) { $0 + ($1.elevationGain ?? 0) }
+        if totalElevation > 0 {
+            let comparison: String
+            if totalElevation >= 8849 {
+                comparison = L.t(sv: "\(String(format: "%.1f", totalElevation / 8849.0)) Mount Everest", nb: "\(String(format: "%.1f", totalElevation / 8849.0)) Mount Everest")
+            } else if totalElevation >= 2097 {
+                comparison = L.t(sv: "\(String(format: "%.1f", totalElevation / 2097.0)) Kebnekaise", nb: "\(String(format: "%.1f", totalElevation / 2097.0)) Kebnekaise")
+            } else {
+                comparison = L.t(sv: "\(Int(totalElevation / 2097.0 * 100))% av Kebnekaise", nb: "\(Int(totalElevation / 2097.0 * 100))% av Kebnekaise")
+            }
+            facts.append(FunFact(
+                id: "elevation",
+                icon: "mountain.2.fill",
+                title: L.t(sv: "Höjdmeter", nb: "Høydemeter"),
+                value: "\(Int(totalElevation)) m",
+                comparison: comparison
+            ))
+        }
+        
+        // Total training time
+        let totalSeconds = allPosts.reduce(0) { $0 + ($1.duration ?? 0) }
+        if totalSeconds > 0 {
+            let hours = Double(totalSeconds) / 3600.0
+            let value: String
+            if hours >= 48 {
+                value = L.t(sv: "\(String(format: "%.1f", hours / 24.0)) dygn", nb: "\(String(format: "%.1f", hours / 24.0)) døgn")
+            } else {
+                value = L.t(sv: "\(String(format: "%.0f", hours)) timmar", nb: "\(String(format: "%.0f", hours)) timer")
+            }
+            let movies = Int(hours / 2.0)
+            facts.append(FunFact(
+                id: "time",
+                icon: "hourglass",
+                title: L.t(sv: "Total träningstid", nb: "Total treningstid"),
+                value: value,
+                comparison: movies > 0
+                    ? L.t(sv: "Tid nog för \(movies) långfilmer", nb: "Tid nok til \(movies) spillefilmer")
+                    : L.t(sv: "Bra start — fortsätt så!", nb: "God start — fortsett sånn!")
+            ))
+        }
+        
+        // Total reps
+        let totalReps = allPosts
+            .filter { isGymActivityType($0.activityType) }
+            .reduce(0) { total, post in
+                total + (post.exercises?.reduce(0) { exTotal, exercise in
+                    let count = min(gymEffectiveSetCount(exercise), exercise.reps.count)
+                    return exTotal + (0..<count).reduce(0) { $0 + exercise.reps[$1] }
+                } ?? 0)
+            }
+        if totalReps > 0 {
+            let gymSessionCount = max(allPosts.filter { isGymActivityType($0.activityType) }.count, 1)
+            facts.append(FunFact(
+                id: "reps",
+                icon: "repeat",
+                title: L.t(sv: "Totalt antal reps", nb: "Totalt antall reps"),
+                value: "\(totalReps)",
+                comparison: L.t(sv: "Snitt \(totalReps / gymSessionCount) reps per gympass", nb: "Snitt \(totalReps / gymSessionCount) reps per økt")
+            ))
+        }
+        
+        return facts
+    }
+    
+    private var funFactsSection: some View {
+        let facts = computeFunFacts()
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L.t(sv: "KUL FAKTA", nb: "GØY FAKTA"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.5)
+                
+                Text(L.t(sv: "Din träning i siffror", nb: "Din trening i tall"))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(L.t(sv: "All din träning omräknad till roliga jämförelser", nb: "All treningen din omregnet til gøye sammenligninger"))
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            if facts.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text(L.t(sv: "Logga pass för att se roliga fakta", nb: "Logg økter for å se gøye fakta"))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(facts.enumerated()), id: \.element.id) { index, fact in
+                        HStack(spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 48, height: 48)
+                                Image(systemName: fact.icon)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(fact.title)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Text(fact.value)
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundColor(.primary)
+                                Text(fact.comparison)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        
+                        if index < facts.count - 1 {
+                            Divider()
+                                .padding(.leading, 78)
+                        }
+                    }
+                }
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Rekordhörnan (PR wall)
+    
+    private struct PersonalRecordEntry: Identifiable {
+        let id: String
+        let exerciseName: String
+        let value: String
+        let date: Date
+    }
+    
+    private func computePersonalRecords() -> [PersonalRecordEntry] {
+        allPosts.compactMap { post -> PersonalRecordEntry? in
+            guard let name = post.pbExerciseName, !name.isEmpty,
+                  let value = post.pbValue, !value.isEmpty,
+                  let date = parseDate(post.createdAt) else { return nil }
+            return PersonalRecordEntry(id: post.id, exerciseName: name, value: value, date: date)
+        }
+        .sorted { $0.date > $1.date }
+    }
+    
+    private var recordCornerSection: some View {
+        let records = computePersonalRecords()
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let recentCount = records.filter { $0.date >= thirtyDaysAgo }.count
+        
+        let prDateFormatter: DateFormatter = {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.dateFormat = "d MMM"
+            return formatter
+        }()
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L.t(sv: "REKORD", nb: "REKORDER"))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.5)
+                
+                Text(L.t(sv: "Rekordhörnan", nb: "Rekordhjørnet"))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                Text(L.t(sv: "Dina senaste personliga rekord", nb: "Dine siste personlige rekorder"))
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            if records.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text(L.t(sv: "Inga rekord ännu", nb: "Ingen rekorder ennå"))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(L.t(sv: "Slå ditt första rekord — logga ett gympass!", nb: "Slå din første rekord — logg en treningsøkt!"))
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(20)
+            } else {
+                VStack(spacing: 16) {
+                    // Hero numbers
+                    HStack(spacing: 12) {
+                        VStack(spacing: 4) {
+                            Text("\(records.count)")
+                                .font(.system(size: 28, weight: .heavy))
+                                .foregroundColor(.primary)
+                            Text(L.t(sv: "Rekord totalt", nb: "Rekorder totalt"))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(16)
+                        
+                        VStack(spacing: 4) {
+                            Text("\(recentCount)")
+                                .font(.system(size: 28, weight: .heavy))
+                                .foregroundColor(.primary)
+                            Text(L.t(sv: "Senaste 30 dagarna", nb: "Siste 30 dagene"))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(16)
+                    }
+                    
+                    // Latest 5 PRs
+                    VStack(spacing: 0) {
+                        ForEach(Array(records.prefix(5).enumerated()), id: \.element.id) { index, record in
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.yellow.opacity(0.15))
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: "trophy.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.1))
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.exerciseName)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text(record.value)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Text(prDateFormatter.string(from: record.date))
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            
+                            if index < min(records.count, 5) - 1 {
+                                Divider()
+                                    .padding(.leading, 70)
+                            }
+                        }
+                    }
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Träningskompisar & favoritplatser
+    
+    private struct BuddyStat: Identifiable {
+        let id: String
+        let username: String
+        let avatarUrl: String?
+        let sessionCount: Int
+    }
+    
+    private struct SocialStats {
+        let topBuddies: [BuddyStat]
+        let topLocation: (name: String, count: Int)?
+        let uniqueLocationCount: Int
+        
+        var isEmpty: Bool { topBuddies.isEmpty && topLocation == nil }
+    }
+    
+    private func computeSocialStats() -> SocialStats {
+        var buddyCounts: [String: (username: String, avatarUrl: String?, count: Int)] = [:]
+        var locationCounts: [String: (display: String, count: Int)] = [:]
+        
+        for post in allPosts {
+            if let buddies = post.trainedWith {
+                for buddy in buddies {
+                    if var existing = buddyCounts[buddy.id] {
+                        existing.count += 1
+                        buddyCounts[buddy.id] = existing
+                    } else {
+                        buddyCounts[buddy.id] = (username: buddy.username, avatarUrl: buddy.avatarUrl, count: 1)
+                    }
+                }
+            }
+            
+            if let location = post.location?.trimmingCharacters(in: .whitespacesAndNewlines), !location.isEmpty {
+                let key = location.lowercased()
+                if var existing = locationCounts[key] {
+                    existing.count += 1
+                    locationCounts[key] = existing
+                } else {
+                    locationCounts[key] = (display: location, count: 1)
+                }
+            }
+        }
+        
+        let topBuddies = buddyCounts
+            .map { BuddyStat(id: $0.key, username: $0.value.username, avatarUrl: $0.value.avatarUrl, sessionCount: $0.value.count) }
+            .sorted { $0.sessionCount > $1.sessionCount }
+            .prefix(3)
+        
+        let topLocation = locationCounts.values.max(by: { $0.count < $1.count })
+        
+        return SocialStats(
+            topBuddies: Array(topBuddies),
+            topLocation: topLocation.map { (name: $0.display, count: $0.count) },
+            uniqueLocationCount: locationCounts.count
+        )
+    }
+    
+    @ViewBuilder
+    private var trainingBuddiesSection: some View {
+        let stats = computeSocialStats()
+        
+        if !stats.isEmpty {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L.t(sv: "SOCIALT", nb: "SOSIALT"))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .tracking(1.5)
+                    
+                    Text(L.t(sv: "Kompisar & platser", nb: "Venner & steder"))
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Text(L.t(sv: "Vilka och var du tränar mest med", nb: "Hvem og hvor du trener mest med"))
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack(spacing: 12) {
+                    // Top buddies
+                    if !stats.topBuddies.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(Array(stats.topBuddies.enumerated()), id: \.element.id) { index, buddy in
+                                HStack(spacing: 14) {
+                                    if let urlString = buddy.avatarUrl, let url = URL(string: urlString) {
+                                        AsyncImage(url: url) { image in
+                                            image.resizable().scaledToFill()
+                                        } placeholder: {
+                                            Circle().fill(Color.primary.opacity(0.08))
+                                        }
+                                        .frame(width: 44, height: 44)
+                                        .clipShape(Circle())
+                                    } else {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.primary.opacity(0.08))
+                                                .frame(width: 44, height: 44)
+                                            Image(systemName: "person.fill")
+                                                .font(.system(size: 18))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(buddy.username)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+                                        Text(L.t(sv: "\(buddy.sessionCount) pass tillsammans", nb: "\(buddy.sessionCount) økter sammen"))
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Text("#\(index + 1)")
+                                        .font(.system(size: 15, weight: .heavy))
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                
+                                if index < stats.topBuddies.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 74)
+                                }
+                            }
+                        }
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(20)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                    }
+                    
+                    // Favorite location
+                    if let location = stats.topLocation {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(width: 48, height: 48)
+                                Image(systemName: "mappin.and.ellipse")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(L.t(sv: "Din favoritplats", nb: "Ditt favorittsted"))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Text(location.name)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                Text(L.t(sv: "\(location.count) pass · \(stats.uniqueLocationCount) olika platser totalt", nb: "\(location.count) økter · \(stats.uniqueLocationCount) ulike steder totalt"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(20)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+    
     // MARK: - Compute Muscle Distribution
     private func computeMuscleDistribution(for timePeriod: MuscleTimePeriod) -> [String: Int] {
         var muscleSetCounts: [String: Int] = [
@@ -1445,18 +2257,17 @@ struct StatisticsView: View {
         }()
         
         for post in allPosts {
-            let type = post.activityType.lowercased()
-            guard type.contains("gym") else { continue }
+            guard isGymActivityType(post.activityType) else { continue }
             guard let exercises = post.exercises else { continue }
             
-            // Filter by date if cutoff is set
-            if let cutoff = cutoffDate, let postDate = parseDate(post.createdAt) {
-                guard postDate >= cutoff else { continue }
+            // Filter by date if cutoff is set; skip posts with unparseable dates
+            if let cutoff = cutoffDate {
+                guard let postDate = parseDate(post.createdAt), postDate >= cutoff else { continue }
             }
             
             for exercise in exercises {
                 let category = (exercise.category ?? "").lowercased()
-                let setCount = exercise.sets > 0 ? exercise.sets : exercise.kg.count
+                let setCount = gymEffectiveSetCount(exercise)
                 
                 // Map categories to muscle groups
                 if category.contains("chest") || category.contains("bröst") {
@@ -1491,17 +2302,18 @@ struct StatisticsView: View {
         var exerciseMap: [String: TopExerciseData] = [:]
         
         for post in allPosts {
-            let type = post.activityType.lowercased()
-            guard type.contains("gym") else { continue }
+            guard isGymActivityType(post.activityType) else { continue }
             guard let exercises = post.exercises else { continue }
             guard let date = parseDate(post.createdAt) else { continue }
             
             for exercise in exercises {
-                let name = exercise.name
-                let setCount = exercise.sets > 0 ? exercise.sets : exercise.kg.count
+                let displayName = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !displayName.isEmpty else { continue }
+                let key = displayName.lowercased()
+                let setCount = gymEffectiveSetCount(exercise)
                 let maxWeight = exercise.kg.max() ?? 0
                 
-                if var existing = exerciseMap[name] {
+                if var existing = exerciseMap[key] {
                     existing.totalSets += setCount
                     existing.sessionCount += 1
                     if date > existing.lastDate {
@@ -1510,10 +2322,10 @@ struct StatisticsView: View {
                     if maxWeight > existing.bestWeight {
                         existing.bestWeight = maxWeight
                     }
-                    exerciseMap[name] = existing
+                    exerciseMap[key] = existing
                 } else {
-                    exerciseMap[name] = TopExerciseData(
-                        name: name,
+                    exerciseMap[key] = TopExerciseData(
+                        name: displayName,
                         totalSets: setCount,
                         sessionCount: 1,
                         lastDate: date,
@@ -1555,11 +2367,10 @@ struct StatisticsView: View {
     }
     
     private func computeExerciseHistories() {
-        var map: [String: (exerciseId: String?, snapshots: [StatExerciseSnapshot])] = [:]
+        var map: [String: (displayName: String, exerciseId: String?, snapshots: [StatExerciseSnapshot])] = [:]
         
         for post in allPosts {
-            let type = post.activityType.lowercased()
-            guard type.contains("gym") else { continue }
+            guard isGymActivityType(post.activityType) else { continue }
             guard let exercises = post.exercises, !exercises.isEmpty else { continue }
             guard let date = parseDate(post.createdAt) else { continue }
             
@@ -1579,23 +2390,27 @@ struct StatisticsView: View {
                     category: exercise.category
                 )
                 
-                // Store exercise ID if available
-                if map[exercise.name] == nil {
-                    map[exercise.name] = (exerciseId: exercise.id, snapshots: [snapshot])
+                // Group case-insensitively so "Bänkpress" and "bänkpress" merge
+                let displayName = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !displayName.isEmpty else { continue }
+                let key = displayName.lowercased()
+                
+                if map[key] == nil {
+                    map[key] = (displayName: displayName, exerciseId: exercise.id, snapshots: [snapshot])
                 } else {
-                    map[exercise.name]?.snapshots.append(snapshot)
+                    map[key]?.snapshots.append(snapshot)
                     // Update exerciseId if we have a newer one
-                    if let id = exercise.id, map[exercise.name]?.exerciseId == nil {
-                        map[exercise.name]?.exerciseId = id
+                    if let id = exercise.id, map[key]?.exerciseId == nil {
+                        map[key]?.exerciseId = id
                     }
                 }
             }
         }
         
-        let histories = map.map { name, data -> StatExerciseHistory in
+        let histories = map.values.map { data -> StatExerciseHistory in
             let sorted = data.snapshots.sorted { $0.date < $1.date }
             return StatExerciseHistory(
-                name: name,
+                name: data.displayName,
                 category: sorted.last?.category,
                 exerciseId: data.exerciseId,
                 history: sorted
@@ -1623,18 +2438,11 @@ struct StatisticsView: View {
         
         if selectedSport == .gym {
             let volume = thisWeekPosts.reduce(0.0) { total, post in
-                let postVolume = post.exercises?.reduce(0.0) { exerciseTotal, exercise in
-                    let exerciseVolume = zip(exercise.reps, exercise.kg).reduce(0.0) { setTotal, pair in
-                        setTotal + Double(pair.0) * pair.1
-                    }
-                    return exerciseTotal + exerciseVolume
-                } ?? 0.0
-                return total + postVolume
+                total + (post.exercises?.reduce(0.0) { $0 + gymExerciseVolume($1) } ?? 0.0)
             }
             
             let sets = thisWeekPosts.reduce(0) { total, post in
-                let postSets = post.exercises?.reduce(0) { $0 + $1.sets } ?? 0
-                return total + postSets
+                total + (post.exercises?.reduce(0) { $0 + gymEffectiveSetCount($1) } ?? 0)
             }
             
             progressStats = ProgressStats(
@@ -1670,13 +2478,7 @@ struct StatisticsView: View {
             let value: Double
             if selectedSport == .gym {
                 value = weekPosts.reduce(0.0) { total, post in
-                    let postVolume = post.exercises?.reduce(0.0) { exerciseTotal, exercise in
-                        let exerciseVolume = zip(exercise.reps, exercise.kg).reduce(0.0) { setTotal, pair in
-                            setTotal + Double(pair.0) * pair.1
-                        }
-                        return exerciseTotal + exerciseVolume
-                    } ?? 0.0
-                    return total + postVolume
+                    total + (post.exercises?.reduce(0.0) { $0 + gymExerciseVolume($1) } ?? 0.0)
                 }
             } else if selectedSport == .golf {
                 value = Double(weekPosts.count)
@@ -2981,7 +3783,8 @@ struct MonthlyReportView: View {
     }
     
     private var totalDistance: Double {
-        monthPosts.reduce(0) { $0 + ($1.distance ?? 0) } / 1000.0
+        // distance is stored in km app-wide
+        monthPosts.reduce(0) { $0 + ($1.distance ?? 0) }
     }
     
     private var totalElevation: Double {
@@ -2991,6 +3794,7 @@ struct MonthlyReportView: View {
     // Total kg lifted from gym sessions
     private var totalKgLifted: Double {
         monthPosts.reduce(0.0) { total, post in
+            guard isGymActivityType(post.activityType) else { return total }
             guard let exercises = post.exercises else { return total }
             let postKg = exercises.reduce(0.0) { exerciseTotal, exercise in
                 // Sum all kg × reps for each set
@@ -3581,7 +4385,7 @@ struct MonthlyReportView: View {
                             Image(systemName: "location")
                                 .font(.system(size: 12))
                             if let distance = post.distance, distance > 0 {
-                                Text("\(String(format: "%.1f", distance / 1000)) km")
+                                Text("\(String(format: "%.1f", distance)) km")
                                     .font(.system(size: 13, weight: .medium))
                             }
                             if let elevation = post.elevationGain, elevation > 0 {
@@ -4092,83 +4896,86 @@ struct StatExerciseHistory: Identifiable {
     
     var trendPercentage: Double {
         guard history.count >= 2 else { return 0 }
-        let firstWeight = history.first?.bestSet.weight ?? 0
-        let lastWeight = history.last?.bestSet.weight ?? 0
-        return firstWeight > 0 ? ((lastWeight - firstWeight) / firstWeight) * 100 : 0
+        // Compare estimated 1RM (same metric bestSet is selected by) so that
+        // same weight at higher reps counts as progress, not a plateau.
+        let first1RM = history.first?.estimated1RM ?? 0
+        let last1RM = history.last?.estimated1RM ?? 0
+        return first1RM > 0 ? ((last1RM - first1RM) / first1RM) * 100 : 0
+    }
+    
+    /// Plateau = near-zero change (float-safe threshold instead of exact equality)
+    var isPlateau: Bool {
+        abs(trendPercentage) < 0.5
     }
     
     var trendMessage: String {
         let change = trendPercentage
-        if change > 5 {
+        if isPlateau {
+            return L.t(sv: "Platå", nb: "Platå")
+        } else if change > 5 {
             return "+\(String(format: "%.0f", change))%"
         } else if change > 0 {
             return "+\(String(format: "%.1f", change))%"
         } else if change < -5 {
             return "\(String(format: "%.0f", change))%"
-        } else if change < 0 {
-            return "\(String(format: "%.1f", change))%"
         } else {
-            return L.t(sv: "Platå", nb: "Platå")
+            return "\(String(format: "%.1f", change))%"
         }
     }
     
     var trendColor: Color {
-        let change = trendPercentage
-        if change > 0 { return .green }
-        if change < 0 { return .red }
-        return .gray
+        if isPlateau { return .gray }
+        return trendPercentage > 0 ? .green : .red
     }
     
     var trendIcon: String {
+        if isPlateau { return "pause.fill" }
         let change = trendPercentage
         if change > 5 { return "flame.fill" }
         if change > 0 { return "arrow.up.right" }
-        if change < 0 { return "arrow.down.right" }
-        return "pause.fill"
+        return "arrow.down.right"
     }
     
     // MARK: - 1RM Predictions
     
-    /// Current 1RM = the HEAVIEST weight the user has actually lifted
+    /// Current 1RM = highest estimated 1RM (Epley) across all history
     var current1RM: Double {
-        // Find the heaviest weight lifted across all history
-        let allWeights = history.flatMap { $0.sets }.map { $0.weight }
-        return allWeights.max() ?? 0
+        history.map { $0.estimated1RM }.max() ?? 0
     }
     
-    /// Latest 1RM = heaviest weight from most recent workout
+    /// Latest 1RM = estimated 1RM from most recent workout
     var latest1RM: Double {
-        latestSnapshot?.bestSet.weight ?? 0
+        latestSnapshot?.estimated1RM ?? 0
     }
     
-    /// Max weight from 30 days ago (or earliest if less than 30 days of data)
+    /// Estimated 1RM from 30 days ago (or earliest if less than 30 days of data)
     var thirtyDaysAgo1RM: Double? {
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         // Find snapshot closest to 30 days ago
         let oldSnapshots = history.filter { $0.date <= thirtyDaysAgo }
-        return oldSnapshots.last?.bestSet.weight ?? history.first?.bestSet.weight
+        return oldSnapshots.last?.estimated1RM ?? history.first?.estimated1RM
     }
     
-    /// Change in max weight over last 30 days (in kg)
+    /// Change in estimated 1RM over last 30 days (in kg)
     var thirtyDayChange: Double {
         guard let old1RM = thirtyDaysAgo1RM, old1RM > 0 else { return 0 }
         return latest1RM - old1RM
     }
     
-    /// Monthly progression rate (kg per month) based on historical data
+    /// Monthly progression rate (kg per month) based on estimated 1RM history
     var monthlyProgressionRate: Double {
         guard history.count >= 2,
               let firstDate = history.first?.date,
               let lastDate = history.last?.date else { return 0 }
         
-        let firstWeight = history.first?.bestSet.weight ?? 0
-        let lastWeight = history.last?.bestSet.weight ?? 0
+        let first1RM = history.first?.estimated1RM ?? 0
+        let last1RM = history.last?.estimated1RM ?? 0
         
         let daysDiff = Calendar.current.dateComponents([.day], from: firstDate, to: lastDate).day ?? 0
         guard daysDiff > 7 else { return 0 } // Need at least a week of data
         
         let monthsDiff = Double(daysDiff) / 30.0
-        return (lastWeight - firstWeight) / max(monthsDiff, 0.5)
+        return (last1RM - first1RM) / max(monthsDiff, 0.5)
     }
     
     /// Predicted 1RM in 3 months
@@ -4293,7 +5100,7 @@ struct StatExerciseRow: View {
     @ViewBuilder
     private var trendBadge: some View {
         let change = history.trendPercentage
-        if change == 0 {
+        if history.isPlateau {
             Text(L.t(sv: "Platå", nb: "Platå"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
@@ -4373,11 +5180,11 @@ struct AllExercisesListView: View {
         case .alla:
             break
         case .okar:
-            results = results.filter { $0.trendPercentage > 0 }
+            results = results.filter { !$0.isPlateau && $0.trendPercentage > 0 }
         case .minskar:
-            results = results.filter { $0.trendPercentage < 0 }
+            results = results.filter { !$0.isPlateau && $0.trendPercentage < 0 }
         case .plata:
-            results = results.filter { $0.trendPercentage == 0 && $0.history.count >= 2 }
+            results = results.filter { $0.isPlateau && $0.history.count >= 2 }
         }
         
         return results
@@ -4498,49 +5305,47 @@ struct AllExercisesListView: View {
         
         do {
             let posts = try await WorkoutService.shared.fetchUserWorkoutPosts(userId: userId)
-            let gymPosts = posts.filter { $0.activityType.lowercased().contains("gym") }
+            let gymPosts = posts.filter { isGymActivityType($0.activityType) }
+            
+            // Same date parsing as StatisticsView.parseDate (fractional seconds fallback)
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let fallbackFormatter = ISO8601DateFormatter()
+            fallbackFormatter.formatOptions = [.withInternetDateTime]
             
             // Group by exercise name
             var exerciseDict: [String: (name: String, exerciseId: String?, snapshots: [StatExerciseSnapshot])] = [:]
             
             for post in gymPosts {
                 guard let exercises = post.exercises else { continue }
+                // Skip posts with unparseable dates instead of defaulting to "now"
+                guard let sessionDate = isoFormatter.date(from: post.createdAt)
+                        ?? fallbackFormatter.date(from: post.createdAt) else { continue }
                 
                 for exercise in exercises {
                     let normalizedName = exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     
-                    // Only process strength training exercises (with kg and reps)
-                    let reps = exercise.reps
-                    let kg = exercise.kg
+                    // Same set construction as computeExerciseHistories: valid reps only,
+                    // best set chosen by estimated 1RM
+                    let sets = zip(exercise.kg, exercise.reps)
+                        .map { StatSetSnapshot(weight: $0.0, reps: $0.1) }
+                        .filter { $0.reps > 0 }
+                    guard !sets.isEmpty else { continue }
                     
-                    // Build sets for this session
-                    var sets: [StatSetSnapshot] = []
-                    var bestSet: StatSetSnapshot?
-                    
-                    for i in 0..<min(reps.count, kg.count) {
-                        let setSnapshot = StatSetSnapshot(weight: kg[i], reps: reps[i])
-                        sets.append(setSnapshot)
-                        
-                        if bestSet == nil || kg[i] > bestSet!.weight || 
-                           (kg[i] == bestSet!.weight && reps[i] > bestSet!.reps) {
-                            bestSet = setSnapshot
-                        }
-                    }
-                    
-                    guard let best = bestSet else { continue }
-                    
-                    let sessionDate = ISO8601DateFormatter().date(from: post.createdAt) ?? Date()
+                    let bestSet = sets.max(by: { $0.estimated1RM < $1.estimated1RM }) ?? sets[0]
                     
                     let snapshot = StatExerciseSnapshot(
                         date: sessionDate,
-                        bestSet: best,
+                        bestSet: bestSet,
                         sets: sets,
-                        category: nil
+                        category: exercise.category
                     )
                     
                     if var existing = exerciseDict[normalizedName] {
                         existing.snapshots.append(snapshot)
-                        existing.snapshots.sort { $0.date < $1.date }
+                        if existing.exerciseId == nil, let id = exercise.id {
+                            existing.exerciseId = id
+                        }
                         exerciseDict[normalizedName] = existing
                     } else {
                         exerciseDict[normalizedName] = (
@@ -4556,9 +5361,9 @@ struct AllExercisesListView: View {
             let histories: [StatExerciseHistory] = exerciseDict.values.map { item in
                 StatExerciseHistory(
                     name: item.name,
-                    category: nil,
+                    category: item.snapshots.sorted { $0.date < $1.date }.last?.category,
                     exerciseId: item.exerciseId,
-                    history: item.snapshots
+                    history: item.snapshots.sorted { $0.date < $1.date }
                 )
             }.sorted { $0.history.count > $1.history.count }
             
@@ -4663,7 +5468,7 @@ private struct CleanExerciseRow: View {
     @ViewBuilder
     private var cleanTrendBadge: some View {
         let change = history.trendPercentage
-        if change == 0 {
+        if history.isPlateau {
             Text(L.t(sv: "Platå", nb: "Platå"))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
@@ -5111,13 +5916,19 @@ struct OneRMPredictionRow: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("+\(String(format: "%.0f", increase)) kg")
+                    if increase > 0.5 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("+\(String(format: "%.0f", increase)) kg")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.green)
+                    } else {
+                        Text(L.t(sv: "Platå", nb: "Platå"))
                             .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.secondary)
                     }
-                    .foregroundColor(.green)
                 }
                 
                 Image(systemName: "chevron.right")
@@ -5626,17 +6437,17 @@ private struct PredictionTimelineRow: View {
             
             Spacer()
             
-            // Increase badge
+            // Increase badge — only when there is an actual predicted gain
             HStack(spacing: 3) {
-                Image(systemName: "arrow.up")
+                Image(systemName: increase > 0.5 ? "arrow.up" : "minus")
                     .font(.system(size: 10, weight: .semibold))
-                Text("+\(String(format: "%.0f", increase))")
+                Text(increase > 0.5 ? "+\(String(format: "%.0f", increase))" : "±0")
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(color)
+            .foregroundColor(increase > 0.5 ? color : .secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(color.opacity(0.15))
+            .background((increase > 0.5 ? color : Color.secondary).opacity(0.15))
             .cornerRadius(8)
         }
         .padding(.vertical, 10)

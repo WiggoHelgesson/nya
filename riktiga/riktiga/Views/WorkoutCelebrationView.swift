@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import PhotosUI
 
 struct WorkoutCelebrationView: View {
     let post: SocialWorkoutPost
@@ -13,8 +14,11 @@ struct WorkoutCelebrationView: View {
     @State private var alertMessage = ""
     @State private var alertTitle = L.t(sv: "Meddelande", nb: "Melding")
     @State private var isSaving = false
-    @State private var selectedBackground: ShareBackgroundOption = .transparent
-    @State private var showBackgroundDialog = false
+    private let selectedBackground: ShareBackgroundOption = .transparent
+    @State private var isPremium = RevenueCatManager.shared.isProMember
+    @State private var customImage: UIImage?
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
     
     init(post: SocialWorkoutPost, onDismiss: @escaping () -> Void) {
         self.post = post
@@ -30,6 +34,11 @@ struct WorkoutCelebrationView: View {
         
         if (post.exercises?.isEmpty == false) {
             list.append(.muscles)
+        }
+        
+        // Photo templates (Pro) shown first when a custom image is picked
+        if customImage != nil {
+            list = ShareCardTemplate.photoTemplates + list
         }
         return list
     }
@@ -93,16 +102,16 @@ struct WorkoutCelebrationView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                     
-                    // Share action buttons - 50/50 width
+                    // Share action buttons
                     HStack(spacing: 12) {
-                        // Background selector
+                        // Download button
                         Button {
-                            showBackgroundDialog = true
+                            saveToPhotos()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: selectedBackground == .transparent ? "square.dashed" : "square.fill")
+                                Image(systemName: "arrow.down.circle.fill")
                                     .font(.system(size: 18))
-                                Text(L.t(sv: "Bakgrund", nb: "Bakgrunn"))
+                                Text(L.t(sv: "Spara", nb: "Lagre"))
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundColor(.primary)
@@ -112,25 +121,52 @@ struct WorkoutCelebrationView: View {
                             .cornerRadius(12)
                         }
                         
-                        // Download button
+                        // Custom image button (Pro download)
                         Button {
-                            saveToPhotos()
+                            showPhotoPicker = true
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "arrow.down.circle.fill")
+                                Image(systemName: "photo.on.rectangle.angled")
                                     .font(.system(size: 18))
-                                Text(L.t(sv: "Ladda ner", nb: "Last ned"))
+                                Text(L.t(sv: "Egen bild", nb: "Eget bilde"))
                                     .font(.system(size: 15, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                             .foregroundColor(.primary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(Color(.systemGray6))
                             .cornerRadius(12)
+                            .overlay(alignment: .topTrailing) {
+                                Text("PRO")
+                                    .font(.system(size: 8, weight: .heavy))
+                                    .foregroundColor(Color(red: 0.55, green: 0.42, blue: 0.06))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color(red: 1, green: 0.9, blue: 0.4))
+                                    .clipShape(Capsule())
+                                    .padding(4)
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
+                    .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+                    .onChange(of: photoPickerItem) { _, newItem in
+                        guard let newItem else { return }
+                        Task {
+                            if let data = try? await newItem.loadTransferable(type: Data.self),
+                               let image = UIImage(data: data) {
+                                await MainActor.run {
+                                    customImage = image
+                                    withAnimation {
+                                        selectedTemplateIndex = 0
+                                    }
+                                }
+                            }
+                        }
+                    }
                     
                     // Done button
                     Button(action: finishAndDismiss) {
@@ -156,14 +192,7 @@ struct WorkoutCelebrationView: View {
         } message: {
             Text(alertMessage)
         }
-        .confirmationDialog(L.t(sv: "Välj bakgrund", nb: "Velg bakgrunn"), isPresented: $showBackgroundDialog, titleVisibility: .visible) {
-            ForEach(ShareBackgroundOption.allCases) { option in
-                Button(option.displayName) {
-                    selectedBackground = option
-                }
-            }
-            Button(L.t(sv: "Avbryt", nb: "Avbryt"), role: .cancel) {}
-        }
+        .onReceive(RevenueCatManager.shared.$isProMember) { isPremium = $0 }
     }
     
     private var workoutCountText: String {
@@ -193,6 +222,7 @@ struct WorkoutCelebrationView: View {
                         size: CGSize(width: UIScreen.main.bounds.width - 48,
                                      height: (UIScreen.main.bounds.width - 48) * 1.25),
                         coverImage: coverImage,
+                        customImage: customImage,
                         isPreview: true
                     )
                     .tag(index)
@@ -226,7 +256,7 @@ struct WorkoutCelebrationView: View {
         let template = templates[selectedTemplateIndex]
         let exportSize = CGSize(width: 1080, height: 1920)
         
-        // Render with transparent background for downloads
+        // Render with transparent background for downloads (photo templates are always opaque)
         let view = ShareCardView(
             template: template,
             post: post,
@@ -234,11 +264,18 @@ struct WorkoutCelebrationView: View {
             background: .transparent,
             size: exportSize,
             coverImage: coverImage,
+            customImage: customImage,
             isPreview: false
         )
         
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
+        
+        if template.isPhotoTemplate {
+            renderer.isOpaque = true
+            return renderer.uiImage
+        }
+        
         renderer.isOpaque = false
         
         guard let cgImage = renderer.cgImage else { return nil }
@@ -246,6 +283,13 @@ struct WorkoutCelebrationView: View {
     }
     
     private func saveToPhotos() {
+        // Photo templates (custom image) are a Pro feature — gate the download
+        let template = templates.indices.contains(selectedTemplateIndex) ? templates[selectedTemplateIndex] : nil
+        if template?.isPhotoTemplate == true && !isPremium {
+            SuperwallService.shared.showPaywall()
+            return
+        }
+        
         isSaving = true
         
         guard let image = renderCurrentCardImage() else {
@@ -507,6 +551,8 @@ struct HevyStyleShareCard: View {
                 statsHorizontalContent
             case .muscles:
                 statsStackedContent // Fallback to stacked stats
+            default:
+                statsStackedContent // Photo templates are not rendered by this legacy card
             }
         }
         .frame(width: size.width, height: size.height)

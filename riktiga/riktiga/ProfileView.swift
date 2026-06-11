@@ -168,15 +168,6 @@ struct ProfileActivitiesView: View {
                                     Divider()
                                         .background(Color(.systemGray5))
 
-                                    if index == 1 {
-                                        Image("108")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(maxWidth: .infinity)
-                                            .accessibilityHidden(true)
-                                        Divider()
-                                            .background(Color(.systemGray5))
-                                    }
                                 }
                             }
                         }
