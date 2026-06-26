@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local env (contains VITE_SHOPIFY_API_KEY etc.)
+.env
+.env.local
+.env.*.local
+
+# Shopify CLI local linking / deploy bundle
+.shopify/
+
+# Logs
+*.log

@@ -1,0 +1,54 @@
+# Up&Down Shopify public app configuration.
+#
+# This file is read by the Shopify CLI (`shopify app deploy`) and declares the
+# app's OAuth scopes, embedded URLs, and webhook subscriptions. It is the
+# source of truth for the Partner Dashboard configuration.
+#
+# Replace the placeholder client_id with the real one from the Partner
+# Dashboard. The Supabase function base URL is the public project URL:
+#   https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1
+
+client_id = "616396dab9aad73cae02f5d1185ccbc0"
+name = "Up&Down"
+handle = "up-and-down"
+application_url = "https://shopify.upanddownapp.com"
+embedded = true
+
+[access_scopes]
+# Product data, discount minting, order/commission tracking, inventory.
+scopes = "read_products,read_discounts,write_discounts,write_price_rules,read_price_rules,read_orders,read_inventory,read_locations"
+
+[auth]
+redirect_urls = [
+  "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-auth-callback",
+  "https://shopify.upanddownapp.com/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-07"
+
+  # Mandatory GDPR / compliance topics (required for App Store).
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-webhook-gdpr"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/create", "products/update", "products/delete" ]
+  uri = "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-webhook-products"
+
+  [[webhooks.subscriptions]]
+  topics = [ "inventory_levels/update" ]
+  uri = "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-webhook-inventory"
+
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create", "orders/updated" ]
+  uri = "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-webhook-orders"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "https://xebatkodviqgkpsbyuiv.supabase.co/functions/v1/shopify-webhook-app-uninstalled"
+
+[pos]
+embedded = false
+
+[build]
