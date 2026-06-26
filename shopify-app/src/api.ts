@@ -58,6 +58,29 @@ export interface ProductRow {
   synced_at: string
 }
 
+export interface MerchantReward {
+  id: string
+  shop_domain: string
+  title: string
+  description: string
+  banner_image_url: string
+  logo_url: string
+  customer_discount_percent: number
+  updown_commission_percent: number
+  status: 'draft' | 'active' | 'inactive'
+  created_at: string
+  updated_at: string
+}
+
+export interface RewardInput {
+  id?: string
+  title: string
+  description: string
+  bannerImageUrl: string
+  logoUrl: string
+  customerDiscountPercent: number
+}
+
 export const api = {
   getStatus: () => request<MerchantStatus>('/status'),
   getProducts: () => request<{ products: ProductRow[] }>('/products'),
@@ -71,5 +94,22 @@ export const api = {
     request<{ ok: boolean; id: string }>('/campaign', {
       method: 'POST',
       body: JSON.stringify(campaign),
+    }),
+
+  uploadImage: (kind: 'banner' | 'logo', dataUrl: string) =>
+    request<{ url: string }>('/upload-image', {
+      method: 'POST',
+      body: JSON.stringify({ kind, dataUrl }),
+    }),
+  getRewards: () => request<{ rewards: MerchantReward[] }>('/merchant-rewards'),
+  saveReward: (reward: RewardInput) =>
+    request<{ ok: boolean; reward: MerchantReward }>('/merchant-reward', {
+      method: 'POST',
+      body: JSON.stringify(reward),
+    }),
+  unpublishReward: (id: string) =>
+    request<{ ok: boolean }>('/merchant-reward/unpublish', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
     }),
 }

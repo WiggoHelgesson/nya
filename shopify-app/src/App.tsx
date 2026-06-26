@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import {
   Page,
   Layout,
@@ -15,8 +15,9 @@ import {
   Spinner,
 } from '@shopify/polaris'
 import { api, type MerchantStatus, type ProductRow } from './api'
+import { RewardsPage } from './RewardsPage'
 
-export function App() {
+function DashboardPage() {
   const [status, setStatus] = useState<MerchantStatus | null>(null)
   const [products, setProducts] = useState<ProductRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -210,5 +211,39 @@ export function App() {
         </Layout.Section>
       </Layout>
     </Page>
+  )
+}
+
+export function App() {
+  const [path, setPath] = useState(window.location.pathname)
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  const navigate = useCallback((to: string) => {
+    return (e: MouseEvent) => {
+      e.preventDefault()
+      window.history.pushState({}, '', to)
+      setPath(to)
+    }
+  }, [])
+
+  const isRewards = path.startsWith('/rewards')
+
+  return (
+    <>
+      <ui-nav-menu>
+        <a href="/" onClick={navigate('/')} rel="home">
+          Dashboard
+        </a>
+        <a href="/rewards" onClick={navigate('/rewards')}>
+          Rewards
+        </a>
+      </ui-nav-menu>
+      {isRewards ? <RewardsPage /> : <DashboardPage />}
+    </>
   )
 }
