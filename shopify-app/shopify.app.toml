@@ -10,7 +10,6 @@
 
 client_id = "616396dab9aad73cae02f5d1185ccbc0"
 name = "Up&Down"
-handle = "up-and-down"
 application_url = "https://shopify.upanddownapp.com"
 embedded = true
 

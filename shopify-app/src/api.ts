@@ -81,7 +81,33 @@ export interface RewardInput {
   customerDiscountPercent: number
 }
 
+export interface CommissionStats {
+  purchases: number
+  totalSales: number
+  totalCommission: number
+  outstandingCommission: number
+  currency: string | null
+}
+
+export type CommissionStatus = 'pending' | 'invoiced' | 'paid'
+
+export interface CommissionPurchase {
+  orderNumber: string | null
+  rewardTitle: string | null
+  orderValue: number
+  commission: number
+  commissionStatus: CommissionStatus
+  discountCode: string
+  date: string | null
+}
+
+export interface CommissionPurchases {
+  currency: string | null
+  purchases: CommissionPurchase[]
+}
+
 export const api = {
+  connect: () => request<{ connected: boolean; merchantId: string }>('/connect', { method: 'POST' }),
   getStatus: () => request<MerchantStatus>('/status'),
   getProducts: () => request<{ products: ProductRow[] }>('/products'),
   saveSettings: (commissionRate: number, discountModel: Record<string, unknown>) =>
@@ -112,4 +138,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ id }),
     }),
+  getCommissionStats: () => request<CommissionStats>('/commission-stats'),
+  getCommissionPurchases: () => request<CommissionPurchases>('/commission-purchases'),
 }

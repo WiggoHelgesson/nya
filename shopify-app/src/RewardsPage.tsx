@@ -17,11 +17,18 @@ import {
   Box,
 } from '@shopify/polaris'
 import { api, type MerchantReward } from './api'
+import { formatDate } from './format'
 
 const DISCOUNT_OPTIONS = [5, 10, 15, 20, 25].map((v) => ({
   label: `${v}%`,
   value: String(v),
 }))
+
+const STATUS_LABEL: Record<MerchantReward['status'], { label: string; tone: 'success' | 'attention' | 'critical' }> = {
+  active: { label: 'Aktiv', tone: 'success' },
+  inactive: { label: 'Inaktiv', tone: 'critical' },
+  draft: { label: 'Utkast', tone: 'attention' },
+}
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -30,12 +37,6 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
-}
-
-function statusTone(status: string): 'success' | 'attention' | 'critical' {
-  if (status === 'active') return 'success'
-  if (status === 'inactive') return 'critical'
-  return 'attention'
 }
 
 export function RewardsPage() {
@@ -59,6 +60,12 @@ export function RewardsPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true)
+      // Auto-connect (token exchange) so the offline token is established/refreshed.
+      try {
+        await api.connect()
+      } catch (e) {
+        console.warn('auto-connect failed:', e)
+      }
       const res = await api.getRewards()
       setRewards(res.rewards)
       setError(null)
@@ -93,7 +100,7 @@ export function RewardsPage() {
       const { url } = await api.uploadImage('banner', dataUrl)
       setBannerUrl(url)
     } catch (e) {
-      setFormError(`Banner upload failed: ${e}`)
+      setFormError(`Uppladdning av banner misslyckades: ${e}`)
     } finally {
       setUploadingBanner(false)
     }
@@ -109,7 +116,7 @@ export function RewardsPage() {
       const { url } = await api.uploadImage('logo', dataUrl)
       setLogoUrl(url)
     } catch (e) {
-      setFormError(`Logo upload failed: ${e}`)
+      setFormError(`Uppladdning av logga misslyckades: ${e}`)
     } finally {
       setUploadingLogo(false)
     }
@@ -118,7 +125,7 @@ export function RewardsPage() {
   const onPublish = useCallback(async () => {
     setFormError(null)
     if (!title.trim() || !description.trim() || !bannerUrl || !logoUrl) {
-      setFormError('Please fill in all fields and upload both a banner and a logo.')
+      setFormError('Fyll i alla fält och ladda upp både en banner och en logga.')
       return
     }
     setPublishing(true)
@@ -131,7 +138,7 @@ export function RewardsPage() {
         logoUrl,
         customerDiscountPercent: Number(discount),
       })
-      setSuccess('Reward published and now visible in Up&Down.')
+      setSuccess('Belöningen är publicerad och syns nu i Up&Down.')
       resetForm()
       await load()
     } catch (e) {
@@ -165,11 +172,11 @@ export function RewardsPage() {
   )
 
   return (
-    <Page title="Rewards" subtitle="Create rewards that appear in the Up&Down app">
+    <Page title="Belöningar" subtitle="Skapa belöningar som visas i Up&Down-appen">
       <Layout>
         {error && (
           <Layout.Section>
-            <Banner tone="critical" title="Something went wrong" onDismiss={() => setError(null)}>
+            <Banner tone="critical" title="Något gick fel" onDismiss={() => setError(null)}>
               <p>{error}</p>
             </Banner>
           </Layout.Section>
@@ -187,7 +194,7 @@ export function RewardsPage() {
           <Card>
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">
-                {editingId ? 'Edit reward' : 'Create a reward'}
+                {editingId ? 'Redigera belöning' : 'Skapa en belöning'}
               </Text>
 
               {formError && (
@@ -198,13 +205,13 @@ export function RewardsPage() {
 
               <BlockStack gap="200">
                 <Text as="span" variant="bodyMd">
-                  Banner image
+                  Bannerbild
                 </Text>
                 {bannerUrl ? (
                   <InlineStack gap="300" blockAlign="center">
                     <Thumbnail source={bannerUrl} alt="Banner" size="large" />
                     <Button variant="plain" onClick={() => setBannerUrl('')}>
-                      Replace
+                      Byt ut
                     </Button>
                   </InlineStack>
                 ) : (
@@ -217,7 +224,7 @@ export function RewardsPage() {
                           </InlineStack>
                         </Box>
                       ) : (
-                        <DropZone.FileUpload actionTitle="Add banner" />
+                        <DropZone.FileUpload actionTitle="Lägg till banner" />
                       )}
                     </DropZone>
                   </Box>
@@ -226,13 +233,13 @@ export function RewardsPage() {
 
               <BlockStack gap="200">
                 <Text as="span" variant="bodyMd">
-                  Logo
+                  Logga
                 </Text>
                 {logoUrl ? (
                   <InlineStack gap="300" blockAlign="center">
-                    <Thumbnail source={logoUrl} alt="Logo" size="medium" />
+                    <Thumbnail source={logoUrl} alt="Logga" size="medium" />
                     <Button variant="plain" onClick={() => setLogoUrl('')}>
-                      Replace
+                      Byt ut
                     </Button>
                   </InlineStack>
                 ) : (
@@ -245,7 +252,7 @@ export function RewardsPage() {
                           </InlineStack>
                         </Box>
                       ) : (
-                        <DropZone.FileUpload actionTitle="Add logo" />
+                        <DropZone.FileUpload actionTitle="Lägg till logga" />
                       )}
                     </DropZone>
                   </Box>
@@ -253,40 +260,40 @@ export function RewardsPage() {
               </BlockStack>
 
               <TextField
-                label="Reward title"
+                label="Belöningens titel"
                 value={title}
                 onChange={setTitle}
                 autoComplete="off"
-                placeholder="e.g. 15% off all golf gear"
+                placeholder="t.ex. 15% rabatt på all golfutrustning"
               />
 
               <Select
-                label="Customer discount"
+                label="Kundrabatt"
                 options={DISCOUNT_OPTIONS}
                 value={discount}
                 onChange={setDiscount}
               />
 
               <TextField
-                label="Company description"
+                label="Företagsbeskrivning"
                 value={description}
                 onChange={setDescription}
                 autoComplete="off"
                 multiline={4}
-                placeholder="Tell Up&Down users about your brand"
+                placeholder="Berätta för Up&Down-användarna om ert varumärke"
               />
 
               <Text as="p" tone="subdued">
-                Up&Down commission: 5%
+                Up&Down provision: 5%
               </Text>
 
               <InlineStack gap="300">
                 <Button variant="primary" loading={publishing} onClick={onPublish}>
-                  {editingId ? 'Save changes' : 'Publish'}
+                  {editingId ? 'Spara ändringar' : 'Publicera'}
                 </Button>
                 {editingId && (
                   <Button onClick={resetForm} disabled={publishing}>
-                    Cancel
+                    Avbryt
                   </Button>
                 )}
               </InlineStack>
@@ -299,7 +306,7 @@ export function RewardsPage() {
           <Card>
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">
-                My rewards
+                Mina belöningar
               </Text>
               {loading ? (
                 <InlineStack align="center">
@@ -307,40 +314,43 @@ export function RewardsPage() {
                 </InlineStack>
               ) : rewards.length === 0 ? (
                 <Text as="p" tone="subdued">
-                  No rewards yet. Create your first reward above.
+                  Inga belöningar ännu. Skapa din första belöning ovan.
                 </Text>
               ) : (
                 <BlockStack gap="300">
-                  {rewards.map((r) => (
-                    <Box key={r.id} padding="300" borderColor="border" borderWidth="025" borderRadius="200">
-                      <InlineStack gap="400" blockAlign="center" align="space-between">
-                        <InlineStack gap="300" blockAlign="center">
-                          <Thumbnail source={r.banner_image_url} alt={r.title} size="large" />
-                          <Thumbnail source={r.logo_url} alt="Logo" size="small" />
-                          <BlockStack gap="100">
-                            <Text as="span" variant="bodyMd" fontWeight="semibold">
-                              {r.title}
-                            </Text>
-                            <InlineStack gap="200" blockAlign="center">
-                              <Badge tone="info">{`${r.customer_discount_percent}% off`}</Badge>
-                              <Badge tone={statusTone(r.status)}>{r.status}</Badge>
-                              <Text as="span" tone="subdued" variant="bodySm">
-                                {new Date(r.created_at).toLocaleDateString()}
+                  {rewards.map((r) => {
+                    const s = STATUS_LABEL[r.status] ?? STATUS_LABEL.draft
+                    return (
+                      <Box key={r.id} padding="300" borderColor="border" borderWidth="025" borderRadius="200">
+                        <InlineStack gap="400" blockAlign="center" align="space-between">
+                          <InlineStack gap="300" blockAlign="center">
+                            <Thumbnail source={r.banner_image_url} alt={r.title} size="large" />
+                            <Thumbnail source={r.logo_url} alt="Logga" size="small" />
+                            <BlockStack gap="100">
+                              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                                {r.title}
                               </Text>
-                            </InlineStack>
-                          </BlockStack>
+                              <InlineStack gap="200" blockAlign="center">
+                                <Badge tone="info">{`${r.customer_discount_percent}% rabatt`}</Badge>
+                                <Badge tone={s.tone}>{s.label}</Badge>
+                                <Text as="span" tone="subdued" variant="bodySm">
+                                  {formatDate(r.created_at)}
+                                </Text>
+                              </InlineStack>
+                            </BlockStack>
+                          </InlineStack>
+                          <InlineStack gap="200">
+                            <Button onClick={() => onEdit(r)}>Redigera</Button>
+                            {r.status === 'active' && (
+                              <Button tone="critical" variant="secondary" onClick={() => onUnpublish(r.id)}>
+                                Avpublicera
+                              </Button>
+                            )}
+                          </InlineStack>
                         </InlineStack>
-                        <InlineStack gap="200">
-                          <Button onClick={() => onEdit(r)}>Edit</Button>
-                          {r.status === 'active' && (
-                            <Button tone="critical" variant="secondary" onClick={() => onUnpublish(r.id)}>
-                              Unpublish
-                            </Button>
-                          )}
-                        </InlineStack>
-                      </InlineStack>
-                    </Box>
-                  ))}
+                      </Box>
+                    )
+                  })}
                 </BlockStack>
               )}
             </BlockStack>
